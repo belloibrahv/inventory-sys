@@ -1,0 +1,14 @@
+/vendor/
+/node_modules/
+.phpunit.cache/
+.phpunit.result.cache
+tools/*.phar
+.DS_Store
+*.log
+.env
+.env.local
+docker/mysql-data/
+wordpress/
+.idea/
+.vscode/
+.next/

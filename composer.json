@@ -1,0 +1,25 @@
+{
+  "name": "abutwins/atoms",
+  "description": "ATOMS — Abu Twins Inventory & Operations Management System. Enterprise WordPress plugin.",
+  "type": "wordpress-plugin",
+  "license": "GPL-2.0-or-later",
+  "require": {
+    "php": ">=8.1"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^10.5"
+  },
+  "autoload": {
+    "psr-4": {
+      "Atoms\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Atoms\\Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "test": "php tools/phpunit.phar --colors=always"
+  }
+}

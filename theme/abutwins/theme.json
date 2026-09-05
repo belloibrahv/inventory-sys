@@ -1,0 +1,66 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/theme.json",
+  "version": 2,
+  "settings": {
+    "appearanceTools": true,
+    "layout": {
+      "contentSize": "1120px",
+      "wideSize": "1280px"
+    },
+    "color": {
+      "palette": [
+        { "slug": "primary", "color": "#2F3590", "name": "Primary royal" },
+        { "slug": "accent", "color": "#0F9F6E", "name": "Accent emerald" },
+        { "slug": "ink", "color": "#0B1220", "name": "Ink" },
+        { "slug": "muted", "color": "#647089", "name": "Muted" },
+        { "slug": "surface", "color": "#FFFFFF", "name": "Surface" },
+        { "slug": "canvas", "color": "#F2F4F9", "name": "Canvas" },
+        { "slug": "night", "color": "#0A0E1A", "name": "Night" }
+      ],
+      "defaultPalette": false
+    },
+    "typography": {
+      "fontFamilies": [
+        {
+          "slug": "display",
+          "name": "Plus Jakarta Sans",
+          "fontFamily": "\"Plus Jakarta Sans\", Inter, system-ui, sans-serif"
+        },
+        {
+          "slug": "mono",
+          "name": "Roboto Mono",
+          "fontFamily": "\"Roboto Mono\", ui-monospace, monospace"
+        }
+      ],
+      "fontSizes": [
+        { "slug": "sm", "size": "0.875rem", "name": "Small" },
+        { "slug": "md", "size": "1rem", "name": "Medium" },
+        { "slug": "lg", "size": "1.25rem", "name": "Large" },
+        { "slug": "xl", "size": "1.75rem", "name": "XL" },
+        { "slug": "xxl", "size": "2.5rem", "name": "Display" }
+      ]
+    },
+    "spacing": {
+      "units": ["px", "rem", "%", "vw"]
+    }
+  },
+  "styles": {
+    "color": {
+      "background": "var(--wp--preset--color--canvas)",
+      "text": "var(--wp--preset--color--ink)"
+    },
+    "typography": {
+      "fontFamily": "var(--wp--preset--font-family--display)",
+      "fontSize": "var(--wp--preset--font-size--md)",
+      "lineHeight": "1.6"
+    },
+    "elements": {
+      "link": {
+        "color": { "text": "var(--wp--preset--color--primary)" }
+      },
+      "heading": {
+        "typography": { "fontWeight": "700", "lineHeight": "1.2" }
+      }
+    }
+  }
+}

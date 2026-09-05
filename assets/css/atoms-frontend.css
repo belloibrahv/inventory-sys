@@ -1,0 +1,606 @@
+/**
+ * Abu Twins Invent — Frontend & Elementor Widget Stylesheet
+ * Matches the Invent ops palette (royal blue brand mark)
+ */
+
+:root {
+  --atoms-fe-primary: #2F3590;
+  --atoms-fe-primary-hover: #252B78;
+  --atoms-fe-accent: #0F9F6E;
+  --atoms-fe-accent-hover: #0B7F58;
+  --atoms-fe-warn: #EAB308;
+  --atoms-fe-danger: #E11D48;
+  --atoms-fe-bg: #F2F4F9;
+  --atoms-fe-surface: #ffffff;
+  --atoms-fe-border: #E3E7F0;
+  --atoms-fe-text: #0B1220;
+  --atoms-fe-muted: #647089;
+  --atoms-fe-radius: 16px;
+  --atoms-fe-shadow: 0 8px 20px -10px rgba(11, 18, 32, 0.12);
+  --atoms-fe-shadow-lg: 0 18px 36px -16px rgba(11, 18, 32, 0.16);
+}
+
+.atoms-fe-widget {
+  font-family: 'Plus Jakarta Sans', 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: var(--atoms-fe-text);
+  background: var(--atoms-fe-surface);
+  border: 1px solid var(--atoms-fe-border);
+  border-radius: var(--atoms-fe-radius);
+  box-shadow: var(--atoms-fe-shadow);
+  padding: 26px;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+.atoms-fe-widget *,
+.atoms-fe-widget *::before,
+.atoms-fe-widget *::after {
+  box-sizing: border-box;
+}
+
+.atoms-fe-header {
+  margin-bottom: 20px;
+}
+
+.atoms-fe-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--atoms-fe-primary);
+  background: #EEF0FB;
+  border: 1px solid #C5CAE8;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  margin-bottom: 10px;
+}
+
+.atoms-fe-badge .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.atoms-fe-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--atoms-fe-text);
+  margin: 0 0 6px 0;
+  letter-spacing: -0.02em;
+}
+
+.atoms-fe-sub {
+  font-size: 14px;
+  color: var(--atoms-fe-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Elementor / shortcode theme variants */
+.atoms-fe-widget[data-theme="dark"] {
+  --atoms-fe-bg: #0f172a;
+  --atoms-fe-surface: #1e293b;
+  --atoms-fe-border: #334155;
+  --atoms-fe-text: #f8fafc;
+  --atoms-fe-muted: #94a3b8;
+  background: var(--atoms-fe-surface);
+  color: var(--atoms-fe-text);
+}
+
+.atoms-fe-widget[data-theme="brand"] {
+  --atoms-fe-primary: #2F3590;
+  border-color: #C5CAE8;
+  box-shadow: var(--atoms-fe-shadow-lg);
+  background:
+    radial-gradient(420px 160px at 100% 0%, rgba(47, 53, 144, 0.08), transparent 55%),
+    var(--atoms-fe-surface);
+}
+
+.atoms-fe-widget[data-theme="dark"] .atoms-fe-input,
+.atoms-fe-widget[data-theme="dark"] .atoms-fe-select {
+  background: #0f172a;
+  color: var(--atoms-fe-text);
+  border-color: var(--atoms-fe-border);
+}
+
+.atoms-fe-widget[data-theme="dark"] .atoms-fe-catalog-card {
+  background: #0f172a;
+  border-color: var(--atoms-fe-border);
+}
+
+.atoms-fe-search-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.atoms-fe-input-wrap {
+  position: relative;
+  flex: 1 1 240px;
+}
+
+.atoms-fe-input-wrap .atoms-fe-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--atoms-fe-muted);
+  font-size: 18px;
+  pointer-events: none;
+}
+
+.atoms-fe-input,
+.atoms-fe-select {
+  width: 100%;
+  height: 46px;
+  padding: 8px 14px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--atoms-fe-text);
+  background: #ffffff;
+  border: 1.5px solid #C5CAE8;
+  border-radius: 10px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.atoms-fe-input-wrap .atoms-fe-input {
+  padding-left: 38px;
+  background: #ffffff;
+  border-color: var(--atoms-fe-border);
+  font-weight: 500;
+}
+
+.atoms-fe-input:focus,
+.atoms-fe-select:focus {
+  outline: none;
+  border-color: var(--atoms-fe-primary);
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(47, 53, 144, 0.18);
+}
+
+.atoms-fe-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 42px;
+  padding-left: 14px;
+  cursor: pointer;
+  font-weight: 700;
+  color: #252B78;
+  background-color: #ffffff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%232F3590' d='M1.4 0.6L6 5.2 10.6.6 12 2 6 8 0 2z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 12px 8px;
+  border: 1.5px solid #C5CAE8;
+  box-shadow: 0 0 0 3px rgba(47, 53, 144, 0.08);
+}
+
+.atoms-fe-select:hover {
+  border-color: var(--atoms-fe-primary);
+  background-color: #ffffff;
+  box-shadow: 0 0 0 3px rgba(47, 53, 144, 0.16);
+}
+
+.atoms-fe-select-wrap {
+  position: relative;
+  flex: 0 1 220px;
+}
+
+.atoms-fe-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 18px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.atoms-fe-btn.primary {
+  background: var(--atoms-fe-primary);
+  color: #ffffff;
+}
+
+.atoms-fe-btn.primary:hover {
+  background: var(--atoms-fe-primary-hover);
+  color: #ffffff;
+}
+
+.atoms-fe-btn.accent {
+  background: var(--atoms-fe-accent);
+  color: #ffffff;
+}
+
+.atoms-fe-btn.accent:hover {
+  background: var(--atoms-fe-accent-hover);
+  color: #ffffff;
+}
+
+.atoms-fe-btn.sm {
+  height: 36px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.atoms-fe-btn .material-symbols-outlined {
+  font-size: 18px;
+}
+
+/* Stock Catalog Grid */
+.atoms-fe-catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.atoms-fe-catalog-card {
+  background: #ffffff;
+  border: 1px solid var(--atoms-fe-border);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.atoms-fe-catalog-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: var(--atoms-fe-shadow-lg);
+  transform: translateY(-2px);
+}
+
+.atoms-fe-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.atoms-fe-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.atoms-fe-type-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.atoms-fe-type-pill.device {
+  background: #e0e7ff;
+  color: #1E2366;
+}
+
+.atoms-fe-card-brand {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--atoms-fe-muted);
+  letter-spacing: 0.05em;
+}
+
+.atoms-fe-card-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--atoms-fe-text);
+  margin: 2px 0 0 0;
+}
+
+.atoms-fe-stock-pill {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.atoms-fe-stock-pill.in-stock {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.atoms-fe-stock-pill.out-of-stock {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.atoms-fe-stock-pill.low-stock {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fcd34d;
+}
+
+.atoms-fe-variant-item.is-low {
+  border-color: #fcd34d;
+  background: #fffbeb;
+}
+
+.atoms-fe-low-dot {
+  color: #b45309;
+  font-weight: 700;
+}
+
+.atoms-fe-variants-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.atoms-fe-variant-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  padding: 6px 8px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #f1f5f9;
+}
+
+.atoms-fe-price {
+  font-family: 'Roboto Mono', monospace;
+  font-weight: 700;
+  color: var(--atoms-fe-text);
+}
+
+/* Warranty Result Card */
+.atoms-fe-warranty-result {
+  margin-top: 20px;
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid var(--atoms-fe-border);
+  background: #ffffff;
+}
+
+.atoms-fe-warranty-result.status-active {
+  border-color: #a7f3d0;
+  background: #f0fdf4;
+}
+
+.atoms-fe-warranty-result.status-expired {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.atoms-fe-warranty-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.atoms-fe-warranty-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+.status-active .atoms-fe-warranty-icon {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.status-expired .atoms-fe-warranty-icon {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.atoms-fe-warranty-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.atoms-fe-info-block {
+  background: #ffffff;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--atoms-fe-border);
+}
+
+.atoms-fe-info-label {
+  font-size: 11px;
+  color: var(--atoms-fe-muted);
+  text-transform: uppercase;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.atoms-fe-info-val {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--atoms-fe-text);
+}
+
+/* Swap / Trade-in Form */
+.atoms-fe-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 640px) {
+  .atoms-fe-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.atoms-fe-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.atoms-fe-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--atoms-fe-text);
+}
+
+.atoms-fe-checkboxes {
+  display: flex;
+  gap: 16px;
+  margin: 10px 0 16px 0;
+  flex-wrap: wrap;
+}
+
+.atoms-fe-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.atoms-fe-swap-result {
+  margin-top: 20px;
+  padding: 20px;
+  background: #EEF0FB;
+  border: 1px solid #C5CAE8;
+  border-radius: 12px;
+  text-align: center;
+}
+
+.atoms-fe-swap-val {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--atoms-fe-primary);
+  font-family: 'Roboto Mono', monospace;
+  margin: 8px 0;
+}
+
+/* Branches Directory */
+.atoms-fe-branches-grid {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.atoms-fe-branches-grid.cols-1 { grid-template-columns: 1fr; }
+.atoms-fe-branches-grid.cols-2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.atoms-fe-branches-grid.cols-3 { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.atoms-fe-branches-grid.cols-4 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+
+.atoms-fe-branch-card {
+  background: #ffffff;
+  border: 1px solid var(--atoms-fe-border);
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.atoms-fe-branch-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.atoms-fe-branch-icon {
+  font-size: 24px;
+  color: var(--atoms-fe-primary);
+  background: #EEF0FB;
+  padding: 8px;
+  border-radius: 10px;
+}
+
+.atoms-fe-branch-name {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.atoms-fe-branch-badge {
+  font-size: 11px;
+  color: #047857;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+}
+
+.atoms-fe-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+}
+
+.atoms-fe-branch-detail {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--atoms-fe-muted);
+  margin: 4px 0;
+}
+
+.atoms-fe-branch-detail .material-symbols-outlined {
+  font-size: 16px;
+  margin-top: 2px;
+}
+
+.atoms-fe-help-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--atoms-fe-muted);
+  margin-top: 12px;
+}
+
+.atoms-fe-help-text .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.atoms-fe-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--atoms-fe-border);
+  border-top-color: var(--atoms-fe-primary);
+  border-radius: 50%;
+  animation: atoms-fe-spin 0.6s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+@keyframes atoms-fe-spin {
+  to { transform: rotate(360deg); }
+}
