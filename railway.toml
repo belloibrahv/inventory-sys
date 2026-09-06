@@ -3,7 +3,7 @@ builder = "NIXPACKS"
 buildCommand = "node scripts/use-postgres-schema.mjs && npx prisma generate && npm run build"
 
 [deploy]
-startCommand = "npx prisma db push && npx tsx prisma/seed-users.ts && npm start"
+startCommand = "node scripts/use-postgres-schema.mjs && npx prisma generate && npx prisma db push && npx tsx prisma/seed-users.ts && npm start"
 healthcheckPath = "/login"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
