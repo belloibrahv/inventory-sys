@@ -39,6 +39,7 @@ export async function getIncomingLots() {
       branch: true,
       supplier: true,
       user: true,
+      purchase: true,
       items: { include: { product: { include: { brand: true } } } },
     },
     orderBy: { createdAt: "desc" },
@@ -53,11 +54,20 @@ export async function createIncomingLot(formData: FormData) {
 
   const branchId = String(formData.get("branchId") || user.branchId || "")
   const supplierId = String(formData.get("supplierId") || "") || null
+  const purchaseId = String(formData.get("purchaseId") || "") || null
   const notes = String(formData.get("notes") || "") || null
   const expectedRaw = String(formData.get("expectedDate") || "")
   const productIds = formData.getAll("productId").map(String).filter(Boolean)
   if (!branchId) return { error: "Choose the shop these goods are going to." }
   if (productIds.length === 0) return { error: "Add at least one item." }
+
+  let linkedSupplierId = supplierId
+  if (purchaseId) {
+    const purchase = await prisma.purchase.findUnique({ where: { id: purchaseId } })
+    if (!purchase) return { error: "That supplier order was not found." }
+    if (purchase.branchId !== branchId) return { error: "This order is for a different shop." }
+    linkedSupplierId = linkedSupplierId || purchase.supplierId
+  }
 
   const identities = formData.getAll("identity").map(String) as IncomingIdentity[]
   const quantities = formData.getAll("quantity").map((value) => Number(value))
@@ -70,7 +80,8 @@ export async function createIncomingLot(formData: FormData) {
         data: {
           lotNumber,
           branchId,
-          supplierId,
+          supplierId: linkedSupplierId,
+          purchaseId,
           userId: user.id,
           notes,
           expectedDate: expectedRaw ? new Date(expectedRaw) : null,
@@ -84,7 +95,7 @@ export async function createIncomingLot(formData: FormData) {
         const ids = identity === "NONE" ? [] : parseIds(identifierBlocks[index] ?? "")
         const quantity = identity === "NONE" ? Math.max(1, quantities[index] || 0) : ids.length
         if (!productId || quantity < 1) throw new Error("Each line needs a product and a quantity or list of numbers.")
-        if (identity !== "NONE" && ids.length === 0) throw new Error("Paste IMEIs or serials for tracked items.")
+        if (identity !== "NONE" && ids.length === 0) throw new Error("Scan IMEIs or serials for tracked items.")
 
         await tx.incomingItem.create({
           data: {
@@ -116,7 +127,7 @@ export async function createIncomingLot(formData: FormData) {
               imei1: key,
               serialNumber: identity === "SERIAL" ? raw : null,
               productId,
-              supplierId,
+              supplierId: linkedSupplierId,
               branchId,
               status: "INCOMING",
               notes: `Coming on ${lotNumber}`,
@@ -186,6 +197,30 @@ export async function markIncomingArrived(formData: FormData) {
       where: { id: lot.id },
       data: { status: IncomingStatus.ARRIVED },
     })
+    if (lot.purchaseId) {
+      const purchase = await tx.purchase.findUnique({
+        where: { id: lot.purchaseId },
+        include: { items: true },
+      })
+      if (purchase) {
+        for (const incoming of lot.items) {
+          const line =
+            purchase.items.find((item) => item.productId === incoming.productId) ?? purchase.items[0]
+          if (!line) continue
+          const receivedQty = Math.min(line.quantity, line.receivedQty + incoming.quantity)
+          await tx.purchaseItem.update({ where: { id: line.id }, data: { receivedQty } })
+          line.receivedQty = receivedQty
+        }
+        const done = purchase.items.every((item) => item.receivedQty >= item.quantity)
+        await tx.purchase.update({
+          where: { id: purchase.id },
+          data: {
+            status: done ? "RECEIVED" : "PARTIAL_RECEIVED",
+            receivedDate: done ? new Date() : purchase.receivedDate,
+          },
+        })
+      }
+    }
     await tx.auditLog.create({
       data: {
         userId: user.id,
@@ -202,7 +237,63 @@ export async function markIncomingArrived(formData: FormData) {
   revalidatePath("/inventory")
   revalidatePath("/imei")
   revalidatePath("/pos")
+  revalidatePath("/purchases")
   return { success: true }
+}
+
+export async function getOpenPurchases() {
+  const user = await requireUser()
+  if (!(await canBookIncoming(user.role))) return []
+  const branchId = await scopedBranchId(user.role, user.branchId)
+  return prisma.purchase.findMany({
+    where: {
+      ...(branchId ? { branchId } : {}),
+      status: { in: ["PENDING", "ORDERED", "PARTIAL_RECEIVED"] },
+    },
+    select: { id: true, invoiceNumber: true, branchId: true, supplierId: true },
+    orderBy: { createdAt: "desc" },
+    take: 40,
+  })
+}
+
+export async function bookPurchaseAsComing(formData: FormData) {
+  const user = await requireUser()
+  if (!(await canBookIncoming(user.role))) return { error: "You cannot book goods before they arrive." }
+  const purchaseId = String(formData.get("id") || "")
+  const identifiers = parseIds(String(formData.get("imeis") || ""))
+  const purchase = await prisma.purchase.findUnique({
+    where: { id: purchaseId },
+    include: { items: { include: { product: true } } },
+  })
+  if (!purchase) return { error: "Purchase not found." }
+  const item = purchase.items[0]
+  if (!item) return { error: "This order has no lines." }
+
+  const alreadyComing = await prisma.incomingItem.aggregate({
+    where: { lot: { purchaseId, status: "COMING" }, productId: item.productId },
+    _sum: { quantity: true },
+  })
+  const remaining = item.quantity - item.receivedQty - (alreadyComing._sum.quantity ?? 0)
+  if (remaining < 1) return { error: "Nothing left to book as coming for this order." }
+
+  const tracking = item.product.tracking === "SERIAL" ? "SERIAL" : item.product.tracking === "NONE" ? "NONE" : "IMEI"
+  if (tracking !== "NONE" && identifiers.length === 0) {
+    return { error: "Scan the IMEIs or serials that are on the way." }
+  }
+  if (tracking !== "NONE" && identifiers.length > remaining) {
+    return { error: `Only ${remaining} units are still expected.` }
+  }
+
+  const next = new FormData()
+  next.set("branchId", purchase.branchId)
+  next.set("supplierId", purchase.supplierId)
+  next.set("purchaseId", purchase.id)
+  next.set("productId", item.productId)
+  next.set("identity", tracking)
+  next.set("quantity", tracking === "NONE" ? String(remaining) : "0")
+  next.set("identifiers", identifiers.join("\n"))
+  next.set("notes", `Booked from ${purchase.invoiceNumber}`)
+  return createIncomingLot(next)
 }
 
 export async function setIncomingVisible(formData: FormData) {

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation"
 import { reverseSupplierPayment } from "@/app/actions/access"
+import { bookPurchaseAsComing } from "@/app/actions/incoming"
 import { getPurchase, payPurchase, receivePurchaseImeis } from "@/app/actions/ops"
 import { isSuperAdmin } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
@@ -8,7 +9,7 @@ import { PageHeader, StatusBadge } from "@/components/shared"
 import { WorkflowSteps } from "@/components/workflow-steps"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
+import { ScanList } from "@/components/scan-field"
 import { formatCurrency, formatDate, money } from "@/lib/utils"
 
 export default async function PurchaseDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -28,7 +29,7 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
       />
       <WorkflowSteps
         current={step}
-        steps={["Order raised", "On the way", "Enter IMEIs", "In shop", "Pay supplier"]}
+        steps={["Order raised", "Coming", "Scan and check", "In shop", "Pay supplier"]}
       />
       <div className="grid gap-4 md:grid-cols-4">
         <div className="surface-card p-5">
@@ -52,15 +53,27 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
         </div>
       </div>
       {purchase.status !== "RECEIVED" ? (
-        <div className="surface-card p-5">
-          <h3 className="mb-2 font-semibold">Receive shipment</h3>
-          <p className="mb-4 text-sm text-muted-foreground">
-            Receiving stock does not pay the supplier. Paste one IMEI per line. Leave empty only for accessories without serials.
-          </p>
-          <ActionForm action={receivePurchaseImeis} submit={`Receive ${remaining} unit(s)`} className="space-y-3">
-            <input type="hidden" name="id" value={purchase.id} />
-            <Textarea name="imeis" placeholder={"351234567890123\n351234567890124"} />
-          </ActionForm>
+        <div className="grid gap-4 xl:grid-cols-2">
+          <div className="surface-card p-5">
+            <h3 className="mb-2 font-semibold">Book as coming</h3>
+            <p className="mb-4 text-sm text-muted-foreground">
+              Scan the IMEIs on the waybill. They stay as Coming until someone confirms they are in the shop. Stock does not rise yet.
+            </p>
+            <ActionForm action={bookPurchaseAsComing} submit="Book as goods on the way" className="space-y-3">
+              <input type="hidden" name="id" value={purchase.id} />
+              <ScanList name="imeis" required={item?.product.tracking !== "NONE"} />
+            </ActionForm>
+          </div>
+          <div className="surface-card p-5">
+            <h3 className="mb-2 font-semibold">Already in this shop</h3>
+            <p className="mb-4 text-sm text-muted-foreground">
+              Use this only if the boxes are on the counter now. Receiving stock does not pay the supplier.
+            </p>
+            <ActionForm action={receivePurchaseImeis} submit={`Add ${remaining} unit(s) to shop`} className="space-y-3">
+              <input type="hidden" name="id" value={purchase.id} />
+              <ScanList name="imeis" required={false} />
+            </ActionForm>
+          </div>
         </div>
       ) : (
         <div className="surface-card p-5 text-sm text-emerald-700">

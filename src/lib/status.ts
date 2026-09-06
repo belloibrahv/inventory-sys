@@ -31,6 +31,16 @@ const map: Record<string, Tone> = {
   RETURNED: "warning",
   SWAPPED: "info",
   REPAIRED: "info",
+  LOGIN: "info",
+  LOGOUT: "muted",
+  CREATE: "success",
+  UPDATE: "info",
+  DELETE: "danger",
+  EXPORT: "warning",
+  IMPORT: "info",
+  DENIED: "danger",
+  VIEW: "muted",
+  HIGH: "danger",
 }
 
 const labels: Record<string, string> = {
@@ -70,6 +80,17 @@ const labels: Record<string, string> = {
   REFURBISHED: "Refurbished",
   SWAP_DEVICE: "Swap phone",
   REPAIR_DEVICE: "Repair phone",
+  LOGIN: "Sign in",
+  LOGOUT: "Sign out",
+  CREATE: "Created",
+  UPDATE: "Changed",
+  DELETE: "Deleted",
+  EXPORT: "Downloaded",
+  IMPORT: "Uploaded",
+  DENIED: "Blocked",
+  VIEW: "Opened",
+  APPROVE: "Approved",
+  REJECT: "Rejected",
 }
 
 export function statusTone(status: string): Tone {

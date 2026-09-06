@@ -3,9 +3,12 @@
 import { useState } from "react"
 import { createIncomingLot } from "@/app/actions/incoming"
 import { ActionForm } from "@/components/action-form"
+import { ScanList } from "@/components/scan-field"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+
+type Purchase = { id: string; invoiceNumber: string; branchId: string; supplierId: string }
 
 type Product = { id: string; name: string; tracking: "IMEI" | "SERIAL" | "NONE" }
 type Branch = { id: string; name: string; isHq?: boolean }
@@ -15,14 +18,18 @@ export function IncomingForm({
   products,
   branches,
   suppliers,
+  purchases = [],
   defaultBranchId,
 }: {
   products: Product[]
   branches: Branch[]
   suppliers: Supplier[]
+  purchases?: Purchase[]
   defaultBranchId?: string | null
 }) {
   const [rows, setRows] = useState([{ key: 1, productId: products[0]?.id ?? "", identity: products[0]?.tracking ?? "IMEI" }])
+  const [branchId, setBranchId] = useState(defaultBranchId ?? branches[0]?.id ?? "")
+  const [supplierId, setSupplierId] = useState("")
 
   function updateRow(key: number, productId: string) {
     const tracking = products.find((item) => item.id === productId)?.tracking ?? "IMEI"
@@ -31,19 +38,39 @@ export function IncomingForm({
 
   return (
     <ActionForm action={createIncomingLot} submit="Book goods on the way" className="space-y-3">
-      <Select name="branchId" defaultValue={defaultBranchId ?? branches[0]?.id} required>
+      <Select name="branchId" value={branchId} onChange={(event) => setBranchId(event.target.value)} required>
         {branches.map((branch) => (
           <option key={branch.id} value={branch.id}>
             {branch.name}{branch.isHq ? " · HQ" : ""}
           </option>
         ))}
       </Select>
-      <Select name="supplierId" defaultValue="">
+      <Select name="supplierId" value={supplierId} onChange={(event) => setSupplierId(event.target.value)}>
         <option value="">Supplier (optional)</option>
         {suppliers.map((supplier) => (
           <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
         ))}
       </Select>
+      {purchases.length ? (
+        <Select
+          name="purchaseId"
+          defaultValue=""
+          onChange={(event) => {
+            const purchase = purchases.find((row) => row.id === event.target.value)
+            if (purchase) {
+              setBranchId(purchase.branchId)
+              setSupplierId(purchase.supplierId)
+            }
+          }}
+        >
+          <option value="">Not tied to a supplier order</option>
+          {purchases.map((purchase) => (
+            <option key={purchase.id} value={purchase.id}>
+              {purchase.invoiceNumber}
+            </option>
+          ))}
+        </Select>
+      ) : null}
       <Input name="expectedDate" type="date" />
       {rows.map((row) => (
         <div key={row.key} className="space-y-2 rounded-xl border border-border p-3">
@@ -61,11 +88,7 @@ export function IncomingForm({
           ) : (
             <>
               <input type="hidden" name="quantity" value="0" />
-              <Textarea
-                name="identifiers"
-                placeholder={row.identity === "IMEI" ? "Paste IMEIs, one per line" : "Paste serial numbers, one per line"}
-                required
-              />
+              <ScanList name="identifiers" kind={row.identity === "SERIAL" ? "SERIAL" : "IMEI"} />
             </>
           )}
           <p className="text-xs text-muted-foreground">

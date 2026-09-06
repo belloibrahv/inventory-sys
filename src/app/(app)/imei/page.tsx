@@ -1,11 +1,11 @@
 import Link from "next/link"
-import { getImeiRecords, intakeImei } from "@/app/actions/imei"
+import { getImeiRecords } from "@/app/actions/imei"
 import { getProducts } from "@/app/actions/catalog"
 import { getBranches, getSuppliers } from "@/app/actions/parties"
-import { ActionForm } from "@/components/action-form"
 import { PageHeader, StatusBadge } from "@/components/shared"
 import { WorkflowSteps } from "@/components/workflow-steps"
 import { Button } from "@/components/ui/button"
+import { ImeiIntakeForm } from "@/app/(app)/imei/intake-form"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { warrantyState } from "@/lib/warranty"
@@ -72,28 +72,11 @@ export default async function ImeiPage({ searchParams }: { searchParams: Promise
         </div>
         <div className="surface-card p-5">
           <h3 className="mb-4 font-semibold">Stock intake</h3>
-          <ActionForm action={intakeImei} submit="Add phone to shop" className="space-y-3">
-            <Input name="imei1" placeholder="IMEI 1" required />
-            <Input name="imei2" placeholder="IMEI 2" />
-            <Input name="serialNumber" placeholder="Serial" />
-            <Select name="productId" required>
-              {products.map((product) => (
-                <option key={product.id} value={product.id}>{product.name}</option>
-              ))}
-            </Select>
-            <Select name="branchId" required>
-              {branches.map((branch) => (
-                <option key={branch.id} value={branch.id}>{branch.name}</option>
-              ))}
-            </Select>
-            <Select name="supplierId">
-              <option value="">Supplier</option>
-              {suppliers.map((supplier) => (
-                <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
-              ))}
-            </Select>
-            <Input name="notes" placeholder="Notes" />
-          </ActionForm>
+          <ImeiIntakeForm
+            products={products.map((product) => ({ id: product.id, name: product.name }))}
+            branches={branches.map((branch) => ({ id: branch.id, name: branch.name }))}
+            suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name }))}
+          />
         </div>
       </div>
     </div>

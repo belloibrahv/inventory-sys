@@ -11,6 +11,21 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {data.tasks.length ? (
+        <div className="surface-card p-5">
+          <h3 className="mb-3 font-semibold">Do these next</h3>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {data.tasks.map((task) => (
+              <a key={task.href + task.label} href={task.href} className="rounded-xl border border-border px-4 py-3 hover:bg-muted">
+                <p className="text-2xl font-semibold">{task.count}</p>
+                <p className="text-sm text-muted-foreground">{task.label}</p>
+              </a>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">No open shop tasks for you right now.</p>
+      )}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           label="Total sales"

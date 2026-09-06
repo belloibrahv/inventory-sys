@@ -64,7 +64,7 @@ export async function getPurchase(id: string) {
   await requireUser()
   return prisma.purchase.findUnique({
     where: { id },
-    include: { supplier: true, branch: true, user: true, items: { include: { product: true } } },
+    include: { supplier: true, branch: true, user: true, items: { include: { product: true } }, incomingLots: true },
   })
 }
 
@@ -1002,7 +1002,7 @@ export async function receiveTransfer(formData: FormData) {
   const confirmed = parseImeis(String(formData.get("imeis") || ""))
   if (expected.length) {
     if (confirmed.length !== expected.length || expected.some((imei) => !confirmed.includes(imei))) {
-      return { error: "Paste every dispatched IMEI. Destination must confirm the serials that arrived." }
+      return { error: "Scan every dispatched IMEI. The receiving shop must confirm the serials that arrived." }
     }
   }
 

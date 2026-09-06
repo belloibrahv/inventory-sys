@@ -73,8 +73,11 @@ export default function LoginPage() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="min-h-12" />
           </div>
+          <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-950">
+            Practice logins such as ceo@abutwins.com are for training. Change or remove them before this shop goes live.
+          </p>
           {error ? <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
           <Button className="w-full" disabled={loading}>
             {loading ? "Checking..." : "Sign in"}

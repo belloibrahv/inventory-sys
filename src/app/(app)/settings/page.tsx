@@ -1,9 +1,10 @@
 import { getSettings, saveSetting } from "@/app/actions/finance"
+import { BackupButton } from "@/app/(app)/settings/backup-button"
 import { ActionForm } from "@/components/action-form"
 import { PageHeader } from "@/components/shared"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
-import { can } from "@/lib/permissions"
+import { can, isSuperAdmin } from "@/lib/permissions"
 import { requireUser } from "@/lib/session"
 
 const labels: Record<string, string> = {
@@ -50,6 +51,15 @@ export default async function SettingsPage() {
           </div>
         ))}
       </div>
+      {isSuperAdmin(me.role) ? (
+        <div className="surface-card p-5">
+          <h3 className="mb-2 font-semibold">Shop backup</h3>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Downloads a JSON copy of shops, staff emails (not passwords), stock, IMEIs, sales, and purchases. Keep it off this computer.
+          </p>
+          <BackupButton />
+        </div>
+      ) : null}
     </div>
   )
 }

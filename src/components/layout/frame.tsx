@@ -13,7 +13,7 @@ export function AppFrame({
   children,
 }: {
   unread: number
-  user: { name?: string | null; role: UserRole }
+  user: { name?: string | null; role: UserRole; mustChangePassword?: boolean }
   allowedHrefs: string[]
   children: ReactNode
 }) {

@@ -4,7 +4,7 @@ import { getPosLookups } from "@/app/actions/sales"
 import { ActionForm } from "@/components/action-form"
 import { PageHeader, StatusBadge } from "@/components/shared"
 import { WorkflowSteps } from "@/components/workflow-steps"
-import { Textarea } from "@/components/ui/textarea"
+import { ScanList } from "@/components/scan-field"
 import { TransferForm } from "./transfer-form"
 
 export default async function TransfersPage() {
@@ -36,14 +36,15 @@ export default async function TransfersPage() {
               {transfer.status !== "RECEIVED" ? (
                 <div className="mt-4 border-t border-border pt-4">
                   <p className="mb-2 text-sm text-muted-foreground">
-                    {transfer.toBranch.name} must paste the IMEIs that actually arrived.
+                    {transfer.toBranch.name} must scan the IMEIs that actually arrived.
                   </p>
                   <ActionForm action={receiveTransfer} submit="Confirm arrival" className="space-y-2">
                     <input type="hidden" name="id" value={transfer.id} />
-                    <Textarea
-                      name="imeis"
-                      placeholder={transfer.imeis.map((item) => item.imei1).join("\n") || "No serials. Accessory quantity only"}
-                    />
+                    {transfer.imeis.length ? (
+                      <ScanList name="imeis" />
+                    ) : (
+                      <p className="text-xs text-muted-foreground">No serials. Confirm the accessory quantity only.</p>
+                    )}
                   </ActionForm>
                 </div>
               ) : (

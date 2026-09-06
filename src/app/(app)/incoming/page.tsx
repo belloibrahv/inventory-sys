@@ -1,4 +1,4 @@
-import { getIncomingLots, markIncomingArrived, setIncomingVisible } from "@/app/actions/incoming"
+import { getIncomingLots, getOpenPurchases, markIncomingArrived, setIncomingVisible } from "@/app/actions/incoming"
 import { getProducts } from "@/app/actions/catalog"
 import { getBranches, getSuppliers } from "@/app/actions/parties"
 import { IncomingForm } from "@/app/(app)/incoming/incoming-form"
@@ -10,11 +10,12 @@ import { requireUser } from "@/lib/session"
 
 export default async function IncomingPage() {
   const me = await requireUser()
-  const [lots, products, branches, suppliers] = await Promise.all([
+  const [lots, products, branches, suppliers, purchases] = await Promise.all([
     getIncomingLots(),
     getProducts(),
     getBranches(),
     getSuppliers(),
+    getOpenPurchases(),
   ])
   const canBook = isSuperAdmin(me.role) || (await can(me.role, "action.incoming"))
   const activeShops = branches.filter((branch) => branch.isActive)
@@ -38,6 +39,7 @@ export default async function IncomingPage() {
                   <p className="text-sm text-muted-foreground">
                     Going to {lot.branch.name}
                     {lot.supplier ? ` · ${lot.supplier.name}` : ""}
+                    {lot.purchase ? ` · order ${lot.purchase.invoiceNumber}` : ""}
                     {lot.expectedDate ? ` · due ${lot.expectedDate.toLocaleDateString("en-NG")}` : ""}
                   </p>
                 </div>
@@ -81,7 +83,7 @@ export default async function IncomingPage() {
       <div className="surface-card p-5">
         <h3 className="mb-2 font-semibold">Book before arrival</h3>
         <p className="mb-4 text-sm text-muted-foreground">
-          Super Admin or Goods intake can upload IMEIs, serials, or a simple piece count. Stock in the shops does not go up until arrival is confirmed.
+          Super Admin or Goods intake can scan IMEIs, serials, or enter a simple piece count. Tie the list to a supplier order when you can. Stock in the shops does not go up until arrival is confirmed.
         </p>
         {canBook ? (
           <IncomingForm
@@ -89,6 +91,7 @@ export default async function IncomingPage() {
             products={products.map((product) => ({ id: product.id, name: product.name, tracking: product.tracking }))}
             branches={activeShops.map((branch) => ({ id: branch.id, name: branch.name, isHq: branch.isHq }))}
             suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name }))}
+            purchases={purchases}
             defaultBranchId={me.branchId}
           />
         ) : (

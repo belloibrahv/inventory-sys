@@ -192,6 +192,8 @@ enum AuditAction {
   REJECT
   EXPORT
   IMPORT
+  DENIED
+  VIEW
 }
 
 enum NotificationType {
@@ -218,9 +220,11 @@ model User {
   role             UserRole  @default(SALES_EXECUTIVE)
   branchId         String?
   branch           Branch?   @relation(fields: [branchId], references: [id])
-  isActive         Boolean   @default(true)
-  twoFactorEnabled Boolean   @default(false)
-  lastLoginAt      DateTime?
+  isActive           Boolean   @default(true)
+  twoFactorEnabled   Boolean   @default(false)
+  totpSecret         String?
+  mustChangePassword Boolean   @default(false)
+  lastLoginAt        DateTime?
   lastLoginIp      String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
@@ -238,6 +242,7 @@ model User {
   approvalsDec  Approval[]       @relation("ApprovalDecider")
   reconciliations Reconciliation[]
   incomingLots    IncomingLot[]
+  dayCloses       DayClose[]
 
   @@index([email])
   @@index([branchId])
@@ -271,6 +276,7 @@ model Branch {
   repairs         Repair[]
   financeEntries  FinanceEntry[]
   incomingLots    IncomingLot[]
+  dayCloses       DayClose[]
 
   @@index([code])
   @@index([isActive])
@@ -363,9 +369,13 @@ model ImeiRecord {
   customer     Customer?  @relation(fields: [customerId], references: [id])
   saleId       String?
   sale         Sale?      @relation(fields: [saleId], references: [id])
-  notes        String?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  notes          String?
+  cosmeticGrade  String?
+  batteryHealth  Int?
+  conditionNotes String?
+  photoData      String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
   saleItems SaleItem[]
   returns   StockReturn[]
@@ -436,7 +446,8 @@ model Purchase {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
-  items PurchaseItem[]
+  items        PurchaseItem[]
+  incomingLots IncomingLot[]
 
   @@index([invoiceNumber])
   @@index([supplierId])
@@ -788,20 +799,27 @@ model ReconciliationItem {
 
 model AuditLog {
   id         String      @id @default(cuid())
-  userId     String
-  user       User        @relation(fields: [userId], references: [id])
+  userId     String?
+  user       User?       @relation(fields: [userId], references: [id])
   action     AuditAction
   entityType String
   entityId   String
   oldValue   String?
   newValue   String?
   ipAddress  String?
+  userAgent  String?
+  path       String?
+  success    Boolean     @default(true)
+  risk       String      @default("LOW")
+  hash       String?
   branchId   String?
   createdAt  DateTime    @default(now())
 
   @@index([userId])
   @@index([action])
   @@index([entityType])
+  @@index([risk])
+  @@index([success])
   @@index([createdAt])
 }
 
@@ -842,12 +860,36 @@ model IncomingLot {
   visible      Boolean        @default(false)
   expectedDate DateTime?
   notes        String?
+  purchaseId   String?
+  purchase     Purchase?      @relation(fields: [purchaseId], references: [id])
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   items        IncomingItem[]
 
   @@index([branchId])
   @@index([status])
+  @@index([purchaseId])
+}
+
+model DayClose {
+  id            String   @id @default(cuid())
+  branchId      String
+  branch        Branch   @relation(fields: [branchId], references: [id])
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  closeDate     DateTime
+  expectedCash  Decimal
+  countedCash   Decimal
+  variance      Decimal
+  transferTotal Decimal  @default(0)
+  posTotal      Decimal  @default(0)
+  creditTotal   Decimal  @default(0)
+  saleCount     Int      @default(0)
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  @@index([branchId])
+  @@index([closeDate])
 }
 
 model IncomingItem {

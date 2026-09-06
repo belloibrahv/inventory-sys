@@ -63,6 +63,10 @@ export async function intakeImei(formData: FormData) {
       branchId,
       status: "IN_STOCK",
       notes: String(formData.get("notes") || "") || null,
+      cosmeticGrade: String(formData.get("cosmeticGrade") || "") || null,
+      batteryHealth: formData.get("batteryHealth") ? Number(formData.get("batteryHealth")) : null,
+      conditionNotes: String(formData.get("conditionNotes") || "") || null,
+      photoData: String(formData.get("photoData") || "") || null,
     },
   })
 
@@ -85,6 +89,38 @@ export async function intakeImei(formData: FormData) {
 
   revalidatePath("/imei")
   revalidatePath("/inventory")
+  return { success: true }
+}
+
+export async function updateImeiCondition(formData: FormData) {
+  const user = await requireUser()
+  if (!(await can(user.role, "action.intake")) && !(await can(user.role, "action.repair"))) {
+    return { error: "You cannot update phone condition." }
+  }
+  const id = String(formData.get("id") || "")
+  const batteryRaw = String(formData.get("batteryHealth") || "")
+  const batteryHealth = batteryRaw ? Number(batteryRaw) : null
+  await prisma.imeiRecord.update({
+    where: { id },
+    data: {
+      cosmeticGrade: String(formData.get("cosmeticGrade") || "") || null,
+      batteryHealth: Number.isFinite(batteryHealth) ? batteryHealth : null,
+      conditionNotes: String(formData.get("conditionNotes") || "") || null,
+      photoData: String(formData.get("photoData") || "") || null,
+    },
+  })
+  await prisma.auditLog.create({
+    data: {
+      userId: user.id,
+      action: "UPDATE",
+      entityType: "IMEIRecord",
+      entityId: id,
+      newValue: JSON.stringify({ cosmeticGrade: String(formData.get("cosmeticGrade") || ""), batteryHealth }),
+      branchId: user.branchId,
+    },
+  })
+  revalidatePath("/imei")
+  revalidatePath(`/imei/${id}`)
   return { success: true }
 }
 

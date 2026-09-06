@@ -365,6 +365,7 @@ export async function createStaff(formData: FormData) {
       role,
       branchId: ["SUPER_ADMIN", "CEO", "AUDITOR", "ACCOUNTANT"].includes(role) ? null : branchId,
       isActive: true,
+      mustChangePassword: true,
     },
   })
   await prisma.auditLog.create({

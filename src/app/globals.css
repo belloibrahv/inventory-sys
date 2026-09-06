@@ -78,6 +78,16 @@ body {
   font-feature-settings: "ss01", "cv11";
 }
 
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea,
+  button {
+    min-height: 44px;
+    font-size: 16px;
+  }
+}
+
 .surface-card {
   @apply rounded-2xl border border-border/80 bg-card shadow-[0_8px_30px_rgb(15,23,42,0.04)];
 }

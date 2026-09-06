@@ -1,6 +1,8 @@
 import { UserRole } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 
+export { isSuperAdmin } from "@/lib/roles"
+
 export const VIEW_PERMS = [
   { key: "view.dashboard", label: "Home", href: "/dashboard" },
   { key: "view.products", label: "Phones & items", href: "/products" },
@@ -93,10 +95,6 @@ const DEFAULTS: Record<UserRole, string[]> = {
     "view.dashboard", "view.imei", "view.repairs", "view.returns", "view.customers", "view.notifications",
     "action.repair", "action.return"
   ),
-}
-
-export function isSuperAdmin(role: UserRole) {
-  return role === "SUPER_ADMIN"
 }
 
 export async function ensureRolePermissions() {

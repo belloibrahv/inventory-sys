@@ -1,19 +1,7 @@
-import { UserRole } from "@prisma/client"
-import { can, isSuperAdmin } from "@/lib/permissions"
+import type { UserRole } from "@prisma/client"
+import { can } from "@/lib/permissions"
 
-export const ROLE_LABELS: Record<UserRole, string> = {
-  SUPER_ADMIN: "Super Admin",
-  CEO: "CEO",
-  AUDITOR: "Records checker",
-  ACCOUNTANT: "Accountant",
-  BRANCH_MANAGER: "Shop manager",
-  VAULT_MANAGER: "Goods intake",
-  CASHIER: "Cashier",
-  SALES_EXECUTIVE: "Sales person",
-  ENGINEER: "Repair engineer",
-}
-
-export { isSuperAdmin }
+export { isSuperAdmin, ROLE_LABELS } from "@/lib/roles"
 
 export async function canSeeAllBranches(role: UserRole) {
   return can(role, "action.all_branches")

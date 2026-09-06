@@ -5,9 +5,12 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { createCustomer } from "@/app/actions/parties"
 import { checkoutSale } from "@/app/actions/sales"
+import { ScanField } from "@/components/scan-field"
+import { OfflineBanner } from "@/components/offline-banner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
+import { pushSaleQueue } from "@/lib/offline-sales"
 import { formatCurrency, money } from "@/lib/utils"
 import { Trash2 } from "lucide-react"
 
@@ -113,6 +116,19 @@ export function PosClient({
     router.refresh()
   }
 
+  function takeScan(code: string) {
+    const exact = branchImeis.find(
+      (item) => item.imei1 === code || item.serialNumber === code || item.imei1.endsWith(code)
+    )
+    if (exact) {
+      addImei(exact)
+      toast.success("Added to cart")
+      return
+    }
+    setQuery(code)
+    toast.error("That IMEI is not In shop here. Check Goods on the way or the shop.")
+  }
+
   function addImei(item: Imei) {
     const price = money(item.product.sellingPrice)
     setCart((current) => [
@@ -168,8 +184,7 @@ export function PosClient({
       toast.error("One price is below the lowest allowed. Raise it, or ask Super Admin.")
       return
     }
-    setBusy(true)
-    const result = await checkoutSale({
+    const payload = {
       customerId: customerId || undefined,
       branchId,
       paymentMethod: method,
@@ -182,7 +197,27 @@ export function PosClient({
         quantity: line.quantity,
         unitPrice: line.unitPrice,
       })),
-    })
+    }
+    setBusy(true)
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      pushSaleQueue(payload)
+      setBusy(false)
+      toast.message("Saved on this device. Send it when the line returns.")
+      setCart([])
+      setPaid(0)
+      return
+    }
+    let result: Awaited<ReturnType<typeof checkoutSale>>
+    try {
+      result = await checkoutSale(payload)
+    } catch {
+      pushSaleQueue(payload)
+      setBusy(false)
+      toast.message("The server did not answer. This sale is waiting on this device.")
+      setCart([])
+      setPaid(0)
+      return
+    }
     setBusy(false)
     if (result.error) {
       toast.error(result.error)
@@ -196,12 +231,19 @@ export function PosClient({
   return (
     <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
       <div className="space-y-4">
-        <div className="surface-card p-4">
+        <OfflineBanner />
+        <div className="surface-card space-y-3 p-4">
+          <ScanField onScan={takeScan} placeholder="Scan IMEI to sell, then Enter" />
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Scan IMEI or serial, or type an accessory name"
-            autoFocus
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault()
+                takeScan(query)
+              }
+            }}
+            placeholder="Or type an accessory name"
           />
           {query ? (
             <div className="mt-3 space-y-2">
@@ -387,9 +429,12 @@ export function PosClient({
             <p className="mt-1 text-xs text-muted-foreground">After this sale they would owe {formatCurrency(nextDebt)}</p>
           ) : null}
         </div>
-        <Button className="w-full" disabled={!cart.length || busy} onClick={checkout}>
+        <Button className="min-h-12 w-full" disabled={!cart.length || busy} onClick={checkout}>
           {busy ? "Posting..." : "Complete sale"}
         </Button>
+        <p className="text-xs text-muted-foreground">
+          USB scanners work like a keyboard. Print the invoice after the sale. If a receipt printer is attached, printing can open the cash drawer.
+        </p>
       </div>
     </div>
   )

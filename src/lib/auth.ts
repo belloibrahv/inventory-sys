@@ -4,6 +4,8 @@ import CredentialsProvider from "next-auth/providers/credentials"
 import * as bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
 import { UserRole } from "@prisma/client"
+import { alertWatchers, writeAudit } from "@/lib/audit"
+import { requestContext } from "@/lib/audit-meta"
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -14,36 +16,50 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
+        const email = String(credentials?.email || "").toLowerCase().trim()
+        const password = String(credentials?.password || "")
+        if (!email || !password) {
           throw new Error("Invalid credentials")
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email.toLowerCase() },
-        })
-
-        if (!user || !user.isActive) {
-          throw new Error("Invalid credentials")
-        }
-
-        const valid = await bcrypt.compare(credentials.password, user.password)
-        if (!valid) {
-          throw new Error("Invalid credentials")
-        }
-
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { lastLoginAt: new Date() },
-        })
-
-        await prisma.auditLog.create({
-          data: {
-            userId: user.id,
+        const user = await prisma.user.findUnique({ where: { email } })
+        const valid = user?.isActive ? await bcrypt.compare(password, user.password) : false
+        if (!user || !user.isActive || !valid) {
+          await writeAudit({
+            userId: user?.id ?? null,
             action: "LOGIN",
             entityType: "User",
-            entityId: user.id,
-            branchId: user.branchId,
-          },
+            entityId: email,
+            newValue: JSON.stringify({ result: "denied", reason: !user ? "unknown" : user.isActive ? "bad_password" : "locked" }),
+            branchId: user?.branchId ?? null,
+            success: false,
+            risk: "HIGH",
+          })
+          const since = new Date(Date.now() - 10 * 60 * 1000)
+          const fails = await prisma.auditLog.count({
+            where: { action: "LOGIN", success: false, entityId: email, createdAt: { gte: since } },
+          })
+          if (fails >= 3) {
+            await alertWatchers(
+              "Repeated failed sign-in",
+              `${email} failed sign-in ${fails} times in 10 minutes. Check Who did what.`
+            )
+          }
+          throw new Error("Invalid credentials")
+        }
+
+        const ctx = await requestContext()
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { lastLoginAt: new Date(), lastLoginIp: ctx.ip },
+        })
+        await writeAudit({
+          userId: user.id,
+          action: "LOGIN",
+          entityType: "User",
+          entityId: user.email,
+          newValue: JSON.stringify({ result: "ok" }),
+          branchId: user.branchId,
         })
 
         return {
@@ -62,6 +78,21 @@ export const authOptions: NextAuthOptions = {
   },
   pages: {
     signIn: "/login",
+  },
+  events: {
+    async signOut(message) {
+      const token = "token" in message ? message.token : null
+      const id = typeof token?.id === "string" ? token.id : null
+      if (!id) return
+      const user = await prisma.user.findUnique({ where: { id }, select: { email: true, branchId: true } })
+      await writeAudit({
+        userId: id,
+        action: "LOGOUT",
+        entityType: "User",
+        entityId: user?.email ?? id,
+        branchId: user?.branchId ?? null,
+      })
+    },
   },
   callbacks: {
     async jwt({ token, user }) {

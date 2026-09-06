@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { getImeiDetail } from "@/app/actions/imei"
+import { ImeiConditionForm } from "@/app/(app)/imei/condition-form"
 import { PageHeader, StatusBadge } from "@/components/shared"
 import { WorkflowSteps } from "@/components/workflow-steps"
 import { formatCurrency, formatDateTime, money } from "@/lib/utils"
@@ -90,6 +91,12 @@ export default async function ImeiDetailPage({ params }: { params: Promise<{ id:
               </p>
             ))}
             {record.notes ? <p className="text-muted-foreground">{record.notes}</p> : null}
+            <div className="mt-4 space-y-2 border-t border-border pt-4">
+              <p className="font-medium">Condition</p>
+              <p>Grade {record.cosmeticGrade ?? "-"}{record.batteryHealth != null ? ` · battery ${record.batteryHealth}%` : ""}</p>
+              {record.conditionNotes ? <p className="text-muted-foreground">{record.conditionNotes}</p> : null}
+              {record.photoData ? <img src={record.photoData} alt="Phone condition" className="mt-2 h-48 w-full rounded-xl object-cover" /> : null}
+            </div>
           </div>
         </div>
         <div className="surface-card p-5">
@@ -97,7 +104,7 @@ export default async function ImeiDetailPage({ params }: { params: Promise<{ id:
           <div className="space-y-3 text-sm">
             {logs.map((log) => (
               <div key={log.id} className="border-b border-border/70 pb-2">
-                <p className="font-medium">{log.action} · {log.user.name}</p>
+                <p className="font-medium">{log.action} · {log.user?.name ?? "Unknown"}</p>
                 <p className="text-xs text-muted-foreground">{formatDateTime(log.createdAt)}</p>
                 <p className="truncate text-xs text-muted-foreground">{log.newValue}</p>
               </div>
@@ -105,6 +112,16 @@ export default async function ImeiDetailPage({ params }: { params: Promise<{ id:
             {logs.length === 0 ? <p className="text-sm text-muted-foreground">No audit rows yet for this IMEI.</p> : null}
           </div>
         </div>
+      </div>
+      <div className="surface-card p-5">
+        <h3 className="mb-3 font-semibold">Update condition and photo</h3>
+        <ImeiConditionForm
+          id={record.id}
+          cosmeticGrade={record.cosmeticGrade}
+          batteryHealth={record.batteryHealth}
+          conditionNotes={record.conditionNotes}
+          photoData={record.photoData}
+        />
       </div>
     </div>
   )

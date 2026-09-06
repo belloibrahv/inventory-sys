@@ -40,6 +40,8 @@ export async function getDashboardData() {
     walkIns,
     openPurchases,
     vaultCounts,
+    overdueIncoming,
+    pendingTransfers,
   ] = await Promise.all([
     prisma.sale.aggregate({
       where: { ...saleWhere, saleDate: { gte: monthStart } },
@@ -104,6 +106,19 @@ export async function getDashboardData() {
       by: ["productId", "branchId"],
       where: { status: "IN_STOCK", ...(branchId ? { branchId } : {}) },
       _count: { _all: true },
+    }),
+    prisma.incomingLot.count({
+      where: {
+        status: "COMING",
+        expectedDate: { lt: new Date(now.getFullYear(), now.getMonth(), now.getDate()) },
+        ...(branchId ? { branchId } : {}),
+      },
+    }),
+    prisma.stockTransfer.count({
+      where: {
+        status: { in: ["PENDING", "IN_TRANSIT"] },
+        ...(branchId ? { OR: [{ fromBranchId: branchId }, { toBranchId: branchId }] } : {}),
+      },
     }),
   ])
 
@@ -207,6 +222,17 @@ export async function getDashboardData() {
         return serialized && vault !== row.quantity
       }).length,
     },
+    tasks: [
+      { href: "/incoming", label: "Overdue goods on the way", count: overdueIncoming },
+      { href: "/transfers", label: "Transfers waiting for confirm", count: pendingTransfers },
+      { href: "/sales", label: "Walk-in sales with no name", count: walkIns },
+      {
+        href: "/inventory",
+        label: "Low stock",
+        count: stock.filter((row) => row.quantity <= (row.minStock > 0 ? row.minStock : 3)).length,
+      },
+      { href: "/approvals", label: "Waiting for approval", count: pendingApprovals },
+    ].filter((task) => task.count > 0),
   }
 }
 

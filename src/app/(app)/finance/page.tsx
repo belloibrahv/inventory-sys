@@ -7,7 +7,13 @@ export default async function FinancePage() {
   const data = await getFinance()
   return (
     <div className="space-y-6">
-      <PageHeader title="Money in & out" description="Cash and bank movements, what customers owe us, and what we owe suppliers." />
+      <PageHeader
+        title="Money in & out"
+        description="Cash and bank movements, what customers owe us, and what we owe suppliers."
+      />
+      <p className="text-sm">
+        <Link href="/finance/close" className="text-primary">Close the day and export cash count</Link>
+      </p>
       <div className="grid gap-4 md:grid-cols-3">
         <div className="surface-card p-5">
           <p className="text-sm text-muted-foreground">Money in</p>

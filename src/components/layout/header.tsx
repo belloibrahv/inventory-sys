@@ -2,11 +2,11 @@
 
 import { signOut } from "next-auth/react"
 import type { UserRole } from "@prisma/client"
-import { useTheme } from "next-themes"
+import { useTheme } from "@/components/theme-provider"
 import { Bell, Menu, Moon, Search, Sun } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useUI } from "@/store/ui"
-import { ROLE_LABELS } from "@/lib/rbac"
+import { ROLE_LABELS } from "@/lib/roles"
 
 export function Header({
   title,
@@ -68,6 +68,9 @@ export function Header({
               {user?.role ? ROLE_LABELS[user.role] : ""}
             </p>
           </div>
+          <a href="/account" className="text-[11px] text-muted-foreground hover:text-foreground">
+            Account
+          </a>
           <button className="text-[11px] text-muted-foreground hover:text-foreground" onClick={() => signOut({ callbackUrl: "/login" })}>
             Sign out
           </button>
