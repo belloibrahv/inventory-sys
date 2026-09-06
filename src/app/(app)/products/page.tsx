@@ -1,4 +1,5 @@
 import { bulkAdjustPrices, createProduct, getProductLookups, getProducts, updateProductPrice, updateProductWarranty } from "@/app/actions/catalog"
+import { BulkProductUpload } from "@/app/(app)/products/bulk-upload"
 import { ActionForm } from "@/components/action-form"
 import { PageHeader, StatusBadge } from "@/components/shared"
 import { Input } from "@/components/ui/input"
@@ -71,8 +72,9 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
           ) : null}
           {canEdit ? (
           <>
+          <BulkProductUpload />
           <div className="surface-card p-5">
-            <h3 className="mb-4 font-semibold">Add product</h3>
+            <h3 className="mb-4 font-semibold">Add one product</h3>
             <ActionForm action={createProduct} submit="Create product" className="space-y-3">
               <Input name="sku" placeholder="Item code" required />
               <Input name="name" placeholder="Name" required />

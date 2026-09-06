@@ -205,3 +205,234 @@ export async function bulkAdjustPrices(formData: FormData) {
   revalidatePath("/products")
   return { success: true, updated: products.length }
 }
+
+const CONDITIONS: Record<string, ProductCondition> = {
+  brand_new: "BRAND_NEW",
+  brandnew: "BRAND_NEW",
+  new: "BRAND_NEW",
+  open_box: "OPEN_BOX",
+  openbox: "OPEN_BOX",
+  uk_used: "UK_USED",
+  ukused: "UK_USED",
+  refurbished: "REFURBISHED",
+  swap_device: "SWAP_DEVICE",
+  swap: "SWAP_DEVICE",
+  faulty: "FAULTY",
+  repair_device: "REPAIR_DEVICE",
+  repair: "REPAIR_DEVICE",
+}
+
+const TRACKING: Record<string, ProductTracking> = {
+  imei: "IMEI",
+  phone: "IMEI",
+  serial: "SERIAL",
+  none: "NONE",
+  no_number: "NONE",
+  nonumber: "NONE",
+}
+
+function keyName(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")
+}
+
+function cell(row: Record<string, string>, ...names: string[]) {
+  const wanted = new Set(names.map(keyName))
+  for (const [key, value] of Object.entries(row)) {
+    if (wanted.has(keyName(key)) && value.trim()) return value.trim()
+  }
+  return ""
+}
+
+function parseCsv(text: string) {
+  const rows: string[][] = []
+  let row: string[] = []
+  let cellValue = ""
+  let quoted = false
+  const input = text.replace(/^\uFEFF/, "")
+  for (let i = 0; i < input.length; i += 1) {
+    const char = input[i]
+    if (quoted) {
+      if (char === '"' && input[i + 1] === '"') {
+        cellValue += '"'
+        i += 1
+      } else if (char === '"') {
+        quoted = false
+      } else {
+        cellValue += char
+      }
+      continue
+    }
+    if (char === '"') {
+      quoted = true
+      continue
+    }
+    if (char === "," || char === "\t") {
+      row.push(cellValue)
+      cellValue = ""
+      continue
+    }
+    if (char === "\n" || char === "\r") {
+      if (char === "\r" && input[i + 1] === "\n") i += 1
+      row.push(cellValue)
+      if (row.some((item) => item.trim())) rows.push(row)
+      row = []
+      cellValue = ""
+      continue
+    }
+    cellValue += char
+  }
+  row.push(cellValue)
+  if (row.some((item) => item.trim())) rows.push(row)
+  return rows
+}
+
+function rowsFromSheet(text: string) {
+  const table = parseCsv(text)
+  if (table.length < 2) return []
+  const headers = table[0].map((item) => item.trim())
+  return table.slice(1).map((line) => {
+    const row: Record<string, string> = {}
+    headers.forEach((header, index) => {
+      row[header] = line[index] ?? ""
+    })
+    return row
+  })
+}
+
+async function readUpload(file: File) {
+  const name = file.name.toLowerCase()
+  if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+    const XLSX = await import("xlsx")
+    const workbook = XLSX.read(Buffer.from(await file.arrayBuffer()), { type: "buffer" })
+    const sheet = workbook.Sheets[workbook.SheetNames[0]]
+    if (!sheet) return []
+    return XLSX.utils.sheet_to_json<Record<string, string | number>>(sheet, { defval: "" }).map((row) =>
+      Object.fromEntries(Object.entries(row).map(([key, value]) => [String(key), String(value ?? "").trim()]))
+    )
+  }
+  return rowsFromSheet(await file.text())
+}
+
+export async function importProducts(formData: FormData) {
+  const user = await requireUser()
+  if (!(await canManageCatalog(user.role))) return { error: "You cannot add or change phones and items." }
+
+  const file = formData.get("file")
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose an Excel or CSV file first." }
+  if (file.size > 2_000_000) return { error: "That file is too big. Use a file under 2 MB." }
+
+  let rows: Record<string, string>[]
+  try {
+    rows = await readUpload(file)
+  } catch {
+    return { error: "We could not read that file. Save it as Excel or CSV and try again." }
+  }
+  if (rows.length === 0) return { error: "The file has no product rows under the header line." }
+  if (rows.length > 400) return { error: "Upload up to 400 products at a time." }
+
+  const [brands, categories, shops] = await Promise.all([
+    prisma.brand.findMany(),
+    prisma.category.findMany(),
+    prisma.branch.findMany({ where: { isActive: true }, select: { id: true } }),
+  ])
+  const brandIds = new Map(brands.map((row) => [row.name.toLowerCase(), row.id]))
+  const categoryIds = new Map(categories.map((row) => [row.name.toLowerCase(), row.id]))
+
+  let created = 0
+  let skipped = 0
+  const errors: string[] = []
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index]
+    const line = index + 2
+    const sku = cell(row, "item_code", "sku", "code")
+    const name = cell(row, "name", "product", "item")
+    const brandName = cell(row, "brand")
+    const categoryName = cell(row, "category")
+    if (!sku || !name || !brandName || !categoryName) {
+      errors.push(`Line ${line}: item code, name, brand, and category are required.`)
+      continue
+    }
+
+    const existing = await prisma.product.findUnique({ where: { sku } })
+    if (existing) {
+      skipped += 1
+      continue
+    }
+
+    const trackingKey = keyName(cell(row, "tracking") || "IMEI")
+    const tracking = TRACKING[trackingKey]
+    if (!tracking) {
+      errors.push(`Line ${line}: tracking must be IMEI, SERIAL, or NONE.`)
+      continue
+    }
+    const conditionKey = keyName(cell(row, "condition") || "BRAND_NEW")
+    const condition = CONDITIONS[conditionKey]
+    if (!condition) {
+      errors.push(`Line ${line}: condition is not one we know. Use Brand New, UK Used, Open Box, or similar.`)
+      continue
+    }
+
+    const costPrice = Number(cell(row, "cost", "cost_price") || 0)
+    const sellingPrice = Number(cell(row, "selling", "selling_price") || 0)
+    const minimumPrice = Number(cell(row, "minimum", "minimum_price", "min") || sellingPrice)
+    if (!Number.isFinite(costPrice) || !Number.isFinite(sellingPrice) || sellingPrice <= 0) {
+      errors.push(`Line ${line}: selling price must be a number above 0.`)
+      continue
+    }
+
+    let brandId = brandIds.get(brandName.toLowerCase())
+    if (!brandId) {
+      const brand = await prisma.brand.create({ data: { name: brandName } })
+      brandId = brand.id
+      brandIds.set(brandName.toLowerCase(), brandId)
+    }
+    let categoryId = categoryIds.get(categoryName.toLowerCase())
+    if (!categoryId) {
+      const category = await prisma.category.create({ data: { name: categoryName } })
+      categoryId = category.id
+      categoryIds.set(categoryName.toLowerCase(), categoryId)
+    }
+
+    const product = await prisma.product.create({
+      data: {
+        sku,
+        name,
+        brandId,
+        categoryId,
+        tracking,
+        condition,
+        color: cell(row, "color") || null,
+        storage: cell(row, "storage") || null,
+        ram: cell(row, "ram") || null,
+        costPrice: costPrice.toFixed(2),
+        minimumPrice: Math.max(0, minimumPrice).toFixed(2),
+        sellingPrice: sellingPrice.toFixed(2),
+        warrantyDays: Number(cell(row, "warranty_days", "warranty") || 365) || 365,
+        description: cell(row, "description") || null,
+      },
+    })
+    if (shops.length) {
+      await prisma.inventory.createMany({
+        data: shops.map((shop) => ({ productId: product.id, branchId: shop.id, quantity: 0 })),
+      })
+    }
+    created += 1
+  }
+
+  await prisma.auditLog.create({
+    data: {
+      userId: user.id,
+      action: "CREATE",
+      entityType: "Product",
+      entityId: "bulk-upload",
+      newValue: JSON.stringify({ created, skipped, errors: errors.length, file: file.name }),
+      branchId: user.branchId,
+    },
+  })
+
+  revalidatePath("/products")
+  revalidatePath("/inventory")
+  revalidatePath("/incoming")
+  return { success: true, created, skipped, errors }
+}
