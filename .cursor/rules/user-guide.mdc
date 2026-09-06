@@ -1,0 +1,21 @@
+---
+description: Keep the Abu Twins Word user guide in sync with every staff-facing change
+alwaysApply: true
+---
+
+# User guide stays current
+
+When you add, change, or remove anything a shop person can see or do, update the guidebook in the same piece of work. Do not wait to be asked.
+
+## What to edit
+
+1. Update `docs/generate-abu-twins-guide.mjs` (plain shop words, no em dashes).
+2. Bump the cover **Version** and **Status**. Add a short note in the CEO letter.
+3. Add or revise the matching section 10 page: what it is, why, a real Ibadan story, steps, what you should see.
+4. Update the left-menu table, word list, test plan (section 13), and rules if the change belongs there.
+5. Regenerate the Word file: `node docs/generate-abu-twins-guide.mjs` (needs the `docx` package).
+6. Leave `docs/Abu-Twins-Shop-System-User-Guide.docx` in the same commit as the product change.
+
+## Tone
+
+Write for the CEO, cashier, accountant, and records checker. Short sentences. Everyday words. The pack does not invent buyers or approve fake cash.

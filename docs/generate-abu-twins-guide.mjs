@@ -1,3 +1,5 @@
+// Shop user guide. After any staff-facing change, edit this file, bump Version,
+// then run: node docs/generate-abu-twins-guide.mjs
 import { writeFileSync } from "node:fs"
 import {
   AlignmentType,
@@ -210,8 +212,8 @@ const children = [
       ["Prepared by", "Product Team, Techvaults Limited"],
       ["Document type", "User guide and test plan"],
       ["Date", "7 September 2026"],
-      ["Version", "1.1"],
-      ["Status", "Updated: till lock, parked sales, IMEI check"],
+      ["Version", "1.2"],
+      ["Status", "Updated: bank books, branded PDF and CSV, day compare"],
     ].map(([k, v]) =>
       new TableRow({
         children: [
@@ -230,7 +232,8 @@ const children = [
   body("You asked for one place where every phone, every sale, and every naira can be seen. You also asked that old numbers cannot be quietly changed. Abu Twins has lost money when accounts were not kept and staff work could not be named. This book shows what Techvaults built, why each part exists, and how your team can try it."),
   body("The rule is simple. Money and phones must leave a name, a time, and a shop record. If it is not on the system, it did not happen."),
   body("We wrote this for shop people, not for engineers. Short sentences. Everyday words. Real shop stories from Ibadan."),
-  body("Version 1.1 adds three locks that stop quiet loss. Sell now stays shut until yesterday’s till is counted. A sale parked on a device while the line is down is watched, and an alert is sent if it sits too long or vanishes. Home always shows shop count against the IMEI list, including when they match."),
+  body("Version 1.1 added three locks that stop quiet loss. Sell now stays shut until yesterday's till is counted. A sale parked on a device while the line is down is watched, and an alert is sent if it sits too long or vanishes. Home always shows shop count against the IMEI list, including when they match."),
+  body("Version 1.2 gives accounts a bank-style statement. Check the books opens any previous Lagos day, compares it with another day or week, and prints a branded PDF or CSV with the company mark. The pack does not change any invoice. It only adds the books again so a person can sign them."),
   body("Today Abu Twins has two shops: Iwo Road, Ibadan (head office) and Challenge, Ibadan. The system can add more shops in Nigeria later. Super Admin opens a new shop when you are ready."),
   body("Please treat the login list at the end as practice only. Those names and passwords are for testing. You can lock them or remove them when live work starts."),
   body("If a page is missing on the live website, ask Techvaults. We will put the newest version up for you."),
@@ -247,7 +250,7 @@ const children = [
   h3("How to read it"),
   bullet("Read section 3 and 4 first. That is the big picture."),
   bullet("Read section 6 and 7 to know shops and jobs."),
-  bullet("Use section 10 when you sit at a computer and click each page. Start with Home, Sell now, and Close the day."),
+  bullet("Use section 10 when you sit at a computer and click each page. Start with Home, Sell now, Close the day, and Check the books."),
   bullet("Use section 12 when you share test logins."),
 
   h1("3. The problem we set out to fix"),
@@ -283,6 +286,8 @@ const children = [
       ["Move goods between shops", "Send to another shop. The other shop must confirm arrival."],
       ["Handle returns and swaps", "The old invoice stays. A new record is made."],
       ["Watch money", "Money in & out, Close the day, expenses, and reports show real figures."],
+      ["Check a past day's books", "Check the books reprints money, phones, and the trail for any Lagos day. You can compare two periods."],
+      ["Print official books", "Download a branded PDF or CSV, or print the statement. It does not change any invoice."],
       ["Control who sees what", "Super Admin ticks pages for each job."],
       ["See who changed a record", "Who did what keeps a list that is not deleted."],
     ],
@@ -306,6 +311,9 @@ const children = [
       ["Invoice", "The sales paper. It has a number. It cannot be edited later."],
       ["Business day", "The shop day in Lagos time, not the time on a phone set to another country."],
       ["Close the day", "Count the cash in the drawer against cash sales for that business day."],
+      ["Check the books", "The official statement for a shop and period. Open a past day. Compare it. Print or download."],
+      ["Statement of account", "The branded books paper with the ab mark, a statement number, and sign-off lines."],
+      ["Compare with", "The other day or period the system puts beside this period, so movement is visible."],
       ["Parked sale", "A finished cart saved on this device because the line was down. It is not an invoice yet."],
       ["IMEI vs shop count", "How many unique phones the system holds, compared with the shop quantity."],
       ["Line down", "This device has no internet. Sell now can still park a sale if the till is not locked."],
@@ -339,8 +347,8 @@ const children = [
     [
       ["Super Admin", "Techvaults or a trusted Abu Twins lead", "Everything. Open shops. Tick pages. Undo a money mistake. Show or hide coming goods."],
       ["CEO", "Abu Twins leadership", "See all shops. Watch sales, stock, and money. Cannot change Who can see what."],
-      ["Records checker", "Internal check person", "Look at records. Approve some requests. Does not sell."],
-      ["Accountant", "Accounts", "See sales and money. Record pay-outs. See every shop."],
+      ["Records checker", "Internal check person", "Look at records. Check the books. Approve some requests. Does not sell."],
+      ["Accountant", "Accounts", "See sales and money. Check the books. Record pay-outs. See every shop."],
       ["Shop manager", "Iwo Road or Challenge manager", "Run one shop. Sell, receive, transfer, approve shop work."],
       ["Goods intake", "The person who books incoming goods", "Book goods before they arrive. Receive phones. Send goods to a shop."],
       ["Cashier", "Front desk money person", "Sell now. Close the day. Collect money. Record a return."],
@@ -383,13 +391,15 @@ const children = [
       ["Stock", "Phones & items, Phone IMEIs, Shop stock, Goods on the way", "What you sell, each phone number, what is here, what is still coming."],
       ["Sell & buy", "Sales, Sell now, Close the day, Goods from supplier, Customers, Suppliers", "Sell, count the till, print invoices, buy from a supplier, keep people lists."],
       ["Daily work", "Send to another shop, Returns, Swaps, Repairs, Stock count", "Move goods, take phones back, trade, fix, count shelves."],
-      ["Money", "Money in & out, Expenses, Needs approval", "Cash movement, bills, and yes-or-no requests."],
+      ["Money", "Money in & out, Check the books, Expenses, Needs approval", "Cash movement, official books, bills, and yes-or-no requests."],
       ["Shop & people", "Shops, Staff, Who can see what, Reports, Who did what, Alerts, Settings", "People, shops, reports, and rules."],
     ],
     [1800, 3600, 3960]
   ),
   para("", { after: 160 }),
   body("At the top there is a search box: Find IMEI, invoice, or customer. Type a phone number, an invoice number, or a buyer name. The system jumps you to that record."),
+  body("On a computer you can hide the left menu if you need more room. The choice stays on that device. On a phone the menu stays a drawer."),
+  body("Every signed-in page has a shop calculator. Use it to add a line by hand. It does not post money. It does not change an invoice."),
 
   h1("10. Features, stories, and tests"),
   body("This is the heart of the book. For each page you get what it is, why it exists, a real Ibadan story, the clicks to try, and the result you should see."),
@@ -738,7 +748,36 @@ const children = [
   }),
 
   ...feature({
-    title: "10.18 Expenses",
+    title: "10.18 Check the books",
+    what: "Check the books is the official statement of account. Pick a shop, a period (one day, last 7 days, or this month to date), and an end date in Lagos time. The system reprints money in, money out, till closes, who collected, invoices, and IMEI versus shop count. You can open any of the last 14 days from the chips, or type an older date. Compare with another day or leave it empty to use the previous period. Download a branded PDF, print to save as PDF, or download CSV. The paper has the ab mark, a statement number such as BK-IWO-20260906-20260906, and sign-off lines for prepared, records, and owner.",
+    why: "Close the day counts one drawer. Reports is a meeting pack. Check the books is what the accountant and records checker sign. They must be able to open yesterday, last week, or any older day, and see how this period moved against another. The pack must look like a bank paper, not a loose screen dump. It must never change an invoice.",
+    story: "Monday morning at Iwo Road. The accountant opens Check the books. Sunday is on the chip strip with eight sales and Closed. They click Sunday. The statement shows cash, transfer, POS, expenses, and the till count. They set Compare with to the Saturday before. Collected is up. They download the branded PDF for the file, and the CSV for Excel. The records checker signs the printed paper. No invoice changed.",
+    steps: [
+      "Sign in as accountant, records checker, CEO, or Super Admin.",
+      "Click Check the books under Money, or open the banner on Who did what.",
+      "Pick the shop. Leave Period on One day. Set End date to a past Lagos day, or click that day on Open a previous day.",
+      "Read This period against Compared with. Leave Compare with empty for the previous day, or type another date.",
+      "Try Compare with yesterday or Compare with same day last week.",
+      "Read the statement: verdict, period comparison, money add-up, working paper, invoices, till closes, IMEI vs shop count, and sign-off lines.",
+      "Click Download branded PDF. Open the file and confirm the ab mark and statement number.",
+      "Click Download CSV. Open it in Excel. Confirm the same shop, period, comparison, and invoices.",
+      "Click Print / Save PDF if you want a paper copy. You may cancel after you see the preview.",
+    ],
+    expect: [
+      "The header is royal blue with the ab mark, Abu Twins, Softskills Investment, the shop, and Lagos time.",
+      "A statement number starts with BK- and the shop code.",
+      "Open a previous day lists about two weeks, with sale count and whether the till was closed.",
+      "Picked compare says Compared with (picked). Empty compare uses the previous period.",
+      "Movement shows naira and percent for collected, posted, cash, transfer, POS, expenses, and sales count.",
+      "Working paper says Pass or Fail. A fail needs a person. A pass is already proved.",
+      "The PDF and the print preview hide the left menu and the calculator.",
+      "The pack does not edit any invoice. Sales, returns, and closes stay as they were.",
+      "A cashier who cannot see Check the books will not find the page. That is correct if Super Admin hid it.",
+    ],
+  }),
+
+  ...feature({
+    title: "10.19 Expenses",
     what: "Expenses is for fuel, rent, salary, and light bill. Staff ask. A manager says yes. Then money can leave.",
     why: "If anyone can tap cash for ‘fuel’ with no yes, the till will never match.",
     story: "The Challenge manager asks for fuel money. The request waits on Needs approval. The CEO says yes. Then the pay-out is recorded.",
@@ -755,7 +794,7 @@ const children = [
   }),
 
   ...feature({
-    title: "10.19 Needs approval",
+    title: "10.20 Needs approval",
     what: "This is the yes-or-no desk. Swaps, refunds, expenses, and stock counts wait here.",
     why: "One place is better than ten WhatsApp chats.",
     story: "The CEO opens Needs approval each morning. Three items wait. Two expenses are yes. One odd stock count is no until the manager recounts.",
@@ -774,7 +813,7 @@ const children = [
   }),
 
   ...feature({
-    title: "10.20 Shops",
+    title: "10.21 Shops",
     what: "Shops lists Iwo Road as HQ and Challenge as Open. Super Admin can open a new shop anywhere in Nigeria. Super Admin can close a shop. Closed shops stay in a Super Admin-only list so old sales are not lost.",
     why: "Abu Twins will grow. The software must not be rebuilt for each new city.",
     story: "Next year Abu Twins may open in Ilorin. Super Admin types the shop name, a short code, and the address. Staff in Ilorin then work in that shop only.",
@@ -793,7 +832,7 @@ const children = [
   }),
 
   ...feature({
-    title: "10.21 Staff",
+    title: "10.22 Staff",
     what: "Staff is the people list. Super Admin or a shop manager (if allowed) can add a person, pick their job, and pick their shop. Super Admin can lock a login.",
     why: "A person who leaves the company must not keep a key to the till.",
     story: "A new cashier starts at Challenge. Super Admin adds their work email, sets job to Cashier, sets shop to Challenge, and gives them a first password. After they sign in, Super Admin asks them to change it.",
@@ -812,7 +851,7 @@ const children = [
   }),
 
   ...feature({
-    title: "10.22 Who can see what",
+    title: "10.23 Who can see what",
     what: "This page is Super Admin only. You tick the pages and the work for each job. Super Admin is not ticked here because Super Admin always has all rights.",
     why: "The CEO may want the accountant to see money but not Sell now. That should be a tick, not a phone call to Techvaults.",
     story: "The CEO asks that cashiers must not see Reports. Super Admin opens Who can see what, finds Cashier, unticks Reports, and saves. The cashier signs out and in. Reports is gone.",
@@ -830,7 +869,7 @@ const children = [
   }),
 
   ...feature({
-    title: "10.23 Reports",
+    title: "10.24 Reports",
     what: "Reports shows today’s real numbers: sales, money collected, stock value, swaps, returns, and who still owes. You can print the report or export sales as a file.",
     why: "Home is a snapshot. Reports is the pack you take to a meeting.",
     story: "Friday review. The CEO prints Reports. Iwo Road and Challenge are compared. Low stock items are listed. Nobody copies numbers from a notebook.",
@@ -847,13 +886,14 @@ const children = [
   }),
 
   ...feature({
-    title: "10.24 Who did what",
-    what: "This is the diary of the system. It shows who did an important action, when, in which shop, and what changed. Nothing here is deleted. It also keeps line-down time, parked sales that posted, parked sales that sat too long, and parked sales that vanished from a device. Those last two are marked high risk.",
+    title: "10.25 Who did what",
+    what: "This is the diary of the system. It shows who did an important action, when, in which shop, and what changed. Nothing here is deleted. It also keeps line-down time, parked sales that posted, parked sales that sat too long, and parked sales that vanished from a device. Those last two are marked high risk. At the top it may show the books verdict. Click that banner to open Check the books.",
     why: "When two people disagree, the diary settles it. When cash sat on a phone with no invoice, the diary names the person and the device.",
     story: "A phone is missing. The records checker opens Who did what, finds the last transfer, and sees who confirmed it at Challenge. The same morning an alert says a parked sale vanished. They filter high risk, open the parked sale line, and see who was signed in on that device when the queue disappeared.",
     steps: [
       "Sign in as CEO or records checker.",
       "Click Who did what.",
+      "Read the books banner if it is there. Click it to open Check the books.",
       "Find a recent sale, incoming booking, or day close.",
       "If Home said a parked sale vanished, filter high risk or open the alert link.",
     ],
@@ -862,11 +902,12 @@ const children = [
       "There is no delete button.",
       "A sale that posted after the line returned is marked as posted from offline.",
       "A vanished parked sale shows as a delete of ParkedSale with high risk.",
+      "The books banner, when present, opens Check the books.",
     ],
   }),
 
   ...feature({
-    title: "10.25 Alerts",
+    title: "10.26 Alerts",
     what: "Alerts are short notices: low stock, a request waiting, a parked sale sitting too long, a parked sale that vanished, or other shop warnings. Super Admin, the CEO, and the records checker get the parked-sale alerts.",
     why: "People miss a page. They should not miss a danger. A parked sale with cash in a drawer and no invoice is a danger.",
     steps: [
@@ -883,10 +924,10 @@ const children = [
   }),
 
   ...feature({
-    title: "10.26 Settings",
-    what: "Settings holds the shop name, phone, address, and email that print on invoices. It also holds the low stock alert and whether cashiers may sell below the lowest price. Only Super Admin can change these.",
-    why: "The invoice header should be the real Ibadan address, not a leftover Lagos line.",
-    story: "Techvaults set the invoice address to Iwo Road, Ibadan, Oyo State and the phone to 07062454854. If the phone number changes, Super Admin updates Settings. The next printed invoice shows the new number.",
+    title: "10.27 Settings",
+    what: "Settings holds the shop name, phone, address, and email that print on invoices and on Check the books. It also holds the low stock alert and whether cashiers may sell below the lowest price. Only Super Admin can change these.",
+    why: "The invoice header and the books statement should be the real Ibadan address, not a leftover Lagos line.",
+    story: "Techvaults set the invoice address to Iwo Road, Ibadan, Oyo State and the phone to 07062454854. If the phone number changes, Super Admin updates Settings. The next printed invoice and the next books PDF show the new number.",
     steps: [
       "Sign in as Super Admin.",
       "Click Settings.",
@@ -895,7 +936,25 @@ const children = [
     ],
     expect: [
       "CEO can read settings but cannot change them.",
-      "Printed invoices use these values.",
+      "Printed invoices and the books statement use these values.",
+    ],
+  }),
+
+  ...feature({
+    title: "10.28 Shop calculator",
+    what: "A round button sits on every signed-in page. It opens a simple calculator. Add, subtract, multiply, and divide. It does not post money. It does not change an invoice. Close it when you are done.",
+    why: "A cashier or accountant often needs to add a line by hand while they look at the till or the books. They should not leave the system for a phone calculator and lose the page.",
+    story: "The cashier is on Close the day. Notes in the drawer are mixed. They tap the calculator, add the notes, type that total as counted cash, and close the day.",
+    steps: [
+      "Sign in as any job.",
+      "Click the calculator button.",
+      "Add two numbers. Confirm the total.",
+      "Close the calculator. Confirm the page you were on did not change.",
+    ],
+    expect: [
+      "The calculator is on Home, Sell now, Close the day, and Check the books.",
+      "It does not appear on a printed invoice or a printed books statement.",
+      "No sale, expense, or close is created when you use it.",
     ],
   }),
 
@@ -911,7 +970,7 @@ const children = [
   body("Iwo Road sends one spare phone to Challenge. Challenge confirms the IMEI. Both shop stocks update."),
   h3("Evening"),
   body("The cashier opens Close the day. They count the cash against cash sales for this Lagos business day. They type the counted number. If it is short, they write why. After the close, Sell now can open tomorrow without a lock from today."),
-  body("The accountant checks Money in & out. The CEO opens Home. IMEI vs shop count should say Match. Reports is for the meeting. Who did what shows every step, including the close. Nobody edited an old invoice."),
+  body("The accountant checks Money in & out, then opens Check the books for this Lagos day. They compare it with yesterday, download the branded PDF for the file, and leave the CSV for Excel. The CEO opens Home. IMEI vs shop count should say Match. Reports is for the meeting. Who did what shows every step, including the close. Nobody edited an old invoice."),
 
   h1("12. Practice logins for testing"),
   noteBox("These logins are for testing only", [
@@ -958,8 +1017,8 @@ const children = [
       ["Selling, printing an invoice, and closing the day", "cashier@abutwins.com or sales@abutwins.com"],
       ["Running Challenge shop", "challenge.manager@abutwins.com"],
       ["Repair steps", "engineer@abutwins.com"],
-      ["Money pages", "accountant@abutwins.com"],
-      ["Checking the diary", "auditor@abutwins.com"],
+      ["Money pages and Check the books", "accountant@abutwins.com"],
+      ["Checking the diary and signing the books", "auditor@abutwins.com"],
     ],
     [5200, 4160]
   ),
@@ -990,6 +1049,10 @@ const children = [
       ["19", "Expense waits for yes", "manager@abutwins.com then CEO", "Money does not leave before approval."],
       ["20", "Who did what keeps the story", "auditor@abutwins.com", "The sale, close, or parked trail appears with a name and time."],
       ["21", "Cashier does not see Super Admin pages", "cashier@abutwins.com", "No Settings change, no Who can see what, no undo money. Close the day is allowed."],
+      ["22", "Open a previous day's books", "accountant@abutwins.com", "A past-day chip or date opens that day's statement with a BK- number."],
+      ["23", "Compare two periods", "accountant@abutwins.com", "This period and Compared show different dates. Movement is in naira and percent."],
+      ["24", "Download books PDF and CSV", "auditor@abutwins.com", "PDF has the ab mark and sign-off lines. CSV opens in Excel with the same sections."],
+      ["25", "Shop calculator does not post money", "cashier@abutwins.com", "You can add numbers. No invoice or close is created."],
     ],
     [600, 2800, 2600, 3360]
   ),
@@ -1006,6 +1069,7 @@ const children = [
   bullet("Home IMEI vs shop count is the truth you act on. If they do not match, count stock. Do not type a new number by hand."),
   bullet("Only Super Admin can reverse a money collection."),
   bullet("Only Super Admin can tick Who can see what."),
+  bullet("Check the books does not change any invoice. It reprints the add-up so the accountant and records checker can sign."),
   bullet("Who did what is never wiped."),
   bullet("Practice logins must be changed or removed before real daily use."),
 
@@ -1025,11 +1089,12 @@ const children = [
   bullet("It will not let staff secretly change an old invoice."),
   bullet("It will not let a new live sale go through while an older day with sales is still open."),
   bullet("It will not stay silent if a parked sale is wiped off a device."),
+  bullet("It will not change an old invoice when you check the books."),
   body("That is the point. The shop stays honest."),
 
   h1("16. Short close"),
   body("You now have one system for two Ibadan shops, ready for more shops in Nigeria. Goods can be booked before they arrive. Shelf stock and coming stock stay apart. Every sale prints an invoice. Each job sees only what Super Admin allows."),
-  body("Close the day before the next live sale. Watch parked work. Believe Home when it says the IMEI list and the shop count match, and act when they do not."),
+  body("Close the day before the next live sale. Check the books for that day and for any day you need to defend. Watch parked work. Believe Home when it says the IMEI list and the shop count match, and act when they do not."),
   body("Try the tests in section 13. Change the practice passwords. Then put real staff on the system."),
   para("Prepared by the Product Team", { bold: true, after: 40 }),
   para("Techvaults Limited", { after: 40 }),
