@@ -45,6 +45,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                       <p className="font-medium">{product.name}</p>
                       <p className="text-xs text-muted-foreground">
                         {product.sku} · {product.brand.name} · {product.color} {product.storage}
+                        {product.tracking === "SERIAL" ? " · serial" : product.tracking === "NONE" ? " · no number" : " · IMEI"}
                       </p>
                     </td>
                     <td className="px-4 py-3">
@@ -87,6 +88,11 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                   ))}
                 </Select>
               </div>
+              <Select name="tracking" defaultValue="IMEI">
+                <option value="IMEI">Phone — IMEI</option>
+                <option value="SERIAL">Accessory with serial</option>
+                <option value="NONE">No number (cords, chargers)</option>
+              </Select>
               <Select name="condition" defaultValue="BRAND_NEW">
                 {conditions.map((item) => (
                   <option key={item} value={item}>{item.replaceAll("_", " ")}</option>

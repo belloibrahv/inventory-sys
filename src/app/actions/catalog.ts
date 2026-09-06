@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { ProductCondition } from "@prisma/client"
+import { ProductCondition, ProductTracking } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { requireUser } from "@/lib/session"
 import { canManageCatalog } from "@/lib/rbac"
@@ -69,6 +69,7 @@ export async function createProduct(formData: FormData) {
       sellingPrice: sellingPrice.toFixed(2),
       marketPrice: formData.get("marketPrice") ? Number(formData.get("marketPrice")).toFixed(2) : null,
       warrantyDays: Number(formData.get("warrantyDays") || 365) || 365,
+      tracking: (String(formData.get("tracking") || "IMEI") as ProductTracking),
     },
   })
 

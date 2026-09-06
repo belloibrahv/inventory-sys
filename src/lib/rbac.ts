@@ -7,7 +7,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   AUDITOR: "Records checker",
   ACCOUNTANT: "Accountant",
   BRANCH_MANAGER: "Shop manager",
-  VAULT_MANAGER: "IMEI keeper",
+  VAULT_MANAGER: "Goods intake",
   CASHIER: "Cashier",
   SALES_EXECUTIVE: "Sales person",
   ENGINEER: "Repair engineer",

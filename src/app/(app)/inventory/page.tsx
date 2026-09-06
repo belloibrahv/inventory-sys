@@ -24,8 +24,8 @@ export default async function InventoryPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Inventory"
-        description={`Each shop keeps its own stock. Cost value now ${formatCurrency(value)}. You get an alert when a shop has ${settings.lowStockThreshold} units or fewer.`}
+        title="Shop stock"
+        description={`In-shop count is what you can sell today. Coming goods stay off this number until they arrive. Cost value in shop ${formatCurrency(value)}. Alert at ${settings.lowStockThreshold} units or fewer.`}
       />
       {gaps.length ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-500/10 dark:text-amber-100">
@@ -46,8 +46,9 @@ export default async function InventoryPage() {
             <tr className="border-b border-border">
               <th className="px-4 py-3">Product</th>
               <th className="px-4 py-3">Shop</th>
-              <th className="px-4 py-3">On hand</th>
-              <th className="px-4 py-3">IMEIs listed</th>
+              <th className="px-4 py-3">In shop</th>
+              <th className="px-4 py-3">Coming</th>
+              <th className="px-4 py-3">IMEIs in shop</th>
               <th className="px-4 py-3">Min</th>
               <th className="px-4 py-3">Value</th>
             </tr>
@@ -55,6 +56,7 @@ export default async function InventoryPage() {
           <tbody>
             {rows.map((row) => {
               const imeis = vault.find((item) => item.productId === row.productId && item.branchId === row.branchId)?.count ?? 0
+              const coming = row.incomingQty
               const mismatch = serialized.has(row.productId) && imeis !== row.quantity
               return (
                 <tr key={row.id} className="border-b border-border/70">
@@ -65,6 +67,9 @@ export default async function InventoryPage() {
                   <td className="px-4 py-3">{row.branch.name}</td>
                   <td className="px-4 py-3">
                     <Badge variant={row.quantity <= lowStockLimit(row.minStock, settings.lowStockThreshold) ? "danger" : "success"}>{row.quantity}</Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    {coming > 0 ? <Badge variant="warning">{coming}</Badge> : "—"}
                   </td>
                   <td className="px-4 py-3">
                     {serialized.has(row.productId) ? imeis : "—"}

@@ -31,6 +31,7 @@ enum ProductCondition {
 
 enum IMEIStatus {
   RECEIVED
+  INCOMING
   IN_STOCK
   TRANSFERRED
   SOLD
@@ -39,6 +40,24 @@ enum IMEIStatus {
   SWAPPED
   DISPOSED
   FAULTY
+}
+
+enum ProductTracking {
+  IMEI
+  SERIAL
+  NONE
+}
+
+enum IncomingStatus {
+  COMING
+  ARRIVED
+  CANCELLED
+}
+
+enum IncomingIdentity {
+  IMEI
+  SERIAL
+  NONE
 }
 
 enum PurchaseStatus {
@@ -218,6 +237,7 @@ model User {
   approvalsReq  Approval[]       @relation("ApprovalRequester")
   approvalsDec  Approval[]       @relation("ApprovalDecider")
   reconciliations Reconciliation[]
+  incomingLots    IncomingLot[]
 
   @@index([email])
   @@index([branchId])
@@ -232,6 +252,7 @@ model Branch {
   phone     String?
   email     String?
   isActive  Boolean  @default(true)
+  isHq      Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -249,6 +270,7 @@ model Branch {
   returns         StockReturn[]
   repairs         Repair[]
   financeEntries  FinanceEntry[]
+  incomingLots    IncomingLot[]
 
   @@index([code])
   @@index([isActive])
@@ -289,6 +311,7 @@ model Product {
   sellingPrice Decimal
   marketPrice  Decimal?
   warrantyDays Int              @default(365)
+  tracking     ProductTracking  @default(IMEI)
   isActive     Boolean          @default(true)
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
@@ -301,6 +324,7 @@ model Product {
   transferItems TransferItem[]
   swaps         Swap[]
   reconItems    ReconciliationItem[]
+  incomingItems IncomingItem[]
 
   @@index([sku])
   @@index([categoryId])
@@ -364,6 +388,7 @@ model Inventory {
   branchId      String
   branch        Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
   quantity      Int       @default(0)
+  incomingQty   Int       @default(0)
   reserved      Int       @default(0)
   minStock      Int       @default(3)
   lastStockCheck DateTime?
@@ -385,8 +410,9 @@ model Supplier {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  purchases   Purchase[]
-  imeiRecords ImeiRecord[]
+  purchases    Purchase[]
+  imeiRecords  ImeiRecord[]
+  incomingLots IncomingLot[]
 
   @@index([isActive])
 }
@@ -801,6 +827,42 @@ model Setting {
   value       String
   description String?
   updatedAt   DateTime @updatedAt
+}
+
+model IncomingLot {
+  id           String         @id @default(cuid())
+  lotNumber    String         @unique
+  branchId     String
+  branch       Branch         @relation(fields: [branchId], references: [id])
+  supplierId   String?
+  supplier     Supplier?      @relation(fields: [supplierId], references: [id])
+  userId       String
+  user         User           @relation(fields: [userId], references: [id])
+  status       IncomingStatus @default(COMING)
+  visible      Boolean        @default(false)
+  expectedDate DateTime?
+  notes        String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  items        IncomingItem[]
+
+  @@index([branchId])
+  @@index([status])
+}
+
+model IncomingItem {
+  id          String           @id @default(cuid())
+  lotId       String
+  lot         IncomingLot      @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product          @relation(fields: [productId], references: [id])
+  quantity    Int
+  identity    IncomingIdentity
+  identifiers String?
+  createdAt   DateTime         @default(now())
+
+  @@index([lotId])
+  @@index([productId])
 }
 
 model RolePermission {

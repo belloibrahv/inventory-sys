@@ -120,12 +120,15 @@ export async function getInventory() {
   const user = await requireUser()
   const branchId = await scopedBranchId(user.role, user.branchId)
   return prisma.inventory.findMany({
-    where: branchId ? { branchId } : undefined,
+    where: {
+      ...(branchId ? { branchId } : {}),
+      branch: { isActive: true },
+    },
     include: {
       product: { include: { brand: true, category: true } },
       branch: true,
     },
-    orderBy: { quantity: "asc" },
+    orderBy: [{ incomingQty: "desc" }, { quantity: "asc" }],
   })
 }
 
@@ -143,8 +146,25 @@ export async function getInStockImeiCounts() {
   }))
 }
 
+export async function getIncomingImeiCounts() {
+  await requireUser()
+  const rows = await prisma.imeiRecord.groupBy({
+    by: ["productId", "branchId"],
+    where: { status: "INCOMING" },
+    _count: { _all: true },
+  })
+  return rows.map((row) => ({
+    productId: row.productId,
+    branchId: row.branchId,
+    count: row._count._all,
+  }))
+}
+
 export async function getSerializedProductIds() {
   await requireUser()
-  const rows = await prisma.imeiRecord.groupBy({ by: ["productId"] })
-  return rows.map((row) => row.productId)
+  const rows = await prisma.product.findMany({
+    where: { tracking: { in: ["IMEI", "SERIAL"] } },
+    select: { id: true },
+  })
+  return rows.map((row) => row.id)
 }

@@ -21,7 +21,7 @@ export default async function ImeiPage({ searchParams }: { searchParams: Promise
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Phone IMEIs" description="Every phone in the shop has IMEI 1, IMEI 2, and a serial. This list is the source of truth." />
+      <PageHeader title="Phone IMEIs" description="Phones and serial items. Coming units are not for sale until they arrive in the shop." />
       <WorkflowSteps current={1} steps={["Receive phone", "In shop", "Sell or move", "Return or repair"]} />
       <div className="grid gap-4 xl:grid-cols-[1.4fr_0.7fr]">
         <div className="surface-card overflow-hidden">
@@ -29,7 +29,7 @@ export default async function ImeiPage({ searchParams }: { searchParams: Promise
             <Input name="q" defaultValue={q} placeholder="Search IMEI, serial, customer, invoice" />
             <Select name="status" defaultValue={status ?? ""}>
               <option value="">All statuses</option>
-              {["IN_STOCK", "SOLD", "RETURNED", "SWAPPED", "REPAIRED", "FAULTY", "TRANSFERRED"].map((item) => (
+              {["INCOMING", "IN_STOCK", "SOLD", "RETURNED", "SWAPPED", "REPAIRED", "FAULTY", "TRANSFERRED"].map((item) => (
                 <option key={item} value={item}>{item}</option>
               ))}
             </Select>

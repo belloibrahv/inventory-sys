@@ -6,6 +6,7 @@ import {
   ShoppingCart,
   Store,
   Truck,
+  Package,
   Users,
   Factory,
   ArrowLeftRight,
@@ -36,6 +37,7 @@ export const navGroups = [
       { name: "Phones & items", href: "/products", icon: Smartphone },
       { name: "Phone IMEIs", href: "/imei", icon: ScanLine },
       { name: "Shop stock", href: "/inventory", icon: Boxes },
+      { name: "Goods on the way", href: "/incoming", icon: Package },
     ],
   },
   {

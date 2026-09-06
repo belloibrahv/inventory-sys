@@ -3,6 +3,7 @@ const VIEW_HREFS = [
   "/products",
   "/imei",
   "/inventory",
+  "/incoming",
   "/sales",
   "/pos",
   "/purchases",

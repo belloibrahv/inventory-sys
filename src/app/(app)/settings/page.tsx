@@ -7,8 +7,11 @@ import { can } from "@/lib/permissions"
 import { requireUser } from "@/lib/session"
 
 const labels: Record<string, string> = {
-  "company.name": "Shop name on receipts",
+  "company.name": "Shop name on invoices",
   "company.product": "System name",
+  "company.phone": "Phone on invoices",
+  "company.address": "Address on invoices",
+  "company.email": "Email on invoices",
   "company.currency": "Currency",
   "sales.allow_below_minimum": "Can cashiers sell below the lowest price?",
   "inventory.low_stock_threshold": "Alert when stock is this low",

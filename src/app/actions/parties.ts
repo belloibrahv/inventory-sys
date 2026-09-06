@@ -115,7 +115,7 @@ export async function getBranches() {
     include: {
       _count: { select: { users: true, customers: true, imeiRecords: true, sales: true } },
     },
-    orderBy: { name: "asc" },
+    orderBy: [{ isHq: "desc" }, { isActive: "desc" }, { name: "asc" }],
   })
 }
 

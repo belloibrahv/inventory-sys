@@ -3,6 +3,7 @@ export const pageTitles: Record<string, string> = {
   "/products": "Phones & items",
   "/imei": "Phone IMEIs",
   "/inventory": "Shop stock",
+  "/incoming": "Goods on the way",
   "/sales": "Sales",
   "/pos": "Sell now",
   "/purchases": "Goods from supplier",

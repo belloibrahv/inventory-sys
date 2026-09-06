@@ -6,6 +6,7 @@ export const VIEW_PERMS = [
   { key: "view.products", label: "Phones & items", href: "/products" },
   { key: "view.imei", label: "Phone IMEIs", href: "/imei" },
   { key: "view.inventory", label: "Shop stock", href: "/inventory" },
+  { key: "view.incoming", label: "Goods on the way", href: "/incoming" },
   { key: "view.sales", label: "Sales", href: "/sales" },
   { key: "view.pos", label: "Sell now", href: "/pos" },
   { key: "view.purchases", label: "Goods from supplier", href: "/purchases" },
@@ -32,6 +33,7 @@ export const ACTION_PERMS = [
   { key: "action.sell", label: "Sell and collect money" },
   { key: "action.catalog", label: "Add items and change prices" },
   { key: "action.intake", label: "Receive phones and supplier goods" },
+  { key: "action.incoming", label: "Book goods before they arrive" },
   { key: "action.transfer", label: "Send and receive goods between shops" },
   { key: "action.return", label: "Record returns" },
   { key: "action.swap", label: "Record swaps" },
@@ -55,7 +57,7 @@ const DEFAULTS: Record<UserRole, string[]> = {
   SUPER_ADMIN: ALL,
   CEO: ALL.filter((key) => key !== "view.access" && key !== "action.override_floor" && key !== "action.settings"),
   AUDITOR: V(
-    "view.dashboard", "view.products", "view.imei", "view.inventory", "view.sales", "view.purchases",
+    "view.dashboard", "view.products", "view.imei", "view.inventory", "view.incoming", "view.sales", "view.purchases",
     "view.customers", "view.suppliers", "view.transfers", "view.returns", "view.swaps", "view.repairs",
     "view.reconciliation", "view.finance", "view.expenses", "view.approvals", "view.branches",
     "view.reports", "view.audit", "view.notifications",
@@ -67,17 +69,17 @@ const DEFAULTS: Record<UserRole, string[]> = {
     "action.sell", "action.finance", "action.all_branches"
   ),
   BRANCH_MANAGER: V(
-    "view.dashboard", "view.products", "view.imei", "view.inventory", "view.sales", "view.pos",
+    "view.dashboard", "view.products", "view.imei", "view.inventory", "view.incoming", "view.sales", "view.pos",
     "view.purchases", "view.customers", "view.suppliers", "view.transfers", "view.returns",
     "view.swaps", "view.repairs", "view.reconciliation", "view.finance", "view.expenses",
     "view.approvals", "view.staff", "view.reports", "view.notifications",
-    "action.sell", "action.catalog", "action.intake", "action.transfer", "action.return",
+    "action.sell", "action.catalog", "action.intake", "action.incoming", "action.transfer", "action.return",
     "action.swap", "action.repair", "action.recon", "action.approve", "action.finance", "action.staff"
   ),
   VAULT_MANAGER: V(
-    "view.dashboard", "view.products", "view.imei", "view.inventory", "view.purchases",
+    "view.dashboard", "view.products", "view.imei", "view.inventory", "view.incoming", "view.purchases",
     "view.suppliers", "view.transfers", "view.notifications",
-    "action.intake", "action.transfer", "action.catalog"
+    "action.intake", "action.incoming", "action.transfer", "action.catalog"
   ),
   CASHIER: V(
     "view.dashboard", "view.pos", "view.sales", "view.customers", "view.returns", "view.notifications",
@@ -98,8 +100,8 @@ export function isSuperAdmin(role: UserRole) {
 }
 
 export async function ensureRolePermissions() {
-  const existing = await prisma.rolePermission.count()
-  if (existing > 0) return
+  const existing = await prisma.rolePermission.findMany()
+  const have = new Set(existing.map((row) => `${row.role}:${row.permKey}`))
   const rows = (Object.keys(DEFAULTS) as UserRole[]).flatMap((role) =>
     ALL_PERM_KEYS.map((permKey) => ({
       role,
@@ -107,7 +109,8 @@ export async function ensureRolePermissions() {
       allowed: role === "SUPER_ADMIN" || DEFAULTS[role].includes(permKey),
     }))
   )
-  await prisma.rolePermission.createMany({ data: rows })
+  const missing = rows.filter((row) => !have.has(`${row.role}:${row.permKey}`))
+  if (missing.length) await prisma.rolePermission.createMany({ data: missing })
 }
 
 export async function getAllowedKeys(role: UserRole) {

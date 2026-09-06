@@ -30,7 +30,7 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
       <PageHeader
         title={sale.invoiceNumber}
         description={`${sale.branch.name} · ${formatDateTime(sale.saleDate)} · posted by ${sale.user.name}`}
-        actions={<PrintButton label="Print A5 receipt" />}
+        actions={<PrintButton label="Print invoice" />}
       />
       <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 print:hidden dark:border-amber-900 dark:bg-amber-500/10 dark:text-amber-100">
         This sale cannot be changed. Staff cannot edit items, IMEIs, or prices. Collect any remaining money below.
@@ -153,6 +153,9 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
           company={company}
           invoiceNumber={sale.invoiceNumber}
           branch={sale.branch.name}
+          address={settings.find((row) => row.key === "company.address")?.value || sale.branch.address}
+          shopPhone={settings.find((row) => row.key === "company.phone")?.value || sale.branch.phone}
+          email={settings.find((row) => row.key === "company.email")?.value}
           cashier={sale.user.name ?? "Staff"}
           customer={sale.customer?.name ?? "Walk-in"}
           phone={sale.customer?.phone}

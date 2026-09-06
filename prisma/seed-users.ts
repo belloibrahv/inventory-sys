@@ -5,31 +5,31 @@ const prisma = new PrismaClient()
 
 const BRANCHES = [
   {
-    name: "Computer Village HQ",
-    code: "LOS",
-    address: "14 Otigba Street, Computer Village, Ikeja, Lagos",
-    phone: "+234 803 111 2201",
-    email: "lagos@abutwins.com",
+    name: "Iwo Road, Ibadan",
+    code: "IWO",
+    address: "Iwo Road, Ibadan, Oyo State",
+    phone: "07062454854",
+    email: "iwo@abutwins.com",
+    isHq: true,
   },
   {
-    name: "Wuse II",
-    code: "ABJ",
-    address: "Plot 42 Ademola Adetokunbo Crescent, Wuse II, Abuja",
-    phone: "+234 809 222 3302",
-    email: "abuja@abutwins.com",
-  },
-  {
-    name: "Trans Amadi",
-    code: "PHC",
-    address: "21 Trans Amadi Industrial Layout, Port Harcourt",
-    phone: "+234 806 333 4403",
-    email: "ph@abutwins.com",
+    name: "Challenge, Ibadan",
+    code: "CHL",
+    address: "Challenge, Ibadan, Oyo State",
+    phone: "07062454854",
+    email: "challenge@abutwins.com",
+    isHq: false,
   },
 ] as const
+
+const RETIRED = ["LOS", "ABJ", "PHC"]
 
 const SETTINGS = [
   { key: "company.name", value: "Abu Twins", description: "Legal trading name" },
   { key: "company.product", value: "Abu Twins Softskills", description: "Product name" },
+  { key: "company.phone", value: "07062454854", description: "Phone on invoices" },
+  { key: "company.address", value: "Iwo Road, Ibadan, Oyo State", description: "Address on invoices" },
+  { key: "company.email", value: "hello@abutwins.com", description: "Email on invoices" },
   { key: "company.currency", value: "NGN", description: "Default currency" },
   { key: "sales.allow_below_minimum", value: "false", description: "Require approval below min price" },
   { key: "inventory.low_stock_threshold", value: "3", description: "Default low stock" },
@@ -47,26 +47,56 @@ const USERS: SeedUser[] = [
   { email: "admin@abutwins.com", password: "admin123", name: "TechVaults Admin", role: "SUPER_ADMIN" },
   { email: "ceo@abutwins.com", password: "ceo123", name: "Abu Twins", role: "CEO" },
   { email: "auditor@abutwins.com", password: "auditor123", name: "Amaka Okonkwo", role: "AUDITOR" },
-  { email: "accountant@abutwins.com", password: "accountant123", name: "Chinedu Bassey", role: "ACCOUNTANT", branchCode: "LOS" },
-  { email: "manager@abutwins.com", password: "manager123", name: "Halima Yusuf", role: "BRANCH_MANAGER", branchCode: "LOS" },
-  { email: "vault@abutwins.com", password: "vault123", name: "Ibrahim Lawal", role: "VAULT_MANAGER", branchCode: "LOS" },
-  { email: "cashier@abutwins.com", password: "cashier123", name: "Blessing Adeyemi", role: "CASHIER", branchCode: "LOS" },
-  { email: "sales@abutwins.com", password: "sales123", name: "Tunde Adebayo", role: "SALES_EXECUTIVE", branchCode: "LOS" },
-  { email: "engineer@abutwins.com", password: "engineer123", name: "Kelechi Nwosu", role: "ENGINEER", branchCode: "LOS" },
-  { email: "abuja.manager@abutwins.com", password: "manager123", name: "Fatima Sule", role: "BRANCH_MANAGER", branchCode: "ABJ" },
+  { email: "accountant@abutwins.com", password: "accountant123", name: "Chinedu Bassey", role: "ACCOUNTANT", branchCode: "IWO" },
+  { email: "manager@abutwins.com", password: "manager123", name: "Halima Yusuf", role: "BRANCH_MANAGER", branchCode: "IWO" },
+  { email: "vault@abutwins.com", password: "vault123", name: "Ibrahim Lawal", role: "VAULT_MANAGER", branchCode: "IWO" },
+  { email: "cashier@abutwins.com", password: "cashier123", name: "Blessing Adeyemi", role: "CASHIER", branchCode: "IWO" },
+  { email: "sales@abutwins.com", password: "sales123", name: "Tunde Adebayo", role: "SALES_EXECUTIVE", branchCode: "IWO" },
+  { email: "engineer@abutwins.com", password: "engineer123", name: "Kelechi Nwosu", role: "ENGINEER", branchCode: "IWO" },
+  { email: "challenge.manager@abutwins.com", password: "manager123", name: "Fatima Sule", role: "BRANCH_MANAGER", branchCode: "CHL" },
 ]
 
 async function main() {
-  console.log("Seeding production users...")
+  console.log("Seeding Ibadan shops and role users...")
 
   const branches = new Map<string, string>()
   for (const branch of BRANCHES) {
     const row = await prisma.branch.upsert({
       where: { code: branch.code },
-      update: { name: branch.name, address: branch.address, phone: branch.phone, email: branch.email, isActive: true },
+      update: {
+        name: branch.name,
+        address: branch.address,
+        phone: branch.phone,
+        email: branch.email,
+        isActive: true,
+        isHq: branch.isHq,
+      },
       create: branch,
     })
     branches.set(row.code, row.id)
+  }
+
+  await prisma.branch.updateMany({
+    where: { code: { in: RETIRED } },
+    data: { isActive: false, isHq: false },
+  })
+
+  const hqId = branches.get("IWO")
+  const challengeId = branches.get("CHL")
+  const oldAbuja = await prisma.user.findUnique({ where: { email: "abuja.manager@abutwins.com" } })
+  const challengeLogin = await prisma.user.findUnique({ where: { email: "challenge.manager@abutwins.com" } })
+  if (oldAbuja && !challengeLogin && challengeId) {
+    await prisma.user.update({
+      where: { id: oldAbuja.id },
+      data: { email: "challenge.manager@abutwins.com", branchId: challengeId, name: "Fatima Sule", isActive: true },
+    })
+    console.log("moved abuja.manager to Challenge")
+  }
+  if (hqId) {
+    await prisma.user.updateMany({
+      where: { branch: { code: { in: RETIRED } } },
+      data: { branchId: hqId },
+    })
   }
 
   for (const user of USERS) {

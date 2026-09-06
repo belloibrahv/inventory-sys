@@ -62,7 +62,7 @@ export async function getPosLookups() {
       sku: product.sku,
       sellingPrice: money(product.sellingPrice),
       minimumPrice: money(product.minimumPrice),
-      serialized: product._count.imeiRecords > 0,
+      serialized: product.tracking !== "NONE",
       brand: { name: product.brand.name },
       stock: product.inventory.map((row) => ({ branchId: row.branchId, quantity: row.quantity })),
     })),

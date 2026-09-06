@@ -42,7 +42,15 @@ export default function LoginPage() {
             Phones, laptops, and power — every IMEI and sale in one record. Old figures cannot be secretly changed.
           </p>
         </div>
-        <p className="relative text-xs uppercase tracking-[0.22em] text-white/45">Abu Twins Softskills Investment</p>
+        <div className="relative space-y-2">
+          <p className="text-xs uppercase tracking-[0.22em] text-white/45">Abu Twins Softskills Investment</p>
+          <p className="text-xs text-white/55">
+            Built by{" "}
+            <a href="https://techvaults.com/" target="_blank" rel="noopener noreferrer" className="text-white underline underline-offset-2">
+              Techvaults Limited
+            </a>
+          </p>
+        </div>
       </div>
       <div className="flex items-center justify-center bg-background px-6 py-12">
         <form onSubmit={onSubmit} className="w-full max-w-md space-y-6">
@@ -71,6 +79,17 @@ export default function LoginPage() {
           <Button className="w-full" disabled={loading}>
             {loading ? "Checking..." : "Sign in"}
           </Button>
+          <p className="pt-2 text-center text-xs text-muted-foreground">
+            Software by{" "}
+            <a
+              href="https://techvaults.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-[#BC0004] underline-offset-2 hover:underline"
+            >
+              Techvaults Limited
+            </a>
+          </p>
         </form>
       </div>
     </div>
