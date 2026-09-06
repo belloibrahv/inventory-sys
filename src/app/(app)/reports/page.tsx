@@ -33,7 +33,10 @@ export default async function ReportsPage() {
         title="Reports"
         description="Today’s real numbers: sales, money collected, stock, swaps, returns, and what people still owe."
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <a href="/audit/books" className="inline-flex min-h-11 items-center rounded-xl border border-border px-3 text-sm">
+              Check the books
+            </a>
             <PrintButton label="Print report" />
             <ExportCsv
               filename="abutwins-sales.csv"

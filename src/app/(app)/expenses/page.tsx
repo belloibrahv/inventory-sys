@@ -17,7 +17,7 @@ export default async function ExpensesPage() {
     canManageFinance(me.role),
   ])
   return (
-    <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
+    <div className="page-split">
       <div>
         <PageHeader title="Expenses" description="Fuel, rent, salary, light bill. Money does not leave the shop until a manager says yes." />
         <WorkflowSteps current={0} steps={["Ask", "Manager says yes", "Pay out"]} />

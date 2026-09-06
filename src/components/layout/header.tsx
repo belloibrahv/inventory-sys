@@ -19,12 +19,20 @@ export function Header({
 }) {
   const { setTheme, resolvedTheme } = useTheme()
   const setCommandOpen = useUI((state) => state.setCommandOpen)
-  const toggleSidebar = useUI((state) => state.toggleSidebar)
+  const toggleNav = useUI((state) => state.toggleNav)
+  const desktopSidebar = useUI((state) => state.desktopSidebar)
+  const sidebarOpen = useUI((state) => state.sidebarOpen)
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border/70 bg-background/80 px-4 backdrop-blur-xl md:px-8">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" className="lg:hidden" onClick={toggleSidebar} aria-label="Open menu">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleNav}
+          aria-label={desktopSidebar || sidebarOpen ? "Hide menu" : "Show menu"}
+          title={desktopSidebar || sidebarOpen ? "Hide menu" : "Show menu"}
+        >
           <Menu className="h-5 w-5" />
         </Button>
         <div>

@@ -19,6 +19,7 @@ import {
   BadgeCheck,
   BarChart3,
   ClipboardCheck,
+  Scale,
   ScrollText,
   Bell,
   Settings,
@@ -65,6 +66,7 @@ export const navGroups = [
     label: "Money",
     items: [
       { name: "Money in & out", href: "/finance", icon: Wallet },
+      { name: "Check the books", href: "/audit/books", icon: Scale },
       { name: "Expenses", href: "/expenses", icon: Receipt },
       { name: "Needs approval", href: "/approvals", icon: BadgeCheck },
     ],

@@ -13,6 +13,8 @@ export default async function FinancePage() {
       />
       <p className="text-sm">
         <Link href="/finance/close" className="text-primary">Close the day and export cash count</Link>
+        {" · "}
+        <Link href="/audit/books" className="text-primary">Check the books</Link>
       </p>
       <div className="grid gap-4 md:grid-cols-3">
         <div className="surface-card p-5">

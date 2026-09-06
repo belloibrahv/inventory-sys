@@ -9,8 +9,8 @@ import { formatCurrency, money } from "@/lib/utils"
 export default async function CustomersPage() {
   const [customers, branches] = await Promise.all([getCustomers(), getBranches()])
   return (
-    <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
-      <div>
+    <div className="page-split">
+      <div className="min-w-0">
         <PageHeader title="Customers" description="Customer names, what they bought, and what they still owe. Money they pay later is recorded here. The old invoice is not changed." />
         <div className="surface-card overflow-hidden">
           <table className="w-full text-sm">
@@ -40,17 +40,35 @@ export default async function CustomersPage() {
       </div>
       <div className="surface-card p-5">
         <h3 className="mb-4 font-semibold">New customer</h3>
-        <ActionForm action={createCustomer} className="space-y-3">
-          <Input name="name" placeholder="Full name" required />
-          <Input name="phone" placeholder="Phone" required />
-          <Input name="email" placeholder="Email" />
-          <Input name="address" placeholder="Address" />
-          <Select name="branchId" required>
-            {branches.map((branch) => (
-              <option key={branch.id} value={branch.id}>{branch.name}</option>
-            ))}
-          </Select>
-          <Input name="creditLimit" type="number" placeholder="Credit limit" />
+        <ActionForm action={createCustomer} className="space-y-4">
+          <label className="block text-sm">
+            <span className="mb-1 block text-muted-foreground">Full name</span>
+            <Input name="name" required />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-muted-foreground">Phone</span>
+            <Input name="phone" required />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-muted-foreground">Email</span>
+            <Input name="email" />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-muted-foreground">Address</span>
+            <Input name="address" />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-muted-foreground">Shop</span>
+            <Select name="branchId" required>
+              {branches.map((branch) => (
+                <option key={branch.id} value={branch.id}>{branch.name}</option>
+              ))}
+            </Select>
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-muted-foreground">Credit limit</span>
+            <Input name="creditLimit" type="number" />
+          </label>
         </ActionForm>
       </div>
     </div>

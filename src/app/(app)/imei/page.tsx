@@ -23,7 +23,7 @@ export default async function ImeiPage({ searchParams }: { searchParams: Promise
     <div className="space-y-6">
       <PageHeader title="Phone IMEIs" description="Phones and serial items. Coming units are not for sale until they arrive in the shop." />
       <WorkflowSteps current={1} steps={["Receive phone", "In shop", "Sell or move", "Return or repair"]} />
-      <div className="grid gap-4 xl:grid-cols-[1.4fr_0.7fr]">
+      <div className="page-split">
         <div className="surface-card overflow-hidden">
           <form className="grid gap-2 border-b border-border p-4 md:grid-cols-[1fr_180px_auto]">
             <Input name="q" defaultValue={q} placeholder="Search IMEI, serial, customer, invoice" />

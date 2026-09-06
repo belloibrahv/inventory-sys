@@ -88,6 +88,10 @@ body {
   }
 }
 
+.page-split {
+  @apply grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,28rem)] xl:items-start;
+}
+
 .surface-card {
   @apply rounded-2xl border border-border/80 bg-card shadow-[0_8px_30px_rgb(15,23,42,0.04)];
 }
@@ -112,7 +116,8 @@ body {
     margin: 10mm;
   }
   aside,
-  header {
+  header,
+  .shop-calculator {
     display: none !important;
   }
   main {
@@ -123,7 +128,12 @@ body {
     break-inside: avoid;
   }
   .receipt,
-  .invoice {
+  .invoice,
+  .audit-pack {
     max-width: none !important;
+  }
+  .audit-pack a {
+    color: inherit !important;
+    text-decoration: none !important;
   }
 }

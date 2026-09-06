@@ -31,6 +31,14 @@ export function pathIsAllowed(pathname: string, allowedHrefs: string[]) {
   if (pathname === "/finance/close" || pathname.startsWith("/finance/close/")) {
     return allowedHrefs.includes("/finance") || allowedHrefs.includes("/pos") || allowedHrefs.includes("/finance/close")
   }
+  if (pathname === "/audit/books" || pathname.startsWith("/audit/books/")) {
+    return (
+      allowedHrefs.includes("/audit") ||
+      allowedHrefs.includes("/finance") ||
+      allowedHrefs.includes("/reports") ||
+      allowedHrefs.includes("/audit/books")
+    )
+  }
   const view = VIEW_HREFS
     .slice()
     .sort((a, b) => b.length - a.length)

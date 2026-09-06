@@ -13,7 +13,7 @@ import { SwapForm } from "./swap-form"
 export default async function SwapsPage() {
   const [swaps, lookups, products] = await Promise.all([getSwaps(), getPosLookups(), getProducts()])
   return (
-    <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
+    <div className="page-split">
       <div>
         <PageHeader title="Swaps" description="Customer brings an old phone. You give a value, wait for approval, give a new phone, collect or pay the difference, then print the invoice." />
         <WorkflowSteps current={0} steps={["Old phone in", "Agree value", "Boss approves", "New phone out", "Balance", "Invoice"]} />

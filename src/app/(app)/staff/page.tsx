@@ -16,13 +16,14 @@ export default async function StaffPage() {
   const canAdd = await canManageStaff(me.role)
   const roles = (Object.keys(ROLE_LABELS) as UserRole[]).filter((role) => isSuperAdmin(me.role) || role !== "SUPER_ADMIN")
   return (
-    <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
-      <div>
+    <div className="page-split">
+      <div className="min-w-0">
         <PageHeader
           title="Staff"
           description="Super Admin decides what each person can see. Open Who can see what to tick the pages for each role."
         />
         <div className="surface-card overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-left text-muted-foreground">
               <tr className="border-b border-border">
@@ -61,26 +62,42 @@ export default async function StaffPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
-      <div className="surface-card p-5">
+      <div className="surface-card p-5 sm:p-6">
         <h3 className="mb-4 font-semibold">Add staff</h3>
         {canAdd ? (
-        <ActionForm action={createStaff} submit="Create staff login" className="space-y-3">
-          <Input name="name" placeholder="Full name" required />
-          <Input name="email" type="email" placeholder="work email" required />
-          <Input name="password" type="password" placeholder="Temporary password" required />
-          <Select name="role" defaultValue="SALES_EXECUTIVE">
-            {roles.map((role) => (
-              <option key={role} value={role}>{ROLE_LABELS[role]}</option>
-            ))}
-          </Select>
-          <Select name="branchId">
-            <option value="">Head office / all shops</option>
-            {branches.map((branch) => (
-              <option key={branch.id} value={branch.id}>{branch.name}</option>
-            ))}
-          </Select>
+        <ActionForm action={createStaff} submit="Create staff login" className="space-y-4">
+          <label className="block text-sm">
+            <span className="mb-1 block text-muted-foreground">Full name</span>
+            <Input name="name" placeholder="e.g. Blessing Adeyemi" required />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-muted-foreground">Work email</span>
+            <Input name="email" type="email" placeholder="name@abutwins.com" required />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-muted-foreground">Temporary password</span>
+            <Input name="password" type="password" placeholder="They must change this" required />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-muted-foreground">Job</span>
+            <Select name="role" defaultValue="SALES_EXECUTIVE">
+              {roles.map((role) => (
+                <option key={role} value={role}>{ROLE_LABELS[role]}</option>
+              ))}
+            </Select>
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-muted-foreground">Shop</span>
+            <Select name="branchId">
+              <option value="">Head office / all shops</option>
+              {branches.map((branch) => (
+                <option key={branch.id} value={branch.id}>{branch.name}</option>
+              ))}
+            </Select>
+          </label>
         </ActionForm>
         ) : (
           <p className="text-sm text-muted-foreground">You can see staff. Super Admin must allow you to add a new login.</p>

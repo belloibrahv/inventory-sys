@@ -24,6 +24,7 @@ export const pageTitles: Record<string, string> = {
   "/staff/access": "Who can see what",
   "/reports": "Reports",
   "/audit": "Who did what",
+  "/audit/books": "Check the books",
   "/notifications": "Alerts",
   "/settings": "Settings",
 }

@@ -26,6 +26,10 @@ export default async function DashboardPage() {
       ) : (
         <p className="text-sm text-muted-foreground">No open shop tasks for you right now.</p>
       )}
+      <p className="text-sm">
+        <a href="/audit/books" className="text-primary">Check the books</a>
+        {" for money, phones, and a working paper the owner or records checker can print."}
+      </p>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           label="Total sales"

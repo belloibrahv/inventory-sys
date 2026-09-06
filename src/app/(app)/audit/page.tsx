@@ -1,4 +1,5 @@
 import { getAuditMonitor } from "@/app/actions/audit"
+import { getBooksCheck } from "@/app/actions/books-check"
 import { AuditExportButton } from "@/app/(app)/audit/export-button"
 import { AuditLogRows } from "@/app/(app)/audit/log-rows"
 import { PageHeader } from "@/components/shared"
@@ -13,14 +14,21 @@ export default async function AuditPage({
   searchParams: Promise<{ q?: string; action?: string; risk?: string; userId?: string; result?: string; from?: string; to?: string; views?: string }>
 }) {
   const filters = await searchParams
-  const data = await getAuditMonitor(filters)
+  const [data, books] = await Promise.all([getAuditMonitor(filters), getBooksCheck()])
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Who did what"
         description="Every sign-in, sale, stock move, money change, export, and blocked screen is kept. Rows cannot be edited. Super Admin, CEO, and Records checker get an alert when something looks wrong."
-        actions={<AuditExportButton filters={filters} />}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <a href="/audit/books" className="inline-flex min-h-11 items-center rounded-xl border border-border px-3 text-sm">
+              Check the books
+            </a>
+            <AuditExportButton filters={filters} />
+          </div>
+        }
       />
 
       <div className={`rounded-xl px-4 py-3 text-sm ${data.integrity.ok ? "bg-emerald-50 text-emerald-900 dark:bg-emerald-500/10 dark:text-emerald-100" : "bg-rose-50 text-rose-900"}`}>
@@ -28,6 +36,16 @@ export default async function AuditPage({
           ? `Trail is sound. ${data.integrity.checked} sealed rows checked. Nobody can quietly rewrite a past action.`
           : "A sealed row no longer matches. Treat this as a break-in on the trail and keep a backup."}
       </div>
+      {books ? (
+        <a
+          href="/audit/books"
+          className={`block rounded-xl px-4 py-3 text-sm ${books.openCount ? "bg-amber-50 text-amber-950 dark:bg-amber-500/10 dark:text-amber-100" : "surface-card"}`}
+        >
+          <p className="font-medium">Owner and records checker</p>
+          <p className="mt-1">{books.verdict}</p>
+          <p className="mt-1 text-primary">Open the working paper</p>
+        </a>
+      ) : null}
 
       <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
         <WatchCard href="/audit?result=failed&action=LOGIN" label="Failed sign-ins (24h)" value={data.watch.failedLogins} hot={data.watch.failedLogins > 0} />

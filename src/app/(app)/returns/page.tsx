@@ -10,7 +10,7 @@ import { ReturnForm } from "./return-form"
 export default async function ReturnsPage() {
   const [rows, sold] = await Promise.all([getReturns(), getSoldImeis()])
   return (
-    <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
+    <div className="page-split">
       <div>
         <PageHeader title="Returns" description="Enter the sold IMEI, say why it came back, wait for approval, then refund, credit, repair, or replace. Walk-in sales need a customer name first. The old invoice is not changed." />
         <WorkflowSteps current={0} steps={["Enter IMEI", "Say why", "Boss approves", "Refund or replace"]} />

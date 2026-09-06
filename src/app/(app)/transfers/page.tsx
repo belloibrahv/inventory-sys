@@ -10,7 +10,7 @@ import { TransferForm } from "./transfer-form"
 export default async function TransfersPage() {
   const [transfers, lookups] = await Promise.all([getTransfers(), getPosLookups()])
   return (
-    <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
+    <div className="page-split">
       <div>
         <PageHeader title="Send to another shop" description="Phones leave this shop only after you pick the IMEIs. The other shop must confirm they arrived." />
         <WorkflowSteps current={0} steps={["Pick IMEIs", "On the way", "Other shop confirms", "Now in that shop"]} />

@@ -18,7 +18,7 @@ export default async function PurchasesPage() {
   ])
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
+    <div className="page-split">
       <div>
         <PageHeader title="Goods from supplier" description="Order goods, wait for them, check them, type the IMEIs, then they are in the shop." />
         <WorkflowSteps current={0} steps={["Order", "On the way", "Check goods", "Enter IMEIs", "In shop"]} />

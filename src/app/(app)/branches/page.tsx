@@ -49,7 +49,7 @@ export default async function BranchesPage() {
   const closed = branches.filter((branch) => !branch.isActive)
   const admin = isSuperAdmin(me.role)
   return (
-    <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
+    <div className="page-split">
       <div>
         <PageHeader title="Shops" description="Iwo Road is HQ. Challenge is the second Ibadan shop. Super Admin can open more shops anywhere in Nigeria when Abu Twins expands." />
         <div className="grid gap-3 md:grid-cols-2">

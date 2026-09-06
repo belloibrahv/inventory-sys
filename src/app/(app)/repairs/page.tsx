@@ -13,7 +13,7 @@ const stages = ["PENDING", "DIAGNOSING", "REPAIRING", "WAITING_PARTS", "COMPLETE
 export default async function RepairsPage() {
   const rows = await getRepairs()
   return (
-    <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
+    <div className="page-split">
       <div>
         <PageHeader title="Repairs" description="Take the phone, find the fault, wait for parts if needed, repair, then give it back to the customer or put it back in the shop." />
         <WorkflowSteps current={1} steps={["Take in", "Find fault", "Wait for parts", "Repair", "Give back"]} />

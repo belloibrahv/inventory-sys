@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { ChevronRight } from "lucide-react"
+import { ChevronRight, PanelLeftClose } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { BrandLockup } from "@/components/brand-mark"
 import { navGroups } from "@/components/layout/nav"
@@ -12,6 +12,8 @@ export function Sidebar({ allowedHrefs }: { allowedHrefs: string[] }) {
   const pathname = usePathname()
   const open = useUI((state) => state.sidebarOpen)
   const setSidebar = useUI((state) => state.setSidebar)
+  const desktopSidebar = useUI((state) => state.desktopSidebar)
+  const setDesktopSidebar = useUI((state) => state.setDesktopSidebar)
   const groups = navGroups
     .map((group) => ({
       ...group,
@@ -33,11 +35,20 @@ export function Sidebar({ allowedHrefs }: { allowedHrefs: string[] }) {
         className={cn(
           "fixed inset-y-0 left-0 z-50 w-[272px] flex-col bg-sidebar text-sidebar-foreground",
           open ? "flex" : "hidden",
-          "lg:flex"
+          desktopSidebar ? "lg:flex" : "lg:hidden"
         )}
       >
-        <div className="flex h-[4.5rem] items-center px-4">
+        <div className="flex h-[4.5rem] items-center justify-between gap-2 px-4">
           <BrandLockup light compact />
+          <button
+            type="button"
+            className="hidden min-h-11 min-w-11 items-center justify-center rounded-xl text-white/70 hover:bg-sidebar-muted hover:text-white lg:inline-flex"
+            onClick={() => setDesktopSidebar(false)}
+            aria-label="Hide menu"
+            title="Hide menu"
+          >
+            <PanelLeftClose className="h-4 w-4" />
+          </button>
         </div>
         <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-8 pt-2">
           {groups.map((group) => (

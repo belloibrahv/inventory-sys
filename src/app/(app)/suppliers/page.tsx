@@ -8,7 +8,7 @@ import { formatCurrency, money } from "@/lib/utils"
 export default async function SuppliersPage() {
   const suppliers = await getSuppliers()
   return (
-    <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
+    <div className="page-split">
       <div>
         <PageHeader title="Suppliers" description="People we buy phones from. Owed is what we have not paid yet on their invoices." />
         <div className="surface-card overflow-hidden">

@@ -23,7 +23,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   return (
     <div className="space-y-6">
       <PageHeader title="Phones & items" description="Add phones, accessories, and selling prices. Lowest price is the floor staff cannot go below." />
-      <div className="grid gap-4 xl:grid-cols-[1.4fr_0.8fr]">
+      <div className="page-split">
         <div className="surface-card overflow-hidden">
           <form className="border-b border-border p-4">
             <Input name="q" defaultValue={q} placeholder="Search item code or model" />

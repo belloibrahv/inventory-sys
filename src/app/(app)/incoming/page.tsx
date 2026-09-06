@@ -21,7 +21,7 @@ export default async function IncomingPage() {
   const activeShops = branches.filter((branch) => branch.isActive)
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
+    <div className="page-split">
       <div>
         <PageHeader
           title="Goods on the way"
