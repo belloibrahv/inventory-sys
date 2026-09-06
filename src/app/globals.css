@@ -113,15 +113,25 @@ body {
 @media print {
   @page {
     size: A4;
-    margin: 10mm;
+    margin: 8mm;
+  }
+  html,
+  body {
+    background: white !important;
+    color: #0f172a !important;
   }
   aside,
   header,
-  .shop-calculator {
+  .shop-calculator,
+  .books-chrome {
     display: none !important;
   }
-  main {
+  main,
+  main + * {
     padding: 0 !important;
+  }
+  .min-h-screen > div {
+    padding-left: 0 !important;
   }
   .surface-card {
     box-shadow: none !important;
@@ -129,11 +139,20 @@ body {
   }
   .receipt,
   .invoice,
-  .audit-pack {
+  .audit-pack,
+  .books-statement {
     max-width: none !important;
+    box-shadow: none !important;
   }
   .audit-pack a {
     color: inherit !important;
     text-decoration: none !important;
+  }
+  .books-statement {
+    break-inside: auto;
+  }
+  .books-statement header {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }

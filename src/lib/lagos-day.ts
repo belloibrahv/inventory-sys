@@ -26,3 +26,25 @@ export function watBounds(dayKey: string) {
 export function recentWatDays(count: number, from = watDayKey()) {
   return Array.from({ length: count }, (_, index) => shiftWatDay(from, -index))
 }
+
+export function formatWatLong(dayKey: string) {
+  const [year, month, day] = dayKey.split("-").map(Number)
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month - 1, day)))
+}
+
+export function formatLagosStamp(date = new Date()) {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Lagos",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date)
+}

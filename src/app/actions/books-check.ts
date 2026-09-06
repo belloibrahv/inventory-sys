@@ -7,7 +7,8 @@ import { requireUser } from "@/lib/session"
 import { verifyAuditChain } from "@/lib/audit"
 import { getUnclosedBusinessDays } from "@/app/actions/day-close"
 import { getParkedWatch } from "@/app/actions/parked"
-import { shiftWatDay, watBounds, watDayKey } from "@/lib/lagos-day"
+import { recentWatDays, shiftWatDay, watBounds, watDayKey } from "@/lib/lagos-day"
+import { getAppSettings } from "@/lib/settings"
 import { money } from "@/lib/utils"
 
 export type BooksRange = "day" | "week" | "month"
@@ -43,7 +44,7 @@ function sumSales(rows: Array<{ paymentMethod: string; totalAmount: unknown; pai
   return { cash, transfer, pos, credit, revenue, collected, due: revenue - collected, methodSum: cash + transfer + pos, count: rows.length }
 }
 
-export async function getBooksCheck(branchId?: string, businessDate?: string, range: BooksRange = "day") {
+export async function getBooksCheck(branchId?: string, businessDate?: string, range: BooksRange = "day", compareDate?: string) {
   const user = await requireUser()
   const allowed =
     (await can(user.role, "view.audit")) ||
@@ -61,10 +62,13 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
   const day = businessDate && /^\d{4}-\d{2}-\d{2}$/.test(businessDate) ? businessDate : watDayKey()
   const span = range === "week" || range === "month" ? range : "day"
   const window = periodWindow(day, span)
-  const prior = previousWindow(window.from, span)
+  const compareDay = compareDate && /^\d{4}-\d{2}-\d{2}$/.test(compareDate) ? compareDate : ""
+  const prior = compareDay ? periodWindow(compareDay, span) : previousWindow(window.from, span)
   const shopWhere = shopId ? { branchId: shopId } : {}
+  const recentDays = recentWatDays(14, day)
+  const recentStart = watBounds(recentDays[recentDays.length - 1]).start
 
-  const [sales, priorSales, expenses, purchases, closes, debtors, creditors, stock, vaultCounts, products, unclosed, parked, walkIns, integrity, highRisk, failedLogins] =
+  const [sales, priorSales, expenses, priorExpenses, purchases, priorPurchases, closes, debtors, creditors, stock, vaultCounts, products, unclosed, parked, walkIns, integrity, highRisk, failedLogins, recentSaleDates, recentCloses, settings] =
     await Promise.all([
       prisma.sale.findMany({
         where: { status: "COMPLETED", ...shopWhere, saleDate: { gte: window.start, lt: window.end } },
@@ -79,8 +83,16 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
         where: { ...shopWhere, date: { gte: window.start, lt: window.end }, approvedAt: { not: null } },
         _sum: { amount: true },
       }),
+      prisma.expense.aggregate({
+        where: { ...shopWhere, date: { gte: prior.start, lt: prior.end }, approvedAt: { not: null } },
+        _sum: { amount: true },
+      }),
       prisma.purchase.aggregate({
         where: { ...shopWhere, createdAt: { gte: window.start, lt: window.end } },
+        _sum: { paidAmount: true },
+      }),
+      prisma.purchase.aggregate({
+        where: { ...shopWhere, createdAt: { gte: prior.start, lt: prior.end } },
         _sum: { paidAmount: true },
       }),
       shopId
@@ -126,15 +138,37 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
       prisma.auditLog.count({
         where: { action: "LOGIN", success: false, createdAt: { gte: window.start, lt: window.end } },
       }),
+      prisma.sale.findMany({
+        where: { status: "COMPLETED", ...shopWhere, saleDate: { gte: recentStart, lt: window.end } },
+        select: { saleDate: true },
+      }),
+      shopId
+        ? prisma.dayClose.findMany({
+            where: { branchId: shopId, OR: [{ businessDate: { in: recentDays } }, { closeDate: { gte: recentStart, lt: window.end } }] },
+            select: { businessDate: true, closeDate: true },
+          })
+        : Promise.resolve([]),
+      getAppSettings(),
     ])
 
   const now = sumSales(sales)
   const then = sumSales(priorSales)
+  const expenseNow = money(expenses._sum.amount)
+  const expenseThen = money(priorExpenses._sum.amount)
+  const paidNow = money(purchases._sum.paidAmount)
+  const paidThen = money(priorPurchases._sum.paidAmount)
   const change = (current: number, previous: number) => {
-    if (!previous) return { value: current ? "New" : "0", up: current >= 0 }
+    if (!previous) return { value: current ? "New" : "0", amount: current - previous, up: current >= previous }
     const pct = ((current - previous) / previous) * 100
-    return { value: `${pct >= 0 ? "+" : ""}${pct.toFixed(0)}%`, up: pct >= 0 }
+    return { value: `${pct >= 0 ? "+" : ""}${pct.toFixed(0)}%`, amount: current - previous, up: pct >= 0 }
   }
+  const soldOn = new Map<string, number>()
+  for (const sale of recentSaleDates) {
+    const key = watDayKey(sale.saleDate)
+    soldOn.set(key, (soldOn.get(key) ?? 0) + 1)
+  }
+  const closedOn = new Set(recentCloses.map((row) => row.businessDate || watDayKey(row.closeDate)))
+  const shop = shops.find((row) => row.id === shopId)
 
   const supplierOwed = creditors.reduce((sum, row) => sum + money(row.totalAmount) - money(row.paidAmount), 0)
   const closeForDay = span === "day" ? closes.find((row) => (row.businessDate || "") === day) ?? closes[0] ?? null : null
@@ -242,7 +276,8 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
   return {
     shops,
     shopId,
-    shopName: shops.find((shop) => shop.id === shopId)?.name ?? "Shop",
+    shopName: shop?.name ?? "Shop",
+    shopCode: shop?.code ?? "SHOP",
     businessDate: day,
     range: span,
     from: window.from,
@@ -258,9 +293,9 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
     revenue: now.revenue,
     due: now.due,
     methodSum: now.methodSum,
-    expenses: money(expenses._sum.amount),
-    purchasesPaid: money(purchases._sum.paidAmount),
-    moneyOut: money(expenses._sum.amount) + money(purchases._sum.paidAmount),
+    expenses: expenseNow,
+    purchasesPaid: paidNow,
+    moneyOut: expenseNow + paidNow,
     customersOwe: money(debtors._sum.currentBalance),
     supplierOwed,
     expectedCash,
@@ -282,9 +317,40 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
       revenue: change(now.revenue, then.revenue),
       collected: change(now.collected, then.collected),
       count: change(now.count, then.count),
+      cash: change(now.cash, then.cash),
+      transfer: change(now.transfer, then.transfer),
+      pos: change(now.pos, then.pos),
+      credit: change(now.credit, then.credit),
+      due: change(now.due, then.due),
+      expenses: change(expenseNow, expenseThen),
+      moneyOut: change(expenseNow + paidNow, expenseThen + paidThen),
       priorRevenue: then.revenue,
       priorCollected: then.collected,
       priorCount: then.count,
+      priorCash: then.cash,
+      priorTransfer: then.transfer,
+      priorPos: then.pos,
+      priorCredit: then.credit,
+      priorDue: then.due,
+      priorExpenses: expenseThen,
+      priorPurchasesPaid: paidThen,
+      priorMoneyOut: expenseThen + paidThen,
+    },
+    comparePicked: Boolean(compareDay),
+    recentDays: recentDays.map((key) => ({
+      day: key,
+      sales: soldOn.get(key) ?? 0,
+      closed: closedOn.has(key),
+    })),
+    statementRef: `BK-${shop?.code ?? "SHOP"}-${window.from.replaceAll("-", "")}-${window.to.replaceAll("-", "")}`,
+    preparedAt: new Date().toISOString(),
+    preparedBy: user.name || user.email,
+    company: {
+      name: settings.companyName,
+      product: settings.productName,
+      phone: settings.companyPhone,
+      address: settings.companyAddress,
+      email: settings.companyEmail,
     },
     invoices: sales.slice(0, 40).map((sale) => ({
       id: sale.id,
@@ -310,3 +376,5 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
     imeiRows: imeiRows.slice(0, 20),
   }
 }
+
+export type BooksCheck = NonNullable<Awaited<ReturnType<typeof getBooksCheck>>>
