@@ -903,7 +903,9 @@ export async function getTransfers() {
     : []
   return rows.map((row) => ({
     ...row,
-    imeis: parseImeis(row.notes ?? "").map((imei1) => records.find((item) => item.imei1 === imei1)).filter(Boolean),
+    imeis: parseImeis(row.notes ?? "")
+      .map((imei1) => records.find((item) => item.imei1 === imei1))
+      .filter((item): item is (typeof records)[number] => Boolean(item)),
   }))
 }
 

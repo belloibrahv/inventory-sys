@@ -29,19 +29,23 @@ Change this password before any live shop uses the system. Create every other lo
 
 ## Railway
 
-The `web` service in the `abutwins-inventory-system` project builds with Nixpacks. Local stays on SQLite. Railway switches Prisma to Postgres at build, then pushes the schema and seeds staff on start.
+Production is the Railway project **inventory-sys**, deployed from this repo (`belloibrahv/inventory-sys`, branch `main`).
 
-Set these on the **web** service (do not put them in git):
+Local stays on SQLite. Railway switches Prisma to Postgres at build, then pushes the schema and seeds one login for every role on start.
+
+Live URL: https://inventory-sys-production.up.railway.app
+
+Set these on the **inventory-sys** service (do not put them in git):
 
 | Variable | Value |
 | --- | --- |
 | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
 | `NEXTAUTH_SECRET` | a long random string |
-| `NEXTAUTH_URL` | the public Railway URL, e.g. `https://web-production-56d9b.up.railway.app` |
+| `NEXTAUTH_URL` | `https://inventory-sys-production.up.railway.app` |
 | `NEXT_PUBLIC_APP_URL` | same public URL |
 | `NEXT_PUBLIC_APP_NAME` | `Abu Twins Softskills` |
 
-After a deploy, Super Admin can sign in with the first-login email above. Change that password immediately.
+After the first live boot, change every seeded password.
 
 ## What this replaces
 

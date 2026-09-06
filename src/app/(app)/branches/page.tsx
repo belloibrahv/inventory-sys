@@ -9,7 +9,7 @@ import { requireUser } from "@/lib/session"
 
 async function toggle(formData: FormData) {
   "use server"
-  return toggleBranch(String(formData.get("id")))
+  await toggleBranch(String(formData.get("id")))
 }
 
 export default async function BranchesPage() {

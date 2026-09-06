@@ -1,5 +1,3 @@
-import type { VariantProps } from "class-variance-authority"
-
 type Tone = "default" | "success" | "warning" | "danger" | "info" | "muted"
 
 const map: Record<string, Tone> = {
@@ -80,4 +78,4 @@ export function statusLabel(status: string) {
     .join(" ")
 }
 
-export type BadgeTone = VariantProps<typeof import("@/components/ui/badge")> extends never ? Tone : Tone
+export type BadgeTone = Tone

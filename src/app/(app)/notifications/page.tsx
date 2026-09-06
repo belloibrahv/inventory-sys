@@ -4,6 +4,11 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { formatDateTime } from "@/lib/utils"
 
+async function markAllRead() {
+  "use server"
+  await markNotificationsRead()
+}
+
 export default async function NotificationsPage() {
   const rows = await getNotifications()
   return (
@@ -12,7 +17,7 @@ export default async function NotificationsPage() {
         title="Alerts"
         description="Low stock, things waiting for approval, money due, goods moving between shops, and returns."
         actions={
-          <form action={markNotificationsRead}>
+          <form action={markAllRead}>
             <Button>Mark all read</Button>
           </form>
         }
