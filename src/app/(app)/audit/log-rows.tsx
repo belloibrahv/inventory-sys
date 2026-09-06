@@ -44,7 +44,7 @@ export function AuditLogRows({ logs }: { logs: Log[] }) {
               <div>
                 <p className="text-sm font-medium">{log.who}</p>
                 <p className="text-xs text-muted-foreground">
-                  {log.entityType} · {log.entityId}
+                  {log.entityType === "Offline" ? "Line down / parked work" : log.entityType} · {log.entityId}
                   {log.path ? ` · ${log.path}` : ""}
                 </p>
               </div>

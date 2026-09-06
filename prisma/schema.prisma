@@ -243,6 +243,7 @@ model User {
   reconciliations Reconciliation[]
   incomingLots    IncomingLot[]
   dayCloses       DayClose[]
+  parkedSales     ParkedSale[]
 
   @@index([email])
   @@index([branchId])
@@ -277,6 +278,7 @@ model Branch {
   financeEntries  FinanceEntry[]
   incomingLots    IncomingLot[]
   dayCloses       DayClose[]
+  parkedSales     ParkedSale[]
 
   @@index([code])
   @@index([isActive])
@@ -878,6 +880,7 @@ model DayClose {
   userId        String
   user          User     @relation(fields: [userId], references: [id])
   closeDate     DateTime
+  businessDate  String   @default("")
   expectedCash  Decimal
   countedCash   Decimal
   variance      Decimal
@@ -890,6 +893,36 @@ model DayClose {
 
   @@index([branchId])
   @@index([closeDate])
+  @@index([businessDate])
+}
+
+enum ParkedSaleStatus {
+  PARKED
+  POSTED
+  VANISHED
+  FAILED
+}
+
+model ParkedSale {
+  id           String           @id
+  userId       String
+  user         User             @relation(fields: [userId], references: [id])
+  branchId     String
+  branch       Branch           @relation(fields: [branchId], references: [id])
+  deviceId     String
+  queuedAt     DateTime
+  lastSeenAt   DateTime
+  status       ParkedSaleStatus @default(PARKED)
+  payload      String
+  postedSaleId String?
+  alertedAt    DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([userId])
+  @@index([branchId])
+  @@index([deviceId])
+  @@index([status])
 }
 
 model IncomingItem {

@@ -8,6 +8,8 @@ import { canManageFinance, canSell, scopedBranchId } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { getAppSettings, lowStockLimit } from "@/lib/settings"
 import { generateDocNumber, money } from "@/lib/utils"
+import { getSellLock } from "@/app/actions/day-close"
+import { markParkedPosted } from "@/app/actions/parked"
 
 export async function getSales() {
   const user = await requireUser()
@@ -95,6 +97,14 @@ export async function getPosLookups() {
     allowBelowMinimum: settings.allowBelowMinimum,
     canOverrideFloor: settings.allowBelowMinimum || (await can(user.role, "action.override_floor")),
     lowStockThreshold: settings.lowStockThreshold,
+    sellLocks: Object.fromEntries(
+      await Promise.all(
+        branches.map(async (branch) => {
+          const lock = await getSellLock(branch.id)
+          return [branch.id, { locked: lock.locked, dates: lock.dates, href: lock.href, message: lock.message }]
+        })
+      )
+    ),
   }
 }
 
@@ -105,11 +115,17 @@ export async function checkoutSale(input: {
   paidAmount: number
   notes?: string
   wholesale?: boolean
+  queuedAt?: string
+  offlineId?: string
   items: Array<{ productId: string; imeiId?: string; quantity: number; unitPrice: number }>
 }) {
   const user = await requireUser()
   if (!(await canSell(user.role))) return { error: "You cannot complete sales." }
   if (!input.items.length) return { error: "Add at least one item." }
+  if (!input.queuedAt || !input.offlineId) {
+    const lock = await getSellLock(input.branchId)
+    if (lock.locked) return { error: lock.message }
+  }
 
   const settings = await getAppSettings()
   const products = await prisma.product.findMany({
@@ -279,7 +295,14 @@ export async function checkoutSale(input: {
         action: "CREATE",
         entityType: "Sale",
         entityId: invoiceNumber,
-        newValue: JSON.stringify({ total: subtotal, paid, method }),
+        newValue: JSON.stringify({
+          total: subtotal,
+          paid,
+          method,
+          ...(input.queuedAt
+            ? { postedFromOffline: true, queuedAt: input.queuedAt, offlineId: input.offlineId ?? null }
+            : {}),
+        }),
         branchId: input.branchId,
       },
     })
@@ -338,6 +361,8 @@ export async function checkoutSale(input: {
 
     return created
   })
+
+  if (input.offlineId) await markParkedPosted(input.offlineId, sale.id)
 
   revalidatePath("/sales")
   revalidatePath("/pos")

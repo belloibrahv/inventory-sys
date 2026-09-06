@@ -8,6 +8,7 @@ import { Header } from "@/components/layout/header"
 import { CommandPalette } from "@/components/layout/command-palette"
 import { AccessGate } from "@/components/layout/access-gate"
 import { pathIsAllowed } from "@/lib/access-path"
+import { OfflineBanner } from "@/components/offline-banner"
 
 function PasswordGate({ mustChange }: { mustChange: boolean }) {
   const pathname = usePathname()
@@ -41,6 +42,9 @@ export function AppShell({
       <Sidebar allowedHrefs={allowedHrefs} />
       <div className="lg:pl-[272px]">
         <Header title={title} unread={unread} user={user} />
+        <div className="px-4 pt-4 md:px-8">
+          <OfflineBanner />
+        </div>
         <main className="px-4 py-6 md:px-8 md:py-8">{allowed ? children : null}</main>
       </div>
       <CommandPalette allowedHrefs={allowedHrefs} />

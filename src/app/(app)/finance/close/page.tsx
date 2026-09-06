@@ -5,22 +5,44 @@ import { PageHeader } from "@/components/shared"
 import { Input } from "@/components/ui/input"
 import { formatCurrency, formatDate } from "@/lib/utils"
 
-export default async function DayClosePage() {
-  const [preview, closes] = await Promise.all([getDayClosePreview(), getDayCloses()])
+export default async function DayClosePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string }>
+}) {
+  const { date } = await searchParams
+  const [preview, closes] = await Promise.all([getDayClosePreview(undefined, date), getDayCloses()])
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Close the day"
-        description="Count the till against cash sales posted today. Transfer and POS stay on the bank record."
+        description="Count the till against cash sales for that business day. Transfer and POS stay on the bank record. Sell now stays locked until older days with sales are closed."
       />
       <p className="text-sm">
         <Link href="/finance" className="text-primary">Back to money in and out</Link>
       </p>
+      {preview.unclosed.length ? (
+        <div className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-950 dark:bg-rose-500/10 dark:text-rose-100">
+          <p className="font-medium">These days still need a till count</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {preview.unclosed.map((day) => (
+              <Link
+                key={day}
+                href={`/finance/close?date=${day}`}
+                className={`rounded-lg px-3 py-2 min-h-11 inline-flex items-center ${day === preview.businessDate ? "bg-rose-200 font-medium" : "bg-white/70 dark:bg-black/20"}`}
+              >
+                {day}
+              </Link>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <div className="grid gap-4 md:grid-cols-4">
         <div className="surface-card p-5">
           <p className="text-sm text-muted-foreground">Cash expected</p>
           <p className="text-2xl font-semibold">{formatCurrency(preview.expectedCash)}</p>
+          <p className="text-xs text-muted-foreground">{preview.businessDate}</p>
         </div>
         <div className="surface-card p-5">
           <p className="text-sm text-muted-foreground">Transfers</p>
@@ -31,17 +53,20 @@ export default async function DayClosePage() {
           <p className="text-2xl font-semibold">{formatCurrency(preview.posTotal)}</p>
         </div>
         <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">Sales today</p>
+          <p className="text-sm text-muted-foreground">Sales this day</p>
           <p className="text-2xl font-semibold">{preview.saleCount}</p>
         </div>
       </div>
       {preview.alreadyClosed ? (
-        <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">This shop already closed today.</p>
+        <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          This shop already closed {preview.businessDate}.
+        </p>
       ) : (
         <div className="surface-card p-5">
-          <h3 className="mb-3 font-semibold">Count the cash</h3>
-          <ActionForm action={closeDay} submit="Close the day" className="space-y-3">
+          <h3 className="mb-3 font-semibold">Count the cash for {preview.businessDate}</h3>
+          <ActionForm action={closeDay} submit="Close this day" className="space-y-3">
             <input type="hidden" name="branchId" value={preview.branchId} />
+            <input type="hidden" name="businessDate" value={preview.businessDate} />
             <Input name="countedCash" type="number" defaultValue={preview.expectedCash} required className="min-h-12" />
             <Input name="notes" placeholder="Shortfall, leftover, or notes" />
           </ActionForm>
@@ -53,8 +78,8 @@ export default async function DayClosePage() {
           <a
             className="text-sm text-primary"
             href={`data:text/csv;charset=utf-8,${encodeURIComponent(
-              ["Date,Shop,Expected cash,Counted,Variance,Transfer,POS,Sales", ...closes.map((row) =>
-                [formatDate(row.closeDate), row.branch, row.expectedCash, row.countedCash, row.variance, row.transferTotal, row.posTotal, row.saleCount].join(",")
+              ["Business day,Closed at,Shop,Expected cash,Counted,Variance,Transfer,POS,Sales", ...closes.map((row) =>
+                [row.businessDate, formatDate(row.closeDate), row.branch, row.expectedCash, row.countedCash, row.variance, row.transferTotal, row.posTotal, row.saleCount].join(",")
               )].join("\n")
             )}`}
             download="day-close.csv"
@@ -66,7 +91,7 @@ export default async function DayClosePage() {
           <table className="w-full text-sm">
             <thead className="text-left text-muted-foreground">
               <tr className="border-y border-border">
-                <th className="px-5 py-3">Date</th>
+                <th className="px-5 py-3">Business day</th>
                 <th className="px-3 py-3">Shop</th>
                 <th className="px-3 py-3">Expected</th>
                 <th className="px-3 py-3">Counted</th>
@@ -76,7 +101,7 @@ export default async function DayClosePage() {
             <tbody>
               {closes.map((row) => (
                 <tr key={row.id} className="border-b border-border/70">
-                  <td className="px-5 py-3">{formatDate(row.closeDate)}</td>
+                  <td className="px-5 py-3">{row.businessDate}</td>
                   <td className="px-3 py-3">{row.branch}</td>
                   <td className="px-3 py-3">{formatCurrency(row.expectedCash)}</td>
                   <td className="px-3 py-3">{formatCurrency(row.countedCash)}</td>

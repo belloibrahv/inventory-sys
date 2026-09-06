@@ -11,6 +11,7 @@ export default async function PosPage() {
       branches={data.branches}
       defaultBranchId={data.branchId}
       canOverrideFloor={data.canOverrideFloor}
+      sellLocks={data.sellLocks}
     />
   )
 }

@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma"
 import { requireUser } from "@/lib/session"
 import { scopedBranchId } from "@/lib/rbac"
 import { money } from "@/lib/utils"
+import { getUnclosedBusinessDays } from "@/app/actions/day-close"
+import { getParkedWatch } from "@/app/actions/parked"
 
 export async function getDashboardData() {
   const user = await requireUser()
@@ -186,6 +188,51 @@ export async function getDashboardData() {
     }))
     .sort((a, b) => b.revenue - a.revenue)
 
+  const [parked, unclosedLists] = await Promise.all([
+    getParkedWatch(),
+    Promise.all((branchId ? branches.filter((branch) => branch.id === branchId) : branches).map((branch) => getUnclosedBusinessDays(branch.id))),
+  ])
+  const unclosedCount = unclosedLists.reduce((sum, days) => sum + days.length, 0)
+
+  const seenImeiKeys = new Set<string>()
+  const imeiCheck = stock
+    .flatMap((row) => {
+      const product = brandGroups.find((item) => item.id === row.productId)
+      if (!product || product.tracking === "NONE") return []
+      const key = `${row.productId}:${row.branchId}`
+      seenImeiKeys.add(key)
+      const imeis = vaultCounts.find((item) => item.productId === row.productId && item.branchId === row.branchId)?._count._all ?? 0
+      return [
+        {
+          id: key,
+          product: row.product.name,
+          shop: row.branch.code,
+          shopQty: row.quantity,
+          imeis,
+          delta: imeis - row.quantity,
+        },
+      ]
+    })
+    .concat(
+      vaultCounts.flatMap((vault) => {
+        const key = `${vault.productId}:${vault.branchId}`
+        if (seenImeiKeys.has(key)) return []
+        const product = brandGroups.find((item) => item.id === vault.productId)
+        if (!product || product.tracking === "NONE") return []
+        return [
+          {
+            id: key,
+            product: product.name,
+            shop: branches.find((branch) => branch.id === vault.branchId)?.code ?? "Shop",
+            shopQty: 0,
+            imeis: vault._count._all,
+            delta: vault._count._all,
+          },
+        ]
+      })
+    )
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta) || a.product.localeCompare(b.product))
+
   return {
     user,
     unread,
@@ -212,17 +259,17 @@ export async function getDashboardData() {
       .sort((a, b) => a.quantity - b.quantity)
       .slice(0, 6),
     ranking,
+    imeiCheck,
     exceptions: {
       pendingApprovals,
       walkIns,
       creditorOwed: openPurchases.reduce((sum, row) => sum + money(row.totalAmount) - money(row.paidAmount), 0),
-      imeiGaps: stock.filter((row) => {
-        const vault = vaultCounts.find((item) => item.productId === row.productId && item.branchId === row.branchId)?._count._all ?? 0
-        const serialized = brandGroups.some((product) => product.id === row.productId && product.imeiRecords.length > 0)
-        return serialized && vault !== row.quantity
-      }).length,
+      imeiGaps: imeiCheck.filter((row) => row.delta !== 0).length,
     },
     tasks: [
+      { href: "/finance/close", label: "Days not closed. Sell now is locked until you count the till", count: unclosedCount },
+      { href: "/pos", label: "Parked sales sitting too long", count: parked.sitting },
+      { href: "/audit?risk=HIGH", label: "Parked sales that vanished from a device", count: parked.vanished },
       { href: "/incoming", label: "Overdue goods on the way", count: overdueIncoming },
       { href: "/transfers", label: "Transfers waiting for confirm", count: pendingTransfers },
       { href: "/sales", label: "Walk-in sales with no name", count: walkIns },

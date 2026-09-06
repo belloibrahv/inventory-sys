@@ -139,7 +139,11 @@ export function viewKeyForPath(pathname: string) {
 }
 
 export function hrefsForKeys(keys: Set<string>) {
-  return VIEW_PERMS.filter((row) => keys.has(row.key)).map((row) => row.href)
+  const hrefs: string[] = VIEW_PERMS.filter((row) => keys.has(row.key)).map((row) => row.href)
+  if ((keys.has("view.finance") || keys.has("view.pos")) && !hrefs.includes("/finance/close")) {
+    hrefs.push("/finance/close")
+  }
+  return hrefs
 }
 
 export { pathIsAllowed } from "@/lib/access-path"

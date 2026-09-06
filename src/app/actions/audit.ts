@@ -166,3 +166,29 @@ function csv(value: string) {
   if (!/[",\n]/.test(value)) return value
   return `"${value.replaceAll("\"", "\"\"")}"`
 }
+
+export async function syncOfflineTrail(input: {
+  events: Array<{ id: string; at: string; kind: string; detail?: Record<string, unknown> }>
+  postedInvoices?: string[]
+}) {
+  const user = await requireUser()
+  if (!input.events.length && !input.postedInvoices?.length) return { success: true }
+  const down = input.events.find((event) => event.kind === "LINE_DOWN")
+  const back = [...input.events].reverse().find((event) => event.kind === "LINE_BACK")
+  await writeAudit({
+    userId: user.id,
+    action: "IMPORT",
+    entityType: "Offline",
+    entityId: down?.id ?? input.events[0]?.id ?? `sync-${Date.now()}`,
+    newValue: JSON.stringify({
+      lineDownAt: down?.at ?? null,
+      lineBackAt: back?.at ?? new Date().toISOString(),
+      parkedSales: input.events.filter((event) => event.kind === "SALE_PARKED").length,
+      postedInvoices: input.postedInvoices ?? [],
+      events: input.events,
+    }),
+    branchId: user.branchId,
+    risk: "HIGH",
+  })
+  return { success: true }
+}

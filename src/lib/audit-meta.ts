@@ -42,6 +42,7 @@ export function inferRisk(input: {
 }): AuditRisk {
   if (input.success === false) return "HIGH"
   if (input.action === "DENIED" || input.action === "DELETE" || input.action === "EXPORT") return "HIGH"
+  if (input.entityType === "Offline") return "HIGH"
   if (HIGH_ENTITIES.has(input.entityType ?? "") && input.action !== "VIEW") return "HIGH"
   if (input.action === "APPROVE" || input.action === "REJECT" || input.action === "IMPORT") return "MEDIUM"
   if (isAfterHours(input.createdAt) && input.action !== "VIEW") return "MEDIUM"

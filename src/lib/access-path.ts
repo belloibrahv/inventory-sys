@@ -28,6 +28,9 @@ const VIEW_HREFS = [
 
 export function pathIsAllowed(pathname: string, allowedHrefs: string[]) {
   if (pathname === "/account" || pathname.startsWith("/account/")) return true
+  if (pathname === "/finance/close" || pathname.startsWith("/finance/close/")) {
+    return allowedHrefs.includes("/finance") || allowedHrefs.includes("/pos") || allowedHrefs.includes("/finance/close")
+  }
   const view = VIEW_HREFS
     .slice()
     .sort((a, b) => b.length - a.length)

@@ -6,7 +6,6 @@ import { toast } from "sonner"
 import { createCustomer } from "@/app/actions/parties"
 import { checkoutSale } from "@/app/actions/sales"
 import { ScanField } from "@/components/scan-field"
-import { OfflineBanner } from "@/components/offline-banner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
@@ -36,6 +35,7 @@ type Product = {
 
 type Customer = { id: string; name: string; phone: string; branchId: string; creditLimit: number; currentBalance: number }
 type Branch = { id: string; name: string; code: string }
+type SellLock = { locked: boolean; dates: string[]; href: string; message: string }
 
 export function PosClient({
   products,
@@ -44,6 +44,7 @@ export function PosClient({
   branches,
   defaultBranchId,
   canOverrideFloor,
+  sellLocks,
 }: {
   products: Product[]
   customers: Customer[]
@@ -51,6 +52,7 @@ export function PosClient({
   branches: Branch[]
   defaultBranchId?: string | null
   canOverrideFloor?: boolean
+  sellLocks?: Record<string, SellLock>
 }) {
   const router = useRouter()
   const [query, setQuery] = useState("")
@@ -88,6 +90,7 @@ export function PosClient({
   const customer = customers.find((row) => row.id === customerId)
   const due = Math.max(0, total - (method === "CREDIT" ? 0 : paid))
   const nextDebt = (customer?.currentBalance ?? 0) + (method === "CREDIT" ? total : due)
+  const sellLock = sellLocks?.[branchId]
 
   function setPaidTo(nextTotal: number) {
     if (method !== "CREDIT") setPaid(nextTotal)
@@ -198,6 +201,10 @@ export function PosClient({
         unitPrice: line.unitPrice,
       })),
     }
+    if (sellLock?.locked) {
+      toast.error(sellLock.message)
+      return
+    }
     setBusy(true)
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       pushSaleQueue(payload)
@@ -230,8 +237,15 @@ export function PosClient({
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+      {sellLock?.locked ? (
+        <div className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-950 xl:col-span-2 dark:bg-rose-500/10 dark:text-rose-100">
+          <p>{sellLock.message}</p>
+          <a href={sellLock.href} className="mt-2 inline-block font-medium text-primary">
+            Count the till for {sellLock.dates[0]}
+          </a>
+        </div>
+      ) : null}
       <div className="space-y-4">
-        <OfflineBanner />
         <div className="surface-card space-y-3 p-4">
           <ScanField onScan={takeScan} placeholder="Scan IMEI to sell, then Enter" />
           <Input
@@ -429,8 +443,8 @@ export function PosClient({
             <p className="mt-1 text-xs text-muted-foreground">After this sale they would owe {formatCurrency(nextDebt)}</p>
           ) : null}
         </div>
-        <Button className="min-h-12 w-full" disabled={!cart.length || busy} onClick={checkout}>
-          {busy ? "Posting..." : "Complete sale"}
+        <Button className="min-h-12 w-full" disabled={!cart.length || busy || Boolean(sellLock?.locked)} onClick={checkout}>
+          {busy ? "Posting..." : sellLock?.locked ? "Close yesterday first" : "Complete sale"}
         </Button>
         <p className="text-xs text-muted-foreground">
           USB scanners work like a keyboard. Print the invoice after the sale. If a receipt printer is attached, printing can open the cash drawer.

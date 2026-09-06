@@ -71,10 +71,64 @@ export default async function DashboardPage() {
           <p className="text-sm text-muted-foreground">We still owe suppliers</p>
           <p className="text-2xl font-semibold">{formatCurrency(data.exceptions.creditorOwed)}</p>
         </a>
-        <a href="/inventory" className="surface-card p-5">
+        <a href="#imei-check" className="surface-card p-5">
           <p className="text-sm text-muted-foreground">Stock count vs IMEI mismatch</p>
           <p className="text-2xl font-semibold">{data.exceptions.imeiGaps}</p>
+          <p className="text-xs text-muted-foreground">
+            {data.exceptions.imeiGaps === 0 ? "Shop list and IMEI match" : "Open the IMEI check below"}
+          </p>
         </a>
+      </div>
+
+      <div id="imei-check" className="surface-card overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-5">
+          <div>
+            <h3 className="font-semibold">IMEI vs shop count</h3>
+            <p className="text-sm text-muted-foreground">
+              {data.exceptions.imeiGaps === 0
+                ? "Every phone and laptop on the shop list has a matching IMEI count."
+                : `${data.exceptions.imeiGaps} product${data.exceptions.imeiGaps === 1 ? "" : "s"} do not match. If it is not on this list, treat the shop count as unproven.`}
+            </p>
+          </div>
+          <Badge variant={data.exceptions.imeiGaps ? "danger" : "success"}>
+            {data.exceptions.imeiGaps ? "Gaps" : "Match"}
+          </Badge>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-muted-foreground">
+              <tr className="border-y border-border">
+                <th className="px-6 py-3 font-medium">Product</th>
+                <th className="px-3 py-3 font-medium">Shop</th>
+                <th className="px-3 py-3 font-medium">Shop qty</th>
+                <th className="px-3 py-3 font-medium">IMEIs</th>
+                <th className="px-6 py-3 font-medium">Gap</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.imeiCheck.map((row) => (
+                <tr key={row.id} className="border-b border-border/70 last:border-0">
+                  <td className="px-6 py-3 font-medium">{row.product}</td>
+                  <td className="px-3 py-3">{row.shop}</td>
+                  <td className="px-3 py-3">{row.shopQty}</td>
+                  <td className="px-3 py-3">{row.imeis}</td>
+                  <td className="px-6 py-3">
+                    <Badge variant={row.delta === 0 ? "success" : "danger"}>
+                      {row.delta === 0 ? "Match" : row.delta > 0 ? `+${row.delta} extra IMEI` : `${row.delta} short`}
+                    </Badge>
+                  </td>
+                </tr>
+              ))}
+              {data.imeiCheck.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-muted-foreground">
+                    No serialized stock in the shops you can see yet.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-7">
