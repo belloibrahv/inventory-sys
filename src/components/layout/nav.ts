@@ -1,0 +1,81 @@
+import {
+  LayoutDashboard,
+  Smartphone,
+  Boxes,
+  ScanLine,
+  ShoppingCart,
+  Store,
+  Truck,
+  Users,
+  Factory,
+  ArrowLeftRight,
+  Undo2,
+  Repeat2,
+  Wrench,
+  Wallet,
+  Receipt,
+  GitBranch,
+  BadgeCheck,
+  BarChart3,
+  ClipboardCheck,
+  ScrollText,
+  Bell,
+  Settings,
+  Shield,
+  UserRoundCog,
+} from "lucide-react"
+
+export const navGroups = [
+  {
+    label: "Start",
+    items: [{ name: "Home", href: "/dashboard", icon: LayoutDashboard }],
+  },
+  {
+    label: "Stock",
+    items: [
+      { name: "Phones & items", href: "/products", icon: Smartphone },
+      { name: "Phone IMEIs", href: "/imei", icon: ScanLine },
+      { name: "Shop stock", href: "/inventory", icon: Boxes },
+    ],
+  },
+  {
+    label: "Sell & buy",
+    items: [
+      { name: "Sales", href: "/sales", icon: ShoppingCart },
+      { name: "Sell now", href: "/pos", icon: Store },
+      { name: "Goods from supplier", href: "/purchases", icon: Truck },
+      { name: "Customers", href: "/customers", icon: Users },
+      { name: "Suppliers", href: "/suppliers", icon: Factory },
+    ],
+  },
+  {
+    label: "Daily work",
+    items: [
+      { name: "Send to another shop", href: "/transfers", icon: ArrowLeftRight },
+      { name: "Returns", href: "/returns", icon: Undo2 },
+      { name: "Swaps", href: "/swaps", icon: Repeat2 },
+      { name: "Repairs", href: "/repairs", icon: Wrench },
+      { name: "Stock count", href: "/reconciliation", icon: ClipboardCheck },
+    ],
+  },
+  {
+    label: "Money",
+    items: [
+      { name: "Money in & out", href: "/finance", icon: Wallet },
+      { name: "Expenses", href: "/expenses", icon: Receipt },
+      { name: "Needs approval", href: "/approvals", icon: BadgeCheck },
+    ],
+  },
+  {
+    label: "Shop & people",
+    items: [
+      { name: "Shops", href: "/branches", icon: GitBranch },
+      { name: "Staff", href: "/staff", icon: UserRoundCog },
+      { name: "Who can see what", href: "/staff/access", icon: Shield },
+      { name: "Reports", href: "/reports", icon: BarChart3 },
+      { name: "Who did what", href: "/audit", icon: ScrollText },
+      { name: "Alerts", href: "/notifications", icon: Bell },
+      { name: "Settings", href: "/settings", icon: Settings },
+    ],
+  },
+]

@@ -1,0 +1,131 @@
+"use server"
+
+import { prisma } from "@/lib/prisma"
+import { getAllowedKeys } from "@/lib/permissions"
+import { requireUser } from "@/lib/session"
+import { canSeeAllBranches } from "@/lib/rbac"
+
+export async function globalSearch(query: string) {
+  const user = await requireUser()
+  const q = query.trim()
+  if (q.length < 2) return []
+
+  const views = await getAllowedKeys(user.role)
+  const allBranches = await canSeeAllBranches(user.role)
+  const branchFilter = user.branchId && !allBranches
+    ? { branchId: user.branchId }
+    : {}
+
+  const [imeis, customers, sales, products, purchases, transfers, repairs] = await Promise.all([
+    views.has("view.imei") ? prisma.imeiRecord.findMany({
+      where: {
+        ...branchFilter,
+        OR: [
+          { imei1: { contains: q } },
+          { imei2: { contains: q } },
+          { serialNumber: { contains: q } },
+        ],
+      },
+      include: { product: true, branch: true },
+      take: 6,
+    }) : [],
+    views.has("view.customers") ? prisma.customer.findMany({
+      where: {
+        ...branchFilter,
+        OR: [{ name: { contains: q } }, { phone: { contains: q } }],
+      },
+      take: 5,
+    }) : [],
+    views.has("view.sales") ? prisma.sale.findMany({
+      where: {
+        ...branchFilter,
+        OR: [{ invoiceNumber: { contains: q } }],
+      },
+      include: { customer: true },
+      take: 5,
+    }) : [],
+    views.has("view.products") ? prisma.product.findMany({
+      where: {
+        OR: [{ name: { contains: q } }, { sku: { contains: q } }],
+      },
+      take: 5,
+    }) : [],
+    views.has("view.purchases") ? prisma.purchase.findMany({
+      where: {
+        ...branchFilter,
+        invoiceNumber: { contains: q },
+      },
+      include: { supplier: true },
+      take: 4,
+    }) : [],
+    views.has("view.transfers") ? prisma.stockTransfer.findMany({
+      where: {
+        transferNumber: { contains: q },
+        ...(user.branchId && !allBranches
+          ? { OR: [{ fromBranchId: user.branchId }, { toBranchId: user.branchId }] }
+          : {}),
+      },
+      take: 4,
+    }) : [],
+    views.has("view.repairs") ? prisma.repair.findMany({
+      where: {
+        ...branchFilter,
+        OR: [{ repairNumber: { contains: q } }, { imei: { imei1: { contains: q } } }],
+      },
+      include: { imei: true },
+      take: 4,
+    }) : [],
+  ])
+
+  return [
+    ...imeis.map((item) => ({
+      kind: "IMEI",
+      id: item.id,
+      title: item.imei1,
+      hint: `${item.product.name} · ${item.branch.code}`,
+      href: `/imei/${item.id}`,
+    })),
+    ...customers.map((item) => ({
+      kind: "Customer",
+      id: item.id,
+      title: item.name,
+      hint: item.phone,
+      href: `/customers/${item.id}`,
+    })),
+    ...sales.map((item) => ({
+      kind: "Invoice",
+      id: item.id,
+      title: item.invoiceNumber,
+      hint: item.customer?.name ?? "Walk-in",
+      href: `/sales/${item.id}`,
+    })),
+    ...products.map((item) => ({
+      kind: "Product",
+      id: item.id,
+      title: item.name,
+      hint: item.sku,
+      href: "/products",
+    })),
+    ...purchases.map((item) => ({
+      kind: "Purchase",
+      id: item.id,
+      title: item.invoiceNumber,
+      hint: item.supplier.name,
+      href: `/purchases/${item.id}`,
+    })),
+    ...transfers.map((item) => ({
+      kind: "Transfer",
+      id: item.id,
+      title: item.transferNumber,
+      hint: item.status,
+      href: "/transfers",
+    })),
+    ...repairs.map((item) => ({
+      kind: "Repair",
+      id: item.id,
+      title: item.repairNumber,
+      hint: item.imei.imei1,
+      href: "/repairs",
+    })),
+  ]
+}

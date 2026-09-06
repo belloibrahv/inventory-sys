@@ -1,27 +1,9 @@
 import { NextAuthOptions } from "next-auth"
+import "@/types"
 import CredentialsProvider from "next-auth/providers/credentials"
 import * as bcrypt from "bcryptjs"
-import { UserRole } from "@/types"
-
-// Mock user data for development (will be replaced with database)
-const mockUsers = [
-  {
-    id: "1",
-    email: "admin@abutwins.com",
-    password: "$2b$10$bpNZ3Ms8pECrVgpWccGGsuh5Gn/xEhXUVCk.bScu0ft4gmMXDBIg6", // admin123
-    name: "Super Admin",
-    role: UserRole.SUPER_ADMIN,
-    branchId: null,
-  },
-  {
-    id: "2",
-    email: "ceo@abutwins.com",
-    password: "$2b$10$dfo.c69plhSLN7BZpIAnRe/xBm71sJv1/AX7QUglwOcKZ04lFg5TS", // ceo123
-    name: "CEO",
-    role: UserRole.CEO,
-    branchId: null,
-  },
-]
+import { prisma } from "@/lib/prisma"
+import { UserRole } from "@prisma/client"
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -29,29 +11,40 @@ export const authOptions: NextAuthOptions = {
       name: "credentials",
       credentials: {
         email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" }
+        password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
           throw new Error("Invalid credentials")
         }
 
-        // For development, use mock users
-        const user = mockUsers.find(u => u.email === credentials.email)
-        
-        if (!user) {
+        const user = await prisma.user.findUnique({
+          where: { email: credentials.email.toLowerCase() },
+        })
+
+        if (!user || !user.isActive) {
           throw new Error("Invalid credentials")
         }
 
-        // Simple password check for development
-        const isPasswordValid = await bcrypt.compare(
-          credentials.password,
-          user.password
-        )
-
-        if (!isPasswordValid) {
+        const valid = await bcrypt.compare(credentials.password, user.password)
+        if (!valid) {
           throw new Error("Invalid credentials")
         }
+
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { lastLoginAt: new Date() },
+        })
+
+        await prisma.auditLog.create({
+          data: {
+            userId: user.id,
+            action: "LOGIN",
+            entityType: "User",
+            entityId: user.id,
+            branchId: user.branchId,
+          },
+        })
 
         return {
           id: user.id,
@@ -60,12 +53,12 @@ export const authOptions: NextAuthOptions = {
           role: user.role,
           branchId: user.branchId,
         }
-      }
-    })
+      },
+    }),
   ],
   session: {
     strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    maxAge: 12 * 60 * 60,
   },
   pages: {
     signIn: "/login",
@@ -83,10 +76,10 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         session.user.id = token.id as string
         session.user.role = token.role as UserRole
-        session.user.branchId = token.branchId as string | null
+        session.user.branchId = (token.branchId as string | null) ?? null
       }
       return session
-    }
+    },
   },
-  secret: "your-secret-key-change-this-in-production-min-32-characters-long",
+  secret: process.env.NEXTAUTH_SECRET,
 }

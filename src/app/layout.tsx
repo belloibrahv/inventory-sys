@@ -1,23 +1,27 @@
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import { Plus_Jakarta_Sans } from "next/font/google"
 import "./globals.css"
 import { Providers } from "./providers"
 
-const inter = Inter({ subsets: ["latin"] })
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  variable: "--font-jakarta",
+})
 
 export const metadata: Metadata = {
-  title: "Abu Twins Enterprise ERP",
-  description: "Multi-branch phone and gadget retail management system",
+  title: "Abu Twins Softskills",
+  description: "Shop system for Abu Twins Softskills Investment — phones, laptops, and power.",
+  manifest: "/manifest.json",
+  icons: {
+    icon: "/icon.svg",
+    apple: "/brand/ab-mark.jpg",
+  },
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${jakarta.variable} font-sans`}>
         <Providers>{children}</Providers>
       </body>
     </html>

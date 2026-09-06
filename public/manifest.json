@@ -1,0 +1,12 @@
+{
+  "name": "Abu Twins Softskills",
+  "short_name": "Abu Twins",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#F5F7FB",
+  "theme_color": "#001BCE",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "/brand/ab-mark.jpg", "sizes": "150x150", "type": "image/jpeg" }
+  ]
+}

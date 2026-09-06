@@ -1,49 +1,119 @@
-/* Tailwind CSS directives - these are expected warnings from CSS linters */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --background: 0 0% 100%;
-  --foreground: 222.2 84% 4.9%;
+  --background: 220 28% 98%;
+  --foreground: 232 36% 12%;
   --card: 0 0% 100%;
-  --card-foreground: 222.2 84% 4.9%;
+  --card-foreground: 232 36% 12%;
   --popover: 0 0% 100%;
-  --popover-foreground: 222.2 84% 4.9%;
-  --primary: 221.2 83.2% 53.3%;
-  --primary-foreground: 210 40% 98%;
-  --secondary: 210 40% 96.1%;
-  --secondary-foreground: 222.2 47.4% 11.2%;
-  --muted: 210 40% 96.1%;
-  --muted-foreground: 215.4 16.3% 46.9%;
-  --accent: 210 40% 96.1%;
-  --accent-foreground: 222.2 47.4% 11.2%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 214.3 31.8% 91.4%;
-  --input: 214.3 31.8% 91.4%;
-  --ring: 221.2 83.2% 53.3%;
-  --radius: 0.5rem;
+  --popover-foreground: 232 36% 12%;
+  --primary: 232 100% 40%;
+  --primary-foreground: 0 0% 100%;
+  --brand: 123 78% 42%;
+  --brand-foreground: 0 0% 100%;
+  --secondary: 232 28% 95%;
+  --secondary-foreground: 232 30% 20%;
+  --muted: 220 20% 95%;
+  --muted-foreground: 228 10% 40%;
+  --accent: 232 28% 95%;
+  --accent-foreground: 232 36% 12%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 226 18% 90%;
+  --input: 226 18% 90%;
+  --ring: 232 100% 40%;
+  --radius: 1rem;
+  --sidebar: 232 100% 18%;
+  --sidebar-foreground: 210 40% 96%;
+  --sidebar-muted: 232 80% 24%;
+  --sidebar-active: 232 100% 32%;
+  --chart-1: 232 100% 40%;
+  --chart-2: 123 78% 42%;
+  --chart-3: 232 80% 62%;
+  --chart-4: 38 92% 55%;
+  --chart-5: 210 80% 56%;
 }
 
 .dark {
-  --background: 222.2 84% 4.9%;
-  --foreground: 210 40% 98%;
-  --card: 222.2 84% 4.9%;
-  --card-foreground: 210 40% 98%;
-  --popover: 222.2 84% 4.9%;
-  --popover-foreground: 210 40% 98%;
-  --primary: 217.2 91.2% 59.8%;
-  --primary-foreground: 222.2 47.4% 11.2%;
-  --secondary: 217.2 32.6% 17.5%;
-  --secondary-foreground: 210 40% 98%;
-  --muted: 217.2 32.6% 17.5%;
-  --muted-foreground: 215 20.2% 65.1%;
-  --accent: 217.2 32.6% 17.5%;
-  --accent-foreground: 210 40% 98%;
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 217.2 32.6% 17.5%;
-  --input: 217.2 32.6% 17.5%;
-  --ring: 224.3 76.3% 48%;
+  --background: 228 20% 7%;
+  --foreground: 220 16% 94%;
+  --card: 228 18% 10%;
+  --card-foreground: 220 16% 94%;
+  --popover: 228 18% 10%;
+  --popover-foreground: 220 16% 94%;
+  --primary: 232 100% 68%;
+  --primary-foreground: 232 40% 10%;
+  --brand: 123 70% 52%;
+  --brand-foreground: 140 40% 8%;
+  --secondary: 228 14% 16%;
+  --secondary-foreground: 220 16% 92%;
+  --muted: 228 14% 16%;
+  --muted-foreground: 220 10% 64%;
+  --accent: 228 14% 16%;
+  --accent-foreground: 220 16% 94%;
+  --destructive: 0 62% 45%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 228 12% 18%;
+  --input: 228 12% 18%;
+  --ring: 232 100% 68%;
+  --sidebar: 232 50% 8%;
+  --sidebar-foreground: 210 30% 90%;
+  --sidebar-muted: 232 40% 13%;
+  --sidebar-active: 232 70% 22%;
+}
+
+* {
+  @apply border-border;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  font-feature-settings: "ss01", "cv11";
+}
+
+.surface-card {
+  @apply rounded-2xl border border-border/80 bg-card shadow-[0_8px_30px_rgb(15,23,42,0.04)];
+}
+
+.dark .surface-card {
+  box-shadow: 0 8px 30px rgb(0 0 0 / 0.25);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.28);
+  border-radius: 999px;
+}
+
+@media print {
+  @page {
+    size: A5;
+    margin: 10mm;
+  }
+  aside,
+  header {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  .surface-card {
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+  .receipt {
+    max-width: none !important;
+    padding: 0 !important;
+  }
 }

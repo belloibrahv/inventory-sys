@@ -1,12 +1,9 @@
 import { redirect } from "next/navigation"
-import { getCurrentUser } from "@/lib/auth-utils"
+import { firstAllowedHref, getAllowedKeys } from "@/lib/permissions"
+import { getCurrentUser } from "@/lib/session"
 
 export default async function Home() {
   const user = await getCurrentUser()
-  
-  if (user) {
-    redirect("/dashboard")
-  } else {
-    redirect("/login")
-  }
+  if (!user) redirect("/login")
+  redirect(firstAllowedHref(await getAllowedKeys(user.role)))
 }
