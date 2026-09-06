@@ -57,7 +57,7 @@ export default async function IncomingPage() {
               {lot.notes ? <p className="mt-2 text-xs text-muted-foreground">{lot.notes}</p> : null}
               <div className="mt-4 flex flex-wrap gap-2">
                 {canBook && lot.status === "COMING" ? (
-                  <ActionForm action={markIncomingArrived} submit="They have arrived — add to shop" buttonClassName="" size="sm">
+                  <ActionForm action={markIncomingArrived} submit="They have arrived. Add to shop" buttonClassName="" size="sm">
                     <input type="hidden" name="id" value={lot.id} />
                   </ActionForm>
                 ) : null}

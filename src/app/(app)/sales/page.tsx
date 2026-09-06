@@ -10,7 +10,7 @@ export default async function SalesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Sales"
-        description="Every sale stays as it was. To collect the rest of the money, open the invoice — do not edit the old sale."
+        description="Every sale stays as it was. To collect the rest of the money, open the invoice. Do not edit the old sale."
         actions={<Button asChild><Link href="/pos">Sell now</Link></Button>}
       />
       <div className="surface-card overflow-hidden">

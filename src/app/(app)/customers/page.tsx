@@ -11,7 +11,7 @@ export default async function CustomersPage() {
   return (
     <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
       <div>
-        <PageHeader title="Customers" description="Customer names, what they bought, and what they still owe. Money they pay later is recorded here — the old invoice is not changed." />
+        <PageHeader title="Customers" description="Customer names, what they bought, and what they still owe. Money they pay later is recorded here. The old invoice is not changed." />
         <div className="surface-card overflow-hidden">
           <table className="w-full text-sm">
             <thead className="text-left text-muted-foreground">

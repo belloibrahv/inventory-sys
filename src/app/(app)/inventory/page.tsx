@@ -29,7 +29,7 @@ export default async function InventoryPage() {
       />
       {gaps.length ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-500/10 dark:text-amber-100">
-          <p className="font-medium">{gaps.length} mismatch{gaps.length === 1 ? "" : "es"} between shop count and IMEI list. Do a stock count — do not change numbers here.</p>
+          <p className="font-medium">{gaps.length} mismatch{gaps.length === 1 ? "" : "es"} between shop count and IMEI list. Do a stock count. Do not change numbers here.</p>
           <ul className="mt-2 space-y-1">
             {gaps.map((item) => (
               <li key={item.row.id}>
@@ -69,10 +69,10 @@ export default async function InventoryPage() {
                     <Badge variant={row.quantity <= lowStockLimit(row.minStock, settings.lowStockThreshold) ? "danger" : "success"}>{row.quantity}</Badge>
                   </td>
                   <td className="px-4 py-3">
-                    {coming > 0 ? <Badge variant="warning">{coming}</Badge> : "—"}
+                    {coming > 0 ? <Badge variant="warning">{coming}</Badge> : "-"}
                   </td>
                   <td className="px-4 py-3">
-                    {serialized.has(row.productId) ? imeis : "—"}
+                    {serialized.has(row.productId) ? imeis : "-"}
                     {mismatch ? <span className="block text-xs text-amber-700">Does not match shop count</span> : null}
                   </td>
                   <td className="px-4 py-3">{lowStockLimit(row.minStock, settings.lowStockThreshold)}</td>

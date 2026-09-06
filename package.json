@@ -1,7 +1,7 @@
 {
   "name": "abutwins-nexus",
   "version": "1.0.0",
-  "description": "Abu Twins Softskills — multi-branch shop system for phones, laptops, and power.",
+  "description": "Abu Twins Softskills multi-shop system for phones, laptops, and power.",
   "engines": {
     "node": ">=20"
   },

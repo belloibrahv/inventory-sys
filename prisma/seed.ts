@@ -716,7 +716,7 @@ async function main() {
         userId: accountant.id,
         category: "RENT",
         amount: naira(850000),
-        description: "Computer Village shop rent — August",
+        description: "Computer Village shop rent, August",
         date: daysAgo(20),
         approvedBy: ceo.id,
         approvedAt: daysAgo(19),
@@ -738,7 +738,7 @@ async function main() {
         userId: accountant.id,
         category: "SALARY",
         amount: naira(620000),
-        description: "Lagos floor staff — August",
+        description: "Lagos floor staff, August",
         date: daysAgo(10),
         approvedBy: ceo.id,
         approvedAt: daysAgo(9),
@@ -887,7 +887,7 @@ async function main() {
       totalExpected: naira(18400000),
       totalCounted: naira(18115000),
       variance: naira(-285000),
-      notes: "September vault count — two UK used units unlocated",
+      notes: "September vault count. Two UK used units unlocated",
     },
   })
   await prisma.reconciliationItem.create({

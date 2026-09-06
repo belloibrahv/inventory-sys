@@ -375,7 +375,7 @@ export async function collectPayment(formData: FormData) {
         amount: (-collected).toFixed(2),
         balance: next.toFixed(2),
         reference: payRef,
-        description: "Ledger collection — invoice lines were not rewritten",
+        description: "Ledger collection. Invoice lines were not rewritten",
       },
     })
     await tx.financeEntry.create({
@@ -473,7 +473,7 @@ export async function collectInvoicePayment(formData: FormData) {
         saleId: sale.id,
         amount: collected.toFixed(2),
         method,
-        notes: "Collection on frozen invoice — items and IMEIs were not edited",
+        notes: "Collection on frozen invoice. Items and IMEIs were not edited",
       },
     })
     if (sale.customerId && sale.customer) {

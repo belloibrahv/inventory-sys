@@ -84,7 +84,7 @@ export function Receipt({
                 {item.name}
                 {item.warranty ? <span className="block text-[10px] text-slate-500">{item.warranty}</span> : null}
               </td>
-              <td className="px-3 py-3 font-mono text-xs">{item.imei ?? "—"}</td>
+              <td className="px-3 py-3 font-mono text-xs">{item.imei ?? "-"}</td>
               <td className="px-3 py-3 text-right">{item.quantity}</td>
               <td className="px-6 py-3 text-right">{formatCurrency(item.amount)}</td>
             </tr>

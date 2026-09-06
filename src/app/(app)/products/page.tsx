@@ -89,7 +89,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                 </Select>
               </div>
               <Select name="tracking" defaultValue="IMEI">
-                <option value="IMEI">Phone — IMEI</option>
+                <option value="IMEI">Phone, IMEI</option>
                 <option value="SERIAL">Accessory with serial</option>
                 <option value="NONE">No number (cords, chargers)</option>
               </Select>

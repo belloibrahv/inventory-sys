@@ -37,8 +37,8 @@ export default async function SettingsPage() {
               <input type="hidden" name="key" value={setting.key} />
               {setting.key === "sales.allow_below_minimum" ? (
                 <Select name="value" defaultValue={setting.value}>
-                  <option value="false">No — only Super Admin can go below the lowest price</option>
-                  <option value="true">Yes — cashiers may go below the lowest price</option>
+                  <option value="false">No. Only Super Admin can go below the lowest price</option>
+                  <option value="true">Yes. Cashiers may go below the lowest price</option>
                 </Select>
               ) : (
                 <Input name="value" defaultValue={setting.value} />

@@ -31,11 +31,11 @@ export default async function ImeiDetailPage({ params }: { params: Promise<{ id:
         </div>
         <div className="surface-card p-5">
           <p className="text-sm text-muted-foreground">IMEI 2</p>
-          <p className="font-medium">{record.imei2 ?? "—"}</p>
+          <p className="font-medium">{record.imei2 ?? "-"}</p>
         </div>
         <div className="surface-card p-5">
           <p className="text-sm text-muted-foreground">Serial</p>
-          <p className="font-medium">{record.serialNumber ?? "—"}</p>
+          <p className="font-medium">{record.serialNumber ?? "-"}</p>
         </div>
         <div className="surface-card p-5">
           <p className="text-sm text-muted-foreground">Warranty</p>

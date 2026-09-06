@@ -39,7 +39,7 @@ export default function LoginPage() {
         <div className="relative max-w-lg space-y-6">
           <p className="text-5xl font-semibold tracking-tight leading-tight">Own The Future</p>
           <p className="text-lg text-white/75">
-            Phones, laptops, and power — every IMEI and sale in one record. Old figures cannot be secretly changed.
+            Phones, laptops, and power. Every IMEI and sale in one record. Old figures cannot be secretly changed.
           </p>
         </div>
         <div className="relative space-y-2">

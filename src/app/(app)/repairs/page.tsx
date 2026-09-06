@@ -33,7 +33,7 @@ export default async function RepairsPage() {
                       {row.repairCost ? ` · charge ${formatCurrency(money(row.repairCost))} on deliver` : ""}
                     </p>
                   ) : (
-                    <p className="mt-1 text-xs text-muted-foreground">Shop phone — when you finish, it goes back into shop stock.</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Shop phone. When you finish, it goes back into shop stock.</p>
                   )}
                 </div>
                 <StatusBadge value={row.status} />

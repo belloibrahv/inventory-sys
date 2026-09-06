@@ -261,7 +261,7 @@ export function PosClient({
                       </p>
                     ) : null}
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">{line.imei ?? "—"}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{line.imei ?? "-"}</td>
                   <td className="px-4 py-3">
                     <Input
                       type="number"

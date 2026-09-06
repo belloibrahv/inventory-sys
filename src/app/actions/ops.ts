@@ -330,7 +330,7 @@ export async function createReturn(formData: FormData) {
   const reason = String(formData.get("reason")) as ReturnReason
   if (reason === "WARRANTY") {
     const cover = warrantyState(imei.sale?.saleDate, imei.product.warrantyDays)
-    if (!cover.active) return { error: cover.label + ". Pick another return reason — do not change the old sale." }
+    if (!cover.active) return { error: cover.label + ". Pick another return reason. Do not change the old sale." }
   }
 
   const line = imei.sale?.items.find((item) => item.imeiId === imei.id)
@@ -412,7 +412,7 @@ export async function completeReturn(formData: FormData) {
           amount: (-(cashOut || debtRelief || asked)).toFixed(2),
           balance: next.toFixed(2),
           reference: record.returnNumber,
-          description: `${record.outcome} — original sale ${sale?.invoiceNumber ?? ""} was not edited`,
+          description: `${record.outcome}. Original sale ${sale?.invoiceNumber ?? ""} was not edited`,
         },
       })
       if (cashOut > 0) {

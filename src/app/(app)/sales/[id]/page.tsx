@@ -42,7 +42,7 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
             {sale.customer ? (
               <Link href={`/customers/${sale.customer.id}`} className="text-primary">{sale.customer.name}</Link>
             ) : (
-              "Walk-in — attach a buyer before any return"
+              "Walk-in. Attach a buyer before any return"
             )}
           </p>
           <p className="text-sm text-muted-foreground">{sale.customer?.phone}</p>
@@ -79,7 +79,7 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
                   {item.imei ? (
                     <Link href={`/imei/${item.imei.id}`} className="text-primary">{item.imei.imei1}</Link>
                   ) : (
-                    "—"
+                    "-"
                   )}
                 </td>
                 <td className="px-4 py-3">{item.quantity}</td>

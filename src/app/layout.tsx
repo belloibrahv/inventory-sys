@@ -10,7 +10,7 @@ const jakarta = Plus_Jakarta_Sans({
 
 export const metadata: Metadata = {
   title: "Abu Twins Softskills",
-  description: "Shop system for Abu Twins Softskills Investment — phones, laptops, and power.",
+  description: "Shop system for Abu Twins Softskills Investment: phones, laptops, and power.",
   manifest: "/manifest.json",
   icons: {
     icon: "/icon.svg",

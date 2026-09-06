@@ -59,7 +59,7 @@ export default async function BranchesPage() {
         </div>
         {admin && closed.length ? (
           <div className="mt-8">
-            <h3 className="mb-2 text-sm font-semibold text-muted-foreground">Closed — not used in Ibadan now</h3>
+            <h3 className="mb-2 text-sm font-semibold text-muted-foreground">Closed. Not used in Ibadan now</h3>
             <p className="mb-3 text-sm text-muted-foreground">Old Lagos, Abuja, and Port Harcourt records stay here so past sales are not lost. They do not appear on intake or POS.</p>
             <div className="grid gap-3 md:grid-cols-2">
               {closed.map((branch) => (

@@ -51,7 +51,7 @@ export function IncomingForm({
             {products.map((product) => (
               <option key={product.id} value={product.id}>
                 {product.name}
-                {product.tracking === "SERIAL" ? " — serial" : product.tracking === "NONE" ? " — no number" : " — IMEI"}
+                {product.tracking === "SERIAL" ? " (serial)" : product.tracking === "NONE" ? " (no number)" : " (IMEI)"}
               </option>
             ))}
           </Select>
@@ -69,9 +69,9 @@ export function IncomingForm({
             </>
           )}
           <p className="text-xs text-muted-foreground">
-            {row.identity === "IMEI" && "Phone — IMEI required"}
+            {row.identity === "IMEI" && "Phone. IMEI required"}
             {row.identity === "SERIAL" && "Accessory with serial"}
-            {row.identity === "NONE" && "No IMEI or serial — charger cords and the like"}
+            {row.identity === "NONE" && "No IMEI or serial. Use this for charger cords and the like"}
           </p>
         </div>
       ))}
@@ -82,7 +82,7 @@ export function IncomingForm({
       >
         Add another item
       </button>
-      <Textarea name="notes" placeholder="Notes — carton marks, waybill, rider" />
+      <Textarea name="notes" placeholder="Notes: carton marks, waybill, rider" />
     </ActionForm>
   )
 }

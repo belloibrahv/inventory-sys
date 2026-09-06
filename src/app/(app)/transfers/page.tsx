@@ -42,7 +42,7 @@ export default async function TransfersPage() {
                     <input type="hidden" name="id" value={transfer.id} />
                     <Textarea
                       name="imeis"
-                      placeholder={transfer.imeis.map((item) => item.imei1).join("\n") || "No serials — accessory qty only"}
+                      placeholder={transfer.imeis.map((item) => item.imei1).join("\n") || "No serials. Accessory quantity only"}
                     />
                   </ActionForm>
                 </div>
