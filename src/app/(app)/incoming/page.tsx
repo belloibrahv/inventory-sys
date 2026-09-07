@@ -25,7 +25,7 @@ export default async function IncomingPage() {
       <div>
         <PageHeader
           title="Goods on the way"
-          description="Book phones, serial items, and pieces with no number before they reach Ibadan. They stay as Coming until someone confirms they have arrived. Super Admin can show a list to staff who have this screen."
+          description="Book the IMEIs or piece count on a supplier carton before it reaches Ibadan. They stay Coming until someone confirms the boxes are in the shop. This is not Shop to shop, and it is not a neighbor shop fill."
         />
         <div className="space-y-3">
           {lots.length === 0 ? (

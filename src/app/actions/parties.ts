@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { requireUser } from "@/lib/session"
 import { isSuperAdmin, scopedBranchId } from "@/lib/rbac"
+import type { SupplierKind } from "@prisma/client"
 
 export async function getCustomers(search?: string) {
   const user = await requireUser()
@@ -103,6 +104,9 @@ export async function createSupplier(formData: FormData) {
       contactPerson: String(formData.get("contactPerson") || "") || null,
       email: String(formData.get("email") || "") || null,
       address: String(formData.get("address") || "") || null,
+      country: String(formData.get("country") || "").trim() || null,
+      city: String(formData.get("city") || "").trim() || null,
+      kind: (String(formData.get("kind") || "SUPPLIER") === "NEIGHBOR" ? "NEIGHBOR" : "SUPPLIER") as SupplierKind,
     },
   })
   revalidatePath("/suppliers")

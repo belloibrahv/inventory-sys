@@ -50,9 +50,11 @@ export function ReturnForm({ sold }: { sold: Sold[] }) {
         ))}
       </Select>
       <Select name="outcome" defaultValue="REPAIR">
-        {["REPLACEMENT", "REPAIR", "REFUND", "CREDIT_NOTE"].map((item) => (
-          <option key={item} value={item}>{item}</option>
-        ))}
+        <option value="REPAIR">Repair</option>
+        <option value="REPLACEMENT">Replace from our stock</option>
+        <option value="REFUND">Refund</option>
+        <option value="CREDIT_NOTE">Credit note</option>
+        <option value="SEND_TO_SUPPLIER">Send back to the supplier</option>
       </Select>
       <Select name="faultClass" defaultValue="FAULTY_STOCK">
         {["GOOD_STOCK", "FAULTY_STOCK", "REPAIR_STOCK", "SCRAP_STOCK"].map((item) => (

@@ -29,11 +29,11 @@ export default async function ImeiPage({ searchParams }: { searchParams: Promise
             <Input name="q" defaultValue={q} placeholder="Search IMEI, serial, customer, invoice" />
             <Select name="status" defaultValue={status ?? ""}>
               <option value="">All statuses</option>
-              {["INCOMING", "IN_STOCK", "SOLD", "RETURNED", "SWAPPED", "REPAIRED", "FAULTY", "TRANSFERRED"].map((item) => (
+              {["INCOMING", "IN_STOCK", "SOLD", "RETURNED", "RETURNED_TO_SUPPLIER", "SWAPPED", "REPAIRED", "FAULTY", "TRANSFERRED"].map((item) => (
                 <option key={item} value={item}>{item}</option>
               ))}
             </Select>
-            <Button type="submit" variant="outline">Search</Button>
+            <Button type="submit">Search</Button>
           </form>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

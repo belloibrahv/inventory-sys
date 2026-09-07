@@ -8,7 +8,14 @@ import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 
-type Purchase = { id: string; invoiceNumber: string; branchId: string; supplierId: string }
+type Purchase = {
+  id: string
+  invoiceNumber: string
+  branchId: string
+  supplierId: string
+  originCountry?: string | null
+  originCity?: string | null
+}
 
 type Product = { id: string; name: string; tracking: "IMEI" | "SERIAL" | "NONE" }
 type Branch = { id: string; name: string; isHq?: boolean }
@@ -67,6 +74,9 @@ export function IncomingForm({
           {purchases.map((purchase) => (
             <option key={purchase.id} value={purchase.id}>
               {purchase.invoiceNumber}
+              {purchase.originCity || purchase.originCountry
+                ? ` · ${[purchase.originCity, purchase.originCountry].filter(Boolean).join(", ")}`
+                : ""}
             </option>
           ))}
         </Select>

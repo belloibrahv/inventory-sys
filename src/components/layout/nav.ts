@@ -19,6 +19,8 @@ import {
   BadgeCheck,
   BarChart3,
   BookOpen,
+  Handshake,
+  TrendingUp,
   ClipboardCheck,
   Scale,
   ScrollText,
@@ -59,7 +61,8 @@ export const navGroups = [
   {
     label: "Daily work",
     items: [
-      { name: "Send to another shop", href: "/transfers", icon: ArrowLeftRight },
+      { name: "Shop to shop", href: "/transfers", icon: ArrowLeftRight },
+      { name: "Neighbor shop fill", href: "/neighbor-fills", icon: Handshake },
       { name: "Returns", href: "/returns", icon: Undo2 },
       { name: "Swaps", href: "/swaps", icon: Repeat2 },
       { name: "Repairs", href: "/repairs", icon: Wrench },
@@ -71,6 +74,7 @@ export const navGroups = [
     items: [
       { name: "Money in & out", href: "/finance", icon: Wallet },
       { name: "Check the books", href: "/audit/books", icon: Scale },
+      { name: "Profit", href: "/profits", icon: TrendingUp },
       { name: "Expenses", href: "/expenses", icon: Receipt },
       { name: "Needs approval", href: "/approvals", icon: BadgeCheck },
     ],

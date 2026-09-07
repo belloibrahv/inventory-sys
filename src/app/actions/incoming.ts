@@ -129,6 +129,7 @@ export async function createIncomingLot(formData: FormData) {
               productId,
               supplierId: linkedSupplierId,
               branchId,
+              purchaseId,
               status: "INCOMING",
               notes: `Coming on ${lotNumber}`,
             },
@@ -154,6 +155,7 @@ export async function createIncomingLot(formData: FormData) {
   revalidatePath("/incoming")
   revalidatePath("/inventory")
   revalidatePath("/imei")
+  revalidatePath("/purchases")
   return { success: true }
 }
 
@@ -182,7 +184,11 @@ export async function markIncomingArrived(formData: FormData) {
       }
       await tx.imeiRecord.updateMany({
         where: { branchId: lot.branchId, productId: item.productId, status: "INCOMING", notes: { contains: lot.lotNumber } },
-        data: { status: "IN_STOCK", notes: `Arrived from ${lot.lotNumber}` },
+        data: {
+          status: "IN_STOCK",
+          notes: `Arrived from ${lot.lotNumber}`,
+          ...(lot.purchaseId ? { purchaseId: lot.purchaseId } : {}),
+        },
       })
       await tx.inventory.upsert({
         where: { productId_branchId: { productId: item.productId, branchId: lot.branchId } },
@@ -250,7 +256,14 @@ export async function getOpenPurchases() {
       ...(branchId ? { branchId } : {}),
       status: { in: ["PENDING", "ORDERED", "PARTIAL_RECEIVED"] },
     },
-    select: { id: true, invoiceNumber: true, branchId: true, supplierId: true },
+    select: {
+      id: true,
+      invoiceNumber: true,
+      branchId: true,
+      supplierId: true,
+      originCountry: true,
+      originCity: true,
+    },
     orderBy: { createdAt: "desc" },
     take: 40,
   })

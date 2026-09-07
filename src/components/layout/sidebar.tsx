@@ -66,10 +66,10 @@ export function Sidebar({ allowedHrefs }: { allowedHrefs: string[] }) {
                       href={item.href}
                       onClick={() => setSidebar(false)}
                       className={cn(
-                        "group flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors",
+                        "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors",
                         active
                           ? "bg-sidebar-active text-white shadow-[inset_3px_0_0_hsl(var(--brand))]"
-                          : "text-white/70 hover:bg-sidebar-muted hover:text-white"
+                          : "text-white hover:bg-sidebar-muted hover:text-white"
                       )}
                     >
                       <Icon className="h-4 w-4 shrink-0" />

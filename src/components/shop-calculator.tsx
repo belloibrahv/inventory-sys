@@ -161,10 +161,10 @@ export function ShopCalculator() {
                 key={label}
                 type="button"
                 onClick={action}
-                className={`min-h-12 rounded-xl text-base ${
+                className={`min-h-12 rounded-xl text-base font-semibold ${
                   label === "="
                     ? "col-span-2 bg-primary text-primary-foreground"
-                    : "bg-muted"
+                    : "bg-muted text-foreground"
                 }`}
               >
                 {label}

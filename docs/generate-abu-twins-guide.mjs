@@ -212,8 +212,8 @@ const children = [
       ["Prepared by", "Product Team, Techvaults Limited"],
       ["Document type", "User guide and test plan"],
       ["Date", "7 September 2026"],
-      ["Version", "1.6"],
-      ["Status", "Updated: parked sales survive a refresh when the line is down"],
+      ["Version", "1.12"],
+      ["Status", "Updated: Stock count is the honest next step when a supplier bill shows missing products"],
     ].map(([k, v]) =>
       new TableRow({
         children: [
@@ -238,6 +238,12 @@ const children = [
   body("Version 1.4 stops cut-off words. A button that is working says the full action, such as Preparing the PDF, not three dots after a half word."),
   body("Version 1.5 puts a handbook on the system. How to use this is on every login. It only covers the pages and work that job can use. Print it. Keep it at the till. A cashier does not see Super Admin pages in that book."),
   body("Version 1.6 keeps the till alive when the line drops. After Sell now has been opened on that phone, a refresh still comes back. Parked sales sit in a stronger store on the device. The invoice is still only born on the server."),
+  body("Version 1.7 keeps the last In shop IMEIs and named customers on that phone. After Sell now has been opened while the line is up, a cashier can still scan when the line drops. A new buyer name cannot be added offline. The invoice is still only born on the server."),
+  body("Version 1.8 makes How to use this, Account, and Sign out the same size as the job name on the top bar. Save, print, search, and other action buttons use the same strong type and a clearer edge, so they do not fade into the page."),
+  body("Version 1.9 splits three kinds of goods movement that used to look the same. Goods from supplier is expected cartons from named suppliers in other countries and cities, including send-back when a unit fails. Shop to shop is Iwo Road and Challenge only. Neighbor shop fill is when you collect one unit from the dealer next door for a named customer, sell it here, return that dealer their money, and keep the profit. Profit shows sell minus cost, neighbor fill profit, and expenses."),
+  body("Version 1.10 changes Shop to shop from ticking phones on the screen to a CSV list. Staff download a sample or the In shop IMEIs, keep the lines that are leaving, add accessory item codes and quantities, and upload the file. The other Abu Twins shop still confirms what arrived."),
+  body("Version 1.11 makes Goods from supplier the carton trail for missing products. Each bill shows how many the supplier sent, how many were scanned, how many already have an invoice (including sold today before close), and how many the system still says are In shop. Search by IMEI opens that bill. If the shelf is short of Still in shop, count stock. Do not type a new number by hand."),
+  body("Version 1.12 writes that next step into Stock count. If a supplier bill says Still in shop but the shelf is short, you count with your hands. A manager must approve before numbers change. Do not type a new shop number because it looks low."),
   body("Today Abu Twins has two shops: Iwo Road, Ibadan (head office) and Challenge, Ibadan. The system can add more shops in Nigeria later. Super Admin opens a new shop when you are ready."),
   body("Please treat the login list at the end as practice only. Those names and passwords are for testing. You can lock them or remove them when live work starts."),
   body("If a page is missing on the live website, ask Techvaults. We will put the newest version up for you."),
@@ -288,7 +294,9 @@ const children = [
       ["Catch a parked sale that sits or vanishes", "Sitting more than two hours, or wiped off the device, raises an alert."],
       ["See phone count versus IMEI", "Home always shows shop qty and IMEI count, including when they match."],
       ["Give the buyer a paper", "Every sale makes a sales invoice you can print."],
-      ["Move goods between shops", "Send to another shop. The other shop must confirm arrival."],
+      ["Move goods between our shops", "Shop to shop. Upload a CSV of IMEIs and accessories. The other Abu Twins shop must confirm arrival."],
+      ["Fill from a neighboring dealer", "Neighbor shop fill. Sell here, return their money, keep our profit."],
+      ["See profit", "Profit shows sell minus cost, neighbor fill profit, and approved expenses."],
       ["Handle returns and swaps", "The old invoice stays. A new record is made."],
       ["Watch money", "Money in & out, Close the day, expenses, and reports show real figures."],
       ["Check a past day's books", "Check the books reprints money, phones, and the trail for any Lagos day. You can compare two periods."],
@@ -322,13 +330,22 @@ const children = [
       ["Parked sale", "A finished cart saved on this device because the line was down. It is not an invoice yet."],
       ["IMEI vs shop count", "How many unique phones the system holds, compared with the shop quantity."],
       ["Line down", "This device has no internet. Sell now can still park a sale if the till is not locked. Refresh is safe after Sell now has been opened on that phone."],
-      ["The till is still here", "The recovery page if a refresh cannot reach the server. Parked sales on this phone are listed."],
+      ["The till is still here", "The recovery page if a refresh cannot reach the server. Parked sales and the last In shop list on this phone are there."],
+      ["List on this phone", "The last In shop IMEIs and named customers saved when Sell now was open and the line was up."],
       ["Goods intake", "The person who books and receives goods."],
       ["Super Admin", "The person who can see and do everything, and can undo a true mistake."],
       ["Needs approval", "A request waiting for a yes or a no from a manager."],
       ["Walk-in", "A buyer with no name on the sale yet."],
       ["Lowest price", "The floor. Staff cannot sell below it unless Super Admin allows it."],
       ["How to use this", "The handbook for your job. Look up a word. Print the book. It only covers pages you can open."],
+      ["Shop to shop", "Send stock that already belongs to Abu Twins from Iwo Road to Challenge, or the other way. The list is a CSV of IMEIs and accessory lines."],
+      ["Neighbor shop fill", "Collect one unit from a neighboring dealer for a named customer. Sell it here. Return their money. Keep the profit."],
+      ["Expected goods", "What a supplier still owes you in units. Coming is not In shop until the carton is checked."],
+      ["Never scanned versus the bill", "Units on the supplier bill that were never given an IMEI or piece count on this system."],
+      ["Sold today", "Units from that supplier carton that already have an invoice on this Lagos day. Check this before Close the day."],
+      ["Still in shop", "What the system still believes is on the shelf from that carton. If the shelf has fewer, open Stock count."],
+      ["Stock count", "Count the shelf with your hands. Compare with the system. A manager must approve before any number changes."],
+      ["Profit", "Sell price minus cost, plus neighbor fill profit, minus approved expenses."],
     ],
     [2800, 6560]
   ),
@@ -397,15 +414,16 @@ const children = [
     [
       ["Start", "Home, How to use this", "Today’s numbers, IMEI versus shop count, and the printable handbook for this job."],
       ["Stock", "Phones & items, Phone IMEIs, Shop stock, Goods on the way", "What you sell, each phone number, what is here, what is still coming."],
-      ["Sell & buy", "Sales, Sell now, Close the day, Goods from supplier, Customers, Suppliers", "Sell, count the till, print invoices, buy from a supplier, keep people lists."],
-      ["Daily work", "Send to another shop, Returns, Swaps, Repairs, Stock count", "Move goods, take phones back, trade, fix, count shelves."],
-      ["Money", "Money in & out, Check the books, Expenses, Needs approval", "Cash movement, official books, bills, and yes-or-no requests."],
+      ["Sell & buy", "Sales, Sell now, Close the day, Goods from supplier, Customers, Suppliers", "Sell, count the till, print invoices, buy from a supplier, trace a carton if a unit is missing, keep people lists."],
+      ["Daily work", "Shop to shop, Neighbor shop fill, Returns, Swaps, Repairs, Stock count", "Move our stock, fill from next door, take phones back, trade, fix, count shelves."],
+      ["Money", "Money in & out, Check the books, Profit, Expenses, Needs approval", "Cash movement, official books, profit, bills, and yes-or-no requests."],
       ["Shop & people", "Shops, Staff, Who can see what, Reports, Who did what, Alerts, Settings", "People, shops, reports, and rules."],
     ],
     [1800, 3600, 3960]
   ),
   para("", { after: 160 }),
-  body("At the top there is a search box: Find IMEI, invoice, or customer. Type a phone number, an invoice number, or a buyer name. The system jumps you to that record."),
+  body("At the top there is a search box: Find IMEI, invoice, supplier bill, or customer. Type a phone number, an invoice number, a supplier bill, or a buyer name. An IMEI can open the carton that unit came from."),
+  body("How to use this, Account, and Sign out sit beside your name. They use the same size as the job name, such as Super Admin, so they are easy to tap."),
   body("On a computer you can hide the left menu if you need more room. The choice stays on that device. On a phone the menu stays a drawer."),
   body("Every signed-in page has a shop calculator. Use it to add a line by hand. It does not post money. It does not change an invoice."),
 
@@ -495,7 +513,7 @@ const children = [
 
   ...feature({
     title: "10.5 Goods on the way",
-    what: "This is the booking page for goods that have not reached Ibadan yet. Super Admin and Goods intake can upload phones (IMEIs), serial items, or a piece count for cords and chargers. A USB scanner works like a keyboard. The list stays Coming until someone says they have arrived. Super Admin can keep a list Hidden, or show it to staff who have this page.",
+    what: "This is the booking page for supplier cartons that have not reached Ibadan yet. Super Admin and Goods intake can upload phones (IMEIs), serial items, or a piece count for cords and chargers. A USB scanner works like a keyboard. The list stays Coming until someone says they have arrived. Super Admin can keep a list Hidden, or show it to staff who have this page. Shop to shop is a different page.",
     why: "Cartons leave China or Lagos before your shelf is ready. If you wait to type numbers until the rider arrives, the day is chaos. If you type them too early and mix them with shelf stock, cashiers sell phones that are still on the road.",
     story: "Friday. A carton of ten iPhones and twenty charger cords is on a bus to Iwo Road. Goods intake opens Goods on the way. They pick Iwo Road, Ibadan · HQ. They paste ten IMEIs for iPhone 15 Pro. They add another line, pick Type-C charger cord, and type 20. They save. Shop stock now shows Coming 10 and Coming 20. On Saturday the carton arrives. They click They have arrived — add to shop. In shop goes up. Sell now can now find those IMEIs.",
     steps: [
@@ -520,7 +538,7 @@ const children = [
 
   ...feature({
     title: "10.6 Sell now",
-    what: "Sell now is the till. You scan or search a phone number or an item name, put it in the cart, pick the buyer, pick cash, transfer, POS, or credit, collect money, and finish. The system then makes an invoice. A USB scanner works like a keyboard: scan, then Enter. A phone camera can read the barcode if the browser allows it. If yesterday had sales and nobody closed that day, Complete sale stays locked for everyone, including Super Admin, until the till is counted. If the line drops and the till is not locked, the sale stays on this device as a parked sale and posts when the line returns. After you have opened Sell now on that phone, a refresh is safe.",
+    what: "Sell now is the till. You scan or search a phone number or an item name, put it in the cart, pick the buyer, pick cash, transfer, POS, or credit, collect money, and finish. The system then makes an invoice. A USB scanner works like a keyboard: scan, then Enter. A phone camera can read the barcode if the browser allows it. If yesterday had sales and nobody closed that day, Complete sale stays locked for everyone, including Super Admin, until the till is counted. If the line drops and the till is not locked, the sale stays on this device as a parked sale and posts when the line returns. After you have opened Sell now on that phone, a refresh is safe, and you can still scan from the last In shop list saved on that phone.",
     why: "Selling from memory is how phones vanish. Selling after a day with no till count is how cash vanishes. The till only offers what is In shop, and only after older days with sales are closed.",
     story: "Monday at Iwo Road. Sunday had cash sales and nobody closed. The cashier opens Sell now. A red note says the shop has not closed 6 September. Complete sale is locked. They open Close the day, count the drawer, and close Sunday. Sell now opens. A buyer wants a Camon 30. They scan the IMEI. The phone is In shop. They collect transfer and finish. The invoice is created. Later the line drops. They still finish a second sale. It stays on that phone as parked. When the line returns, the banner says send parked work. After it posts, Who did what shows it came from offline.",
     steps: [
@@ -533,7 +551,8 @@ const children = [
       "Pick or add a customer. Do not invent a fake person for a live test if the CEO forbids dummy buyers. For practice, add a clearly marked test buyer only if leadership agrees.",
       "Set the amount paid and the method. Finish the sale.",
       "If the line is down and the till is not locked, finish anyway. You should see that the sale is saved on this device.",
-      "Refresh the page while the line is still down. Sell now should come back, or you should see The till is still here with the parked sale listed.",
+      "While the line is down, scan an IMEI that was In shop when you last opened Sell now. It should add to the cart.",
+      "Refresh the page while the line is still down. Sell now should come back, or you should see The till is still here with the parked sale and the shop list.",
     ],
     expect: [
       "If an older day with sales is open, Complete sale is blocked. Parking a new live sale is also blocked.",
@@ -544,6 +563,8 @@ const children = [
       "Shop stock In shop goes down by one for that phone.",
       "A parked sale shows a banner on every signed-in page until it is sent. After two hours Super Admin, CEO, and the records checker get an alert. If someone wipes it off the device, Who did what records a vanished parked sale.",
       "A refresh while the line is down does not wipe the parked sale.",
+      "An IMEI from the last In shop list can be scanned while the line is down. A Coming IMEI cannot.",
+      "A new customer cannot be saved while the line is down.",
     ],
   }),
 
@@ -599,50 +620,98 @@ const children = [
     ],
     expect: [
       "Each supplier has a name you can pick on Goods from supplier and on Goods on the way.",
-      "Supplier is optional when you only book goods on the way.",
+      "Country and city show where the carton is coming from.",
+      "A neighboring dealer is marked Neighboring shop and is used on Neighbor shop fill.",
     ],
   }),
 
   ...feature({
     title: "10.10 Goods from supplier",
-    what: "This page is for goods you have ordered from a supplier and will receive into a shop. You order, wait, check the carton, type IMEIs, then the goods sit in the shop. This is different from Goods on the way. Goods on the way is the early booking before the carton is in your hands. Goods from supplier is the buy record with money and supplier invoice.",
-    why: "Buying and paying a supplier must leave a money trail. Booking a carton that is still travelling must not pretend the phones are already yours to sell.",
-    story: "Accounts wants to know what we still owe a supplier. They open the purchase. They see the invoice total and what has been paid. They do not change old lines. They post a payment.",
+    what: "This page documents expected cartons from named suppliers in other countries and cities. It is also the trail if a product goes missing. You can see how many were supplied, how many were scanned, how many were sold on invoices (including today before close), and how many the system still says are In shop. Coming is not In shop until the boxes are checked. You can also send a failed unit, including a phone a customer returned to us, back to that supplier. This is not Shop to shop, and it is not Neighbor shop fill.",
+    why: "If a phone leaves without a sale, the supplier bill is the first count. Expected minus recorded shows units that never got a number. Still in shop versus the shelf shows units that may have been sold off the books. Sold today helps you check before Close the day.",
+    story: "A carton of twenty Tecno units is booked from Dubai to Iwo Road. Eighteen IMEIs are scanned. Two never appear. Later the shelf has sixteen In shop phones, but the bill still says eighteen In shop and two sold on invoices. The manager searches one missing IMEI, opens the bill, and sees it is still In shop on the system with no invoice. That is a missing product, not a typing job. They count stock before close.",
     steps: [
       "Click Goods from supplier.",
-      "Read a purchase if one exists.",
-      "Follow the steps on the page: Order, On the way, Check goods, Enter IMEIs, In shop.",
+      "Add expected goods: supplier, shop, item, quantity, cost, country or city, and due date if you know it.",
+      "Open the bill. Book IMEIs as Coming if the carton is still on the road, or confirm they are in this shop if the boxes are on the counter.",
+      "Search by IMEI, bill number, supplier, or product when you need that carton trail.",
+      "Read Expected, Recorded, Sold on the system, Sold today, and Still in shop. If the shelf is short, count stock.",
+      "Pay the supplier as a separate money step.",
+      "If a unit must go back, scan those IMEIs on Send back to supplier, or pick Send back to the supplier on Returns.",
     ],
     expect: [
-      "A purchase has its own number.",
-      "Received quantity and money owed are visible.",
-      "IMEIs entered here become In shop after the receive steps, not Coming.",
+      "Expected, recorded, sold, sold today, and still in shop are separate numbers.",
+      "Never scanned versus the bill is expected minus recorded.",
+      "Each IMEI on the bill shows its status, shop, and invoice if it was sold.",
+      "The origin country or city is visible on the bill.",
+      "Coming IMEIs cannot be sold on Sell now.",
+      "A unit sent back shows Sent back to supplier. It is not Shop to shop.",
     ],
   }),
 
   ...feature({
-    title: "10.11 Send to another shop",
-    what: "Use this when Iwo Road sends phones to Challenge, or the other way. You pick the IMEIs. They leave this shop. The other shop must paste the numbers that actually arrived.",
-    why: "A rider can lose a phone. If the other shop does not confirm, the system still knows the phones are on the way, not sold, and not on the old shelf.",
-    story: "Iwo Road sends two iPhones to Challenge. Challenge opens the transfer, pastes the two IMEIs, and confirms. Those phones now show Challenge as the shop. Iwo Road no longer has them In shop.",
+    title: "10.11 Shop to shop",
+    what: "Use this when Iwo Road sends phones and accessories that already belong to Abu Twins to Challenge, or the other way. You do not tick phones on the screen. You upload a CSV with IMEI, serial, item code, name, quantity, color, and notes. The other Abu Twins shop must confirm the numbers that actually arrived. This is not a supplier carton and not a neighboring dealer.",
+    why: "A rider can lose a phone. A long list is easier to check in Excel than on a till screen. If the other shop does not confirm, the system still knows the phones are on the way between our shops, not sold, and not on the old shelf.",
+    story: "Iwo Road is sending two iPhones and twenty charger cords to Challenge. The manager downloads the In shop IMEI list, keeps the two iPhone lines, adds a cord line with item code and quantity 20, and uploads the CSV. Challenge opens Shop to shop, pastes the two IMEIs, and confirms. Those phones now show Challenge as the shop. Iwo Road no longer has them In shop.",
     steps: [
       "Sign in as a shop manager.",
-      "Click Send to another shop.",
-      "Create a transfer from Iwo Road to Challenge with one In shop IMEI (use a test unit leadership accepts).",
+      "Click Shop to shop.",
+      "Pick Iwo Road as the sending shop and Challenge as the receiving shop.",
+      "Download the sample file or Download IMEIs in this sending shop.",
+      "Keep only the units that are leaving. Add accessory lines with item code and quantity. Save as CSV.",
+      "Upload the file and click Send this list.",
       "Sign in as the Challenge manager (challenge.manager@abutwins.com).",
-      "Open the same transfer and confirm arrival.",
+      "Open the same send and confirm the IMEIs that arrived.",
     ],
     expect: [
-      "Status moves from on the way to received.",
-      "The phone’s shop becomes Challenge.",
+      "The send has a transfer number. Status is on the way until Challenge confirms.",
+      "The phone’s shop becomes Challenge after confirm.",
       "Iwo Road In shop drops. Challenge In shop rises.",
-      "The other shop must confirm. Sending alone is not enough.",
+      "An IMEI that is not In shop at the sending shop is refused.",
+      "The other shop must confirm. Sending the file alone is not enough.",
     ],
   }),
 
   ...feature({
-    title: "10.12 Returns",
-    what: "A return starts from a sold IMEI. You say why it came back. A manager approves. Then you refund, give credit, send to repair, or replace. The old invoice is not rewritten.",
+    title: "10.12 Neighbor shop fill",
+    what: "A named customer wants a unit this shop does not have. Instead of sending the buyer to another place, staff collect the unit from a neighboring dealer, sell it here, return that dealer their money, and keep the profit. The unit does not sit on our shelf as In shop stock.",
+    why: "If this lives in chat, the neighbor is not paid, the customer has no invoice, and nobody can see the profit Abu Twins kept.",
+    story: "A buyer at Iwo Road wants a model Challenge also does not have, but the shop next door has it. The cashier records the neighbor, the named customer, the cost to the neighbor, and the sell price. They sell it here. They return the neighbor their cost. Profit stays on Profit.",
+    steps: [
+      "Add the real customer first if they are not on the list.",
+      "Click Neighbor shop fill.",
+      "Enter the neighboring shop, the customer, the item, the IMEI if it has one, what the neighbor is owed, and what the customer will pay.",
+      "Sell to this customer. Then return money to the neighboring shop.",
+    ],
+    expect: [
+      "An invoice is created. The old pack does not invent a buyer.",
+      "Profit equals sell price minus what the neighbor is owed.",
+      "Money returned to the neighbor shows as money out. Our profit is not sent with it.",
+      "This page is not Shop to shop and not Goods from supplier.",
+    ],
+  }),
+
+  ...feature({
+    title: "10.13 Profit",
+    what: "Profit is sell price minus cost on completed shop sales, plus profit kept on neighbor fills, minus approved expenses. Neighbor fill sales are not counted twice.",
+    why: "Revenue on Reports is money in. Profit is what remains after cost and bills. The boss asked to see that clearly.",
+    story: "The CEO opens Profit. Iwo Road shop sales profit and Challenge neighbor fill profit sit in two columns. Approved fuel is subtracted. Net is the figure for the meeting.",
+    steps: [
+      "Sign in as CEO or accountant.",
+      "Click Profit.",
+      "Read shop sales profit, neighbor fill profit, expenses, net, and By shop.",
+    ],
+    expect: [
+      "Neighbor fill invoices do not also inflate shop sales profit.",
+      "Figures come from real invoices, fills, and approved expenses.",
+      "A cashier without this page does not see it.",
+    ],
+  }),
+
+  ...feature({
+    title: "10.14 Returns",
+    what: "A return starts from a sold IMEI. You say why it came back. A manager approves. Then you refund, give credit, send to repair, replace, or send the unit back to the supplier. The old invoice is not rewritten.",
     why: "If staff edit the old sale, the day’s cash lies. A return is a new story that points at the old invoice.",
     story: "A buyer returns a faulty Camon 30. The cashier enters the IMEI and the reason. The shop manager approves. The phone comes back to the shop or goes to repair. The original invoice still shows the sale.",
     steps: [
@@ -655,13 +724,13 @@ const children = [
     expect: [
       "Walk-in sales block the return until a buyer name is attached.",
       "The old invoice does not change.",
-      "The IMEI status can become Returned or move to repair.",
+      "The IMEI status can become Returned, move to repair, or become Sent back to supplier.",
       "A refund is a new money record, not an erase.",
     ],
   }),
 
   ...feature({
-    title: "10.13 Swaps",
+    title: "10.15 Swaps",
     what: "A swap is when a customer brings an old phone and takes another. You agree a trade value. A manager approves. You give the new phone, collect or pay the difference, and print an invoice.",
     why: "Swaps mix stock and money. If they stay in chat, the old phone disappears and the new phone is not paid for.",
     story: "A customer trades an iPhone 13 for an iPhone 15. The manager agrees the trade value. The customer pays the difference. The old phone is now shop stock. The new phone is sold on a new invoice.",
@@ -678,7 +747,7 @@ const children = [
   }),
 
   ...feature({
-    title: "10.14 Repairs",
+    title: "10.16 Repairs",
     what: "Repairs is the workshop book. Take the phone in, write the fault, wait for parts if needed, repair, then give it back or put it back in the shop.",
     why: "A phone in a drawer is not ‘in shop’ and is not ‘sold’. The workshop must have its own steps.",
     story: "A sold phone comes back with a charge fault. The engineer logs the IMEI, finds the fault, waits for a part, repairs it, and marks it delivered. The customer record stays on the job.",
@@ -697,25 +766,28 @@ const children = [
   }),
 
   ...feature({
-    title: "10.15 Stock count",
-    what: "Stock count is when you count one shop with your hands. The system compares your count with the IMEI list. If they differ, a manager must approve before numbers change.",
-    why: "People should not type a new stock number because ‘it looks low’. Count first. Approve second. Then the number may change.",
-    story: "Iwo Road counts iPhone 14. The shelf has 3. The system expected 4. The count shows a difference. The manager checks the missing IMEI, then approves. Only then does the number change.",
+    title: "10.17 Stock count",
+    what: "Stock count is when you count one shop with your hands. Use it when Home IMEI vs shop count disagrees, or when a Goods from supplier bill says Still in shop but the shelf has fewer. The system compares your count with the IMEI list. If they differ, a manager must approve before numbers change.",
+    why: "A missing product is not a typing job. If a unit left without an invoice, the supplier bill shows Still in shop with no sale. You count the shelf. You do not type a new shop number because it looks low. Count first. Approve second. Then the number may change.",
+    story: "Iwo Road opens a Dubai carton bill. It says twenty expected, eighteen recorded, two sold on invoices, and sixteen Still in shop. The shelf has fourteen. The manager searches the two extra IMEIs. Both still say In shop with no invoice. They start Stock count for Iwo Road, enter fourteen, and send it for approval. Only after yes does the shop number change.",
     steps: [
+      "If a product looks missing, open Goods from supplier first. Search the IMEI or the bill.",
+      "Read Expected, Recorded, Sold on the system, Sold today, and Still in shop.",
       "Click Stock count.",
       "Start a count for Iwo Road or Challenge.",
-      "Enter counted quantities.",
+      "Enter counted quantities from the shelf in front of you.",
       "Send for approval if there is a difference.",
     ],
     expect: [
       "The page shows expected, counted, and the difference.",
       "Stock numbers do not change until a manager approves.",
       "Who did what records the approval.",
+      "A supplier bill Still in shop gap is not fixed by typing a new number on Shop stock.",
     ],
   }),
 
   ...feature({
-    title: "10.16 Money in & out",
+    title: "10.18 Money in & out",
     what: "This page lists money that moved: collections, pay-outs, and the difference. It also shows what customers still owe and what Abu Twins still owes suppliers. From here you can open Close the day to count the till.",
     why: "Sales pages show goods. This page shows naira.",
     story: "The accountant opens Money in & out on Friday. Money in matches the transfer alerts. Money out shows supplier payments and approved expenses. The difference is the week’s movement, not a guess.",
@@ -734,7 +806,7 @@ const children = [
   }),
 
   ...feature({
-    title: "10.17 Close the day",
+    title: "10.19 Close the day",
     what: "Close the day is the till count. You pick the business day (Lagos time), see cash expected from cash sales that day, plus transfer, POS, and credit totals, then type the cash you counted. The system stores the difference. Sell now stays locked until every older day that had completed sales is closed. The page opens on the oldest unclosed day. Cashiers and sales people can close the day even if they cannot see the full Money in & out page.",
     why: "If staff keep selling after a day with no count, yesterday’s cash can leave and today’s invoices still look busy. A close writes a name, a time, a shop, expected cash, counted cash, and the shortfall or leftover. That is the only way the drawer is allowed to start a new day of live sales.",
     story: "Sunday at Iwo Road had eight cash sales. Nobody counted. Monday morning Sell now is locked. The cashier opens Close the day. The red list shows 6 September. Cash expected is on the card. They count the drawer, type that number, and add a short note if a note is short. They click Close this day. If another old day is still open, the page jumps there. When the list is empty, Sell now works again.",
@@ -758,7 +830,7 @@ const children = [
   }),
 
   ...feature({
-    title: "10.18 Check the books",
+    title: "10.20 Check the books",
     what: "Check the books is the official statement of account. Pick a shop, a period (one day, last 7 days, or this month to date), and an end date in Lagos time. The system reprints money in, money out, till closes, who collected, invoices, and IMEI versus shop count. You can open any of the last 14 days from the chips, or type an older date. Compare with another day or leave it empty to use the previous period. Download a branded PDF, print to save as PDF, or download CSV. The paper has the ab mark, a statement number such as BK-IWO-20260906-20260906, and sign-off lines for prepared, records, and owner.",
     why: "Close the day counts one drawer. Reports is a meeting pack. Check the books is what the accountant and records checker sign. They must be able to open yesterday, last week, or any older day, and see how this period moved against another. The pack must look like a bank paper, not a loose screen dump. It must never change an invoice.",
     story: "Monday morning at Iwo Road. The accountant opens Check the books. Sunday is on the chip strip with eight sales and Closed. They click Sunday. The statement shows cash, transfer, POS, expenses, and the till count. They set Compare with to the Saturday before. Collected is up. They download the branded PDF for the file, and the CSV for Excel. The records checker signs the printed paper. No invoice changed.",
@@ -788,7 +860,7 @@ const children = [
   }),
 
   ...feature({
-    title: "10.19 Expenses",
+    title: "10.21 Expenses",
     what: "Expenses is for fuel, rent, salary, and light bill. Staff ask. A manager says yes. Then money can leave.",
     why: "If anyone can tap cash for ‘fuel’ with no yes, the till will never match.",
     story: "The Challenge manager asks for fuel money. The request waits on Needs approval. The CEO says yes. Then the pay-out is recorded.",
@@ -805,7 +877,7 @@ const children = [
   }),
 
   ...feature({
-    title: "10.20 Needs approval",
+    title: "10.22 Needs approval",
     what: "This is the yes-or-no desk. Swaps, refunds, expenses, and stock counts wait here.",
     why: "One place is better than ten WhatsApp chats.",
     story: "The CEO opens Needs approval each morning. Three items wait. Two expenses are yes. One odd stock count is no until the manager recounts.",
@@ -824,7 +896,7 @@ const children = [
   }),
 
   ...feature({
-    title: "10.21 Shops",
+    title: "10.23 Shops",
     what: "Shops lists Iwo Road as HQ and Challenge as Open. Super Admin can open a new shop anywhere in Nigeria. Super Admin can close a shop. Closed shops stay in a Super Admin-only list so old sales are not lost.",
     why: "Abu Twins will grow. The software must not be rebuilt for each new city.",
     story: "Next year Abu Twins may open in Ilorin. Super Admin types the shop name, a short code, and the address. Staff in Ilorin then work in that shop only.",
@@ -843,7 +915,7 @@ const children = [
   }),
 
   ...feature({
-    title: "10.22 Staff",
+    title: "10.24 Staff",
     what: "Staff is the people list. Super Admin or a shop manager (if allowed) can add a person, pick their job, and pick their shop. Super Admin can lock a login.",
     why: "A person who leaves the company must not keep a key to the till.",
     story: "A new cashier starts at Challenge. Super Admin adds their work email, sets job to Cashier, sets shop to Challenge, and gives them a first password. After they sign in, Super Admin asks them to change it.",
@@ -862,7 +934,7 @@ const children = [
   }),
 
   ...feature({
-    title: "10.23 Who can see what",
+    title: "10.25 Who can see what",
     what: "This page is Super Admin only. You tick the pages and the work for each job. Super Admin is not ticked here because Super Admin always has all rights.",
     why: "The CEO may want the accountant to see money but not Sell now. That should be a tick, not a phone call to Techvaults.",
     story: "The CEO asks that cashiers must not see Reports. Super Admin opens Who can see what, finds Cashier, unticks Reports, and saves. The cashier signs out and in. Reports is gone.",
@@ -880,7 +952,7 @@ const children = [
   }),
 
   ...feature({
-    title: "10.24 Reports",
+    title: "10.26 Reports",
     what: "Reports shows sales, money collected, stock value, swaps, returns, and who still owes, for every completed record you can see. On screen it is a dashboard. Print or download gives a branded management report with the ab mark, shop books, people who still owe, unpaid supplier invoices, and low stock. The pack does not change any invoice.",
     why: "Home is a snapshot. Reports is the pack you take to a meeting. It must look like a company paper, not a screen dump with buttons.",
     story: "Friday review. The CEO opens Reports, then downloads the branded PDF. Iwo Road and Challenge sit on one page. Low stock is listed. The Check the books button is not on the paper. Nobody copies numbers from a notebook.",
@@ -900,7 +972,7 @@ const children = [
   }),
 
   ...feature({
-    title: "10.25 Who did what",
+    title: "10.27 Who did what",
     what: "This is the diary of the system. It shows who did an important action, when, in which shop, and what changed. Nothing here is deleted. It also keeps line-down time, parked sales that posted, parked sales that sat too long, and parked sales that vanished from a device. Those last two are marked high risk. At the top it may show the books verdict. Click that banner to open Check the books.",
     why: "When two people disagree, the diary settles it. When cash sat on a phone with no invoice, the diary names the person and the device.",
     story: "A phone is missing. The records checker opens Who did what, finds the last transfer, and sees who confirmed it at Challenge. The same morning an alert says a parked sale vanished. They filter high risk, open the parked sale line, and see who was signed in on that device when the queue disappeared.",
@@ -921,7 +993,7 @@ const children = [
   }),
 
   ...feature({
-    title: "10.26 Alerts",
+    title: "10.28 Alerts",
     what: "Alerts are short notices: low stock, a request waiting, a parked sale sitting too long, a parked sale that vanished, or other shop warnings. Super Admin, the CEO, and the records checker get the parked-sale alerts.",
     why: "People miss a page. They should not miss a danger. A parked sale with cash in a drawer and no invoice is a danger.",
     steps: [
@@ -938,7 +1010,7 @@ const children = [
   }),
 
   ...feature({
-    title: "10.27 Settings",
+    title: "10.29 Settings",
     what: "Settings holds the shop name, phone, address, and email that print on invoices and on Check the books. It also holds the low stock alert and whether cashiers may sell below the lowest price. Only Super Admin can change these.",
     why: "The invoice header and the books statement should be the real Ibadan address, not a leftover Lagos line.",
     story: "Techvaults set the invoice address to Iwo Road, Ibadan, Oyo State and the phone to 07062454854. If the phone number changes, Super Admin updates Settings. The next printed invoice and the next books PDF show the new number.",
@@ -955,7 +1027,7 @@ const children = [
   }),
 
   ...feature({
-    title: "10.28 Shop calculator",
+    title: "10.30 Shop calculator",
     what: "A round button sits on every signed-in page. It opens a simple calculator. Add, subtract, multiply, and divide. It does not post money. It does not change an invoice. Close it when you are done.",
     why: "A cashier or accountant often needs to add a line by hand while they look at the till or the books. They should not leave the system for a phone calculator and lose the page.",
     story: "The cashier is on Close the day. Notes in the drawer are mixed. They tap the calculator, add the notes, type that total as counted cash, and close the day.",
@@ -973,7 +1045,7 @@ const children = [
   }),
 
   ...feature({
-    title: "10.29 How to use this",
+    title: "10.31 How to use this",
     what: "How to use this is the in-system handbook. Every signed-in person can open it from Start, from the top bar, or from search. The book is built for that login only. A cashier sees Sell now and Close the day. They do not see Who can see what or Settings. Super Admin sees every page. You can look up a word on the screen. Print or Save PDF makes a branded paper with the ab mark, the job name, and a number such as HB-CASHIER-20260907. Print includes the full book even if you filtered the screen.",
     why: "Staff should not hunt a Word file when they are at the till. They need a book that matches the buttons in front of them, not a book for every job in the company.",
     story: "Blessing is on the Iwo Road till. A buyer asks for a return. She opens How to use this, types return, and reads that a walk-in needs a name first. She prints the cashier book for the drawer so the next shift can look it up without asking her.",
@@ -996,20 +1068,22 @@ const children = [
   }),
 
   ...feature({
-    title: "10.30 The till is still here",
-    what: "After Sell now has been opened on a phone, that phone can keep the till if the line drops. A refresh does not wipe a parked sale. Parked sales live in a stronger store on the device. If the phone cannot rebuild Sell now, it opens The till is still here. That page lists parked sales on this phone. The invoice is only born when the line returns and the sale posts.",
-    why: "A cashier who refreshes on a dead line used to see a dead screen. The sale was still on the phone, but they could not get back to it. That is how cash sits in a drawer with no paper.",
-    story: "Blessing parks a cash sale when the Iwo Road line drops. She refreshes by habit. Sell now comes back, or she sees The till is still here with that parked sale. She does not write the sale in a notebook. When the line returns, she sends parked work. Who did what shows it came from offline.",
+    title: "10.32 The till is still here",
+    what: "After Sell now has been opened on a phone, that phone can keep the till if the line drops. It also keeps the last In shop IMEIs and named customers. A refresh does not wipe a parked sale. If the phone cannot rebuild Sell now, it opens The till is still here. That page lists parked sales and lets the cashier sell from the saved list. The invoice is only born when the line returns and the sale posts.",
+    why: "A cashier who refreshes on a dead line used to see a dead screen. Even with the till open, a scan needed the server. That is how a buyer walks and the sale is written in a notebook.",
+    story: "Blessing opens Sell now at Iwo Road. The line drops. A buyer wants the Camon 30 she already saw on the shelf. She scans that IMEI from the list on the phone, parks the cash sale, and refreshes. The till is still here shows the parked sale and the remaining In shop list. When the line returns, she sends parked work. Who did what shows it came from offline.",
     steps: [
       "Sign in as cashier@abutwins.com.",
       "Open Sell now while the line is up.",
-      "Turn the line off. Finish a sale if the till is not locked. Confirm it is saved on this device.",
-      "Refresh. Confirm Sell now returns, or The till is still here lists the parked sale.",
+      "Turn the line off. Scan an In shop IMEI. Finish the sale if the till is not locked.",
+      "Refresh. Confirm Sell now returns, or The till is still here lists the parked sale and the shop list.",
+      "Confirm a new customer form is not offered while the line is down.",
       "Turn the line on. Send parked work now.",
     ],
     expect: [
       "The parked sale is still on the device after a refresh.",
-      "The till is still here shows the item count and the amount.",
+      "The last In shop IMEI can be scanned while the line is down.",
+      "The till is still here shows the item count, the amount, and Sell from the list on this phone.",
       "After send, Who did what has the posted-from-offline trail.",
       "No invoice is created until the server accepts the parked sale.",
     ],
@@ -1102,7 +1176,7 @@ const children = [
       ["14", "Invoice cannot be edited", "Any seller", "No way to change items or prices."],
       ["15", "Parked sale when the line drops", "cashier@abutwins.com with line down", "Sale stays on the device. Banner says send it when the line returns. Who did what gets the trail."],
       ["16", "Home IMEI vs shop count", "ceo@abutwins.com", "The table is always there. Match or a gap is shown for each phone and laptop."],
-      ["17", "Transfer Iwo Road to Challenge", "Both shop managers", "Challenge must confirm. Then stock moves."],
+      ["17", "Shop to shop CSV Iwo Road to Challenge", "Both shop managers", "CSV of In shop IMEIs uploads. Challenge must confirm. Then stock moves. This is not Goods from supplier."],
       ["18", "Return needs a named buyer", "cashier@abutwins.com", "Walk-in is blocked until a name is attached."],
       ["19", "Expense waits for yes", "manager@abutwins.com then CEO", "Money does not leave before approval."],
       ["20", "Who did what keeps the story", "auditor@abutwins.com", "The sale, close, or parked trail appears with a name and time."],
@@ -1114,6 +1188,12 @@ const children = [
       ["26", "Reports print looks like a company paper", "ceo@abutwins.com", "PDF has the ab mark, RP- number, shop books, and no buttons."],
       ["27", "How to use this matches the job", "cashier then CEO then Super Admin", "Each book names that job. Cashier has no Who can see what. Super Admin has it. Print shows the ab mark and an HB- number."],
       ["28", "Refresh while the line is down", "cashier@abutwins.com after opening Sell now", "Parked sales stay. Sell now returns or The till is still here lists them. No invoice until send."],
+      ["29", "Scan from the list on this phone", "cashier@abutwins.com after opening Sell now", "While the line is down, an In shop IMEI from the last list adds to the cart. A new customer cannot be saved."],
+      ["30", "Book expected supplier goods with origin", "vault@abutwins.com or manager", "The bill shows the supplier, country or city, expected quantity, recorded IMEIs, sold on the system, sold today, and still in shop. Sell now cannot sell those IMEIs until arrival."],
+      ["31", "Neighbor shop fill keeps profit", "cashier@abutwins.com", "Named customer, neighbor cost, sell price. Invoice is created. Neighbor is paid their cost. Profit equals the difference."],
+      ["32", "Profit page matches real figures", "ceo@abutwins.com", "Shop sales profit plus neighbor fill profit minus expenses. Neighbor fill invoices are not counted twice."],
+      ["33", "Trace a missing unit on a supplier bill", "manager or CEO", "Search the IMEI. The bill opens. Never scanned versus the bill, Sold on the system, and Still in shop are visible. If the shelf is short of Still in shop, Stock count is the next step."],
+      ["34", "Stock count after a supplier bill gap", "manager then CEO or auditor", "Shelf count is entered. Difference waits for approval. Shop stock does not change until yes. Who did what keeps the names."],
     ],
     [600, 2800, 2600, 3360]
   ),
@@ -1121,6 +1201,9 @@ const children = [
   h1("14. Rules that keep the records safe"),
   bullet("A sale is a finished paper. You do not edit it. You add a payment, a return, or a swap as a new step."),
   bullet("Coming is not In shop. Do not promise a Coming phone as if it is on the shelf."),
+  bullet("Goods from supplier, Shop to shop, and Neighbor shop fill are three different jobs. Do not mix them."),
+  bullet("The supplier bill is the first count if a product is missing. Expected minus recorded is never scanned. Still in shop versus the shelf may mean a sale without an invoice. Count stock. Do not type a new number by hand."),
+  bullet("Shop to shop leaves this shop from a CSV list. Every IMEI on that list must already be In shop at the sending shop."),
   bullet("The same IMEI cannot live two lives. The system will stop a copy."),
   bullet("A walk-in sale needs a name before a return."),
   bullet("Staff cannot sell below the lowest price unless Super Admin turns that on."),

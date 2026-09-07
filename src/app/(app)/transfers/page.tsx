@@ -12,8 +12,11 @@ export default async function TransfersPage() {
   return (
     <div className="page-split">
       <div>
-        <PageHeader title="Send to another shop" description="Phones leave this shop only after you pick the IMEIs. The other shop must confirm they arrived." />
-        <WorkflowSteps current={0} steps={["Pick IMEIs", "On the way", "Other shop confirms", "Now in that shop"]} />
+        <PageHeader
+          title="Shop to shop"
+          description="Move phones and accessories that already belong to Abu Twins from one of our shops to another, such as Iwo Road to Challenge. Upload a CSV of the IMEIs and accessory lines. The receiving shop must confirm what arrived. This is not goods from a supplier, and it is not buying from a neighboring dealer."
+        />
+        <WorkflowSteps current={0} steps={["Upload the CSV", "On the way to our other shop", "That shop confirms", "Now in that shop"]} />
         <div className="space-y-3">
           {transfers.map((transfer) => (
             <div key={transfer.id} className="surface-card p-5">
@@ -21,7 +24,8 @@ export default async function TransfersPage() {
                 <div>
                   <p className="font-semibold">{transfer.transferNumber}</p>
                   <p className="text-sm text-muted-foreground">
-                    {transfer.fromBranch.code} → {transfer.toBranch.code} · {transfer.items[0]?.product.name} × {transfer.items[0]?.quantity}
+                    {transfer.fromBranch.code} → {transfer.toBranch.code}
+                    {transfer.items.map((item) => ` · ${item.product.name} × ${item.quantity}`).join("")}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2 text-sm">
                     {transfer.imeis.map((imei) => (
@@ -36,14 +40,14 @@ export default async function TransfersPage() {
               {transfer.status !== "RECEIVED" ? (
                 <div className="mt-4 border-t border-border pt-4">
                   <p className="mb-2 text-sm text-muted-foreground">
-                    {transfer.toBranch.name} must scan the IMEIs that actually arrived.
+                    {transfer.toBranch.name} must scan or paste every IMEI from the list that actually arrived.
                   </p>
                   <ActionForm action={receiveTransfer} submit="Confirm arrival" className="space-y-2">
                     <input type="hidden" name="id" value={transfer.id} />
                     {transfer.imeis.length ? (
                       <ScanList name="imeis" />
                     ) : (
-                      <p className="text-xs text-muted-foreground">No serials. Confirm the accessory quantity only.</p>
+                      <p className="text-sm text-muted-foreground">No unique numbers on this send. Confirm the accessory quantity only.</p>
                     )}
                   </ActionForm>
                 </div>
@@ -55,7 +59,10 @@ export default async function TransfersPage() {
         </div>
       </div>
       <div className="surface-card p-5">
-        <h3 className="mb-4 font-semibold">Dispatch transfer</h3>
+        <h3 className="mb-2 font-semibold">Send a CSV between our shops</h3>
+        <p className="mb-4 text-sm text-muted-foreground">
+          Do not pick phones one by one on this screen. Put the IMEIs and accessory counts in the file, then send the list.
+        </p>
         <TransferForm
           branches={lookups.branches}
           products={lookups.products}

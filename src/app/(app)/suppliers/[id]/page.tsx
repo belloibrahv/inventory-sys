@@ -12,7 +12,7 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
 
   return (
     <div className="space-y-6">
-      <PageHeader title={supplier.name} description={`${supplier.phone}${supplier.contactPerson ? ` · ${supplier.contactPerson}` : ""}`} />
+      <PageHeader title={supplier.name} description={`${supplier.kind === "NEIGHBOR" ? "Neighboring shop" : "Supplier"} · ${[supplier.city, supplier.country].filter(Boolean).join(", ") || "Origin not set"} · ${supplier.phone}${supplier.contactPerson ? ` · ${supplier.contactPerson}` : ""}`} />
       <div className="grid gap-4 md:grid-cols-3">
         <div className="surface-card p-5">
           <p className="text-sm text-muted-foreground">Still owed</p>

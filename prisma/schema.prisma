@@ -40,6 +40,7 @@ enum IMEIStatus {
   SWAPPED
   DISPOSED
   FAULTY
+  RETURNED_TO_SUPPLIER
 }
 
 enum ProductTracking {
@@ -106,6 +107,7 @@ enum ReturnOutcome {
   REPAIR
   REFUND
   CREDIT_NOTE
+  SEND_TO_SUPPLIER
 }
 
 enum ReturnStatus {
@@ -145,6 +147,17 @@ enum TransferStatus {
   IN_TRANSIT
   RECEIVED
   CANCELLED
+}
+
+enum SupplierKind {
+  SUPPLIER
+  NEIGHBOR
+}
+
+enum NeighborFillStatus {
+  OPEN
+  SOLD
+  SETTLED
 }
 
 enum ExpenseCategory {
@@ -244,6 +257,7 @@ model User {
   incomingLots    IncomingLot[]
   dayCloses       DayClose[]
   parkedSales     ParkedSale[]
+  neighborFills   NeighborFill[]
 
   @@index([email])
   @@index([branchId])
@@ -279,6 +293,7 @@ model Branch {
   incomingLots    IncomingLot[]
   dayCloses       DayClose[]
   parkedSales     ParkedSale[]
+  neighborFills   NeighborFill[]
 
   @@index([code])
   @@index([isActive])
@@ -333,6 +348,7 @@ model Product {
   swaps         Swap[]
   reconItems    ReconciliationItem[]
   incomingItems IncomingItem[]
+  neighborFills NeighborFill[]
 
   @@index([sku])
   @@index([categoryId])
@@ -371,6 +387,8 @@ model ImeiRecord {
   customer     Customer?  @relation(fields: [customerId], references: [id])
   saleId       String?
   sale         Sale?      @relation(fields: [saleId], references: [id])
+  purchaseId     String?
+  purchase       Purchase?  @relation(fields: [purchaseId], references: [id])
   notes          String?
   cosmeticGrade  String?
   batteryHealth  Int?
@@ -379,11 +397,12 @@ model ImeiRecord {
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
-  saleItems SaleItem[]
-  returns   StockReturn[]
-  repairs   Repair[]
-  swapsOld  Swap[]     @relation("SwapOld")
-  swapsNew  Swap[]     @relation("SwapNew")
+  saleItems     SaleItem[]
+  returns       StockReturn[]
+  repairs       Repair[]
+  swapsOld      Swap[]         @relation("SwapOld")
+  swapsNew      Swap[]         @relation("SwapNew")
+  neighborFills NeighborFill[]
 
   @@index([imei1])
   @@index([imei2])
@@ -391,6 +410,7 @@ model ImeiRecord {
   @@index([productId])
   @@index([branchId])
   @@index([status])
+  @@index([purchaseId])
 }
 
 model Inventory {
@@ -412,21 +432,27 @@ model Inventory {
 }
 
 model Supplier {
-  id            String   @id @default(cuid())
+  id            String       @id @default(cuid())
   name          String
   contactPerson String?
   email         String?
   phone         String
   address       String?
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  country       String?
+  city          String?
+  kind          SupplierKind @default(SUPPLIER)
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
-  purchases    Purchase[]
-  imeiRecords  ImeiRecord[]
-  incomingLots IncomingLot[]
+  purchases     Purchase[]
+  imeiRecords   ImeiRecord[]
+  incomingLots  IncomingLot[]
+  stockReturns  StockReturn[]
+  neighborFills NeighborFill[]
 
   @@index([isActive])
+  @@index([kind])
 }
 
 model Purchase {
@@ -443,6 +469,8 @@ model Purchase {
   paidAmount    Decimal        @default(0)
   paymentMethod String?
   notes         String?
+  originCountry String?
+  originCity    String?
   expectedDate  DateTime?
   receivedDate  DateTime?
   createdAt     DateTime       @default(now())
@@ -450,6 +478,7 @@ model Purchase {
 
   items        PurchaseItem[]
   incomingLots IncomingLot[]
+  imeiRecords  ImeiRecord[]
 
   @@index([invoiceNumber])
   @@index([supplierId])
@@ -496,9 +525,10 @@ model Sale {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  items    SaleItem[]
-  payments Payment[]
-  imeis    ImeiRecord[]
+  items         SaleItem[]
+  payments      Payment[]
+  imeis         ImeiRecord[]
+  neighborFills NeighborFill[]
 
   @@index([invoiceNumber])
   @@index([branchId])
@@ -558,6 +588,7 @@ model Customer {
   returns       StockReturn[]
   swaps         Swap[]
   repairs       Repair[]
+  neighborFills NeighborFill[]
 
   @@index([phone])
   @@index([branchId])
@@ -595,16 +626,20 @@ model StockReturn {
   faultClass   FaultClass    @default(FAULTY_STOCK)
   status       ReturnStatus  @default(PENDING)
   refundAmount Decimal?
-  notes        String?
-  approvedBy   String?
-  approvedAt   DateTime?
-  completedAt  DateTime?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  notes            String?
+  supplierId       String?
+  supplier         Supplier?     @relation(fields: [supplierId], references: [id])
+  sentToSupplierAt DateTime?
+  approvedBy       String?
+  approvedAt       DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   @@index([returnNumber])
   @@index([branchId])
   @@index([status])
+  @@index([supplierId])
 }
 
 model Swap {
@@ -938,6 +973,44 @@ model IncomingItem {
 
   @@index([lotId])
   @@index([productId])
+}
+
+model NeighborFill {
+  id                  String             @id @default(cuid())
+  fillNumber          String             @unique
+  branchId            String
+  branch              Branch             @relation(fields: [branchId], references: [id])
+  neighborName        String
+  neighborPhone       String?
+  supplierId          String?
+  supplier            Supplier?          @relation(fields: [supplierId], references: [id])
+  customerId          String
+  customer            Customer           @relation(fields: [customerId], references: [id])
+  productId           String
+  product             Product            @relation(fields: [productId], references: [id])
+  imei1               String?
+  imeiId              String?
+  imei                ImeiRecord?        @relation(fields: [imeiId], references: [id])
+  neighborCost        Decimal
+  sellPrice           Decimal
+  profit              Decimal
+  moneySentToNeighbor Decimal            @default(0)
+  saleId              String?
+  sale                Sale?              @relation(fields: [saleId], references: [id])
+  status              NeighborFillStatus @default(OPEN)
+  paymentMethod       String?
+  notes               String?
+  userId              String
+  user                User               @relation(fields: [userId], references: [id])
+  soldAt              DateTime?
+  settledAt           DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@index([fillNumber])
+  @@index([branchId])
+  @@index([status])
+  @@index([customerId])
 }
 
 model RolePermission {

@@ -12,8 +12,8 @@ export default async function ReturnsPage() {
   return (
     <div className="page-split">
       <div>
-        <PageHeader title="Returns" description="Enter the sold IMEI, say why it came back, wait for approval, then refund, credit, repair, or replace. Walk-in sales need a customer name first. The old invoice is not changed." />
-        <WorkflowSteps current={0} steps={["Enter IMEI", "Say why", "Boss approves", "Refund or replace"]} />
+        <PageHeader title="Returns" description="A buyer brings a phone back. The old invoice stays. After approval you refund, give credit, repair, replace, or send the unit back to the supplier. Shop to shop is a different page." />
+        <WorkflowSteps current={0} steps={["Enter IMEI", "Say why", "Boss approves", "Refund, replace, or send to supplier"]} />
         <div className="space-y-3">
           {rows.map((row) => (
             <div key={row.id} className="surface-card p-5">
@@ -49,7 +49,15 @@ export default async function ReturnsPage() {
                       <Input name="replacementImei" placeholder="In-stock replacement IMEI" />
                     ) : (
                       <p className="text-xs text-muted-foreground">
-                        This will {row.outcome === "REFUND" ? "pay cash back from the amount they already paid" : row.outcome === "REPAIR" ? "open a repair job" : "post a credit note"} without editing the original sale.
+                        This will {
+                          row.outcome === "REFUND"
+                            ? "pay cash back from the amount they already paid"
+                            : row.outcome === "REPAIR"
+                              ? "open a repair job"
+                              : row.outcome === "SEND_TO_SUPPLIER"
+                                ? "send this unit back to the supplier. It will not sit in this shop"
+                                : "post a credit note"
+                        } without editing the original sale.
                       </p>
                     )}
                   </ActionForm>

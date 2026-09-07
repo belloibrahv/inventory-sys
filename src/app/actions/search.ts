@@ -26,7 +26,7 @@ export async function globalSearch(query: string) {
           { serialNumber: { contains: q } },
         ],
       },
-      include: { product: true, branch: true },
+      include: { product: true, branch: true, purchase: { select: { invoiceNumber: true } } },
       take: 6,
     }) : [],
     views.has("view.customers") ? prisma.customer.findMany({
@@ -53,10 +53,25 @@ export async function globalSearch(query: string) {
     views.has("view.purchases") ? prisma.purchase.findMany({
       where: {
         ...branchFilter,
-        invoiceNumber: { contains: q },
+        OR: [
+          { invoiceNumber: { contains: q } },
+          { supplier: { name: { contains: q } } },
+          { items: { some: { product: { OR: [{ name: { contains: q } }, { sku: { contains: q } }] } } } },
+          {
+            imeiRecords: {
+              some: {
+                OR: [
+                  { imei1: { contains: q } },
+                  { imei2: { contains: q } },
+                  { serialNumber: { contains: q } },
+                ],
+              },
+            },
+          },
+        ],
       },
-      include: { supplier: true },
-      take: 4,
+      include: { supplier: true, items: { include: { product: true } } },
+      take: 6,
     }) : [],
     views.has("view.transfers") ? prisma.stockTransfer.findMany({
       where: {
@@ -82,7 +97,7 @@ export async function globalSearch(query: string) {
       kind: "IMEI",
       id: item.id,
       title: item.imei1,
-      hint: `${item.product.name} · ${item.branch.code}`,
+      hint: `${item.product.name} · ${item.branch.code}${item.purchase ? ` · bill ${item.purchase.invoiceNumber}` : ""}`,
       href: `/imei/${item.id}`,
     })),
     ...customers.map((item) => ({
@@ -107,10 +122,10 @@ export async function globalSearch(query: string) {
       href: "/products",
     })),
     ...purchases.map((item) => ({
-      kind: "Purchase",
+      kind: "Supplier bill",
       id: item.id,
       title: item.invoiceNumber,
-      hint: item.supplier.name,
+      hint: `${item.supplier.name}${item.items[0] ? ` · ${item.items[0].product.name}` : ""}`,
       href: `/purchases/${item.id}`,
     })),
     ...transfers.map((item) => ({

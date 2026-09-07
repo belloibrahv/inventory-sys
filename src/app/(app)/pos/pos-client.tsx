@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { createCustomer } from "@/app/actions/parties"
@@ -10,54 +10,39 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { pushSaleQueue } from "@/lib/offline-sales"
+import { applyParkedToTillSnapshot, readTillSnapshot, saveTillSnapshot, type TillBranch, type TillCustomer, type TillImei, type TillProduct, type TillSellLock } from "@/lib/till-catalog"
 import { formatCurrency, money } from "@/lib/utils"
 import { Trash2 } from "lucide-react"
 
-type Imei = {
-  id: string
-  imei1: string
-  serialNumber: string | null
-  productId: string
-  branchId: string
-  product: { name: string; sellingPrice: number; minimumPrice: number }
-}
-
-type Product = {
-  id: string
-  name: string
-  sku: string
-  sellingPrice: number
-  minimumPrice: number
-  serialized: boolean
-  brand: { name: string }
-  stock: Array<{ branchId: string; quantity: number }>
-}
-
-type Customer = { id: string; name: string; phone: string; branchId: string; creditLimit: number; currentBalance: number }
-type Branch = { id: string; name: string; code: string }
-type SellLock = { locked: boolean; dates: string[]; href: string; message: string }
-
 export function PosClient({
-  products,
-  customers,
-  imeis,
-  branches,
+  products: serverProducts,
+  customers: serverCustomers,
+  imeis: serverImeis,
+  branches: serverBranches,
   defaultBranchId,
-  canOverrideFloor,
-  sellLocks,
+  canOverrideFloor: serverCanOverrideFloor,
+  sellLocks: serverSellLocks,
 }: {
-  products: Product[]
-  customers: Customer[]
-  imeis: Imei[]
-  branches: Branch[]
+  products: TillProduct[]
+  customers: TillCustomer[]
+  imeis: TillImei[]
+  branches: TillBranch[]
   defaultBranchId?: string | null
   canOverrideFloor?: boolean
-  sellLocks?: Record<string, SellLock>
+  sellLocks?: Record<string, TillSellLock>
 }) {
   const router = useRouter()
+  const [products, setProducts] = useState(serverProducts)
+  const [customers, setCustomers] = useState(serverCustomers)
+  const [imeis, setImeis] = useState(serverImeis)
+  const [branches, setBranches] = useState(serverBranches)
+  const [canOverrideFloor, setCanOverrideFloor] = useState(Boolean(serverCanOverrideFloor))
+  const [sellLocks, setSellLocks] = useState(serverSellLocks)
+  const [usingDeviceList, setUsingDeviceList] = useState(false)
+  const [lineDown, setLineDown] = useState(false)
   const [query, setQuery] = useState("")
   const [customerId, setCustomerId] = useState("")
-  const [branchId, setBranchId] = useState(defaultBranchId || branches[0]?.id || "")
+  const [branchId, setBranchId] = useState(defaultBranchId || serverBranches[0]?.id || "")
   const [method, setMethod] = useState<"CASH" | "TRANSFER" | "POS" | "CREDIT">("CASH")
   const [paid, setPaid] = useState(0)
   const [notes, setNotes] = useState("")
@@ -67,6 +52,56 @@ export function PosClient({
   const [savingCustomer, setSavingCustomer] = useState(false)
   const [cart, setCart] = useState<Array<{ productId: string; imeiId?: string; name: string; imei?: string; unitPrice: number; minPrice: number; quantity: number }>>([])
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    const onLine = () => setLineDown(!navigator.onLine)
+    onLine()
+    window.addEventListener("online", onLine)
+    window.addEventListener("offline", onLine)
+    return () => {
+      window.removeEventListener("online", onLine)
+      window.removeEventListener("offline", onLine)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const snapshot = {
+      products: serverProducts,
+      customers: serverCustomers,
+      imeis: serverImeis,
+      branches: serverBranches,
+      defaultBranchId,
+      canOverrideFloor: serverCanOverrideFloor,
+      sellLocks: serverSellLocks,
+    }
+    void (async () => {
+      const online = navigator.onLine
+      if (online && (serverImeis.length || serverCustomers.length || serverProducts.length)) {
+        await saveTillSnapshot(snapshot)
+        return
+      }
+      const stored = await readTillSnapshot()
+      if (cancelled) return
+      if (stored) {
+        setProducts(stored.products)
+        setCustomers(stored.customers)
+        setImeis(stored.imeis)
+        setBranches(stored.branches)
+        setCanOverrideFloor(Boolean(stored.canOverrideFloor))
+        setSellLocks(stored.sellLocks)
+        if (stored.defaultBranchId && !branchId) setBranchId(stored.defaultBranchId)
+        setUsingDeviceList(true)
+        return
+      }
+      if (!online && (serverImeis.length || serverCustomers.length)) {
+        await saveTillSnapshot(snapshot)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [serverProducts, serverCustomers, serverImeis, serverBranches, defaultBranchId, serverCanOverrideFloor, serverSellLocks])
 
   const branchImeis = imeis.filter((item) => item.branchId === branchId && !cart.some((line) => line.imeiId === item.id))
   const q = query.trim().toLowerCase()
@@ -97,6 +132,10 @@ export function PosClient({
   }
 
   async function saveCustomer() {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("Add a new name while the line is up. Use a customer already on this phone.")
+      return
+    }
     if (!newName.trim() || !newPhone.trim()) {
       toast.error("Name and phone are required for a new customer.")
       return
@@ -132,7 +171,7 @@ export function PosClient({
     toast.error("That IMEI is not In shop here. Check Goods on the way or the shop.")
   }
 
-  function addImei(item: Imei) {
+  function addImei(item: TillImei) {
     const price = money(item.product.sellingPrice)
     setCart((current) => [
       ...current,
@@ -150,7 +189,7 @@ export function PosClient({
     setQuery("")
   }
 
-  function addAccessory(product: Product) {
+  function addAccessory(product: TillProduct) {
     const price = money(product.sellingPrice)
     setCart((current) => {
       const existing = current.find((line) => !line.imeiId && line.productId === product.id)
@@ -206,23 +245,29 @@ export function PosClient({
       return
     }
     setBusy(true)
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
+    async function keepOnDevice() {
       await pushSaleQueue(payload)
+      const next = await applyParkedToTillSnapshot(payload)
+      if (next) {
+        setImeis(next.imeis)
+        setProducts(next.products)
+        setUsingDeviceList(true)
+      }
       setBusy(false)
-      toast.message("Saved on this device. Send it when the line returns.")
       setCart([])
       setPaid(0)
+    }
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      await keepOnDevice()
+      toast.message("Saved on this device. Send it when the line returns.")
       return
     }
     let result: Awaited<ReturnType<typeof checkoutSale>>
     try {
       result = await checkoutSale(payload)
     } catch {
-      await pushSaleQueue(payload)
-      setBusy(false)
+      await keepOnDevice()
       toast.message("The server did not answer. This sale is waiting on this device.")
-      setCart([])
-      setPaid(0)
       return
     }
     setBusy(false)
@@ -237,6 +282,11 @@ export function PosClient({
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+      {usingDeviceList || lineDown ? (
+        <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-950 xl:col-span-2 dark:bg-amber-500/10 dark:text-amber-100">
+          Selling from the last In shop list saved on this phone. Only names already on this phone. Coming phones are not here. The invoice is born when the line returns.
+        </div>
+      ) : null}
       {sellLock?.locked ? (
         <div className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-950 xl:col-span-2 dark:bg-rose-500/10 dark:text-rose-100">
           <p>{sellLock.message}</p>
@@ -392,6 +442,10 @@ export function PosClient({
             <p className="mt-1 text-xs text-muted-foreground">
               Owing {formatCurrency(customer.currentBalance)}
               {customer.creditLimit > 0 ? ` · limit ${formatCurrency(customer.creditLimit)}` : ""}
+            </p>
+          ) : lineDown ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              New buyers cannot be saved while the line is down. Pick a name already on this phone, or take a walk-in who pays in full.
             </p>
           ) : (
             <div className="mt-2 grid grid-cols-2 gap-2">

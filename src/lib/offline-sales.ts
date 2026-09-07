@@ -29,6 +29,7 @@ class ShopDatabase extends Dexie {
   parkedSales!: Table<QueuedSale, string>
   offlineEvents!: Table<OfflineEvent, string>
   meta!: Table<{ key: string; value: string }, string>
+  tillSnapshots!: Table<{ key: string; savedAt: string; json: string }, string>
 
   constructor() {
     super("abutwins-shop")
@@ -36,6 +37,12 @@ class ShopDatabase extends Dexie {
       parkedSales: "id, createdAt",
       offlineEvents: "id, at, kind",
       meta: "key",
+    })
+    this.version(2).stores({
+      parkedSales: "id, createdAt",
+      offlineEvents: "id, at, kind",
+      meta: "key",
+      tillSnapshots: "key, savedAt",
     })
   }
 }
@@ -47,6 +54,10 @@ function browserDb() {
   if (typeof window === "undefined") return null
   if (!db) db = new ShopDatabase()
   return db
+}
+
+export function getShopDb() {
+  return browserDb()
 }
 
 function notify() {

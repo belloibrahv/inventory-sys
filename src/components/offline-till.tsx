@@ -1,15 +1,18 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { PosClient } from "@/app/(app)/pos/pos-client"
 import { flushParkedSales } from "@/lib/flush-parked"
 import { formatLagosStamp } from "@/lib/lagos-day"
 import { readSaleQueue, type QueuedSale } from "@/lib/offline-sales"
+import { readTillSnapshot, type TillSnapshot } from "@/lib/till-catalog"
 import { formatCurrency } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 
 export function OfflineTill() {
   const [online, setOnline] = useState(true)
   const [queue, setQueue] = useState<QueuedSale[]>([])
+  const [snapshot, setSnapshot] = useState<TillSnapshot | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState("")
 
@@ -17,6 +20,7 @@ export function OfflineTill() {
     const refresh = async () => {
       setOnline(navigator.onLine)
       setQueue(await readSaleQueue())
+      setSnapshot(await readTillSnapshot())
     }
     void refresh()
     const onChange = () => void refresh()
@@ -36,6 +40,7 @@ export function OfflineTill() {
     const result = await flushParkedSales("manual")
     setBusy(false)
     setQueue(await readSaleQueue())
+    setSnapshot(await readTillSnapshot())
     if (result.error) {
       setMessage(result.error)
       return
@@ -50,7 +55,7 @@ export function OfflineTill() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="bg-[#001BCE] px-6 py-6 text-white">
-        <div className="mx-auto flex max-w-xl items-center gap-3">
+        <div className={`mx-auto flex items-center gap-3 ${snapshot ? "max-w-6xl" : "max-w-xl"}`}>
           <img src="/brand/ab-mark.jpg" alt="" width={48} height={48} className="rounded-full bg-white ring-2 ring-[#7CFF86]" />
           <div>
             <p className="text-lg font-semibold">Abu Twins Softskills</p>
@@ -59,13 +64,15 @@ export function OfflineTill() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-xl space-y-5 px-6 py-8">
+      <main className={`mx-auto space-y-5 px-6 py-8 ${snapshot ? "max-w-6xl" : "max-w-xl"}`}>
         <div className="rounded-2xl bg-white p-5 shadow-sm">
           <h1 className="text-xl font-semibold">This device cannot reach the shop server</h1>
           <p className="mt-2 text-sm text-slate-700">
             {online
               ? "The line is back. Open Sell now to keep selling, or send parked work from here."
-              : "Parked sales stay on this phone. Refresh is safe. When the line returns, send the work. The invoice is only born on the server."}
+              : snapshot
+                ? "Sell from the last In shop list saved on this phone. Parked sales stay here. The invoice is only born on the server."
+                : "Parked sales stay on this phone. Open Sell now once while the line is up so this phone can keep the shop list."}
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <a
@@ -80,6 +87,11 @@ export function OfflineTill() {
               </Button>
             ) : null}
           </div>
+          {snapshot ? (
+            <p className="mt-3 text-xs text-slate-600">
+              Last shop list saved {formatLagosStamp(new Date(snapshot.savedAt))}. {snapshot.imeis.length} In shop IMEIs. {snapshot.customers.length} named customers.
+            </p>
+          ) : null}
           {message ? <p className="mt-3 text-sm text-slate-700">{message}</p> : null}
         </div>
 
@@ -100,6 +112,21 @@ export function OfflineTill() {
             </ul>
           )}
         </div>
+
+        {snapshot ? (
+          <div className="rounded-2xl bg-white p-5 shadow-sm">
+            <h2 className="mb-4 text-sm font-semibold">Sell from the list on this phone</h2>
+            <PosClient
+              products={snapshot.products}
+              customers={snapshot.customers}
+              imeis={snapshot.imeis}
+              branches={snapshot.branches}
+              defaultBranchId={snapshot.defaultBranchId}
+              canOverrideFloor={snapshot.canOverrideFloor}
+              sellLocks={snapshot.sellLocks}
+            />
+          </div>
+        ) : null}
       </main>
     </div>
   )

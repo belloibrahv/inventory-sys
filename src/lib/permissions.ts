@@ -14,7 +14,8 @@ export const VIEW_PERMS = [
   { key: "view.purchases", label: "Goods from supplier", href: "/purchases" },
   { key: "view.customers", label: "Customers", href: "/customers" },
   { key: "view.suppliers", label: "Suppliers", href: "/suppliers" },
-  { key: "view.transfers", label: "Send to another shop", href: "/transfers" },
+  { key: "view.transfers", label: "Shop to shop", href: "/transfers" },
+  { key: "view.neighbor-fills", label: "Neighbor shop fill", href: "/neighbor-fills" },
   { key: "view.returns", label: "Returns", href: "/returns" },
   { key: "view.swaps", label: "Swaps", href: "/swaps" },
   { key: "view.repairs", label: "Repairs", href: "/repairs" },
@@ -25,6 +26,7 @@ export const VIEW_PERMS = [
   { key: "view.branches", label: "Shops", href: "/branches" },
   { key: "view.staff", label: "Staff", href: "/staff" },
   { key: "view.access", label: "Who can see what", href: "/staff/access" },
+  { key: "view.profits", label: "Profit", href: "/profits" },
   { key: "view.reports", label: "Reports", href: "/reports" },
   { key: "view.audit", label: "Who did what", href: "/audit" },
   { key: "view.notifications", label: "Alerts", href: "/notifications" },
@@ -36,7 +38,8 @@ export const ACTION_PERMS = [
   { key: "action.catalog", label: "Add items and change prices" },
   { key: "action.intake", label: "Receive phones and supplier goods" },
   { key: "action.incoming", label: "Book goods before they arrive" },
-  { key: "action.transfer", label: "Send and receive goods between shops" },
+  { key: "action.transfer", label: "Send and receive goods between Abu Twins shops" },
+  { key: "action.neighbor", label: "Record a fill from a neighboring shop" },
   { key: "action.return", label: "Record returns" },
   { key: "action.swap", label: "Record swaps" },
   { key: "action.repair", label: "Handle repairs" },
@@ -60,23 +63,23 @@ const DEFAULTS: Record<UserRole, string[]> = {
   CEO: ALL.filter((key) => key !== "view.access" && key !== "action.override_floor" && key !== "action.settings"),
   AUDITOR: V(
     "view.dashboard", "view.products", "view.imei", "view.inventory", "view.incoming", "view.sales", "view.purchases",
-    "view.customers", "view.suppliers", "view.transfers", "view.returns", "view.swaps", "view.repairs",
-    "view.reconciliation", "view.finance", "view.expenses", "view.approvals", "view.branches",
+    "view.customers", "view.suppliers", "view.transfers", "view.neighbor-fills", "view.returns", "view.swaps", "view.repairs",
+    "view.reconciliation", "view.finance", "view.expenses", "view.profits", "view.approvals", "view.branches",
     "view.reports", "view.audit", "view.notifications",
     "action.approve", "action.recon", "action.all_branches"
   ),
   ACCOUNTANT: V(
     "view.dashboard", "view.sales", "view.customers", "view.suppliers", "view.purchases",
-    "view.finance", "view.expenses", "view.reports", "view.notifications",
+    "view.neighbor-fills", "view.finance", "view.expenses", "view.profits", "view.reports", "view.notifications",
     "action.sell", "action.finance", "action.all_branches"
   ),
   BRANCH_MANAGER: V(
     "view.dashboard", "view.products", "view.imei", "view.inventory", "view.incoming", "view.sales", "view.pos",
-    "view.purchases", "view.customers", "view.suppliers", "view.transfers", "view.returns",
-    "view.swaps", "view.repairs", "view.reconciliation", "view.finance", "view.expenses",
+    "view.purchases", "view.customers", "view.suppliers", "view.transfers", "view.neighbor-fills", "view.returns",
+    "view.swaps", "view.repairs", "view.reconciliation", "view.finance", "view.expenses", "view.profits",
     "view.approvals", "view.staff", "view.reports", "view.notifications",
-    "action.sell", "action.catalog", "action.intake", "action.incoming", "action.transfer", "action.return",
-    "action.swap", "action.repair", "action.recon", "action.approve", "action.finance", "action.staff"
+    "action.sell", "action.catalog", "action.intake", "action.incoming", "action.transfer", "action.neighbor",
+    "action.return", "action.swap", "action.repair", "action.recon", "action.approve", "action.finance", "action.staff"
   ),
   VAULT_MANAGER: V(
     "view.dashboard", "view.products", "view.imei", "view.inventory", "view.incoming", "view.purchases",
@@ -84,12 +87,12 @@ const DEFAULTS: Record<UserRole, string[]> = {
     "action.intake", "action.incoming", "action.transfer", "action.catalog"
   ),
   CASHIER: V(
-    "view.dashboard", "view.pos", "view.sales", "view.customers", "view.returns", "view.notifications",
-    "action.sell", "action.return"
+    "view.dashboard", "view.pos", "view.sales", "view.customers", "view.neighbor-fills", "view.returns", "view.notifications",
+    "action.sell", "action.neighbor", "action.return"
   ),
   SALES_EXECUTIVE: V(
-    "view.dashboard", "view.pos", "view.sales", "view.customers", "view.products", "view.notifications",
-    "action.sell"
+    "view.dashboard", "view.pos", "view.sales", "view.customers", "view.products", "view.neighbor-fills", "view.notifications",
+    "action.sell", "action.neighbor"
   ),
   ENGINEER: V(
     "view.dashboard", "view.imei", "view.repairs", "view.returns", "view.customers", "view.notifications",
@@ -112,8 +115,8 @@ export async function ensureRolePermissions() {
 }
 
 export async function getAllowedKeys(role: UserRole) {
-  if (role === "SUPER_ADMIN") return new Set(ALL_PERM_KEYS)
   await ensureRolePermissions()
+  if (role === "SUPER_ADMIN") return new Set(ALL_PERM_KEYS)
   const rows = await prisma.rolePermission.findMany({ where: { role } })
   if (rows.length === 0) return new Set(DEFAULTS[role] ?? [])
   return new Set(rows.filter((row) => row.allowed).map((row) => row.permKey))

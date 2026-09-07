@@ -134,6 +134,7 @@ export async function getImeiDetail(id: string) {
       supplier: true,
       customer: true,
       sale: { include: { customer: true, branch: true } },
+      purchase: { select: { id: true, invoiceNumber: true } },
       returns: { include: { customer: true }, orderBy: { createdAt: "desc" } },
       repairs: { include: { customer: true }, orderBy: { createdAt: "desc" } },
       swapsOld: { include: { customer: true, newProduct: true }, orderBy: { createdAt: "desc" } },

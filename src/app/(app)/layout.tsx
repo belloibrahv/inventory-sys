@@ -6,7 +6,7 @@ import { AppFrame } from "@/components/layout/frame"
 import { getAllowedKeys, hrefsForKeys, pathIsAllowed } from "@/lib/permissions"
 import { writeAudit } from "@/lib/audit"
 
-const WATCHED = ["/audit", "/settings", "/staff", "/staff/access", "/finance", "/finance/close", "/reports"]
+const WATCHED = ["/audit", "/settings", "/staff", "/staff/access", "/finance", "/finance/close", "/reports", "/profits"]
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser()

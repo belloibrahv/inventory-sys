@@ -8,7 +8,7 @@ import { formatCurrency, formatDateTime, money } from "@/lib/utils"
 import { statusLabel } from "@/lib/status"
 import { warrantyState } from "@/lib/warranty"
 
-const lifecycle = ["RECEIVED", "IN_STOCK", "TRANSFERRED", "SOLD", "RETURNED", "FAULTY", "REPAIRED", "SWAPPED", "DISPOSED"]
+const lifecycle = ["RECEIVED", "IN_STOCK", "TRANSFERRED", "SOLD", "RETURNED", "FAULTY", "RETURNED_TO_SUPPLIER", "REPAIRED", "SWAPPED", "DISPOSED"]
 
 export default async function ImeiDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -61,6 +61,14 @@ export default async function ImeiDetailPage({ params }: { params: Promise<{ id:
         <div className="surface-card p-5 text-sm">
           <h3 className="mb-3 font-semibold">Unit history</h3>
           <div className="space-y-3">
+            {record.purchase ? (
+              <p>
+                Supplier bill{" "}
+                <Link href={`/purchases/${record.purchase.id}`} className="font-medium text-primary">
+                  {record.purchase.invoiceNumber}
+                </Link>
+              </p>
+            ) : null}
             {record.sale ? (
               <p>
                 Invoice{" "}

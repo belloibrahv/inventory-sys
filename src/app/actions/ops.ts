@@ -15,9 +15,18 @@ import { canApprove, canManageFinance, canSeeAllBranches, scopedBranchId } from 
 import { can } from "@/lib/permissions"
 import { generateDocNumber, money } from "@/lib/utils"
 import { warrantyState } from "@/lib/warranty"
+import { cell, readTableFile } from "@/lib/table-file"
+import { buildBillTrace, type SupplierBillTrace } from "@/lib/supplier-trace"
+import { watBounds, watDayKey } from "@/lib/lagos-day"
 
 function parseImeis(raw: string) {
   return [...new Set(raw.split(/[\s,;]+/).map((item) => item.trim()).filter((item) => item.length >= 14))]
+}
+
+function parseTransferIds(raw: string) {
+  const match = raw.match(/IMEIs:\s*(.+)/i)
+  const list = match ? match[1] : raw
+  return [...new Set(list.split(/[\s,;]+/).map((item) => item.trim()).filter((item) => item.length >= 4 && !item.includes(":")))]
 }
 
 function refreshOps() {
@@ -37,6 +46,8 @@ function refreshOps() {
     "/audit",
     "/staff",
     "/suppliers",
+    "/neighbor-fills",
+    "/profits",
   ]) {
     revalidatePath(path)
   }
@@ -50,22 +61,174 @@ async function notify(userId: string, title: string, message: string, actionUrl:
   })
 }
 
-export async function getPurchases() {
+async function attachImeisToPurchases() {
+  const orphanCount = await prisma.imeiRecord.count({
+    where: { purchaseId: null, notes: { not: null } },
+  })
+  if (orphanCount === 0) return
+  const bills = await prisma.purchase.findMany({
+    select: {
+      id: true,
+      invoiceNumber: true,
+      incomingLots: { select: { lotNumber: true } },
+    },
+  })
+  for (const bill of bills) {
+    const needles = [bill.invoiceNumber, ...bill.incomingLots.map((lot) => lot.lotNumber)].filter(Boolean)
+    if (!needles.length) continue
+    await prisma.imeiRecord.updateMany({
+      where: {
+        purchaseId: null,
+        OR: needles.map((needle) => ({ notes: { contains: needle } })),
+      },
+      data: { purchaseId: bill.id },
+    })
+  }
+}
+
+function trackingOf(value: string | undefined): "IMEI" | "SERIAL" | "NONE" {
+  if (value === "SERIAL") return "SERIAL"
+  if (value === "NONE") return "NONE"
+  return "IMEI"
+}
+
+async function accessorySoldSince(productId: string, branchId: string, since: Date) {
+  const today = watBounds(watDayKey())
+  const [all, todayRows] = await Promise.all([
+    prisma.saleItem.aggregate({
+      where: {
+        productId,
+        imeiId: null,
+        sale: {
+          branchId,
+          status: "COMPLETED",
+          saleType: { not: "NEIGHBOR_FILL" },
+          saleDate: { gte: since },
+        },
+      },
+      _sum: { quantity: true },
+    }),
+    prisma.saleItem.aggregate({
+      where: {
+        productId,
+        imeiId: null,
+        sale: {
+          branchId,
+          status: "COMPLETED",
+          saleType: { not: "NEIGHBOR_FILL" },
+          saleDate: { gte: today.start, lt: today.end },
+        },
+      },
+      _sum: { quantity: true },
+    }),
+  ])
+  return {
+    soldQty: all._sum.quantity ?? 0,
+    soldToday: todayRows._sum.quantity ?? 0,
+  }
+}
+
+const purchaseInclude = {
+  supplier: true,
+  branch: true,
+  user: true,
+  items: { include: { product: true } },
+  incomingLots: { select: { id: true, lotNumber: true, status: true, createdAt: true } },
+  imeiRecords: {
+    include: {
+      branch: true,
+      customer: true,
+      sale: { select: { id: true, invoiceNumber: true, saleDate: true, status: true } },
+    },
+    orderBy: { createdAt: "asc" as const },
+  },
+}
+
+function purchaseSearchWhere(q: string) {
+  return {
+    OR: [
+      { invoiceNumber: { contains: q } },
+      { originCity: { contains: q } },
+      { originCountry: { contains: q } },
+      { notes: { contains: q } },
+      { supplier: { name: { contains: q } } },
+      { items: { some: { product: { OR: [{ name: { contains: q } }, { sku: { contains: q } }] } } } },
+      {
+        imeiRecords: {
+          some: {
+            OR: [
+              { imei1: { contains: q } },
+              { imei2: { contains: q } },
+              { serialNumber: { contains: q } },
+            ],
+          },
+        },
+      },
+    ],
+  }
+}
+
+export async function getPurchases(search?: string) {
   const user = await requireUser()
   const branchId = await scopedBranchId(user.role, user.branchId)
-  return prisma.purchase.findMany({
-    where: branchId ? { branchId } : undefined,
-    include: { supplier: true, branch: true, user: true, items: { include: { product: true } } },
+  await attachImeisToPurchases()
+  const q = search?.trim() ?? ""
+  const purchases = await prisma.purchase.findMany({
+    where: {
+      ...(branchId ? { branchId } : {}),
+      ...(q.length >= 2 ? purchaseSearchWhere(q) : {}),
+    },
+    include: purchaseInclude,
     orderBy: { createdAt: "desc" },
   })
+
+  const traces = await Promise.all(
+    purchases.map(async (purchase) => {
+      const item = purchase.items[0]
+      const tracking = trackingOf(item?.product.tracking)
+      const accessory =
+        tracking === "NONE" && item
+          ? {
+              receivedQty: item.receivedQty,
+              ...(await accessorySoldSince(item.productId, purchase.branchId, purchase.createdAt)),
+            }
+          : undefined
+      const trace = buildBillTrace(
+        item?.quantity ?? 0,
+        tracking,
+        purchase.imeiRecords.map((row) => ({ status: row.status, saleDate: row.sale?.saleDate ?? null })),
+        accessory
+      )
+      return { ...purchase, trace }
+    })
+  )
+  return traces
 }
 
 export async function getPurchase(id: string) {
   await requireUser()
-  return prisma.purchase.findUnique({
+  await attachImeisToPurchases()
+  const purchase = await prisma.purchase.findUnique({
     where: { id },
-    include: { supplier: true, branch: true, user: true, items: { include: { product: true } }, incomingLots: true },
+    include: { ...purchaseInclude, incomingLots: true },
   })
+  if (!purchase) return null
+  const item = purchase.items[0]
+  const tracking = trackingOf(item?.product.tracking)
+  const accessory =
+    tracking === "NONE" && item
+      ? {
+          receivedQty: item.receivedQty,
+          ...(await accessorySoldSince(item.productId, purchase.branchId, purchase.createdAt)),
+        }
+      : undefined
+  const trace: SupplierBillTrace = buildBillTrace(
+    item?.quantity ?? 0,
+    tracking,
+    purchase.imeiRecords.map((row) => ({ status: row.status, saleDate: row.sale?.saleDate ?? null })),
+    accessory
+  )
+  return { ...purchase, trace }
 }
 
 export async function createPurchase(formData: FormData) {
@@ -75,7 +238,18 @@ export async function createPurchase(formData: FormData) {
   const productId = String(formData.get("productId"))
   const quantity = Number(formData.get("quantity") || 0)
   const costPrice = Number(formData.get("costPrice") || 0)
-  if (!supplierId || !branchId || !productId || quantity < 1) return { error: "Complete the purchase form." }
+  if (!supplierId || !branchId || !productId || quantity < 1) return { error: "Complete the expected-goods form." }
+
+  const supplier = await prisma.supplier.findUnique({ where: { id: supplierId } })
+  if (!supplier) return { error: "Pick a supplier from the list." }
+  if (supplier.kind === "NEIGHBOR") {
+    return { error: "A neighboring shop is not a supplier carton. Use Neighbor shop fill." }
+  }
+
+  const originCountry = String(formData.get("originCountry") || "").trim() || supplier.country
+  const originCity = String(formData.get("originCity") || "").trim() || supplier.city
+  const expectedRaw = String(formData.get("expectedDate") || "").trim()
+  const expectedDate = expectedRaw ? new Date(`${expectedRaw}T12:00:00`) : null
 
   const purchase = await prisma.purchase.create({
     data: {
@@ -86,6 +260,9 @@ export async function createPurchase(formData: FormData) {
       status: "ORDERED",
       totalAmount: (quantity * costPrice).toFixed(2),
       notes: String(formData.get("notes") || "") || null,
+      originCountry,
+      originCity,
+      expectedDate,
       items: {
         create: {
           productId,
@@ -171,6 +348,7 @@ export async function receivePurchaseImeis(formData: FormData) {
           productId: item.productId,
           supplierId: purchase.supplierId,
           branchId: purchase.branchId,
+          purchaseId: purchase.id,
           status: "IN_STOCK",
           notes: `Received on ${purchase.invoiceNumber}`,
         },
@@ -348,6 +526,7 @@ export async function createReturn(formData: FormData) {
       outcome: String(formData.get("outcome")) as ReturnOutcome,
       faultClass: String(formData.get("faultClass") || "FAULTY_STOCK") as FaultClass,
       notes: String(formData.get("notes") || "") || null,
+      supplierId: imei.supplierId,
       refundAmount: (asked > 0 ? asked : money(line?.totalPrice) || money(imei.product.sellingPrice)).toFixed(2),
     },
   })
@@ -444,6 +623,17 @@ export async function completeReturn(formData: FormData) {
       await tx.imeiRecord.update({ where: { id: record.imeiId }, data: { status: "FAULTY" } })
     }
 
+    if (record.outcome === "SEND_TO_SUPPLIER" && record.imeiId) {
+      await tx.imeiRecord.update({
+        where: { id: record.imeiId },
+        data: {
+          status: "RETURNED_TO_SUPPLIER",
+          customerId: null,
+          notes: [record.imei?.notes, `Sent back to supplier on ${record.returnNumber}`].filter(Boolean).join(" · "),
+        },
+      })
+    }
+
     if (record.outcome === "REPLACEMENT") {
       const fresh = await tx.imeiRecord.findUnique({ where: { imei1: replacementImei } })
       if (!fresh || fresh.status !== "IN_STOCK") {
@@ -472,7 +662,7 @@ export async function completeReturn(formData: FormData) {
       }
     }
 
-    if (record.outcome !== "REPLACEMENT" && record.outcome !== "REPAIR" && record.imeiId) {
+    if (record.outcome !== "REPLACEMENT" && record.outcome !== "REPAIR" && record.outcome !== "SEND_TO_SUPPLIER" && record.imeiId) {
       await tx.imeiRecord.update({
         where: { id: record.imeiId },
         data: {
@@ -496,6 +686,8 @@ export async function completeReturn(formData: FormData) {
         approvedBy: user.id,
         approvedAt: new Date(),
         completedAt: new Date(),
+        sentToSupplierAt: record.outcome === "SEND_TO_SUPPLIER" ? new Date() : record.sentToSupplierAt,
+        supplierId: record.supplierId || record.imei?.supplierId || null,
       },
     })
     await tx.auditLog.create({
@@ -894,49 +1086,148 @@ export async function getTransfers() {
     },
     orderBy: { createdAt: "desc" },
   })
-  const serials = rows.flatMap((row) => parseImeis(row.notes ?? ""))
+  const serials = rows.flatMap((row) => parseTransferIds(row.notes ?? ""))
   const records = serials.length
     ? await prisma.imeiRecord.findMany({
-        where: { imei1: { in: serials } },
+        where: { OR: [{ imei1: { in: serials } }, { serialNumber: { in: serials } }] },
         include: { product: true },
       })
     : []
   return rows.map((row) => ({
     ...row,
-    imeis: parseImeis(row.notes ?? "")
-      .map((imei1) => records.find((item) => item.imei1 === imei1))
+    imeis: parseTransferIds(row.notes ?? "")
+      .map((code) => records.find((item) => item.imei1 === code || item.serialNumber === code))
       .filter((item): item is (typeof records)[number] => Boolean(item)),
   }))
 }
 
-export async function createTransfer(formData: FormData) {
+export async function createTransfer(formData: FormData): Promise<{
+  error?: string
+  errors?: string[]
+  success?: boolean
+}> {
   const user = await requireUser()
-  if (!(await can(user.role, "action.transfer"))) return { error: "You cannot dispatch transfers." }
-  const fromBranchId = String(formData.get("fromBranchId"))
-  const toBranchId = String(formData.get("toBranchId"))
-  const picked = formData.getAll("imei").map(String).filter((item) => item.length >= 14)
-  const imeis = [...new Set([...parseImeis(String(formData.get("imeis") || "")), ...picked])]
-  let productId = String(formData.get("productId") || "")
-  const quantity = imeis.length || Number(formData.get("quantity") || 0)
-  if (fromBranchId === toBranchId) return { error: "Choose two different branches." }
-  if (quantity < 1) return { error: "Tick IMEIs to move, or enter an accessory quantity." }
+  if (!(await can(user.role, "action.transfer"))) return { error: "You cannot send goods between our shops." }
+  const fromBranchId = String(formData.get("fromBranchId") || "")
+  const toBranchId = String(formData.get("toBranchId") || "")
+  if (!fromBranchId || !toBranchId) return { error: "Pick the sending shop and the receiving shop." }
+  if (fromBranchId === toBranchId) return { error: "Choose two different Abu Twins shops." }
 
   const scoped = await scopedBranchId(user.role, user.branchId)
-  if (scoped && fromBranchId !== scoped) return { error: "You can only dispatch from your own branch." }
+  if (scoped && fromBranchId !== scoped) return { error: "You can only send from your own shop." }
 
-  let records: Array<{ imei1: string; productId: string; status: string; branchId: string }> = []
-  if (imeis.length) {
-    records = await prisma.imeiRecord.findMany({ where: { imei1: { in: imeis } } })
-    if (records.length !== imeis.length) return { error: "One or more IMEIs were not found." }
-    if (records.some((row) => row.status !== "IN_STOCK" || row.branchId !== fromBranchId)) {
-      return { error: "Every IMEI must be in stock at the sending branch." }
-    }
-    const products = new Set(records.map((row) => row.productId))
-    if (products.size !== 1) return { error: "Send one phone model at a time. Split mixed phones into two sends." }
-    productId = records[0].productId
+  const file = formData.get("file")
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose the CSV file of goods leaving this shop." }
+  if (file.size > 2_000_000) return { error: "That file is too big. Use a file under 2 MB." }
+
+  let rows: Record<string, string>[]
+  try {
+    rows = await readTableFile(file)
+  } catch {
+    return { error: "We could not read that file. Save it as CSV or Excel and try again." }
   }
-  if (!productId) return { error: "Choose the product for this transfer." }
+  if (!rows.length) return { error: "The file has no rows under the header line." }
+  if (rows.length > 200) return { error: "Send up to 200 lines at a time." }
 
+  const products = await prisma.product.findMany({ where: { isActive: true } })
+  const bySku = new Map(products.map((row) => [row.sku.toLowerCase(), row]))
+  const byName = new Map<string, typeof products>()
+  for (const product of products) {
+    const key = product.name.toLowerCase()
+    const list = byName.get(key) ?? []
+    list.push(product)
+    byName.set(key, list)
+  }
+
+  type PhoneLine = { imei1: string; productId: string; color: string; extra: string }
+  const phones: PhoneLine[] = []
+  const accessoryQty = new Map<string, number>()
+  const seen = new Set<string>()
+  const errors: string[] = []
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index]
+    const line = index + 2
+    const imei = cell(row, "imei", "imei1", "phone")
+    const serial = cell(row, "serial", "serial_number", "sn")
+    const sku = cell(row, "item_code", "sku", "code")
+    const name = cell(row, "name", "product", "item")
+    const color = cell(row, "color")
+    const extra = cell(row, "notes", "note", "remark")
+    const qtyRaw = cell(row, "quantity", "qty", "pieces")
+    const code = imei || serial
+
+    if (!code && !sku && !name) continue
+
+    if (code) {
+      if (seen.has(code)) {
+        errors.push(`Line ${line}: ${code} is listed twice.`)
+        continue
+      }
+      seen.add(code)
+      const record = await prisma.imeiRecord.findFirst({
+        where: { OR: [{ imei1: code }, { imei2: code }, { serialNumber: code }] },
+        include: { product: true },
+      })
+      if (!record) {
+        errors.push(`Line ${line}: ${code} is not on this system.`)
+        continue
+      }
+      if (record.status !== "IN_STOCK" || record.branchId !== fromBranchId) {
+        errors.push(`Line ${line}: ${record.imei1} is not In shop at the sending shop.`)
+        continue
+      }
+      if (sku && record.product.sku.toLowerCase() !== sku.toLowerCase()) {
+        errors.push(`Line ${line}: ${record.imei1} belongs to ${record.product.sku}, not ${sku}.`)
+        continue
+      }
+      phones.push({ imei1: record.imei1, productId: record.productId, color, extra })
+      continue
+    }
+
+    const product =
+      (sku ? bySku.get(sku.toLowerCase()) : undefined) ??
+      (name && (byName.get(name.toLowerCase())?.length === 1) ? byName.get(name.toLowerCase())![0] : undefined)
+    if (!product) {
+      errors.push(`Line ${line}: pick a known item code for this accessory, or put an IMEI on a phone line.`)
+      continue
+    }
+    if (product.tracking !== "NONE") {
+      errors.push(`Line ${line}: ${product.name} needs an IMEI or serial. Put the number in the IMEI or serial column.`)
+      continue
+    }
+    const quantity = Number(qtyRaw || 0)
+    if (!Number.isFinite(quantity) || quantity < 1) {
+      errors.push(`Line ${line}: type how many ${product.name} pieces are leaving.`)
+      continue
+    }
+    accessoryQty.set(product.id, (accessoryQty.get(product.id) ?? 0) + quantity)
+  }
+
+  if (errors.length) return { error: errors[0], errors }
+  if (!phones.length && accessoryQty.size === 0) {
+    return { error: "The file has no phones or accessories to send." }
+  }
+
+  const qtyByProduct = new Map<string, number>()
+  for (const phone of phones) {
+    qtyByProduct.set(phone.productId, (qtyByProduct.get(phone.productId) ?? 0) + 1)
+  }
+  for (const [productId, quantity] of accessoryQty) {
+    qtyByProduct.set(productId, (qtyByProduct.get(productId) ?? 0) + quantity)
+  }
+
+  for (const [productId, quantity] of qtyByProduct) {
+    const stock = await prisma.inventory.findUnique({
+      where: { productId_branchId: { productId, branchId: fromBranchId } },
+    })
+    if (!stock || stock.quantity < quantity) {
+      const product = products.find((row) => row.id === productId)
+      return { error: `${product?.name ?? "This item"} does not have ${quantity} In shop at the sending shop.` }
+    }
+  }
+
+  const imeis = phones.map((row) => row.imei1)
   const transfer = await prisma.stockTransfer.create({
     data: {
       transferNumber: generateDocNumber("TRF"),
@@ -945,8 +1236,10 @@ export async function createTransfer(formData: FormData) {
       userId: user.id,
       status: "IN_TRANSIT",
       sentAt: new Date(),
-      notes: imeis.length ? `IMEIs: ${imeis.join(",")}` : String(formData.get("notes") || "") || null,
-      items: { create: { productId, quantity } },
+      notes: imeis.length ? `IMEIs: ${imeis.join(",")}` : String(formData.get("notes") || "") || `CSV ${file.name}`,
+      items: {
+        create: [...qtyByProduct.entries()].map(([productId, quantity]) => ({ productId, quantity })),
+      },
     },
   })
 
@@ -956,19 +1249,30 @@ export async function createTransfer(formData: FormData) {
         where: { imei1: { in: imeis } },
         data: { status: "TRANSFERRED" },
       })
+      for (const phone of phones) {
+        if (!phone.color && !phone.extra) continue
+        const current = await tx.imeiRecord.findUnique({ where: { imei1: phone.imei1 } })
+        await tx.imeiRecord.update({
+          where: { imei1: phone.imei1 },
+          data: {
+            notes: [current?.notes, phone.color ? `Color ${phone.color}` : "", phone.extra].filter(Boolean).join(" · "),
+          },
+        })
+      }
     }
-    await tx.inventory.upsert({
-      where: { productId_branchId: { productId, branchId: fromBranchId } },
-      update: { quantity: { decrement: quantity } },
-      create: { productId, branchId: fromBranchId, quantity: 0 },
-    })
+    for (const [productId, quantity] of qtyByProduct) {
+      await tx.inventory.update({
+        where: { productId_branchId: { productId, branchId: fromBranchId } },
+        data: { quantity: { decrement: quantity } },
+      })
+    }
     await tx.auditLog.create({
       data: {
         userId: user.id,
         action: "CREATE",
         entityType: "StockTransfer",
         entityId: transfer.transferNumber,
-        newValue: JSON.stringify({ fromBranchId, toBranchId, quantity, imeis }),
+        newValue: JSON.stringify({ fromBranchId, toBranchId, file: file.name, imeis, items: [...qtyByProduct.entries()] }),
         branchId: fromBranchId,
       },
     })
@@ -998,11 +1302,11 @@ export async function receiveTransfer(formData: FormData) {
     return { error: `Only ${transfer.toBranch.name} (or head office) can receive this.` }
   }
 
-  const expected = parseImeis(transfer.notes ?? "")
-  const confirmed = parseImeis(String(formData.get("imeis") || ""))
+  const expected = parseTransferIds(transfer.notes ?? "")
+  const confirmed = parseTransferIds(String(formData.get("imeis") || ""))
   if (expected.length) {
     if (confirmed.length !== expected.length || expected.some((imei) => !confirmed.includes(imei))) {
-      return { error: "Scan every dispatched IMEI. The receiving shop must confirm the serials that arrived." }
+      return { error: "Scan or paste every IMEI from the list that actually arrived." }
     }
   }
 
@@ -1052,6 +1356,93 @@ export async function receiveTransfer(formData: FormData) {
       },
     })
   })
+  refreshOps()
+  return { success: true }
+}
+
+export async function getSupplierReturnCandidates() {
+  const user = await requireUser()
+  const branchId = await scopedBranchId(user.role, user.branchId)
+  const rows = await prisma.imeiRecord.findMany({
+    where: {
+      status: { in: ["FAULTY", "RETURNED"] },
+      ...(branchId ? { branchId } : {}),
+    },
+    include: { product: true, supplier: true, branch: true },
+    orderBy: { updatedAt: "desc" },
+    take: 80,
+  })
+  return rows.map((row) => ({
+    id: row.id,
+    imei1: row.imei1,
+    productName: row.product.name,
+    supplierId: row.supplierId,
+    supplierName: row.supplier?.name ?? "",
+    shop: row.branch.name,
+    status: row.status,
+  }))
+}
+
+export async function sendUnitsToSupplier(formData: FormData) {
+  const user = await requireUser()
+  if (!(await can(user.role, "action.intake")) && !(await can(user.role, "action.return"))) {
+    return { error: "You cannot send goods back to a supplier." }
+  }
+  const supplierId = String(formData.get("supplierId") || "").trim()
+  const imeis = parseImeis(String(formData.get("imeis") || ""))
+  if (!imeis.length) return { error: "Scan or paste the IMEIs going back to the supplier." }
+
+  const records = await prisma.imeiRecord.findMany({
+    where: { imei1: { in: imeis } },
+    include: { product: true, supplier: true },
+  })
+  if (records.length !== imeis.length) return { error: "One or more IMEIs were not found." }
+  if (records.some((row) => !["FAULTY", "RETURNED", "IN_STOCK"].includes(row.status))) {
+    return { error: "Only in-shop, returned, or faulty units can go back to a supplier." }
+  }
+
+  const scoped = await scopedBranchId(user.role, user.branchId)
+  if (scoped && records.some((row) => row.branchId !== scoped)) {
+    return { error: "You can only send units from your own shop." }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    for (const record of records) {
+      const houseId = supplierId || record.supplierId
+      if (record.status === "IN_STOCK") {
+        const stock = await tx.inventory.findUnique({
+          where: { productId_branchId: { productId: record.productId, branchId: record.branchId } },
+        })
+        if (stock && stock.quantity > 0) {
+          await tx.inventory.update({
+            where: { productId_branchId: { productId: record.productId, branchId: record.branchId } },
+            data: { quantity: { decrement: 1 } },
+          })
+        }
+      }
+      await tx.imeiRecord.update({
+        where: { id: record.id },
+        data: {
+          status: "RETURNED_TO_SUPPLIER",
+          customerId: null,
+          supplierId: houseId || record.supplierId,
+          notes: [record.notes, "Sent back to supplier"].filter(Boolean).join(" · "),
+        },
+      })
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "UPDATE",
+          entityType: "IMEIRecord",
+          entityId: record.imei1,
+          oldValue: record.status,
+          newValue: JSON.stringify({ status: "RETURNED_TO_SUPPLIER", supplierId: houseId || record.supplierId }),
+          branchId: record.branchId,
+        },
+      })
+    }
+  })
+
   refreshOps()
   return { success: true }
 }

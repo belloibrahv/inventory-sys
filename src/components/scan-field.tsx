@@ -106,7 +106,7 @@ export function ScanField({
           inputMode="numeric"
           className="min-h-12"
         />
-        <Button type="button" variant="outline" className="min-h-12 shrink-0" onClick={scanning ? stopCamera : startCamera}>
+        <Button type="button" className="min-h-12 shrink-0" onClick={scanning ? stopCamera : startCamera}>
           {scanning ? "Stop camera" : "Scan with camera"}
         </Button>
       </div>
