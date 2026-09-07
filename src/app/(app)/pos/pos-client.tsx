@@ -207,7 +207,7 @@ export function PosClient({
     }
     setBusy(true)
     if (typeof navigator !== "undefined" && !navigator.onLine) {
-      pushSaleQueue(payload)
+      await pushSaleQueue(payload)
       setBusy(false)
       toast.message("Saved on this device. Send it when the line returns.")
       setCart([])
@@ -218,7 +218,7 @@ export function PosClient({
     try {
       result = await checkoutSale(payload)
     } catch {
-      pushSaleQueue(payload)
+      await pushSaleQueue(payload)
       setBusy(false)
       toast.message("The server did not answer. This sale is waiting on this device.")
       setCart([])

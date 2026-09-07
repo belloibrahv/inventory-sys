@@ -1,3 +1,5 @@
+import Dexie, { type Table } from "dexie"
+
 export type QueuedSale = {
   id: string
   createdAt: string
@@ -23,29 +25,36 @@ const SALE_KEY = "abutwins.offline-sales"
 const EVENT_KEY = "abutwins.offline-events"
 const DEVICE_KEY = "abutwins.device-id"
 
-export function getDeviceId() {
-  if (typeof window === "undefined") return ""
-  const existing = window.localStorage.getItem(DEVICE_KEY)
-  if (existing) return existing
-  const id =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? `dev-${crypto.randomUUID()}`
-      : `dev-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-  window.localStorage.setItem(DEVICE_KEY, id)
-  return id
+class ShopDatabase extends Dexie {
+  parkedSales!: Table<QueuedSale, string>
+  offlineEvents!: Table<OfflineEvent, string>
+  meta!: Table<{ key: string; value: string }, string>
+
+  constructor() {
+    super("abutwins-shop")
+    this.version(1).stores({
+      parkedSales: "id, createdAt",
+      offlineEvents: "id, at, kind",
+      meta: "key",
+    })
+  }
 }
 
-export function parkedHeartbeatRows() {
-  return readSaleQueue().map((row) => ({
-    id: row.id,
-    queuedAt: row.createdAt,
-    branchId: row.payload.branchId,
-    itemCount: row.payload.items.length,
-    paidAmount: row.payload.paidAmount,
-  }))
+let db: ShopDatabase | null = null
+let ready: Promise<void> | null = null
+
+function browserDb() {
+  if (typeof window === "undefined") return null
+  if (!db) db = new ShopDatabase()
+  return db
 }
 
-function readJson<T>(key: string, fallback: T): T {
+function notify() {
+  if (typeof window === "undefined") return
+  window.dispatchEvent(new Event("abutwins-queue"))
+}
+
+function readLegacyJson<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback
   try {
     const raw = window.localStorage.getItem(key)
@@ -55,53 +64,127 @@ function readJson<T>(key: string, fallback: T): T {
   }
 }
 
-function writeJson(key: string, value: unknown) {
-  window.localStorage.setItem(key, JSON.stringify(value))
-  window.dispatchEvent(new Event("abutwins-queue"))
+async function migrateFromLocalStorage(store: ShopDatabase) {
+  const sales = readLegacyJson<QueuedSale[]>(SALE_KEY, [])
+  const events = readLegacyJson<OfflineEvent[]>(EVENT_KEY, [])
+  const device = typeof window !== "undefined" ? window.localStorage.getItem(DEVICE_KEY) : null
+  if (sales.length) await store.parkedSales.bulkPut(sales)
+  if (events.length) await store.offlineEvents.bulkPut(events)
+  if (device) await store.meta.put({ key: "deviceId", value: device })
+  if (typeof window !== "undefined") {
+    if (sales.length) window.localStorage.removeItem(SALE_KEY)
+    if (events.length) window.localStorage.removeItem(EVENT_KEY)
+  }
 }
 
-export function readSaleQueue(): QueuedSale[] {
-  return readJson<QueuedSale[]>(SALE_KEY, [])
+export async function ensureOfflineStore() {
+  if (typeof window === "undefined") return
+  if (!ready) {
+    ready = (async () => {
+      const store = browserDb()
+      if (!store) return
+      await store.open()
+      await migrateFromLocalStorage(store)
+    })()
+  }
+  await ready
 }
 
-export function readOfflineEvents(): OfflineEvent[] {
-  return readJson<OfflineEvent[]>(EVENT_KEY, [])
+export async function getDeviceId() {
+  if (typeof window === "undefined") return ""
+  await ensureOfflineStore()
+  const store = browserDb()
+  const existing = await store?.meta.get("deviceId")
+  if (existing?.value) {
+    window.localStorage.setItem(DEVICE_KEY, existing.value)
+    return existing.value
+  }
+  const fromLegacy = window.localStorage.getItem(DEVICE_KEY)
+  const id =
+    fromLegacy ||
+    (typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? `dev-${crypto.randomUUID()}`
+      : `dev-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`)
+  await store?.meta.put({ key: "deviceId", value: id })
+  window.localStorage.setItem(DEVICE_KEY, id)
+  return id
 }
 
-export function recordOfflineEvent(kind: OfflineEvent["kind"], detail?: Record<string, unknown>) {
-  const events = readOfflineEvents()
+export async function parkedHeartbeatRows() {
+  const rows = await readSaleQueue()
+  return rows.map((row) => ({
+    id: row.id,
+    queuedAt: row.createdAt,
+    branchId: row.payload.branchId,
+    itemCount: row.payload.items.length,
+    paidAmount: row.payload.paidAmount,
+  }))
+}
+
+export async function readSaleQueue(): Promise<QueuedSale[]> {
+  if (typeof window === "undefined") return []
+  await ensureOfflineStore()
+  const rows = (await browserDb()?.parkedSales.orderBy("createdAt").toArray()) ?? []
+  return rows
+}
+
+export async function readOfflineEvents(): Promise<OfflineEvent[]> {
+  if (typeof window === "undefined") return []
+  await ensureOfflineStore()
+  return (await browserDb()?.offlineEvents.orderBy("at").toArray()) ?? []
+}
+
+export async function recordOfflineEvent(kind: OfflineEvent["kind"], detail?: Record<string, unknown>) {
+  if (typeof window === "undefined") return []
+  await ensureOfflineStore()
+  const store = browserDb()
+  if (!store) return []
+  const events = await store.offlineEvents.orderBy("at").toArray()
   const last = events[events.length - 1]
   if (last && last.kind === kind && Date.now() - new Date(last.at).getTime() < 15_000) return events
-  const next = [
-    ...events,
-    { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, at: new Date().toISOString(), kind, detail },
-  ]
-  writeJson(EVENT_KEY, next)
-  return next
+  await store.offlineEvents.add({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    at: new Date().toISOString(),
+    kind,
+    detail,
+  })
+  notify()
+  return store.offlineEvents.orderBy("at").toArray()
 }
 
-export function clearOfflineEvents() {
-  writeJson(EVENT_KEY, [])
+export async function clearOfflineEvents() {
+  if (typeof window === "undefined") return
+  await ensureOfflineStore()
+  await browserDb()?.offlineEvents.clear()
+  notify()
 }
 
-export function pushSaleQueue(payload: QueuedSale["payload"]) {
+export async function pushSaleQueue(payload: QueuedSale["payload"]) {
+  if (typeof window === "undefined") return []
+  await ensureOfflineStore()
+  const store = browserDb()
+  if (!store) return []
   const row: QueuedSale = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     createdAt: new Date().toISOString(),
     payload,
   }
-  writeJson(SALE_KEY, [...readSaleQueue(), row])
-  recordOfflineEvent("SALE_PARKED", {
+  await store.parkedSales.put(row)
+  await recordOfflineEvent("SALE_PARKED", {
     queueId: row.id,
     branchId: payload.branchId,
     items: payload.items.length,
     paidAmount: payload.paidAmount,
     method: payload.paymentMethod,
   })
-  return readSaleQueue()
+  notify()
+  return store.parkedSales.orderBy("createdAt").toArray()
 }
 
-export function removeSaleQueue(id: string) {
-  writeJson(SALE_KEY, readSaleQueue().filter((row) => row.id !== id))
+export async function removeSaleQueue(id: string) {
+  if (typeof window === "undefined") return []
+  await ensureOfflineStore()
+  await browserDb()?.parkedSales.delete(id)
+  notify()
   return readSaleQueue()
 }

@@ -20,7 +20,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (allowedHrefs.length === 0) redirect("/login")
 
   const pathname = (await headers()).get("x-pathname") || ""
-  if (pathname && pathname !== "/account") {
+  if (pathname && pathname !== "/account" && pathname !== "/help") {
     try {
       if (!pathIsAllowed(pathname, allowedHrefs)) {
         await writeAudit({

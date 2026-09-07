@@ -212,8 +212,8 @@ const children = [
       ["Prepared by", "Product Team, Techvaults Limited"],
       ["Document type", "User guide and test plan"],
       ["Date", "7 September 2026"],
-      ["Version", "1.4"],
-      ["Status", "Updated: full words on buttons, no three-dot cut-offs"],
+      ["Version", "1.6"],
+      ["Status", "Updated: parked sales survive a refresh when the line is down"],
     ].map(([k, v]) =>
       new TableRow({
         children: [
@@ -236,6 +236,8 @@ const children = [
   body("Version 1.2 gives accounts a bank-style statement. Check the books opens any previous Lagos day, compares it with another day or week, and prints a branded PDF or CSV with the company mark. The pack does not change any invoice. It only adds the books again so a person can sign them."),
   body("Version 1.3 makes Reports print like a management paper. The meeting pack has the ab mark, shop books, and NGN amounts. Buttons stay on the screen, not on the paper."),
   body("Version 1.4 stops cut-off words. A button that is working says the full action, such as Preparing the PDF, not three dots after a half word."),
+  body("Version 1.5 puts a handbook on the system. How to use this is on every login. It only covers the pages and work that job can use. Print it. Keep it at the till. A cashier does not see Super Admin pages in that book."),
+  body("Version 1.6 keeps the till alive when the line drops. After Sell now has been opened on that phone, a refresh still comes back. Parked sales sit in a stronger store on the device. The invoice is still only born on the server."),
   body("Today Abu Twins has two shops: Iwo Road, Ibadan (head office) and Challenge, Ibadan. The system can add more shops in Nigeria later. Super Admin opens a new shop when you are ready."),
   body("Please treat the login list at the end as practice only. Those names and passwords are for testing. You can lock them or remove them when live work starts."),
   body("If a page is missing on the live website, ask Techvaults. We will put the newest version up for you."),
@@ -252,7 +254,8 @@ const children = [
   h3("How to read it"),
   bullet("Read section 3 and 4 first. That is the big picture."),
   bullet("Read section 6 and 7 to know shops and jobs."),
-  bullet("Use section 10 when you sit at a computer and click each page. Start with Home, Sell now, Close the day, and Check the books."),
+  bullet("Use section 10 when you sit at a computer and click each page. Start with Home, How to use this, Sell now, Close the day, and Check the books."),
+  bullet("On the live system, open How to use this. That book only covers the job you signed in as."),
   bullet("Use section 12 when you share test logins."),
 
   h1("3. The problem we set out to fix"),
@@ -318,12 +321,14 @@ const children = [
       ["Compare with", "The other day or period the system puts beside this period, so movement is visible."],
       ["Parked sale", "A finished cart saved on this device because the line was down. It is not an invoice yet."],
       ["IMEI vs shop count", "How many unique phones the system holds, compared with the shop quantity."],
-      ["Line down", "This device has no internet. Sell now can still park a sale if the till is not locked."],
+      ["Line down", "This device has no internet. Sell now can still park a sale if the till is not locked. Refresh is safe after Sell now has been opened on that phone."],
+      ["The till is still here", "The recovery page if a refresh cannot reach the server. Parked sales on this phone are listed."],
       ["Goods intake", "The person who books and receives goods."],
       ["Super Admin", "The person who can see and do everything, and can undo a true mistake."],
       ["Needs approval", "A request waiting for a yes or a no from a manager."],
       ["Walk-in", "A buyer with no name on the sale yet."],
       ["Lowest price", "The floor. Staff cannot sell below it unless Super Admin allows it."],
+      ["How to use this", "The handbook for your job. Look up a word. Print the book. It only covers pages you can open."],
     ],
     [2800, 6560]
   ),
@@ -390,7 +395,7 @@ const children = [
   table(
     ["Group", "Pages", "In one sentence"],
     [
-      ["Start", "Home", "Today’s numbers, IMEI versus shop count, and work that must be done now."],
+      ["Start", "Home, How to use this", "Today’s numbers, IMEI versus shop count, and the printable handbook for this job."],
       ["Stock", "Phones & items, Phone IMEIs, Shop stock, Goods on the way", "What you sell, each phone number, what is here, what is still coming."],
       ["Sell & buy", "Sales, Sell now, Close the day, Goods from supplier, Customers, Suppliers", "Sell, count the till, print invoices, buy from a supplier, keep people lists."],
       ["Daily work", "Send to another shop, Returns, Swaps, Repairs, Stock count", "Move goods, take phones back, trade, fix, count shelves."],
@@ -515,7 +520,7 @@ const children = [
 
   ...feature({
     title: "10.6 Sell now",
-    what: "Sell now is the till. You scan or search a phone number or an item name, put it in the cart, pick the buyer, pick cash, transfer, POS, or credit, collect money, and finish. The system then makes an invoice. A USB scanner works like a keyboard: scan, then Enter. A phone camera can read the barcode if the browser allows it. If yesterday had sales and nobody closed that day, Complete sale stays locked for everyone, including Super Admin, until the till is counted. If the line drops and the till is not locked, the sale stays on this device as a parked sale and posts when the line returns.",
+    what: "Sell now is the till. You scan or search a phone number or an item name, put it in the cart, pick the buyer, pick cash, transfer, POS, or credit, collect money, and finish. The system then makes an invoice. A USB scanner works like a keyboard: scan, then Enter. A phone camera can read the barcode if the browser allows it. If yesterday had sales and nobody closed that day, Complete sale stays locked for everyone, including Super Admin, until the till is counted. If the line drops and the till is not locked, the sale stays on this device as a parked sale and posts when the line returns. After you have opened Sell now on that phone, a refresh is safe.",
     why: "Selling from memory is how phones vanish. Selling after a day with no till count is how cash vanishes. The till only offers what is In shop, and only after older days with sales are closed.",
     story: "Monday at Iwo Road. Sunday had cash sales and nobody closed. The cashier opens Sell now. A red note says the shop has not closed 6 September. Complete sale is locked. They open Close the day, count the drawer, and close Sunday. Sell now opens. A buyer wants a Camon 30. They scan the IMEI. The phone is In shop. They collect transfer and finish. The invoice is created. Later the line drops. They still finish a second sale. It stays on that phone as parked. When the line returns, the banner says send parked work. After it posts, Who did what shows it came from offline.",
     steps: [
@@ -528,6 +533,7 @@ const children = [
       "Pick or add a customer. Do not invent a fake person for a live test if the CEO forbids dummy buyers. For practice, add a clearly marked test buyer only if leadership agrees.",
       "Set the amount paid and the method. Finish the sale.",
       "If the line is down and the till is not locked, finish anyway. You should see that the sale is saved on this device.",
+      "Refresh the page while the line is still down. Sell now should come back, or you should see The till is still here with the parked sale listed.",
     ],
     expect: [
       "If an older day with sales is open, Complete sale is blocked. Parking a new live sale is also blocked.",
@@ -537,6 +543,7 @@ const children = [
       "When the sale succeeds you are taken to the invoice page.",
       "Shop stock In shop goes down by one for that phone.",
       "A parked sale shows a banner on every signed-in page until it is sent. After two hours Super Admin, CEO, and the records checker get an alert. If someone wipes it off the device, Who did what records a vanished parked sale.",
+      "A refresh while the line is down does not wipe the parked sale.",
     ],
   }),
 
@@ -965,6 +972,49 @@ const children = [
     ],
   }),
 
+  ...feature({
+    title: "10.29 How to use this",
+    what: "How to use this is the in-system handbook. Every signed-in person can open it from Start, from the top bar, or from search. The book is built for that login only. A cashier sees Sell now and Close the day. They do not see Who can see what or Settings. Super Admin sees every page. You can look up a word on the screen. Print or Save PDF makes a branded paper with the ab mark, the job name, and a number such as HB-CASHIER-20260907. Print includes the full book even if you filtered the screen.",
+    why: "Staff should not hunt a Word file when they are at the till. They need a book that matches the buttons in front of them, not a book for every job in the company.",
+    story: "Blessing is on the Iwo Road till. A buyer asks for a return. She opens How to use this, types return, and reads that a walk-in needs a name first. She prints the cashier book for the drawer so the next shift can look it up without asking her.",
+    steps: [
+      "Sign in as cashier@abutwins.com.",
+      "Click How to use this under Start, or the same words on the top bar.",
+      "Confirm the header says Cashier and a HB- number.",
+      "Type return in Look up a page, button, or word. Confirm Returns stays and Who can see what is not in the book.",
+      "Click Print / Save PDF. Confirm the paper has the ab mark and hides the left menu.",
+      "Sign out. Sign in as ceo@abutwins.com. Open How to use this. Confirm Who can see what is still missing, and Check the books is there.",
+      "Sign in as admin@abutwins.com. Confirm Who can see what and Settings are in the Super Admin book.",
+    ],
+    expect: [
+      "The cashier book has Home, Sell now, Sales, Customers, Returns, Alerts, Close the day, and Your login.",
+      "The cashier book does not have Who can see what, Settings, or Goods on the way.",
+      "The CEO book does not have Who can see what. The CEO can read Settings but cannot change them.",
+      "Print still includes every section for that job after a lookup filter.",
+      "The paper uses the shop name and address from Settings.",
+    ],
+  }),
+
+  ...feature({
+    title: "10.30 The till is still here",
+    what: "After Sell now has been opened on a phone, that phone can keep the till if the line drops. A refresh does not wipe a parked sale. Parked sales live in a stronger store on the device. If the phone cannot rebuild Sell now, it opens The till is still here. That page lists parked sales on this phone. The invoice is only born when the line returns and the sale posts.",
+    why: "A cashier who refreshes on a dead line used to see a dead screen. The sale was still on the phone, but they could not get back to it. That is how cash sits in a drawer with no paper.",
+    story: "Blessing parks a cash sale when the Iwo Road line drops. She refreshes by habit. Sell now comes back, or she sees The till is still here with that parked sale. She does not write the sale in a notebook. When the line returns, she sends parked work. Who did what shows it came from offline.",
+    steps: [
+      "Sign in as cashier@abutwins.com.",
+      "Open Sell now while the line is up.",
+      "Turn the line off. Finish a sale if the till is not locked. Confirm it is saved on this device.",
+      "Refresh. Confirm Sell now returns, or The till is still here lists the parked sale.",
+      "Turn the line on. Send parked work now.",
+    ],
+    expect: [
+      "The parked sale is still on the device after a refresh.",
+      "The till is still here shows the item count and the amount.",
+      "After send, Who did what has the posted-from-offline trail.",
+      "No invoice is created until the server accepts the parked sale.",
+    ],
+  }),
+
   h1("11. One full day in Ibadan"),
   body("This story ties the pages together. Read it aloud in a training room."),
   h3("Morning at Iwo Road"),
@@ -1026,6 +1076,7 @@ const children = [
       ["Repair steps", "engineer@abutwins.com"],
       ["Money pages and Check the books", "accountant@abutwins.com"],
       ["Checking the diary and signing the books", "auditor@abutwins.com"],
+      ["The handbook for one job only", "Any practice login, then How to use this"],
     ],
     [5200, 4160]
   ),
@@ -1061,6 +1112,8 @@ const children = [
       ["24", "Download books PDF and CSV", "auditor@abutwins.com", "PDF has the ab mark, NGN amounts, and sign-off lines. CSV opens in Excel with the same sections."],
       ["25", "Shop calculator does not post money", "cashier@abutwins.com", "You can add numbers. No invoice or close is created."],
       ["26", "Reports print looks like a company paper", "ceo@abutwins.com", "PDF has the ab mark, RP- number, shop books, and no buttons."],
+      ["27", "How to use this matches the job", "cashier then CEO then Super Admin", "Each book names that job. Cashier has no Who can see what. Super Admin has it. Print shows the ab mark and an HB- number."],
+      ["28", "Refresh while the line is down", "cashier@abutwins.com after opening Sell now", "Parked sales stay. Sell now returns or The till is still here lists them. No invoice until send."],
     ],
     [600, 2800, 2600, 3360]
   ),
@@ -1073,6 +1126,7 @@ const children = [
   bullet("Staff cannot sell below the lowest price unless Super Admin turns that on."),
   bullet("If a past business day had sales and is not closed, nobody starts a new live sale. Super Admin is locked too. Already parked sales may still post."),
   bullet("A parked sale that sits more than two hours, or vanishes from a device, alerts Super Admin, the CEO, and the records checker."),
+  bullet("A refresh on a dead line must not wipe a parked sale. The invoice is still only born on the server."),
   bullet("If it is not on the system, it did not happen. Money and phones leave a name, a time, and a shop record."),
   bullet("Home IMEI vs shop count is the truth you act on. If they do not match, count stock. Do not type a new number by hand."),
   bullet("Only Super Admin can reverse a money collection."),

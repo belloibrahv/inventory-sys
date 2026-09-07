@@ -18,6 +18,7 @@ import {
   GitBranch,
   BadgeCheck,
   BarChart3,
+  BookOpen,
   ClipboardCheck,
   Scale,
   ScrollText,
@@ -30,7 +31,10 @@ import {
 export const navGroups = [
   {
     label: "Start",
-    items: [{ name: "Home", href: "/dashboard", icon: LayoutDashboard }],
+    items: [
+      { name: "Home", href: "/dashboard", icon: LayoutDashboard },
+      { name: "How to use this", href: "/help", icon: BookOpen },
+    ],
   },
   {
     label: "Stock",

@@ -3,7 +3,7 @@
 import { signOut } from "next-auth/react"
 import type { UserRole } from "@prisma/client"
 import { useTheme } from "@/components/theme-provider"
-import { Bell, Menu, Moon, Search, Sun } from "lucide-react"
+import { Bell, BookOpen, Menu, Moon, Search, Sun } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useUI } from "@/store/ui"
 import { ROLE_LABELS } from "@/lib/roles"
@@ -60,6 +60,14 @@ export function Header({
           <Sun className="h-4 w-4 dark:hidden" />
           <Moon className="hidden h-4 w-4 dark:block" />
         </Button>
+        <a
+          href="/help"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-xl hover:bg-muted sm:hidden"
+          aria-label="How to use this"
+          title="How to use this"
+        >
+          <BookOpen className="h-4 w-4" />
+        </a>
         <a href="/notifications" className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl hover:bg-muted">
           <Bell className="h-4 w-4" />
           {unread > 0 ? (
@@ -76,6 +84,9 @@ export function Header({
               {user?.role ? ROLE_LABELS[user.role] : ""}
             </p>
           </div>
+          <a href="/help" className="text-[11px] text-muted-foreground hover:text-foreground">
+            How to use this
+          </a>
           <a href="/account" className="text-[11px] text-muted-foreground hover:text-foreground">
             Account
           </a>

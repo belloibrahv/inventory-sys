@@ -124,7 +124,9 @@ body {
   header,
   .shop-calculator,
   .books-chrome,
-  .reports-chrome {
+  .reports-chrome,
+  .manual-chrome,
+  .manual-lookup {
     display: none !important;
   }
   main,
@@ -142,7 +144,8 @@ body {
   .invoice,
   .audit-pack,
   .books-statement,
-  .reports-statement {
+  .reports-statement,
+  .manual-pack {
     max-width: none !important;
     box-shadow: none !important;
   }
@@ -151,11 +154,17 @@ body {
     text-decoration: none !important;
   }
   .books-statement,
-  .reports-statement {
+  .reports-statement,
+  .manual-pack {
     break-inside: auto;
   }
+  .manual-section {
+    display: block !important;
+    break-inside: avoid;
+  }
   .books-statement header,
-  .reports-statement header {
+  .reports-statement header,
+  .manual-pack header {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
