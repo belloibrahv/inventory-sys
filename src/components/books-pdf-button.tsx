@@ -4,9 +4,9 @@ import { useState } from "react"
 import { jsPDF } from "jspdf"
 import type { BooksCheck } from "@/app/actions/books-check"
 import { Button } from "@/components/ui/button"
-import { booksCompareRows, booksMoneyLines, booksPeriodLabel, booksRangeTitle } from "@/lib/books-pack"
+import { booksCompareRows, booksMoneyLines, booksPeriodLabel, booksRangeTitle, formatPdfMoney, formatPdfMove } from "@/lib/books-pack"
 import { formatLagosStamp, formatWatLong } from "@/lib/lagos-day"
-import { formatCurrency, formatDateTime } from "@/lib/utils"
+import { formatDateTime } from "@/lib/utils"
 
 const NAVY: [number, number, number] = [0, 27, 206]
 const LIME: [number, number, number] = [24, 192, 32]
@@ -14,10 +14,6 @@ const INK: [number, number, number] = [15, 23, 42]
 const MUTED: [number, number, number] = [100, 116, 139]
 const LINE: [number, number, number] = [226, 232, 240]
 const PAPER: [number, number, number] = [248, 250, 252]
-
-function naira(value: number) {
-  return formatCurrency(value)
-}
 
 async function loadMark() {
   const response = await fetch("/brand/ab-mark.jpg")
@@ -160,9 +156,9 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
 
       const boxes = [
         ["SALES", String(data.salesCount)],
-        ["COLLECTED", naira(data.collected)],
-        ["POSTED", naira(data.revenue)],
-        ["MONEY OUT", naira(data.moneyOut)],
+        ["COLLECTED", formatPdfMoney(data.collected)],
+        ["POSTED", formatPdfMoney(data.revenue)],
+        ["MONEY OUT", formatPdfMoney(data.moneyOut)],
       ]
       boxes.forEach(([label, value], index) => {
         const x = left + index * (width / 4)
@@ -188,15 +184,15 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
       doc.text("Movement", right - 1, y, { align: "right" })
       y += 5
       booksCompareRows(data).forEach((item, index) => {
-        const now = item.money ? naira(item.now) : String(item.now)
-        const then = item.money ? naira(item.then) : String(item.then)
-        const move = `${item.money ? naira(item.change.amount) : item.change.amount}  ${item.change.value}`
+        const now = item.money ? formatPdfMoney(item.now) : String(item.now)
+        const then = item.money ? formatPdfMoney(item.then) : String(item.then)
+        const move = formatPdfMove(item.change, item.money)
         row(item.label, now, then, move, index % 2 ? PAPER : undefined)
       })
 
       section("Money add-up")
       booksMoneyLines(data).forEach((item, index) => {
-        row(item.label, naira(item.value), undefined, undefined, item.total ? [232, 237, 255] : index % 2 ? PAPER : undefined)
+        row(item.label, formatPdfMoney(item.value), undefined, undefined, item.total ? [232, 237, 255] : index % 2 ? PAPER : undefined)
       })
 
       section("Working paper")
@@ -222,17 +218,17 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
         row("No completed sales in this period", "")
       } else {
         data.byStaff.forEach((item, index) => {
-          row(`${item.name}  ·  ${item.count} sale${item.count === 1 ? "" : "s"}`, naira(item.collected), undefined, undefined, index % 2 ? PAPER : undefined)
+          row(`${item.name}  ·  ${item.count} sale${item.count === 1 ? "" : "s"}`, formatPdfMoney(item.collected), undefined, undefined, index % 2 ? PAPER : undefined)
         })
       }
 
       section("Position still open")
-      row("Customers still owe", naira(data.customersOwe))
-      row("We still owe suppliers", naira(data.supplierOwed))
+      row("Customers still owe", formatPdfMoney(data.customersOwe))
+      row("We still owe suppliers", formatPdfMoney(data.supplierOwed))
       row("Walk-in sales", String(data.walkIns))
-      row("Till expected", naira(data.expectedCash))
-      row("Till counted", data.countedCash == null ? "Not closed" : naira(data.countedCash))
-      row("Till variance", data.variance == null ? "Not closed" : naira(data.variance), undefined, undefined, PAPER)
+      row("Till expected", formatPdfMoney(data.expectedCash))
+      row("Till counted", data.countedCash == null ? "Not closed" : formatPdfMoney(data.countedCash))
+      row("Till variance", data.variance == null ? "Not closed" : formatPdfMoney(data.variance), undefined, undefined, PAPER)
 
       section("Invoices")
       if (data.invoices.length === 0) {
@@ -243,7 +239,7 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
             `${item.invoice}  ${item.customer}`,
             item.method,
             formatDateTime(item.when),
-            naira(item.paid),
+            formatPdfMoney(item.paid),
             index % 2 ? PAPER : undefined
           )
         })
@@ -254,7 +250,7 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
         row("No till close in this period", "")
       } else {
         data.closes.forEach((item, index) => {
-          row(`${formatWatLong(item.day)}  ·  ${item.staff}`, naira(item.expected), "variance", naira(item.variance), index % 2 ? PAPER : undefined)
+          row(`${formatWatLong(item.day)}  ·  ${item.staff}`, formatPdfMoney(item.expected), "variance", formatPdfMoney(item.variance), index % 2 ? PAPER : undefined)
         })
       }
 

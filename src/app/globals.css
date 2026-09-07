@@ -123,7 +123,8 @@ body {
   aside,
   header,
   .shop-calculator,
-  .books-chrome {
+  .books-chrome,
+  .reports-chrome {
     display: none !important;
   }
   main,
@@ -140,7 +141,8 @@ body {
   .receipt,
   .invoice,
   .audit-pack,
-  .books-statement {
+  .books-statement,
+  .reports-statement {
     max-width: none !important;
     box-shadow: none !important;
   }
@@ -148,10 +150,12 @@ body {
     color: inherit !important;
     text-decoration: none !important;
   }
-  .books-statement {
+  .books-statement,
+  .reports-statement {
     break-inside: auto;
   }
-  .books-statement header {
+  .books-statement header,
+  .reports-statement header {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }

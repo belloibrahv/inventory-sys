@@ -27,6 +27,19 @@ export function booksCompareRows(data: BooksCheck) {
   ]
 }
 
+export function formatPdfMoney(value: number) {
+  const n = Math.round(Number.isFinite(value) ? value : 0)
+  const digits = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Math.abs(n))
+  return `${n < 0 ? "-" : ""}NGN ${digits}`
+}
+
+export function formatPdfMove(change: { amount: number; value: string }, money: boolean) {
+  const amount = money ? formatPdfMoney(change.amount) : `${change.amount > 0 ? "+" : ""}${change.amount}`
+  if (change.value === "0") return amount
+  if (change.value === "New") return `${amount} (new)`
+  return `${amount} (${change.value})`
+}
+
 export function booksMoneyLines(data: BooksCheck) {
   return [
     { label: "Cash collected", value: data.cash, total: false },
