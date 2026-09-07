@@ -13,6 +13,7 @@ import { Select } from "@/components/ui/select"
 import { isSuperAdmin } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { formatCurrency, formatDateTime, money } from "@/lib/utils"
+import { statusLabel } from "@/lib/status"
 import { warrantyState } from "@/lib/warranty"
 
 export default async function SaleDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -50,7 +51,7 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
         <div className="surface-card p-5">
           <p className="text-sm text-muted-foreground">Status</p>
           <StatusBadge value={sale.status} />
-          <p className="mt-2 text-sm text-muted-foreground">{sale.paymentMethod}{sale.isWholesale ? " · wholesale" : ""}</p>
+          <p className="mt-2 text-sm text-muted-foreground">{statusLabel(sale.paymentMethod)}{sale.isWholesale ? " · wholesale" : ""}</p>
         </div>
         <div className="surface-card p-5">
           <p className="text-sm text-muted-foreground">Collected</p>
@@ -169,7 +170,7 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
           }))}
           total={money(sale.totalAmount)}
           paid={money(sale.paidAmount)}
-          method={sale.paymentMethod}
+          method={statusLabel(sale.paymentMethod)}
           notes={sale.notes}
         />
       </div>

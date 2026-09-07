@@ -333,7 +333,18 @@ export async function getStaff() {
   const user = await requireUser()
   if (!(await can(user.role, "view.staff"))) return []
   return prisma.user.findMany({
-    include: { branch: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      branchId: true,
+      isActive: true,
+      mustChangePassword: true,
+      lastLoginAt: true,
+      createdAt: true,
+      branch: { select: { id: true, name: true, code: true } },
+    },
     orderBy: { createdAt: "asc" },
   })
 }

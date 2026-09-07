@@ -3,6 +3,7 @@ import { getSales } from "@/app/actions/sales"
 import { PageHeader, StatusBadge } from "@/components/shared"
 import { Button } from "@/components/ui/button"
 import { formatCurrency, formatDate, money } from "@/lib/utils"
+import { statusLabel } from "@/lib/status"
 
 export default async function SalesPage() {
   const sales = await getSales()
@@ -44,7 +45,7 @@ export default async function SalesPage() {
                 </td>
                 <td className="px-4 py-3">{sale.branch.code}</td>
                 <td className="px-4 py-3">{formatCurrency(money(sale.totalAmount))} / {formatCurrency(money(sale.paidAmount))}</td>
-                <td className="px-4 py-3">{sale.paymentMethod}</td>
+                <td className="px-4 py-3">{statusLabel(sale.paymentMethod)}</td>
                 <td className="px-4 py-3"><StatusBadge value={sale.status} /></td>
               </tr>
             ))}

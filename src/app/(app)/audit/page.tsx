@@ -5,6 +5,7 @@ import { AuditLogRows } from "@/app/(app)/audit/log-rows"
 import { PageHeader } from "@/components/shared"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
+import { statusLabel } from "@/lib/status"
 
 const ACTIONS = ["LOGIN", "LOGOUT", "CREATE", "UPDATE", "DELETE", "APPROVE", "REJECT", "EXPORT", "IMPORT", "DENIED", "VIEW"]
 
@@ -59,14 +60,14 @@ export default async function AuditPage({
       <form className="surface-card grid gap-2 p-4 md:grid-cols-[1fr_160px_140px_180px_140px_auto] md:items-end">
         <label className="text-sm">
           <span className="mb-1 block text-muted-foreground">Search</span>
-          <Input name="q" defaultValue={filters.q} placeholder="Name, email, IMEI, invoice, path" />
+          <Input name="q" defaultValue={filters.q} placeholder="Name, email, IMEI, or invoice" />
         </label>
         <label className="text-sm">
           <span className="mb-1 block text-muted-foreground">Action</span>
           <Select name="action" defaultValue={filters.action ?? ""}>
             <option value="">All actions</option>
             {ACTIONS.map((action) => (
-              <option key={action} value={action}>{action}</option>
+              <option key={action} value={action}>{statusLabel(action)}</option>
             ))}
           </Select>
         </label>
@@ -117,7 +118,7 @@ export default async function AuditPage({
         <div className="surface-card overflow-hidden">
           <div className="border-b border-border px-4 py-3">
             <h3 className="font-semibold">Activity</h3>
-            <p className="text-xs text-muted-foreground">Tap a row for device, path, and the exact change.</p>
+            <p className="text-xs text-muted-foreground">Tap a row for the device, the page, and what changed in shop words.</p>
           </div>
           <AuditLogRows
             logs={data.logs.map((log) => ({

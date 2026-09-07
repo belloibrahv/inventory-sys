@@ -106,6 +106,8 @@ export async function heartbeatParkedSales(input: {
 }
 
 export async function markParkedPosted(offlineId: string, saleId: string) {
+  await requireUser()
+  if (!offlineId || !saleId) return
   await prisma.parkedSale.updateMany({
     where: { id: offlineId },
     data: { status: "POSTED", postedSaleId: saleId, lastSeenAt: new Date() },

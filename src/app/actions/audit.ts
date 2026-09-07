@@ -6,6 +6,8 @@ import { can } from "@/lib/permissions"
 import { requireUser } from "@/lib/session"
 import { verifyAuditChain, writeAudit } from "@/lib/audit"
 import { isAfterHours } from "@/lib/audit-meta"
+import { formatRecordChange, pageNameFromPath, recordKindLabel } from "@/lib/shop-speak"
+import { statusLabel } from "@/lib/status"
 
 export type AuditFilters = {
   q?: string
@@ -143,20 +145,20 @@ export async function exportAuditCsv(filters: AuditFilters) {
     newValue: JSON.stringify({ filters, count: rows.length }),
     branchId: user.branchId,
   })
-  const header = "When,Who,Email,Action,Result,Risk,What,ID,Path,IP,Change"
+  const header = "When,Who,Email,Action,Result,Risk,Record,Number,Page,Device,What changed"
   const lines = rows.map((row) =>
     [
       row.createdAt.toISOString(),
       csv(row.user?.name ?? "Unknown"),
       csv(row.user?.email ?? ""),
-      row.action,
-      row.success ? "ok" : "failed",
-      row.risk,
-      csv(row.entityType),
-      csv(row.entityId),
-      csv(row.path ?? ""),
+      csv(statusLabel(row.action)),
+      row.success ? "Worked" : "Failed",
+      csv(statusLabel(row.risk)),
+      csv(recordKindLabel(row.entityType)),
+      csv(row.entityId.startsWith("c") ? "" : row.entityId),
+      csv(pageNameFromPath(row.path) ?? ""),
       csv(row.ipAddress ?? ""),
-      csv(row.newValue ?? row.oldValue ?? ""),
+      csv(formatRecordChange(row.newValue ?? row.oldValue)),
     ].join(",")
   )
   return { success: true, csv: [header, ...lines].join("\n") }

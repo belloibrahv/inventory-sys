@@ -44,6 +44,14 @@ const map: Record<string, Tone> = {
   DENIED: "danger",
   VIEW: "muted",
   HIGH: "danger",
+  MEDIUM: "warning",
+  LOW: "muted",
+  UNREAD: "warning",
+  READ: "muted",
+  CASH: "success",
+  TRANSFER: "info",
+  POS: "info",
+  SPLIT_PAYMENT: "info",
 }
 
 const labels: Record<string, string> = {
@@ -100,6 +108,24 @@ const labels: Record<string, string> = {
   VIEW: "Opened",
   APPROVE: "Approved",
   REJECT: "Rejected",
+  HIGH: "High",
+  MEDIUM: "Medium",
+  LOW: "Low",
+  UNREAD: "Not read yet",
+  READ: "Read",
+  CASH: "Cash",
+  TRANSFER: "Transfer",
+  POS: "POS",
+  SPLIT_PAYMENT: "Split payment",
+  REVERSED: "Undone",
+  WALK_IN: "Walk-in",
+  PARKED: "Parked",
+  VANISHED: "Left this device",
+  POSTED: "Sent",
+  SWAP: "Swap",
+  EXPENSE: "Expense",
+  RECONCILIATION: "Stock count",
+  RETURN: "Return",
 }
 
 export function statusTone(status: string): Tone {

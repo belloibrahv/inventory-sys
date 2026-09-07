@@ -105,7 +105,7 @@ export async function updateProductPrice(formData: FormData) {
   const sellingPrice = Number(formData.get("sellingPrice"))
   const reason = String(formData.get("reason") || "Manual update")
   const product = await prisma.product.findUnique({ where: { id } })
-  if (!product) return { error: "Product not found." }
+  if (!product) return { error: "That item was not found." }
   if (sellingPrice < Number(product.minimumPrice) && !(await can(user.role, "action.override_floor"))) {
     return { error: "Selling price is below the lowest allowed. Ask Super Admin." }
   }
@@ -146,7 +146,7 @@ export async function updateProductWarranty(formData: FormData) {
   const warrantyDays = Number(formData.get("warrantyDays") || 0)
   if (!id || warrantyDays <= 0) return { error: "Enter warranty days for a product." }
   const product = await prisma.product.findUnique({ where: { id } })
-  if (!product) return { error: "Product not found." }
+  if (!product) return { error: "That item was not found." }
   await prisma.product.update({ where: { id }, data: { warrantyDays } })
   await prisma.auditLog.create({
     data: {
@@ -168,7 +168,7 @@ export async function updateProductWarranty(formData: FormData) {
 export async function bulkAdjustPrices(formData: FormData) {
   const user = await requireUser()
   if (!(await canManageCatalog(user.role))) {
-    return { error: "Insufficient permissions." }
+    return { error: "You cannot change prices for every item at once." }
   }
 
   const mode = String(formData.get("mode"))
@@ -363,7 +363,7 @@ export async function importProducts(formData: FormData) {
     const trackingKey = keyName(cell(row, "tracking") || "IMEI")
     const tracking = TRACKING[trackingKey]
     if (!tracking) {
-      errors.push(`Line ${line}: tracking must be IMEI, SERIAL, or NONE.`)
+      errors.push(`Line ${line}: say phone IMEI, serial, or no number.`)
       continue
     }
     const conditionKey = keyName(cell(row, "condition") || "BRAND_NEW")

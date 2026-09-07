@@ -9,6 +9,7 @@ import { ImeiIntakeForm } from "@/app/(app)/imei/intake-form"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { warrantyState } from "@/lib/warranty"
+import { statusLabel } from "@/lib/status"
 
 export default async function ImeiPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string }> }) {
   const { q, status } = await searchParams
@@ -30,7 +31,7 @@ export default async function ImeiPage({ searchParams }: { searchParams: Promise
             <Select name="status" defaultValue={status ?? ""}>
               <option value="">All statuses</option>
               {["INCOMING", "IN_STOCK", "SOLD", "RETURNED", "RETURNED_TO_SUPPLIER", "SWAPPED", "REPAIRED", "FAULTY", "TRANSFERRED"].map((item) => (
-                <option key={item} value={item}>{item}</option>
+                <option key={item} value={item}>{statusLabel(item)}</option>
               ))}
             </Select>
             <Button type="submit">Search</Button>

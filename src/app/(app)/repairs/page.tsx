@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { formatCurrency, money } from "@/lib/utils"
+import { statusLabel } from "@/lib/status"
 
 const stages = ["PENDING", "DIAGNOSING", "REPAIRING", "WAITING_PARTS", "COMPLETED", "DELIVERED"]
 
@@ -43,10 +44,10 @@ export default async function RepairsPage() {
                   <ActionForm action={advanceRepair} submit="Update repair" className="grid gap-2 md:grid-cols-2">
                     <input type="hidden" name="id" value={row.id} />
                     <Select name="status" defaultValue={row.status}>
-                      {stages.map((item) => <option key={item} value={item}>{item}</option>)}
+                      {stages.map((item) => <option key={item} value={item}>{statusLabel(item)}</option>)}
                     </Select>
                     <Input name="repairCost" type="number" placeholder="Repair cost" defaultValue={row.repairCost ? String(row.repairCost) : ""} />
-                    <Textarea name="diagnosis" placeholder="Diagnosis" defaultValue={row.diagnosis ?? ""} className="md:col-span-2" />
+                    <Textarea name="diagnosis" placeholder="What you found on this phone" defaultValue={row.diagnosis ?? ""} className="md:col-span-2" />
                   </ActionForm>
                 </div>
               ) : null}

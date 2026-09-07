@@ -55,7 +55,7 @@ export default async function SettingsPage() {
         <div className="surface-card p-5">
           <h3 className="mb-2 font-semibold">Shop backup</h3>
           <p className="mb-3 text-sm text-muted-foreground">
-            Downloads a JSON copy of shops, staff emails (not passwords), stock, IMEIs, sales, and purchases. Keep it off this computer.
+            Downloads a copy of shops, staff emails (not passwords), stock, IMEIs, sales, and purchases. Keep that file off this computer.
           </p>
           <BackupButton />
         </div>

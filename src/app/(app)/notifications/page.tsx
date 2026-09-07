@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/shared"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { formatDateTime } from "@/lib/utils"
+import { statusLabel } from "@/lib/status"
 
 async function markAllRead() {
   "use server"
@@ -31,7 +32,7 @@ export default async function NotificationsPage() {
                 <p className="text-sm text-muted-foreground">{row.message}</p>
                 <p className="mt-1 text-xs text-muted-foreground">{formatDateTime(row.createdAt)}</p>
               </div>
-              <Badge variant={row.status === "UNREAD" ? "warning" : "muted"}>{row.status}</Badge>
+              <Badge variant={row.status === "UNREAD" ? "warning" : "muted"}>{statusLabel(row.status)}</Badge>
             </div>
           </a>
         ))}

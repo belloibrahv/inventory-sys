@@ -7,6 +7,7 @@ import { can, isSuperAdmin } from "@/lib/permissions"
 import { scopedBranchId } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { generateDocNumber } from "@/lib/utils"
+import { shopError } from "@/lib/shop-speak"
 
 function parseIds(raw: string) {
   return [...new Set(raw.split(/[\s,;]+/).map((item) => item.trim()).filter(Boolean))]
@@ -149,7 +150,7 @@ export async function createIncomingLot(formData: FormData) {
       })
     })
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "Could not book these goods." }
+    return { error: shopError(error, "Could not book these goods.") }
   }
 
   revalidatePath("/incoming")

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { formatCurrency, formatDate, money } from "@/lib/utils"
 import { warrantyState } from "@/lib/warranty"
+import { statusLabel } from "@/lib/status"
 
 export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -81,7 +82,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
                 <div key={row.id} className="flex justify-between gap-3 border-b border-border/70 pb-2">
                   <div>
                     <a href={`/imei/${row.id}`} className="font-medium text-primary">{row.imei1}</a>
-                    <p className="text-xs text-muted-foreground">{row.product.name} · {row.status}</p>
+                    <p className="text-xs text-muted-foreground">{row.product.name} · {statusLabel(row.status)}</p>
                   </div>
                   <span className="text-right text-xs text-muted-foreground">{cover?.label ?? "Not on a sale"}</span>
                 </div>

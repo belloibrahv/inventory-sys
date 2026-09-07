@@ -14,6 +14,7 @@ import { requireUser } from "@/lib/session"
 import { canApprove, canManageFinance, canSeeAllBranches, scopedBranchId } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { generateDocNumber, money } from "@/lib/utils"
+import { shopError } from "@/lib/shop-speak"
 import { warrantyState } from "@/lib/warranty"
 import { cell, readTableFile } from "@/lib/table-file"
 import { buildBillTrace, type SupplierBillTrace } from "@/lib/supplier-trace"
@@ -702,7 +703,7 @@ export async function completeReturn(formData: FormData) {
     })
   })
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "Could not complete return." }
+    return { error: shopError(error, "Could not complete return.") }
   }
 
   refreshOps()
@@ -752,7 +753,7 @@ export async function createSwap(formData: FormData) {
     where: { id: newImeiId },
     include: { product: true },
   })
-  if (!newImei || newImei.status !== "IN_STOCK") return { error: "Selected store device is not available." }
+  if (!newImei || newImei.status !== "IN_STOCK") return { error: "That phone is not In shop." }
   if (newImei.branchId !== branchId) return { error: "That IMEI is not in the selected shop." }
 
   const incoming = await prisma.imeiRecord.create({
@@ -1282,7 +1283,7 @@ export async function createTransfer(formData: FormData): Promise<{
     where: { branchId: toBranchId, isActive: true },
   })
   for (const staff of destStaff) {
-    await notify(staff.id, "Incoming transfer", `${transfer.transferNumber} · confirm IMEIs on arrival`, "/transfers", "TRANSFER")
+    await notify(staff.id, "Shop to shop send", `${transfer.transferNumber} · confirm IMEIs on arrival`, "/transfers", "TRANSFER")
   }
   refreshOps()
   return { success: true }

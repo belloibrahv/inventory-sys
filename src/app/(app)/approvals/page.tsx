@@ -5,6 +5,8 @@ import { PageHeader, StatusBadge } from "@/components/shared"
 import { WorkflowSteps } from "@/components/workflow-steps"
 import { canApprove } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
+import { recordKindLabel } from "@/lib/shop-speak"
+import { statusLabel } from "@/lib/status"
 import { formatDateTime } from "@/lib/utils"
 
 function entityHref(type: string) {
@@ -28,8 +30,8 @@ export default async function ApprovalsPage() {
           <div key={row.id} className="surface-card flex flex-col gap-3 p-5 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="font-semibold">
-                <Link href={entityHref(row.entityType)} className="text-primary">{row.type}</Link>
-                {" · "}{row.entityType}
+                <Link href={entityHref(row.entityType)} className="text-primary">{statusLabel(row.type)}</Link>
+                {" · "}{recordKindLabel(row.entityType)}
               </p>
               <p className="text-sm text-muted-foreground">{row.reason} · {row.requester.name} · {formatDateTime(row.requestedAt)}</p>
             </div>

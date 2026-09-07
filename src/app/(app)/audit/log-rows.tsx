@@ -3,6 +3,8 @@
 import { useState } from "react"
 import { StatusBadge } from "@/components/shared"
 import { Badge } from "@/components/ui/badge"
+import { formatRecordChange, pageNameFromPath, recordKindLabel } from "@/lib/shop-speak"
+import { statusLabel } from "@/lib/status"
 import { formatDateTime } from "@/lib/utils"
 
 type Log = {
@@ -32,6 +34,9 @@ export function AuditLogRows({ logs }: { logs: Log[] }) {
     <div className="divide-y divide-border">
       {logs.map((log) => {
         const expanded = open === log.id
+        const page = pageNameFromPath(log.path)
+        const kind = recordKindLabel(log.entityType)
+        const change = formatRecordChange(log.change)
         return (
           <button
             key={log.id}
@@ -43,23 +48,27 @@ export function AuditLogRows({ logs }: { logs: Log[] }) {
               <p className="text-xs text-muted-foreground">{formatDateTime(log.when)}</p>
               <div>
                 <p className="text-sm font-medium">{log.who}</p>
-                <p className="text-xs text-muted-foreground">
-                  {log.entityType === "Offline" ? "Line down / parked work" : log.entityType} · {log.entityId}
-                  {log.path ? ` · ${log.path}` : ""}
+                <p className="text-sm text-muted-foreground">
+                  {kind}
+                  {log.entityId && !log.entityId.startsWith("c") ? ` · ${log.entityId}` : ""}
+                  {page ? ` · ${page}` : ""}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-1">
                 <StatusBadge value={log.action} />
-                <Badge variant={log.risk === "HIGH" ? "danger" : log.risk === "MEDIUM" ? "warning" : "muted"}>{log.risk}</Badge>
+                <Badge variant={log.risk === "HIGH" ? "danger" : log.risk === "MEDIUM" ? "warning" : "muted"}>
+                  {statusLabel(log.risk)}
+                </Badge>
                 {!log.success ? <Badge variant="danger">Failed</Badge> : null}
                 {log.afterHours ? <Badge variant="warning">Night</Badge> : null}
               </div>
             </div>
             {expanded ? (
-              <div className="mt-3 space-y-1 rounded-xl bg-muted px-3 py-3 text-xs">
-                <p>Email: {log.email}</p>
+              <div className="mt-3 space-y-1 rounded-xl bg-muted px-3 py-3 text-sm">
+                <p>Work email: {log.email}</p>
                 <p>Device: {log.ip ?? "Not recorded"}</p>
-                {log.change ? <p className="break-all font-mono">{log.change}</p> : <p>No extra detail on this row.</p>}
+                {page ? <p>Page: {page}</p> : null}
+                {change ? <p>{change}</p> : <p>No extra detail on this row.</p>}
                 <p className="text-muted-foreground">This row cannot be edited or deleted.</p>
               </div>
             ) : null}

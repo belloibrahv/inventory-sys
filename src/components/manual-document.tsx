@@ -96,7 +96,6 @@ export function ManualDocument({
             <h2 className="text-base font-semibold">
               {index + 1}. {section.title}
             </h2>
-            {section.href ? <p className="mt-1 font-mono text-[11px] text-slate-500">{section.href}</p> : null}
             <p className="mt-3 text-sm text-slate-700">{section.what}</p>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <div>

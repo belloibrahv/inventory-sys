@@ -7,6 +7,7 @@ import { formatLagosStamp } from "@/lib/lagos-day"
 import { readSaleQueue, type QueuedSale } from "@/lib/offline-sales"
 import { readTillSnapshot, type TillSnapshot } from "@/lib/till-catalog"
 import { formatCurrency } from "@/lib/utils"
+import { statusLabel } from "@/lib/status"
 import { Button } from "@/components/ui/button"
 
 export function OfflineTill() {
@@ -104,7 +105,7 @@ export function OfflineTill() {
               {queue.map((row) => (
                 <li key={row.id} className="rounded-xl border border-slate-200 px-4 py-3 text-sm">
                   <p className="font-medium">
-                    {row.payload.items.length} item{row.payload.items.length === 1 ? "" : "s"} · {formatCurrency(row.payload.paidAmount)} · {row.payload.paymentMethod}
+                    {row.payload.items.length} item{row.payload.items.length === 1 ? "" : "s"} · {formatCurrency(row.payload.paidAmount)} · {statusLabel(row.payload.paymentMethod)}
                   </p>
                   <p className="mt-1 text-slate-600">Parked {formatLagosStamp(new Date(row.createdAt))}</p>
                 </li>

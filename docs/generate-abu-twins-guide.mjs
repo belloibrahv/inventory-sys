@@ -212,8 +212,8 @@ const children = [
       ["Prepared by", "Product Team, Techvaults Limited"],
       ["Document type", "User guide and test plan"],
       ["Date", "7 September 2026"],
-      ["Version", "1.12"],
-      ["Status", "Updated: Stock count is the honest next step when a supplier bill shows missing products"],
+      ["Version", "1.13"],
+      ["Status", "Updated: Shop screens speak shop words, not computer notes"],
     ].map(([k, v]) =>
       new TableRow({
         children: [
@@ -244,6 +244,7 @@ const children = [
   body("Version 1.10 changes Shop to shop from ticking phones on the screen to a CSV list. Staff download a sample or the In shop IMEIs, keep the lines that are leaving, add accessory item codes and quantities, and upload the file. The other Abu Twins shop still confirms what arrived."),
   body("Version 1.11 makes Goods from supplier the carton trail for missing products. Each bill shows how many the supplier sent, how many were scanned, how many already have an invoice (including sold today before close), and how many the system still says are In shop. Search by IMEI opens that bill. If the shelf is short of Still in shop, count stock. Do not type a new number by hand."),
   body("Version 1.12 writes that next step into Stock count. If a supplier bill says Still in shop but the shelf is short, you count with your hands. A manager must approve before numbers change. Do not type a new shop number because it looks low."),
+  body("Version 1.13 keeps computer notes off the shop screens. Who did what, Alerts, Needs approval, and the phone diary speak shop words. A tap shows what changed in plain language, not a computer file. Sign in still works the same way."),
   body("Today Abu Twins has two shops: Iwo Road, Ibadan (head office) and Challenge, Ibadan. The system can add more shops in Nigeria later. Super Admin opens a new shop when you are ready."),
   body("Please treat the login list at the end as practice only. Those names and passwords are for testing. You can lock them or remove them when live work starts."),
   body("If a page is missing on the live website, ask Techvaults. We will put the newest version up for you."),
@@ -973,9 +974,9 @@ const children = [
 
   ...feature({
     title: "10.27 Who did what",
-    what: "This is the diary of the system. It shows who did an important action, when, in which shop, and what changed. Nothing here is deleted. It also keeps line-down time, parked sales that posted, parked sales that sat too long, and parked sales that vanished from a device. Those last two are marked high risk. At the top it may show the books verdict. Click that banner to open Check the books.",
+    what: "This is the diary of the system. It shows who did an important action, when, and what changed, in shop words. Nothing here is deleted. It also keeps line-down time, parked sales that posted, parked sales that sat too long, and parked sales that vanished from a device. Those last two are marked high risk. At the top it may show the books verdict. Click that banner to open Check the books.",
     why: "When two people disagree, the diary settles it. When cash sat on a phone with no invoice, the diary names the person and the device.",
-    story: "A phone is missing. The records checker opens Who did what, finds the last transfer, and sees who confirmed it at Challenge. The same morning an alert says a parked sale vanished. They filter high risk, open the parked sale line, and see who was signed in on that device when the queue disappeared.",
+    story: "A phone is missing. The records checker opens Who did what, finds the last shop-to-shop send, and sees who confirmed it at Challenge. The same morning an alert says a parked sale vanished. They filter high risk, open the parked sale line, and see who was signed in on that device when the queue disappeared.",
     steps: [
       "Sign in as CEO or records checker.",
       "Click Who did what.",
@@ -984,10 +985,10 @@ const children = [
       "If Home said a parked sale vanished, filter high risk or open the alert link.",
     ],
     expect: [
-      "You see time, person, action, and what changed.",
+      "You see time, person, action, and what changed in everyday words.",
       "There is no delete button.",
       "A sale that posted after the line returned is marked as posted from offline.",
-      "A vanished parked sale shows as a delete of ParkedSale with high risk.",
+      "A vanished parked sale shows as a high-risk parked sale that left this device.",
       "The books banner, when present, opens Check the books.",
     ],
   }),
@@ -1194,6 +1195,7 @@ const children = [
       ["32", "Profit page matches real figures", "ceo@abutwins.com", "Shop sales profit plus neighbor fill profit minus expenses. Neighbor fill invoices are not counted twice."],
       ["33", "Trace a missing unit on a supplier bill", "manager or CEO", "Search the IMEI. The bill opens. Never scanned versus the bill, Sold on the system, and Still in shop are visible. If the shelf is short of Still in shop, Stock count is the next step."],
       ["34", "Stock count after a supplier bill gap", "manager then CEO or auditor", "Shelf count is entered. Difference waits for approval. Shop stock does not change until yes. Who did what keeps the names."],
+      ["35", "Who did what speaks shop words", "auditor@abutwins.com", "A row shows supplier bill or parked sale, not a computer file. Tap shows what changed in everyday words."],
     ],
     [600, 2800, 2600, 3360]
   ),

@@ -505,9 +505,9 @@ const PAGES: Array<
     id: "audit",
     href: "/audit",
     title: "Who did what",
-    what: "The diary. Who did an important action, when, in which shop, and what changed. Nothing here is deleted. Parked sales that sat or vanished are marked high risk.",
+    what: "The diary. Who did an important action, when, and what changed, in shop words. Nothing here is deleted. Parked sales that sat or vanished are marked high risk.",
     doThis: [
-      "Search a name, IMEI, invoice, or path.",
+      "Search a name, IMEI, or invoice.",
       "Filter by action, risk, or failed sign-in.",
       "Open the books banner if it is there.",
       "Download the diary as a file if you need a copy.",

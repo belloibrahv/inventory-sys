@@ -8,6 +8,7 @@ import { can } from "@/lib/permissions"
 import { scopedBranchId } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { generateDocNumber, money } from "@/lib/utils"
+import { shopError } from "@/lib/shop-speak"
 import { getAppSettings } from "@/lib/settings"
 
 function refreshNeighbor() {
@@ -326,7 +327,7 @@ export async function sellNeighborFill(formData: FormData) {
       })
     })
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "Could not complete this neighbor fill sale." }
+    return { error: shopError(error, "Could not complete this neighbor fill sale.") }
   }
 
   refreshNeighbor()

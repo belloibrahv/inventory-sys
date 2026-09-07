@@ -6,6 +6,7 @@ import { PageHeader, StatusBadge } from "@/components/shared"
 import { WorkflowSteps } from "@/components/workflow-steps"
 import { formatCurrency, formatDateTime, money } from "@/lib/utils"
 import { statusLabel } from "@/lib/status"
+import { formatRecordChange } from "@/lib/shop-speak"
 import { warrantyState } from "@/lib/warranty"
 
 const lifecycle = ["RECEIVED", "IN_STOCK", "TRANSFERRED", "SOLD", "RETURNED", "FAULTY", "RETURNED_TO_SUPPLIER", "REPAIRED", "SWAPPED", "DISPOSED"]
@@ -82,20 +83,20 @@ export default async function ImeiDetailPage({ params }: { params: Promise<{ id:
             {record.returns.map((row) => (
               <p key={row.id}>
                 Return <Link href="/returns" className="text-primary">{row.returnNumber}</Link>
-                {` · ${row.status} · ${row.reason} → ${row.outcome}`}
+                {` · ${statusLabel(row.status)} · ${statusLabel(row.reason)} → ${statusLabel(row.outcome)}`}
                 {row.refundAmount ? ` · ${formatCurrency(money(row.refundAmount))}` : ""}
               </p>
             ))}
             {record.repairs.map((row) => (
               <p key={row.id}>
                 Repair <Link href="/repairs" className="text-primary">{row.repairNumber}</Link>
-                {` · ${row.status} · ${row.issue}`}
+                {` · ${statusLabel(row.status)} · ${row.issue}`}
               </p>
             ))}
             {swaps.map((row) => (
               <p key={row.id}>
                 Swap <Link href="/swaps" className="text-primary">{row.swapNumber}</Link>
-                {` · ${row.status} · ${row.customer.name} · ${row.newProduct.name}`}
+                {` · ${statusLabel(row.status)} · ${row.customer.name} · ${row.newProduct.name}`}
               </p>
             ))}
             {record.notes ? <p className="text-muted-foreground">{record.notes}</p> : null}
@@ -108,16 +109,19 @@ export default async function ImeiDetailPage({ params }: { params: Promise<{ id:
           </div>
         </div>
         <div className="surface-card p-5">
-          <h3 className="mb-3 font-semibold">Lifecycle log</h3>
+          <h3 className="mb-3 font-semibold">What happened to this phone</h3>
           <div className="space-y-3 text-sm">
-            {logs.map((log) => (
+            {logs.map((log) => {
+              const change = formatRecordChange(log.newValue)
+              return (
               <div key={log.id} className="border-b border-border/70 pb-2">
-                <p className="font-medium">{log.action} · {log.user?.name ?? "Unknown"}</p>
+                <p className="font-medium">{statusLabel(log.action)} · {log.user?.name ?? "Unknown"}</p>
                 <p className="text-xs text-muted-foreground">{formatDateTime(log.createdAt)}</p>
-                <p className="break-all text-xs text-muted-foreground">{log.newValue}</p>
+                {change ? <p className="text-sm text-muted-foreground">{change}</p> : null}
               </div>
-            ))}
-            {logs.length === 0 ? <p className="text-sm text-muted-foreground">No audit rows yet for this IMEI.</p> : null}
+              )
+            })}
+            {logs.length === 0 ? <p className="text-sm text-muted-foreground">No diary rows yet for this IMEI.</p> : null}
           </div>
         </div>
       </div>
