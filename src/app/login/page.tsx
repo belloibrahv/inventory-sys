@@ -80,7 +80,7 @@ export default function LoginPage() {
           </p>
           {error ? <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
           <Button className="w-full" disabled={loading}>
-            {loading ? "Checking..." : "Sign in"}
+            {loading ? "Checking your sign-in" : "Sign in"}
           </Button>
           <p className="pt-2 text-center text-xs text-muted-foreground">
             Software by{" "}

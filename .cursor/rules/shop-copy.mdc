@@ -1,0 +1,20 @@
+---
+description: Shop screens must show complete words, never ellipsis
+alwaysApply: true
+---
+
+# Complete words on every screen
+
+Never cut a shop word short with three dots. Buttons, placeholders, titles, and loading text use the full phrase.
+
+```tsx
+// Wrong
+{busy ? "Saving..." : "Save"}
+placeholder="Find IMEI..."
+
+// Right
+{busy ? "Saving this customer" : "Save customer for this shop"}
+placeholder="Find IMEI, invoice, supplier bill, or customer"
+```
+
+Do not use CSS `truncate`, `text-ellipsis`, or `line-clamp` on names, invoices, IMEIs, or amounts. Let the full value wrap.

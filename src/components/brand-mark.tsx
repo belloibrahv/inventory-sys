@@ -29,7 +29,7 @@ export function BrandLockup({
     <div className="flex items-center gap-3">
       <BrandMark size={compact ? 36 : 44} />
       <div className="min-w-0">
-        <p className={cn("truncate font-semibold tracking-tight", compact ? "text-sm" : "text-base", light ? "text-white" : "text-foreground")}>
+        <p className={cn("font-semibold tracking-tight", compact ? "text-sm" : "text-base", light ? "text-white" : "text-foreground")}>
           abutwins
           <span className={cn("font-medium", light ? "text-white/80" : "text-primary")}> Softskills</span>
         </p>

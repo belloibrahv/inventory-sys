@@ -65,7 +65,7 @@ export function CommandPalette({ allowedHrefs = [] }: { allowedHrefs?: string[] 
         <div className="border-b border-border p-3">
           <Input
             autoFocus
-            placeholder="Find IMEI, invoice, supplier bill, or customer..."
+            placeholder="Find IMEI, invoice, supplier bill, or customer"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />

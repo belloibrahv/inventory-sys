@@ -297,7 +297,7 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
 
   return (
     <Button type="button" onClick={download} disabled={busy} className="print:hidden">
-      {busy ? "Preparing PDF..." : "Download branded PDF"}
+      {busy ? "Preparing the PDF" : "Download branded PDF"}
     </Button>
   )
 }

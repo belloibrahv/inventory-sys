@@ -58,7 +58,7 @@ export function BulkProductUpload() {
         <p className="text-xs text-muted-foreground">
           Columns: item code, name, brand, category, tracking (IMEI, SERIAL, or NONE), condition, color, storage, ram, cost, minimum, selling, warranty days, description.
         </p>
-        <Button type="submit" disabled={busy}>{busy ? "Uploading..." : "Upload list"}</Button>
+        <Button type="submit" disabled={busy}>{busy ? "Uploading the list" : "Upload list"}</Button>
       </form>
       {result ? (
         <div className="mt-4 space-y-1 text-sm">

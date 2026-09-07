@@ -137,7 +137,7 @@ export function OfflineBanner() {
       )}
       {!offline && (queue.length || eventCount) ? (
         <Button type="button" size="sm" className="mt-2 min-h-11" disabled={busy} onClick={() => void flush("manual")}>
-          {busy ? "Sending..." : "Send parked work now"}
+          {busy ? "Sending parked work" : "Send parked work now"}
         </Button>
       ) : null}
     </div>

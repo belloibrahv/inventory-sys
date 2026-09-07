@@ -212,8 +212,8 @@ const children = [
       ["Prepared by", "Product Team, Techvaults Limited"],
       ["Document type", "User guide and test plan"],
       ["Date", "7 September 2026"],
-      ["Version", "1.3"],
-      ["Status", "Updated: branded reports print and PDF"],
+      ["Version", "1.4"],
+      ["Status", "Updated: full words on buttons, no three-dot cut-offs"],
     ].map(([k, v]) =>
       new TableRow({
         children: [
@@ -235,6 +235,7 @@ const children = [
   body("Version 1.1 added three locks that stop quiet loss. Sell now stays shut until yesterday's till is counted. A sale parked on a device while the line is down is watched, and an alert is sent if it sits too long or vanishes. Home always shows shop count against the IMEI list, including when they match."),
   body("Version 1.2 gives accounts a bank-style statement. Check the books opens any previous Lagos day, compares it with another day or week, and prints a branded PDF or CSV with the company mark. The pack does not change any invoice. It only adds the books again so a person can sign them."),
   body("Version 1.3 makes Reports print like a management paper. The meeting pack has the ab mark, shop books, and NGN amounts. Buttons stay on the screen, not on the paper."),
+  body("Version 1.4 stops cut-off words. A button that is working says the full action, such as Preparing the PDF, not three dots after a half word."),
   body("Today Abu Twins has two shops: Iwo Road, Ibadan (head office) and Challenge, Ibadan. The system can add more shops in Nigeria later. Super Admin opens a new shop when you are ready."),
   body("Please treat the login list at the end as practice only. Those names and passwords are for testing. You can lock them or remove them when live work starts."),
   body("If a page is missing on the live website, ask Techvaults. We will put the newest version up for you."),
@@ -376,6 +377,7 @@ const children = [
   bullet("The left side says abutwins Softskills and Own The Future."),
   bullet("The bottom of the sign-in page says Software by Techvaults Limited. You can click it to open techvaults.com."),
   bullet("After a correct login you land on Home, or the first page your job is allowed to see."),
+  bullet("While it checks, the button says Checking your sign-in, not three dots."),
   bullet("A wrong email or password shows: Email or password is not correct, or this login is locked."),
   bullet("A locked staff account cannot enter."),
   h3("If you get stuck"),
@@ -1078,6 +1080,7 @@ const children = [
   bullet("Check the books does not change any invoice. It reprints the add-up so the accountant and records checker can sign."),
   bullet("Who did what is never wiped."),
   bullet("Practice logins must be changed or removed before real daily use."),
+  bullet("Every button and label uses the full word. Do not cut a term short with three dots."),
 
   h1("15. How Techvaults will help you"),
   body("Techvaults Limited built this software for Abu Twins Softskills Investment. We are the provider. Our website is techvaults.com."),

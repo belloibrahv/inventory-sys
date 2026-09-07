@@ -106,7 +106,7 @@ export default async function ImeiDetailPage({ params }: { params: Promise<{ id:
               <div key={log.id} className="border-b border-border/70 pb-2">
                 <p className="font-medium">{log.action} · {log.user?.name ?? "Unknown"}</p>
                 <p className="text-xs text-muted-foreground">{formatDateTime(log.createdAt)}</p>
-                <p className="truncate text-xs text-muted-foreground">{log.newValue}</p>
+                <p className="break-all text-xs text-muted-foreground">{log.newValue}</p>
               </div>
             ))}
             {logs.length === 0 ? <p className="text-sm text-muted-foreground">No audit rows yet for this IMEI.</p> : null}

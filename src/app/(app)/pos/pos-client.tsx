@@ -398,7 +398,7 @@ export function PosClient({
               <Input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="New name" />
               <Input value={newPhone} onChange={(event) => setNewPhone(event.target.value)} placeholder="Phone" />
               <Button type="button" variant="outline" size="sm" className="col-span-2" disabled={savingCustomer} onClick={saveCustomer}>
-                {savingCustomer ? "Saving..." : "Save customer for this shop"}
+                {savingCustomer ? "Saving this customer" : "Save customer for this shop"}
               </Button>
             </div>
           )}
@@ -444,7 +444,7 @@ export function PosClient({
           ) : null}
         </div>
         <Button className="min-h-12 w-full" disabled={!cart.length || busy || Boolean(sellLock?.locked)} onClick={checkout}>
-          {busy ? "Posting..." : sellLock?.locked ? "Close yesterday first" : "Complete sale"}
+          {busy ? "Posting this sale" : sellLock?.locked ? "Close yesterday first" : "Complete sale"}
         </Button>
         <p className="text-xs text-muted-foreground">
           USB scanners work like a keyboard. Print the invoice after the sale. If a receipt printer is attached, printing can open the cash drawer.
