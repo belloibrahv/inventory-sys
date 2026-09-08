@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { pushSaleQueue } from "@/lib/offline-sales"
-import { applyParkedToTillSnapshot, readTillSnapshot, saveTillSnapshot, type TillBranch, type TillCustomer, type TillImei, type TillProduct, type TillSellLock } from "@/lib/till-catalog"
+import { applyParkedToTillSnapshot, readTillSnapshot, saveTillSnapshot, type TillBranch, type TillCustomer, type TillImei, type TillProduct, type TillSellLock, type TillSnapshot } from "@/lib/till-catalog"
 import { formatCurrency, money } from "@/lib/utils"
 import { Trash2 } from "lucide-react"
 
@@ -32,14 +32,24 @@ export function PosClient({
   sellLocks?: Record<string, TillSellLock>
 }) {
   const router = useRouter()
-  const [products, setProducts] = useState(serverProducts)
-  const [customers, setCustomers] = useState(serverCustomers)
-  const [imeis, setImeis] = useState(serverImeis)
-  const [branches, setBranches] = useState(serverBranches)
-  const [canOverrideFloor, setCanOverrideFloor] = useState(Boolean(serverCanOverrideFloor))
-  const [sellLocks, setSellLocks] = useState(serverSellLocks)
-  const [usingDeviceList, setUsingDeviceList] = useState(false)
+  // The till reads the shop system while the line is up, and the last list
+  // saved on this phone when it is down. Only the phone's own list is held in
+  // state. The shop system's figures are read straight from props.
+  //
+  // They used to be copied into state on first load, which meant nothing sent
+  // from the shop system afterwards ever arrived: a customer added at the till
+  // a moment earlier was missing from the list, so the credit limit was checked
+  // against nothing and the name looked unselected.
+  const [deviceList, setDeviceList] = useState<TillSnapshot | null>(null)
   const [lineDown, setLineDown] = useState(false)
+
+  const usingDeviceList = deviceList !== null
+  const products = deviceList?.products ?? serverProducts
+  const customers = deviceList?.customers ?? serverCustomers
+  const imeis = deviceList?.imeis ?? serverImeis
+  const branches = deviceList?.branches ?? serverBranches
+  const canOverrideFloor = deviceList ? Boolean(deviceList.canOverrideFloor) : Boolean(serverCanOverrideFloor)
+  const sellLocks = deviceList?.sellLocks ?? serverSellLocks
   const [query, setQuery] = useState("")
   const [customerId, setCustomerId] = useState("")
   const [branchId, setBranchId] = useState(defaultBranchId || serverBranches[0]?.id || "")
@@ -54,7 +64,20 @@ export function PosClient({
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    const onLine = () => setLineDown(!navigator.onLine)
+    const onLine = () => {
+      const down = !navigator.onLine
+      setLineDown(down)
+      // When the line comes back, go back to the shop system's list and ask the
+      // server for a fresh one. The till used to stay on the phone's saved list
+      // for the rest of the shift, so a phone sold at the other till kept
+      // showing as In shop here long after the line returned.
+      if (!down) {
+        setDeviceList((current) => {
+          if (current) router.refresh()
+          return null
+        })
+      }
+    }
     onLine()
     window.addEventListener("online", onLine)
     window.addEventListener("offline", onLine)
@@ -62,7 +85,7 @@ export function PosClient({
       window.removeEventListener("online", onLine)
       window.removeEventListener("offline", onLine)
     }
-  }, [])
+  }, [router])
 
   useEffect(() => {
     let cancelled = false
@@ -79,19 +102,16 @@ export function PosClient({
       const online = navigator.onLine
       if (online && (serverImeis.length || serverCustomers.length || serverProducts.length)) {
         await saveTillSnapshot(snapshot)
+        // Fresh figures have arrived, so the phone's older copy is no longer
+        // what should be on screen.
+        if (!cancelled) setDeviceList(null)
         return
       }
       const stored = await readTillSnapshot()
       if (cancelled) return
       if (stored) {
-        setProducts(stored.products)
-        setCustomers(stored.customers)
-        setImeis(stored.imeis)
-        setBranches(stored.branches)
-        setCanOverrideFloor(Boolean(stored.canOverrideFloor))
-        setSellLocks(stored.sellLocks)
+        setDeviceList(stored)
         if (stored.defaultBranchId && !branchId) setBranchId(stored.defaultBranchId)
-        setUsingDeviceList(true)
         return
       }
       if (!online && (serverImeis.length || serverCustomers.length)) {
@@ -103,23 +123,43 @@ export function PosClient({
     }
   }, [serverProducts, serverCustomers, serverImeis, serverBranches, defaultBranchId, serverCanOverrideFloor, serverSellLocks])
 
-  const branchImeis = imeis.filter((item) => item.branchId === branchId && !cart.some((line) => line.imeiId === item.id))
+  // What is In shop here and not already on this sale. Worked out once per
+  // change rather than on every keystroke: this walks every phone in the shop
+  // and, for each, the whole cart, so on a big shop it was enough work between
+  // keypresses to make the search box feel stuck.
+  const cartImeiIds = useMemo(
+    () => new Set(cart.map((line) => line.imeiId).filter(Boolean) as string[]),
+    [cart]
+  )
+  const branchImeis = useMemo(
+    () => imeis.filter((item) => item.branchId === branchId && !cartImeiIds.has(item.id)),
+    [imeis, branchId, cartImeiIds]
+  )
+
   const q = query.trim().toLowerCase()
-  const filtered = q
-    ? branchImeis.filter(
-        (item) =>
-          item.imei1.toLowerCase().includes(q) ||
-          (item.serialNumber ?? "").toLowerCase().includes(q) ||
-          item.product.name.toLowerCase().includes(q)
-      )
-    : []
-  const accessoryHits = q
-    ? products.filter((product) => {
-        if (product.serialized) return false
-        const onHand = product.stock.find((row) => row.branchId === branchId)?.quantity ?? 0
-        return onHand > 0 && (product.name.toLowerCase().includes(q) || product.sku.toLowerCase().includes(q))
-      })
-    : []
+  const filtered = useMemo(
+    () =>
+      q
+        ? branchImeis.filter(
+            (item) =>
+              item.imei1.toLowerCase().includes(q) ||
+              (item.serialNumber ?? "").toLowerCase().includes(q) ||
+              item.product.name.toLowerCase().includes(q)
+          )
+        : [],
+    [q, branchImeis]
+  )
+  const accessoryHits = useMemo(
+    () =>
+      q
+        ? products.filter((product) => {
+            if (product.serialized) return false
+            const onHand = product.stock.find((row) => row.branchId === branchId)?.quantity ?? 0
+            return onHand > 0 && (product.name.toLowerCase().includes(q) || product.sku.toLowerCase().includes(q))
+          })
+        : [],
+    [q, products, branchId]
+  )
 
   const total = useMemo(() => cart.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0), [cart])
   const customer = customers.find((row) => row.id === customerId)
@@ -248,11 +288,7 @@ export function PosClient({
     async function keepOnDevice() {
       await pushSaleQueue(payload)
       const next = await applyParkedToTillSnapshot(payload)
-      if (next) {
-        setImeis(next.imeis)
-        setProducts(next.products)
-        setUsingDeviceList(true)
-      }
+      if (next) setDeviceList(next)
       setBusy(false)
       setCart([])
       setPaid(0)

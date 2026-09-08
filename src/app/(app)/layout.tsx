@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/session"
 import { prisma } from "@/lib/prisma"
 import { AppFrame } from "@/components/layout/frame"
+import { LiveRefresh } from "@/components/live-refresh"
 import { getAllowedKeys, hrefsForKeys, pathIsAllowed } from "@/lib/permissions"
 import { writeAudit } from "@/lib/audit"
 import { getViewShopOptions } from "@/app/actions/view-shop"
@@ -56,6 +57,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <AppFrame unread={unread} shops={shops} user={{ name: user.name, role: user.role, mustChangePassword: user.mustChangePassword }} allowedHrefs={allowedHrefs}>
+      <LiveRefresh />
       {children}
     </AppFrame>
   )
