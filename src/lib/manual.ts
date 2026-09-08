@@ -231,7 +231,7 @@ const PAGES: Array<
       "If a unit does not work, send those IMEIs back to the supplier from this page or from Returns.",
     ],
     watch: [
-      "This is not Iwo Road sending a phone to Challenge. That is Shop to shop.",
+      "This is not Iwo Road sending a phone to Bodija or Challenge. That is Shop to shop.",
       "This is not buying one unit from the shop next door for a customer. That is Neighbor shop fill.",
       "Never scanned versus the bill means those units were never given a number on this system.",
       "If Still in shop is higher than the shelf, a unit may have been sold without an invoice. Do not type a new shop number by hand.",
@@ -271,7 +271,7 @@ const PAGES: Array<
     href: "/transfers",
     title: "Shop to shop",
     needAction: "action.transfer",
-    what: "Move phones and accessories that already belong to Abu Twins from one of our shops to another, such as Iwo Road to Challenge. You upload a CSV of IMEIs and accessory lines. The receiving shop must confirm arrival.",
+    what: "Move phones and accessories that already belong to Abu Twins from one of our shops to another, such as Iwo Road to Bodija. You upload a CSV of IMEIs and accessory lines. The receiving shop must confirm arrival.",
     doThis: [
       "Pick the Abu Twins shop you are sending from and the Abu Twins shop that will receive.",
       "Download the sample file, or download the In shop IMEIs at the sending shop.",
@@ -301,7 +301,7 @@ const PAGES: Array<
     ],
     watch: [
       "Do not invent a buyer. Add the customer first.",
-      "This is not Shop to shop. Challenge is our shop. A neighbor is someone next door.",
+      "This is not Shop to shop. Bodija and Challenge are our shops. A neighbor is someone next door.",
     ],
     cannot: ["You cannot turn a neighbor fill into Iwo Road shelf stock and then pretend it arrived from a supplier."],
     lookup: ["neighbor", "next door", "fill", "profit"],
@@ -453,9 +453,9 @@ const PAGES: Array<
     href: "/branches",
     title: "Shops",
     needAction: "action.settings",
-    what: "Iwo Road is head office. Challenge is the second shop. Super Admin can open a new shop or close one. Closed shops stay in a Super Admin-only list so old sales are not lost.",
+    what: "Iwo Road is head office. Bodija and Challenge are the other two shops. Each shop keeps its own stock, sales, customers, and money, and staff there see only their own shop. Super Admin can open a new shop or close one. Closed shops stay in a Super Admin-only list so old sales are not lost.",
     doThis: [
-      "Confirm you see Iwo Road, Ibadan and Challenge, Ibadan.",
+      "Confirm you see Iwo Road, Ibadan, Bodija, Ibadan, and Challenge, Ibadan.",
       "If you are Super Admin, you can open a new shop with a name, a short code, and an address.",
     ],
     watch: ["Old Lagos or Abuja names do not appear when you sell or book new goods."],
