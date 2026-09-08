@@ -15,6 +15,8 @@ import { canApprove, canManageFinance, canSeeAllBranches, scopedBranchId } from 
 import { can } from "@/lib/permissions"
 import { generateDocNumber, money } from "@/lib/utils"
 import { shopError } from "@/lib/shop-speak"
+import { canReachBranch, viewBranchFilter } from "@/lib/branch-scope"
+import { ConflictError, claimImei, claimImeis, drawStock, returnStock, shiftCustomerBalance } from "@/lib/concurrency"
 import { warrantyState } from "@/lib/warranty"
 import { cell, readTableFile } from "@/lib/table-file"
 import { buildBillTrace, type SupplierBillTrace } from "@/lib/supplier-trace"
@@ -171,7 +173,7 @@ function purchaseSearchWhere(q: string) {
 
 export async function getPurchases(search?: string) {
   const user = await requireUser()
-  const branchId = await scopedBranchId(user.role, user.branchId)
+  const branchId = await viewBranchFilter(user)
   await attachImeisToPurchases()
   const q = search?.trim() ?? ""
   const purchases = await prisma.purchase.findMany({
@@ -207,13 +209,16 @@ export async function getPurchases(search?: string) {
 }
 
 export async function getPurchase(id: string) {
-  await requireUser()
+  const user = await requireUser()
   await attachImeisToPurchases()
   const purchase = await prisma.purchase.findUnique({
     where: { id },
     include: { ...purchaseInclude, incomingLots: true },
   })
   if (!purchase) return null
+  // A supplier bill carries cost prices and the IMEIs it landed. It stays with
+  // the shop that ordered it.
+  if (!(await canReachBranch(user, purchase.branchId))) return null
   const item = purchase.items[0]
   const tracking = trackingOf(item?.product.tracking)
   const accessory =
@@ -307,21 +312,26 @@ export async function receivePurchaseImeis(formData: FormData) {
 
   if (imeis.length === 0) {
     if (remaining < 1) return { error: "Nothing left to receive." }
-    await prisma.$transaction(async (tx) => {
-      await tx.purchaseItem.update({
-        where: { id: item.id },
-        data: { receivedQty: item.quantity },
+    try {
+      await prisma.$transaction(async (tx) => {
+        // Only book in against the count this screen was showing. Two people
+        // receiving the same shipment used to add the goods to stock twice.
+        const booked = await tx.purchaseItem.updateMany({
+          where: { id: item.id, receivedQty: item.receivedQty },
+          data: { receivedQty: item.quantity },
+        })
+        if (booked.count !== 1) {
+          throw new ConflictError(`${purchase.invoiceNumber} was already received by someone else. Refresh to see it.`)
+        }
+        await tx.purchase.update({
+          where: { id },
+          data: { status: "RECEIVED", receivedDate: new Date() },
+        })
+        await returnStock(tx, { productId: item.productId, branchId: purchase.branchId, quantity: remaining })
       })
-      await tx.purchase.update({
-        where: { id },
-        data: { status: "RECEIVED", receivedDate: new Date() },
-      })
-      await tx.inventory.upsert({
-        where: { productId_branchId: { productId: item.productId, branchId: purchase.branchId } },
-        update: { quantity: { increment: remaining } },
-        create: { productId: item.productId, branchId: purchase.branchId, quantity: remaining },
-      })
-    })
+    } catch (error) {
+      return { error: shopError(error, "Could not receive this shipment.") }
+    }
     refreshOps()
     return { success: true }
   }
@@ -341,7 +351,18 @@ export async function receivePurchaseImeis(formData: FormData) {
   const receivedQty = item.receivedQty + imeis.length
   const done = receivedQty >= item.quantity
 
+  try {
   await prisma.$transaction(async (tx) => {
+    // Claim the line against the count this screen was showing, before creating
+    // anything. A second receive on the same shipment now stops here instead of
+    // booking the same phones in twice.
+    const booked = await tx.purchaseItem.updateMany({
+      where: { id: item.id, receivedQty: item.receivedQty },
+      data: { receivedQty },
+    })
+    if (booked.count !== 1) {
+      throw new ConflictError(`${purchase.invoiceNumber} was received by someone else while you were scanning. Refresh and scan what is left.`)
+    }
     for (const imei1 of imeis) {
       await tx.imeiRecord.create({
         data: {
@@ -355,10 +376,6 @@ export async function receivePurchaseImeis(formData: FormData) {
         },
       })
     }
-    await tx.purchaseItem.update({
-      where: { id: item.id },
-      data: { receivedQty },
-    })
     await tx.purchase.update({
       where: { id },
       data: {
@@ -366,11 +383,7 @@ export async function receivePurchaseImeis(formData: FormData) {
         receivedDate: done ? new Date() : purchase.receivedDate,
       },
     })
-    await tx.inventory.upsert({
-      where: { productId_branchId: { productId: item.productId, branchId: purchase.branchId } },
-      update: { quantity: { increment: imeis.length } },
-      create: { productId: item.productId, branchId: purchase.branchId, quantity: imeis.length },
-    })
+    await returnStock(tx, { productId: item.productId, branchId: purchase.branchId, quantity: imeis.length })
     await tx.auditLog.create({
       data: {
         userId: user.id,
@@ -394,6 +407,9 @@ export async function receivePurchaseImeis(formData: FormData) {
       })
     }
   })
+  } catch (error) {
+    return { error: shopError(error, "Could not receive these phones. Check that no IMEI is already on the system.") }
+  }
 
   refreshOps()
   return { success: true }
@@ -417,14 +433,21 @@ export async function payPurchase(formData: FormData) {
   const sent = Math.min(amount, due)
   const payRef = generateDocNumber("SPAY")
 
+  try {
   await prisma.$transaction(async (tx) => {
-    await tx.purchase.update({
+    // The database adds the payment on, so two clerks paying the same supplier
+    // invoice at once cannot overwrite each other and lose one of the payments.
+    const paid = await tx.purchase.update({
       where: { id },
       data: {
-        paidAmount: (money(purchase.paidAmount) + sent).toFixed(2),
+        paidAmount: { increment: sent },
         paymentMethod: method,
       },
+      select: { paidAmount: true, totalAmount: true, invoiceNumber: true },
     })
+    if (money(paid.paidAmount) > money(paid.totalAmount) + 0.005) {
+      throw new ConflictError(`${paid.invoiceNumber} was already paid while you were typing. Open it again to see what is still owed.`)
+    }
     await tx.financeEntry.create({
       data: {
         branchId: purchase.branchId,
@@ -446,6 +469,9 @@ export async function payPurchase(formData: FormData) {
       },
     })
   })
+  } catch (error) {
+    return { error: shopError(error, "Could not record this supplier payment.") }
+  }
 
   refreshOps()
   revalidatePath(`/purchases/${id}`)
@@ -454,7 +480,7 @@ export async function payPurchase(formData: FormData) {
 
 export async function getReturns() {
   const user = await requireUser()
-  const branchId = await scopedBranchId(user.role, user.branchId)
+  const branchId = await viewBranchFilter(user)
   const rows = await prisma.stockReturn.findMany({
     where: branchId ? { branchId } : undefined,
     include: {
@@ -574,17 +600,32 @@ export async function completeReturn(formData: FormData) {
 
   try {
   await prisma.$transaction(async (tx) => {
+    // Close the return before any money or stock moves. Two clicks on Complete
+    // used to pay the refund twice and put the phone back on the shelf twice,
+    // because both reads saw the return still open.
+    const sealed = await tx.stockReturn.updateMany({
+      where: { id, status: { not: "COMPLETED" } },
+      data: {
+        status: "COMPLETED",
+        approvedBy: user.id,
+        approvedAt: new Date(),
+        completedAt: new Date(),
+        sentToSupplierAt: record.outcome === "SEND_TO_SUPPLIER" ? new Date() : record.sentToSupplierAt,
+        supplierId: record.supplierId || record.imei?.supplierId || null,
+      },
+    })
+    if (sealed.count !== 1) {
+      throw new ConflictError(`${record.returnNumber} was already completed by someone else. Refresh to see it.`)
+    }
+
     if (record.outcome === "REFUND" || record.outcome === "CREDIT_NOTE") {
       const asked = money(record.refundAmount) || (record.imei ? money(record.imei.product.sellingPrice) : 0)
       const salePaid = sale ? money(sale.paidAmount) : asked
       const saleDue = sale ? Math.max(0, money(sale.totalAmount) - salePaid) : 0
       const cashOut = record.outcome === "REFUND" ? Math.min(asked, salePaid || asked) : 0
       const debtRelief = Math.min(saleDue, asked)
-      const next = Math.max(0, money(record.customer.currentBalance) - debtRelief)
-      await tx.customer.update({
-        where: { id: record.customerId },
-        data: { currentBalance: next.toFixed(2) },
-      })
+      const after = await shiftCustomerBalance(tx, record.customerId, -debtRelief)
+      const next = Math.max(0, money(after.currentBalance))
       await tx.ledgerEntry.create({
         data: {
           customerId: record.customerId,
@@ -638,15 +679,19 @@ export async function completeReturn(formData: FormData) {
     if (record.outcome === "REPLACEMENT") {
       const fresh = await tx.imeiRecord.findUnique({ where: { imei1: replacementImei } })
       if (!fresh || fresh.status !== "IN_STOCK") {
-        throw new Error("Replacement IMEI must be in stock.")
+        throw new ConflictError("Replacement IMEI must be in stock.")
       }
-      await tx.imeiRecord.update({
-        where: { id: fresh.id },
+      await claimImei(tx, {
+        imeiId: fresh.id,
+        branchId: fresh.branchId,
+        label: fresh.imei1,
         data: { status: "SOLD", customerId: record.customerId, saleId: record.saleId },
       })
-      await tx.inventory.update({
-        where: { productId_branchId: { productId: fresh.productId, branchId: fresh.branchId } },
-        data: { quantity: { decrement: 1 } },
+      await drawStock(tx, {
+        productId: fresh.productId,
+        branchId: fresh.branchId,
+        quantity: 1,
+        label: replacementImei,
       })
       if (record.imeiId) {
         await tx.imeiRecord.update({
@@ -654,11 +699,7 @@ export async function completeReturn(formData: FormData) {
           data: { status: record.faultClass === "GOOD_STOCK" ? "IN_STOCK" : "FAULTY", customerId: null, saleId: null },
         })
         if (record.faultClass === "GOOD_STOCK") {
-          await tx.inventory.upsert({
-            where: { productId_branchId: { productId: record.imei!.productId, branchId: record.branchId } },
-            update: { quantity: { increment: 1 } },
-            create: { productId: record.imei!.productId, branchId: record.branchId, quantity: 1 },
-          })
+          await returnStock(tx, { productId: record.imei!.productId, branchId: record.branchId, quantity: 1 })
         }
       }
     }
@@ -672,25 +713,10 @@ export async function completeReturn(formData: FormData) {
         },
       })
       if (record.faultClass === "GOOD_STOCK") {
-        await tx.inventory.upsert({
-          where: { productId_branchId: { productId: record.imei!.productId, branchId: record.branchId } },
-          update: { quantity: { increment: 1 } },
-          create: { productId: record.imei!.productId, branchId: record.branchId, quantity: 1 },
-        })
+        await returnStock(tx, { productId: record.imei!.productId, branchId: record.branchId, quantity: 1 })
       }
     }
 
-    await tx.stockReturn.update({
-      where: { id },
-      data: {
-        status: "COMPLETED",
-        approvedBy: user.id,
-        approvedAt: new Date(),
-        completedAt: new Date(),
-        sentToSupplierAt: record.outcome === "SEND_TO_SUPPLIER" ? new Date() : record.sentToSupplierAt,
-        supplierId: record.supplierId || record.imei?.supplierId || null,
-      },
-    })
     await tx.auditLog.create({
       data: {
         userId: user.id,
@@ -712,7 +738,7 @@ export async function completeReturn(formData: FormData) {
 
 export async function getSwaps() {
   const user = await requireUser()
-  const branchId = await scopedBranchId(user.role, user.branchId)
+  const branchId = await viewBranchFilter(user)
   const rows = await prisma.swap.findMany({
     where: branchId ? { branchId } : undefined,
     include: {
@@ -823,7 +849,25 @@ export async function completeSwap(formData: FormData) {
   const balance = money(swap.balanceAmount)
   const collected = Math.min(paid, Math.max(balance, 0))
 
-  const invoice = await prisma.$transaction(async (tx) => {
+  let invoice: { id: string }
+  try {
+  invoice = await prisma.$transaction(async (tx) => {
+    // Seal the swap first. Without this, two clicks on Complete raised two
+    // invoices and sold the same replacement phone twice.
+    const sealed = await tx.swap.updateMany({
+      where: { id, status: { not: "COMPLETED" } },
+      data: {
+        status: "COMPLETED",
+        approvedBy: user.id,
+        approvedAt: new Date(),
+        completedAt: new Date(),
+        notes: [swap.notes, `Invoice ${invoiceNumber}`].filter(Boolean).join(" · "),
+      },
+    })
+    if (sealed.count !== 1) {
+      throw new ConflictError(`${swap.swapNumber} was already completed by someone else. Refresh to see it.`)
+    }
+
     const sale = await tx.sale.create({
       data: {
         invoiceNumber,
@@ -855,37 +899,33 @@ export async function completeSwap(formData: FormData) {
       },
     })
 
-    await tx.imeiRecord.update({
-      where: { id: swap.newImeiId! },
+    await claimImei(tx, {
+      imeiId: swap.newImeiId!,
+      branchId: swap.branchId,
+      label: "The replacement phone",
       data: { status: "SOLD", customerId: swap.customerId, saleId: sale.id },
     })
     await tx.imeiRecord.update({
       where: { id: swap.oldImeiId },
       data: { status: "IN_STOCK", customerId: null, notes: `Trade-in from ${swap.customer.name}` },
     })
-    await tx.inventory.update({
-      where: { productId_branchId: { productId: swap.newProductId, branchId: swap.branchId } },
-      data: { quantity: { decrement: 1 } },
+    await drawStock(tx, {
+      productId: swap.newProductId,
+      branchId: swap.branchId,
+      quantity: 1,
+      label: swap.newProduct.name,
     })
-    await tx.inventory.upsert({
-      where: { productId_branchId: { productId: swap.oldImei.productId, branchId: swap.branchId } },
-      update: { quantity: { increment: 1 } },
-      create: { productId: swap.oldImei.productId, branchId: swap.branchId, quantity: 1 },
-    })
+    await returnStock(tx, { productId: swap.oldImei.productId, branchId: swap.branchId, quantity: 1 })
 
     const due = Math.max(balance - collected, 0)
     if (due > 0) {
-      const next = money(swap.customer.currentBalance) + due
-      await tx.customer.update({
-        where: { id: swap.customerId },
-        data: { currentBalance: next.toFixed(2) },
-      })
+      const after = await shiftCustomerBalance(tx, swap.customerId, due)
       await tx.ledgerEntry.create({
         data: {
           customerId: swap.customerId,
           type: "SALE",
           amount: due.toFixed(2),
-          balance: next.toFixed(2),
+          balance: money(after.currentBalance).toFixed(2),
           reference: invoiceNumber,
           description: `Swap difference ${swap.swapNumber}`,
         },
@@ -904,16 +944,6 @@ export async function completeSwap(formData: FormData) {
       })
     }
 
-    await tx.swap.update({
-      where: { id },
-      data: {
-        status: "COMPLETED",
-        approvedBy: user.id,
-        approvedAt: new Date(),
-        completedAt: new Date(),
-        notes: [swap.notes, `Invoice ${invoiceNumber}`].filter(Boolean).join(" · "),
-      },
-    })
     await tx.auditLog.create({
       data: {
         userId: user.id,
@@ -926,6 +956,9 @@ export async function completeSwap(formData: FormData) {
     })
     return sale
   })
+  } catch (error) {
+    return { error: shopError(error, "Could not complete this swap.") }
+  }
 
   refreshOps()
   return { success: true, redirectTo: `/sales/${invoice.id}` }
@@ -933,7 +966,7 @@ export async function completeSwap(formData: FormData) {
 
 export async function getRepairs() {
   const user = await requireUser()
-  const branchId = await scopedBranchId(user.role, user.branchId)
+  const branchId = await viewBranchFilter(user)
   return prisma.repair.findMany({
     where: branchId ? { branchId } : undefined,
     include: { imei: { include: { product: true } }, customer: true, branch: true, user: true },
@@ -999,9 +1032,13 @@ export async function advanceRepair(formData: FormData) {
   const nextCost = formData.get("repairCost") ? Number(formData.get("repairCost")) : money(repair.repairCost)
   const closing = status === "COMPLETED" || status === "DELIVERED"
 
+  try {
   await prisma.$transaction(async (tx) => {
-    await tx.repair.update({
-      where: { id },
+    // Only move the job on from the state this screen was showing. A second
+    // click on Delivered used to charge the customer again and put the phone
+    // back on the shelf a second time.
+    const advanced = await tx.repair.updateMany({
+      where: { id, status: repair.status },
       data: {
         status,
         diagnosis: String(formData.get("diagnosis") || repair.diagnosis || "") || null,
@@ -1009,6 +1046,9 @@ export async function advanceRepair(formData: FormData) {
         completedAt: closing ? new Date() : repair.completedAt,
       },
     })
+    if (advanced.count !== 1) {
+      throw new ConflictError(`${repair.repairNumber} was already moved on by someone else. Refresh to see where it is now.`)
+    }
 
     if (closing) {
       const shopUnit = !repair.customerId
@@ -1019,25 +1059,16 @@ export async function advanceRepair(formData: FormData) {
         },
       })
       if (shopUnit && status === "DELIVERED") {
-        await tx.inventory.upsert({
-          where: { productId_branchId: { productId: repair.imei.productId, branchId: repair.branchId } },
-          update: { quantity: { increment: 1 } },
-          create: { productId: repair.imei.productId, branchId: repair.branchId, quantity: 1 },
-        })
+        await returnStock(tx, { productId: repair.imei.productId, branchId: repair.branchId, quantity: 1 })
       }
       if (status === "DELIVERED" && repair.customerId && nextCost > 0 && repair.status !== "DELIVERED") {
-        const customer = await tx.customer.findUnique({ where: { id: repair.customerId } })
-        const next = money(customer?.currentBalance) + nextCost
-        await tx.customer.update({
-          where: { id: repair.customerId },
-          data: { currentBalance: next.toFixed(2) },
-        })
+        const after = await shiftCustomerBalance(tx, repair.customerId, nextCost)
         await tx.ledgerEntry.create({
           data: {
             customerId: repair.customerId,
             type: "SALE",
             amount: nextCost.toFixed(2),
-            balance: next.toFixed(2),
+            balance: money(after.currentBalance).toFixed(2),
             reference: repair.repairNumber,
             description: `Repair ${repair.repairNumber} · ${repair.imei.product.name}`,
           },
@@ -1067,6 +1098,9 @@ export async function advanceRepair(formData: FormData) {
       },
     })
   })
+  } catch (error) {
+    return { error: shopError(error, "Could not move this repair on.") }
+  }
   refreshOps()
   if (repair.customerId) revalidatePath(`/customers/${repair.customerId}`)
   return { success: true }
@@ -1074,7 +1108,7 @@ export async function advanceRepair(formData: FormData) {
 
 export async function getTransfers() {
   const user = await requireUser()
-  const branchId = await scopedBranchId(user.role, user.branchId)
+  const branchId = await viewBranchFilter(user)
   const rows = await prisma.stockTransfer.findMany({
     where: branchId
       ? { OR: [{ fromBranchId: branchId }, { toBranchId: branchId }] }
@@ -1140,6 +1174,26 @@ export async function createTransfer(formData: FormData): Promise<{
     byName.set(key, list)
   }
 
+  // One read for every code on the sheet. This loop used to fire a query per
+  // line, so a 200 line transfer meant 200 round trips before anything moved.
+  const codes = rows
+    .map((row) => cell(row, "imei", "imei1", "phone") || cell(row, "serial", "serial_number", "sn"))
+    .filter(Boolean)
+  const codeRecords = codes.length
+    ? await prisma.imeiRecord.findMany({
+        where: {
+          OR: [{ imei1: { in: codes } }, { imei2: { in: codes } }, { serialNumber: { in: codes } }],
+        },
+        include: { product: true },
+      })
+    : []
+  const byCode = new Map<string, (typeof codeRecords)[number]>()
+  for (const record of codeRecords) {
+    for (const key of [record.imei1, record.imei2, record.serialNumber]) {
+      if (key && !byCode.has(key)) byCode.set(key, record)
+    }
+  }
+
   type PhoneLine = { imei1: string; productId: string; color: string; extra: string }
   const phones: PhoneLine[] = []
   const accessoryQty = new Map<string, number>()
@@ -1166,10 +1220,7 @@ export async function createTransfer(formData: FormData): Promise<{
         continue
       }
       seen.add(code)
-      const record = await prisma.imeiRecord.findFirst({
-        where: { OR: [{ imei1: code }, { imei2: code }, { serialNumber: code }] },
-        include: { product: true },
-      })
+      const record = byCode.get(code)
       if (!record) {
         errors.push(`Line ${line}: ${code} is not on this system.`)
         continue
@@ -1218,41 +1269,53 @@ export async function createTransfer(formData: FormData): Promise<{
     qtyByProduct.set(productId, (qtyByProduct.get(productId) ?? 0) + quantity)
   }
 
+  const sendingStock = await prisma.inventory.findMany({
+    where: { branchId: fromBranchId, productId: { in: [...qtyByProduct.keys()] } },
+    select: { productId: true, quantity: true },
+  })
+  const heldByProduct = new Map(sendingStock.map((row) => [row.productId, row.quantity]))
   for (const [productId, quantity] of qtyByProduct) {
-    const stock = await prisma.inventory.findUnique({
-      where: { productId_branchId: { productId, branchId: fromBranchId } },
-    })
-    if (!stock || stock.quantity < quantity) {
+    if ((heldByProduct.get(productId) ?? 0) < quantity) {
       const product = products.find((row) => row.id === productId)
       return { error: `${product?.name ?? "This item"} does not have ${quantity} In shop at the sending shop.` }
     }
   }
 
   const imeis = phones.map((row) => row.imei1)
-  const transfer = await prisma.stockTransfer.create({
-    data: {
-      transferNumber: generateDocNumber("TRF"),
-      fromBranchId,
-      toBranchId,
-      userId: user.id,
-      status: "IN_TRANSIT",
-      sentAt: new Date(),
-      notes: imeis.length ? `IMEIs: ${imeis.join(",")}` : String(formData.get("notes") || "") || `CSV ${file.name}`,
-      items: {
-        create: [...qtyByProduct.entries()].map(([productId, quantity]) => ({ productId, quantity })),
-      },
-    },
-  })
+  const transferNumber = generateDocNumber("TRF")
 
-  await prisma.$transaction(async (tx) => {
-    if (imeis.length) {
-      await tx.imeiRecord.updateMany({
-        where: { imei1: { in: imeis } },
-        data: { status: "TRANSFERRED" },
+  // The transfer record used to be written before the stock moved. When the
+  // stock write then failed, the shop was left with a transfer showing goods in
+  // transit that had never left the shelf. Both now stand or fall together.
+  let transfer: { transferNumber: string }
+  try {
+    transfer = await prisma.$transaction(async (tx) => {
+      const created = await tx.stockTransfer.create({
+        data: {
+          transferNumber,
+          fromBranchId,
+          toBranchId,
+          userId: user.id,
+          status: "IN_TRANSIT",
+          sentAt: new Date(),
+          notes: imeis.length ? `IMEIs: ${imeis.join(",")}` : String(formData.get("notes") || "") || `CSV ${file.name}`,
+          items: {
+            create: [...qtyByProduct.entries()].map(([productId, quantity]) => ({ productId, quantity })),
+          },
+        },
       })
+
+      // Every phone on the list must still be In shop here. If one was sold
+      // while the sheet was being prepared, the whole send is refused rather
+      // than silently shipping a phone the shop no longer holds.
+      await claimImeis(tx, { imei1s: imeis, branchId: fromBranchId, data: { status: "TRANSFERRED" } })
+
       for (const phone of phones) {
         if (!phone.color && !phone.extra) continue
-        const current = await tx.imeiRecord.findUnique({ where: { imei1: phone.imei1 } })
+        const current = await tx.imeiRecord.findUnique({
+          where: { imei1: phone.imei1 },
+          select: { notes: true },
+        })
         await tx.imeiRecord.update({
           where: { imei1: phone.imei1 },
           data: {
@@ -1260,24 +1323,31 @@ export async function createTransfer(formData: FormData): Promise<{
           },
         })
       }
-    }
-    for (const [productId, quantity] of qtyByProduct) {
-      await tx.inventory.update({
-        where: { productId_branchId: { productId, branchId: fromBranchId } },
-        data: { quantity: { decrement: quantity } },
+
+      for (const [productId, quantity] of qtyByProduct) {
+        await drawStock(tx, {
+          productId,
+          branchId: fromBranchId,
+          quantity,
+          label: products.find((row) => row.id === productId)?.name ?? "This item",
+        })
+      }
+
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "CREATE",
+          entityType: "StockTransfer",
+          entityId: created.transferNumber,
+          newValue: JSON.stringify({ fromBranchId, toBranchId, file: file.name, imeis, items: [...qtyByProduct.entries()] }),
+          branchId: fromBranchId,
+        },
       })
-    }
-    await tx.auditLog.create({
-      data: {
-        userId: user.id,
-        action: "CREATE",
-        entityType: "StockTransfer",
-        entityId: transfer.transferNumber,
-        newValue: JSON.stringify({ fromBranchId, toBranchId, file: file.name, imeis, items: [...qtyByProduct.entries()] }),
-        branchId: fromBranchId,
-      },
+      return created
     })
-  })
+  } catch (error) {
+    return { error: shopError(error, "Could not send these goods. Nothing left the shop.") }
+  }
 
   const destStaff = await prisma.user.findMany({
     where: { branchId: toBranchId, isActive: true },
@@ -1311,16 +1381,27 @@ export async function receiveTransfer(formData: FormData) {
     }
   }
 
+  try {
   await prisma.$transaction(async (tx) => {
-    await tx.stockTransfer.update({
-      where: { id },
+    // Mark it received first and only from In transit. Two people confirming
+    // the same delivery used to add the goods to the shelf twice.
+    const received = await tx.stockTransfer.updateMany({
+      where: { id, status: { not: "RECEIVED" } },
       data: { status: "RECEIVED", receivedAt: new Date() },
     })
+    if (received.count !== 1) {
+      throw new ConflictError(`${transfer.transferNumber} was already received by someone else. Refresh to see it.`)
+    }
     if (expected.length) {
-      await tx.imeiRecord.updateMany({
-        where: { imei1: { in: expected } },
+      const landed = await tx.imeiRecord.updateMany({
+        where: { imei1: { in: expected }, status: "TRANSFERRED" },
         data: { status: "IN_STOCK", branchId: transfer.toBranchId },
       })
+      if (landed.count !== expected.length) {
+        throw new ConflictError(
+          `${expected.length - landed.count} of these phones are not showing as sent. Check the list with the sending shop before receiving.`
+        )
+      }
       for (const imei1 of expected) {
         await tx.auditLog.create({
           data: {
@@ -1340,10 +1421,10 @@ export async function receiveTransfer(formData: FormData) {
         where: { id: item.id },
         data: { receivedQty: item.quantity },
       })
-      await tx.inventory.upsert({
-        where: { productId_branchId: { productId: item.productId, branchId: transfer.toBranchId } },
-        update: { quantity: { increment: item.quantity } },
-        create: { productId: item.productId, branchId: transfer.toBranchId, quantity: item.quantity },
+      await returnStock(tx, {
+        productId: item.productId,
+        branchId: transfer.toBranchId,
+        quantity: item.quantity,
       })
     }
     await tx.auditLog.create({
@@ -1357,13 +1438,16 @@ export async function receiveTransfer(formData: FormData) {
       },
     })
   })
+  } catch (error) {
+    return { error: shopError(error, "Could not receive this transfer.") }
+  }
   refreshOps()
   return { success: true }
 }
 
 export async function getSupplierReturnCandidates() {
   const user = await requireUser()
-  const branchId = await scopedBranchId(user.role, user.branchId)
+  const branchId = await viewBranchFilter(user)
   const rows = await prisma.imeiRecord.findMany({
     where: {
       status: { in: ["FAULTY", "RETURNED"] },
@@ -1407,22 +1491,18 @@ export async function sendUnitsToSupplier(formData: FormData) {
     return { error: "You can only send units from your own shop." }
   }
 
+  try {
   await prisma.$transaction(async (tx) => {
     for (const record of records) {
       const houseId = supplierId || record.supplierId
-      if (record.status === "IN_STOCK") {
-        const stock = await tx.inventory.findUnique({
-          where: { productId_branchId: { productId: record.productId, branchId: record.branchId } },
-        })
-        if (stock && stock.quantity > 0) {
-          await tx.inventory.update({
-            where: { productId_branchId: { productId: record.productId, branchId: record.branchId } },
-            data: { quantity: { decrement: 1 } },
-          })
-        }
-      }
-      await tx.imeiRecord.update({
-        where: { id: record.id },
+      // Claim from the state this screen was showing. A unit sold between the
+      // list loading and Send being pressed is now refused, not shipped away
+      // from under the customer who just bought it.
+      await claimImei(tx, {
+        imeiId: record.id,
+        branchId: record.branchId,
+        label: record.imei1,
+        from: record.status,
         data: {
           status: "RETURNED_TO_SUPPLIER",
           customerId: null,
@@ -1430,6 +1510,14 @@ export async function sendUnitsToSupplier(formData: FormData) {
           notes: [record.notes, "Sent back to supplier"].filter(Boolean).join(" · "),
         },
       })
+      if (record.status === "IN_STOCK") {
+        await drawStock(tx, {
+          productId: record.productId,
+          branchId: record.branchId,
+          quantity: 1,
+          label: record.imei1,
+        })
+      }
       await tx.auditLog.create({
         data: {
           userId: user.id,
@@ -1443,6 +1531,9 @@ export async function sendUnitsToSupplier(formData: FormData) {
       })
     }
   })
+  } catch (error) {
+    return { error: shopError(error, "Could not send these units back. Nothing was moved.") }
+  }
 
   refreshOps()
   return { success: true }

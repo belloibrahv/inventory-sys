@@ -1,3 +1,4 @@
+import { cache } from "react"
 import { UserRole } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 
@@ -100,26 +101,63 @@ const DEFAULTS: Record<UserRole, string[]> = {
   ),
 }
 
-export async function ensureRolePermissions() {
-  const existing = await prisma.rolePermission.findMany()
+const ROLE_LIST = Object.keys(DEFAULTS) as UserRole[]
+const EXPECTED_ROWS = ROLE_LIST.length * ALL_PERM_KEYS.length
+
+/**
+ * Fill in any permission row a new release added. The common case is that
+ * nothing is missing, so that case costs one cheap count instead of reading the
+ * whole table. Wrapped in cache() so it runs once per request no matter how many
+ * screens and buttons ask what this member of staff may do.
+ */
+export const ensureRolePermissions = cache(async () => {
+  if ((await prisma.rolePermission.count()) >= EXPECTED_ROWS) return
+
+  const existing = await prisma.rolePermission.findMany({ select: { role: true, permKey: true } })
   const have = new Set(existing.map((row) => `${row.role}:${row.permKey}`))
-  const rows = (Object.keys(DEFAULTS) as UserRole[]).flatMap((role) =>
-    ALL_PERM_KEYS.map((permKey) => ({
+  const missing = ROLE_LIST.flatMap((role) =>
+    ALL_PERM_KEYS.filter((permKey) => !have.has(`${role}:${permKey}`)).map((permKey) => ({
       role,
       permKey,
       allowed: role === "SUPER_ADMIN" || DEFAULTS[role].includes(permKey),
     }))
   )
-  const missing = rows.filter((row) => !have.has(`${row.role}:${row.permKey}`))
   if (missing.length) await prisma.rolePermission.createMany({ data: missing })
-}
+})
+
+/**
+ * Every allowed permission, for every role, in one read. Checking a single role
+ * at a time meant a fresh query for each button on the page; a whole page load
+ * used to run a dozen of them. cache() holds the answer for this one request
+ * only, so a change on Who can see what still shows up on the next page.
+ */
+const loadPermissionMap = cache(async () => {
+  await ensureRolePermissions()
+  const rows = await prisma.rolePermission.findMany({
+    select: { role: true, permKey: true, allowed: true },
+  })
+  // A role that appears here has been set up, even if every box is unticked.
+  // That is different from a role nobody has touched yet, so both are tracked:
+  // unticking everything must lock the role out, not quietly hand back the
+  // permissions it shipped with.
+  const map = new Map<UserRole, Set<string>>()
+  for (const row of rows) {
+    const set = map.get(row.role) ?? new Set<string>()
+    if (row.allowed) set.add(row.permKey)
+    map.set(row.role, set)
+  }
+  return map
+})
 
 export async function getAllowedKeys(role: UserRole) {
-  await ensureRolePermissions()
   if (role === "SUPER_ADMIN") return new Set(ALL_PERM_KEYS)
-  const rows = await prisma.rolePermission.findMany({ where: { role } })
-  if (rows.length === 0) return new Set(DEFAULTS[role] ?? [])
-  return new Set(rows.filter((row) => row.allowed).map((row) => row.permKey))
+  const allowed = (await loadPermissionMap()).get(role)
+  // No rows at all means Who can see what has never been set up for this role,
+  // so fall back to what it ships with rather than locking the person out.
+  if (!allowed) return new Set(DEFAULTS[role] ?? [])
+  // Handed back as a copy: the map is held for the whole request, and a caller
+  // that added to it would change what everyone else on the page is allowed.
+  return new Set(allowed)
 }
 
 export async function can(role: UserRole, key: string) {

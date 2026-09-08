@@ -13,6 +13,14 @@ const BRANCHES = [
     isHq: true,
   },
   {
+    name: "Bodija, Ibadan",
+    code: "BOD",
+    address: "Bodija, Ibadan, Oyo State",
+    phone: "07062454854",
+    email: "bodija@abutwins.com",
+    isHq: false,
+  },
+  {
     name: "Challenge, Ibadan",
     code: "CHL",
     address: "Challenge, Ibadan, Oyo State",
@@ -54,6 +62,16 @@ const USERS: SeedUser[] = [
   { email: "sales@abutwins.com", password: "sales123", name: "Tunde Adebayo", role: "SALES_EXECUTIVE", branchCode: "IWO" },
   { email: "engineer@abutwins.com", password: "engineer123", name: "Kelechi Nwosu", role: "ENGINEER", branchCode: "IWO" },
   { email: "challenge.manager@abutwins.com", password: "manager123", name: "Fatima Sule", role: "BRANCH_MANAGER", branchCode: "CHL" },
+  { email: "challenge.vault@abutwins.com", password: "vault123", name: "Segun Oyelaran", role: "VAULT_MANAGER", branchCode: "CHL" },
+  { email: "challenge.cashier@abutwins.com", password: "cashier123", name: "Ngozi Eze", role: "CASHIER", branchCode: "CHL" },
+  { email: "challenge.sales@abutwins.com", password: "sales123", name: "Musa Danjuma", role: "SALES_EXECUTIVE", branchCode: "CHL" },
+  { email: "challenge.engineer@abutwins.com", password: "engineer123", name: "Yemi Ogunleye", role: "ENGINEER", branchCode: "CHL" },
+
+  { email: "bodija.manager@abutwins.com", password: "manager123", name: "Aisha Bello", role: "BRANCH_MANAGER", branchCode: "BOD" },
+  { email: "bodija.vault@abutwins.com", password: "vault123", name: "Emeka Obi", role: "VAULT_MANAGER", branchCode: "BOD" },
+  { email: "bodija.cashier@abutwins.com", password: "cashier123", name: "Folake Adisa", role: "CASHIER", branchCode: "BOD" },
+  { email: "bodija.sales@abutwins.com", password: "sales123", name: "Sadiq Abubakar", role: "SALES_EXECUTIVE", branchCode: "BOD" },
+  { email: "bodija.engineer@abutwins.com", password: "engineer123", name: "Chidera Okafor", role: "ENGINEER", branchCode: "BOD" },
 ]
 
 async function main() {

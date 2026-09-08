@@ -25,12 +25,14 @@ function PasswordGate({ mustChange }: { mustChange: boolean }) {
 export function AppShell({
   title,
   unread,
+  shops = null,
   user,
   allowedHrefs,
   children,
 }: {
   title: string
   unread?: number
+  shops?: { branches: Array<{ id: string; name: string; code: string }>; active: string } | null
   user: { name?: string | null; role: import("@prisma/client").UserRole; mustChangePassword?: boolean }
   allowedHrefs: string[]
   children: ReactNode
@@ -50,7 +52,7 @@ export function AppShell({
       <PasswordGate mustChange={Boolean(user.mustChangePassword)} />
       <Sidebar allowedHrefs={allowedHrefs} />
       <div className={cn("transition-[padding] duration-200", desktopSidebar ? "lg:pl-[272px]" : "lg:pl-0")}>
-        <Header title={title} unread={unread} user={user} />
+        <Header title={title} unread={unread} user={user} shops={shops} />
         <div className="px-4 pt-4 md:px-8">
           <OfflineBanner />
         </div>

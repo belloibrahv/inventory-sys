@@ -7,6 +7,7 @@ import { Bell, Menu, Moon, Search, Sun } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useUI } from "@/store/ui"
 import { ROLE_LABELS } from "@/lib/roles"
+import { ShopSwitch } from "@/components/shop-switch"
 
 const headerAction =
   "inline-flex min-h-11 items-center rounded-xl px-3 text-sm font-semibold text-foreground hover:bg-muted"
@@ -15,10 +16,12 @@ export function Header({
   title,
   unread = 0,
   user,
+  shops = null,
 }: {
   title: string
   unread?: number
   user: { name?: string | null; role: UserRole }
+  shops?: { branches: Array<{ id: string; name: string; code: string }>; active: string } | null
 }) {
   const { setTheme, resolvedTheme } = useTheme()
   const setCommandOpen = useUI((state) => state.setCommandOpen)
@@ -44,6 +47,7 @@ export function Header({
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
+        {shops ? <ShopSwitch branches={shops.branches} active={shops.active} /> : null}
         <button
           onClick={() => setCommandOpen(true)}
           className="hidden h-11 items-center gap-3 rounded-xl border-2 border-primary/40 bg-card px-3 text-sm font-semibold text-foreground shadow-sm md:flex"

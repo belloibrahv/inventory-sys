@@ -3,13 +3,14 @@
 import { revalidatePath } from "next/cache"
 import { IMEIStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
+import { canReachBranch, viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
 import { scopedBranchId } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 
 export async function getImeiRecords(search?: string, status?: string) {
   const user = await requireUser()
-  const branchId = await scopedBranchId(user.role, user.branchId)
+  const branchId = await viewBranchFilter(user)
 
   return prisma.imeiRecord.findMany({
     where: {
@@ -125,7 +126,7 @@ export async function updateImeiCondition(formData: FormData) {
 }
 
 export async function getImeiDetail(id: string) {
-  await requireUser()
+  const user = await requireUser()
   const record = await prisma.imeiRecord.findFirst({
     where: { OR: [{ id }, { imei1: id }] },
     include: {
@@ -141,6 +142,9 @@ export async function getImeiDetail(id: string) {
       swapsNew: { include: { customer: true, newProduct: true }, orderBy: { createdAt: "desc" } },
     },
   })
+  // A phone belongs to the shop holding it. Looking one up by IMEI must not
+  // become a way to read another shop's stock and sales history.
+  if (!(await canReachBranch(user, record?.branchId))) return null
   if (!record) return null
   const logs = await prisma.auditLog.findMany({
     where: {
@@ -155,7 +159,7 @@ export async function getImeiDetail(id: string) {
 
 export async function getInventory() {
   const user = await requireUser()
-  const branchId = await scopedBranchId(user.role, user.branchId)
+  const branchId = await viewBranchFilter(user)
   return prisma.inventory.findMany({
     where: {
       ...(branchId ? { branchId } : {}),

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { ExpenseCategory, UserRole } from "@prisma/client"
 import * as bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
+import { branchFilter, viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
 import { canApprove, canManageFinance, canManageStaff, isSuperAdmin, scopedBranchId } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
@@ -14,7 +15,7 @@ export async function getFinance() {
   if (!(await can(user.role, "view.finance")) && !(await can(user.role, "view.expenses"))) {
     return { entries: [], expenses: [], debtors: [], creditors: [], inflow: 0, outflow: 0, net: 0 }
   }
-  const branchId = await scopedBranchId(user.role, user.branchId)
+  const branchId = await viewBranchFilter(user)
   const where = branchId ? { branchId } : {}
   const [entries, expenses, debtors, purchases] = await Promise.all([
     prisma.financeEntry.findMany({
@@ -236,7 +237,7 @@ export async function rejectRequest(formData: FormData) {
 export async function getReconciliations() {
   const user = await requireUser()
   if (!(await can(user.role, "view.reconciliation"))) return []
-  const branchId = await scopedBranchId(user.role, user.branchId)
+  const branchId = await viewBranchFilter(user)
   return prisma.reconciliation.findMany({
     where: branchId ? { branchId } : undefined,
     include: { branch: true, user: true, items: { include: { product: true } } },
@@ -332,7 +333,11 @@ export async function markNotificationsRead() {
 export async function getStaff() {
   const user = await requireUser()
   if (!(await can(user.role, "view.staff"))) return []
+  // A shop manager runs their own shop's people. Head office sees everyone,
+  // including the head office roles that are not tied to any shop.
+  const scope = await branchFilter(user)
   return prisma.user.findMany({
+    where: scope ? { branchId: scope } : undefined,
     select: {
       id: true,
       name: true,
@@ -367,6 +372,13 @@ export async function createStaff(formData: FormData) {
   }
   const exists = await prisma.user.findUnique({ where: { email } })
   if (exists) return { error: "That email is already on staff." }
+
+  // A shop manager may only add people to their own shop. The shop came from
+  // the form, so without this a manager could attach a login to another shop.
+  const allowedBranch = await branchFilter(user, branchId)
+  if (branchId && allowedBranch && branchId !== allowedBranch) {
+    return { error: "You can only add staff to your own shop." }
+  }
 
   await prisma.user.create({
     data: {
@@ -426,7 +438,7 @@ export async function getReportData() {
   if (!(await can(user.role, "view.reports"))) {
     return { sales: [], expenses: [], swaps: [], returns: [], inventory: [], debtors: [], creditors: [] }
   }
-  const branchId = await scopedBranchId(user.role, user.branchId)
+  const branchId = await viewBranchFilter(user)
   const [sales, expenses, swaps, returns, inventory, debtors, purchases] = await Promise.all([
     prisma.sale.findMany({
       where: { status: "COMPLETED", ...(branchId ? { branchId } : {}) },
@@ -472,7 +484,7 @@ export async function getProfitData() {
   if (!(await can(user.role, "view.profits")) && !(await can(user.role, "view.reports"))) {
     return { shopLines: [], neighborLines: [], expenses: 0, byShop: [] as Array<{ name: string; shopProfit: number; neighborProfit: number; expenses: number; net: number }> }
   }
-  const branchId = await scopedBranchId(user.role, user.branchId)
+  const branchId = await viewBranchFilter(user)
   const [sales, fills, expenseRows] = await Promise.all([
     prisma.sale.findMany({
       where: { status: "COMPLETED", saleType: { not: "NEIGHBOR_FILL" }, ...(branchId ? { branchId } : {}) },

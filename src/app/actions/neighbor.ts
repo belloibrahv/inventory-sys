@@ -4,6 +4,8 @@ import { PaymentMethod } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 import { getSellLock } from "@/app/actions/day-close"
 import { prisma } from "@/lib/prisma"
+import { viewBranchFilter } from "@/lib/branch-scope"
+import { shiftCustomerBalance } from "@/lib/concurrency"
 import { can } from "@/lib/permissions"
 import { scopedBranchId } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
@@ -23,7 +25,7 @@ async function canRecordNeighbor(role: Parameters<typeof can>[0]) {
 
 export async function getNeighborFills() {
   const user = await requireUser()
-  const branchId = await scopedBranchId(user.role, user.branchId)
+  const branchId = await viewBranchFilter(user)
   const rows = await prisma.neighborFill.findMany({
     where: branchId ? { branchId } : undefined,
     include: {
@@ -285,17 +287,13 @@ export async function sellNeighborFill(formData: FormData) {
       }
 
       if (due > 0) {
-        const next = money(fill.customer.currentBalance) + due
-        await tx.customer.update({
-          where: { id: fill.customerId },
-          data: { currentBalance: next.toFixed(2) },
-        })
+        const after = await shiftCustomerBalance(tx, fill.customerId, due)
         await tx.ledgerEntry.create({
           data: {
             customerId: fill.customerId,
             type: "SALE",
             amount: due.toFixed(2),
-            balance: next.toFixed(2),
+            balance: money(after.currentBalance).toFixed(2),
             reference: invoiceNumber,
             description: `Neighbor fill ${fill.fillNumber} still due`,
           },

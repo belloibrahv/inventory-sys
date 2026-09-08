@@ -2,13 +2,14 @@
 
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
+import { scopeRecord, viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
 import { isSuperAdmin, scopedBranchId } from "@/lib/rbac"
 import type { SupplierKind } from "@prisma/client"
 
 export async function getCustomers(search?: string) {
   const user = await requireUser()
-  const branchId = await scopedBranchId(user.role, user.branchId)
+  const branchId = await viewBranchFilter(user)
   return prisma.customer.findMany({
     where: {
       ...(branchId ? { branchId } : {}),
@@ -22,8 +23,10 @@ export async function getCustomers(search?: string) {
 }
 
 export async function getCustomer(id: string) {
-  await requireUser()
-  return prisma.customer.findUnique({
+  const user = await requireUser()
+  // A customer ledger shows what someone owes and everything they have bought.
+  // It belongs to the shop that opened the account.
+  return scopeRecord(user, await prisma.customer.findUnique({
     where: { id },
     include: {
       branch: true,
@@ -33,7 +36,7 @@ export async function getCustomer(id: string) {
       swaps: { orderBy: { createdAt: "desc" } },
       imeiRecords: { include: { product: true, sale: true }, orderBy: { updatedAt: "desc" }, take: 20 },
     },
-  })
+  }))
 }
 
 export async function createCustomer(formData: FormData) {

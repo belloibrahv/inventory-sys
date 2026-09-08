@@ -8,12 +8,14 @@ import { canManageFinance, canSell, scopedBranchId } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { getAppSettings, lowStockLimit } from "@/lib/settings"
 import { generateDocNumber, money } from "@/lib/utils"
+import { ConflictError, claimImei, creditInvoice, drawStock, settle, shiftCustomerBalance } from "@/lib/concurrency"
+import { scopeRecord, viewBranchFilter } from "@/lib/branch-scope"
 import { getSellLock } from "@/app/actions/day-close"
 import { markParkedPosted } from "@/app/actions/parked"
 
 export async function getSales() {
   const user = await requireUser()
-  const branchId = await scopedBranchId(user.role, user.branchId)
+  const branchId = await viewBranchFilter(user)
   return prisma.sale.findMany({
     where: branchId ? { branchId } : undefined,
     include: { customer: true, branch: true, user: true, items: { include: { product: true, imei: true } } },
@@ -23,8 +25,11 @@ export async function getSales() {
 }
 
 export async function getSale(id: string) {
-  await requireUser()
-  return prisma.sale.findUnique({
+  const user = await requireUser()
+  // An invoice id is easy to guess or share. Without this check any member of
+  // staff could open another shop's sale, and its customer, straight from the
+  // address bar.
+  return scopeRecord(user, await prisma.sale.findUnique({
     where: { id },
     include: {
       customer: true,
@@ -33,7 +38,7 @@ export async function getSale(id: string) {
       items: { include: { product: true, imei: true } },
       payments: true,
     },
-  })
+  }))
 }
 
 export async function getPosLookups() {
@@ -132,28 +137,67 @@ export async function checkoutSale(input: {
     where: { id: { in: input.items.map((item) => item.productId) } },
     include: { _count: { select: { imeiRecords: true } } },
   })
+  const productById = new Map(products.map((row) => [row.id, row]))
   const canOverrideFloor = settings.allowBelowMinimum || (await can(user.role, "action.override_floor"))
+  const canOverrideCredit = await can(user.role, "action.override_floor")
+
+  // One read for every tracked unit in the cart, and one for every branch stock
+  // row, instead of a query per line. A 20 line cart used to fire 20 round trips.
+  const imeiIds = input.items.map((item) => item.imeiId).filter((id): id is string => Boolean(id))
+  const [cartImeis, stockRows] = await Promise.all([
+    imeiIds.length
+      ? prisma.imeiRecord.findMany({
+          where: { id: { in: imeiIds } },
+          select: { id: true, imei1: true, status: true, branchId: true },
+        })
+      : Promise.resolve([]),
+    prisma.inventory.findMany({
+      where: { branchId: input.branchId, productId: { in: input.items.map((item) => item.productId) } },
+      select: { productId: true, quantity: true, minStock: true },
+    }),
+  ])
+  const imeiById = new Map(cartImeis.map((row) => [row.id, row]))
+  const stockByProduct = new Map(stockRows.map((row) => [row.productId, row]))
+
+  // Pieces wanted per product, so a cart holding the same accessory on two lines
+  // is checked against stock once, on the combined figure.
+  const wantByProduct = new Map<string, number>()
 
   for (const item of input.items) {
-    const product = products.find((row) => row.id === item.productId)
+    const product = productById.get(item.productId)
     if (!product) return { error: "A product in the cart is missing." }
+    if (!Number.isFinite(item.quantity) || item.quantity < 1) {
+      return { error: `Enter how many ${product.name} the customer is buying.` }
+    }
+    if (!Number.isFinite(item.unitPrice) || item.unitPrice < 0) {
+      return { error: `Enter a valid price for ${product.name}.` }
+    }
     if (item.unitPrice < money(product.minimumPrice) && !canOverrideFloor) {
       return { error: `${product.name} is below the lowest allowed price. Raise it, or ask Super Admin.` }
     }
     if (item.imeiId) {
-      const imei = await prisma.imeiRecord.findUnique({ where: { id: item.imeiId } })
+      const imei = imeiById.get(item.imeiId)
       if (!imei || imei.status !== "IN_STOCK") return { error: `IMEI ${imei?.imei1 ?? ""} is not available.` }
       if (imei.branchId !== input.branchId) return { error: `${imei.imei1} is not in this shop.` }
     } else if (product._count.imeiRecords > 0) {
       return { error: `${product.name} must be sold with an IMEI from this shop.` }
     } else {
-      const stock = await prisma.inventory.findUnique({
-        where: { productId_branchId: { productId: item.productId, branchId: input.branchId } },
-      })
-      if (!stock || stock.quantity < item.quantity) {
-        return { error: `${product.name} does not have enough units at this branch.` }
-      }
+      wantByProduct.set(item.productId, (wantByProduct.get(item.productId) ?? 0) + item.quantity)
     }
+  }
+
+  for (const [productId, wanted] of wantByProduct) {
+    const stock = stockByProduct.get(productId)
+    if (!stock || stock.quantity < wanted) {
+      return { error: `${productById.get(productId)?.name ?? "This item"} does not have enough units at this branch.` }
+    }
+  }
+
+  // A phone scanned onto two lines of the same cart would otherwise be claimed
+  // twice and sold once.
+  const duplicateImei = imeiIds.find((id, index) => imeiIds.indexOf(id) !== index)
+  if (duplicateImei) {
+    return { error: `${imeiById.get(duplicateImei)?.imei1 ?? "That phone"} is on this sale twice. Remove one line.` }
   }
 
   const subtotal = input.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0)
@@ -169,197 +213,191 @@ export async function checkoutSale(input: {
     const customer = await prisma.customer.findUnique({ where: { id: input.customerId } })
     if (!customer) return { error: "Customer not found." }
     const nextDebt = money(customer.currentBalance) + due
-    if (money(customer.creditLimit) > 0 && nextDebt > money(customer.creditLimit) && !(await can(user.role, "action.override_floor"))) {
+    if (money(customer.creditLimit) > 0 && nextDebt > money(customer.creditLimit) && !canOverrideCredit) {
       return { error: `${customer.name} would exceed the credit limit of ₦${money(customer.creditLimit).toLocaleString("en-NG")}.` }
     }
   }
 
   const invoiceNumber = generateDocNumber("INV")
 
-  const sale = await prisma.$transaction(async (tx) => {
-    const created = await tx.sale.create({
-      data: {
-        invoiceNumber,
-        branchId: input.branchId,
-        userId: user.id,
-        customerId: input.customerId || null,
-        saleType: input.wholesale ? "WHOLESALE" : "RETAIL",
-        isWholesale: Boolean(input.wholesale),
-        status: "COMPLETED",
-        subtotal: subtotal.toFixed(2),
-        totalAmount: subtotal.toFixed(2),
-        paidAmount: paid.toFixed(2),
-        paymentMethod: method,
-        notes: input.notes,
-        items: {
-          create: input.items.map((item) => ({
-            productId: item.productId,
-            imeiId: item.imeiId || null,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice.toFixed(2),
-            totalPrice: (item.unitPrice * item.quantity).toFixed(2),
-          })),
-        },
-        payments:
-          paid > 0
-            ? {
-                create: {
-                  amount: paid.toFixed(2),
-                  method: input.paymentMethod,
-                },
-              }
-            : undefined,
-      },
-    })
+  // Alerts are gathered while the books are being written and sent afterwards.
+  // Fanning notifications out inside the transaction held stock rows locked for
+  // as long as it took to write one row per member of staff.
+  const lowStockAlerts: Array<{ productId: string; quantity: number; limit: number }> = []
 
-    for (const item of input.items) {
-      if (item.imeiId) {
-        await tx.imeiRecord.update({
-          where: { id: item.imeiId },
+  const posted = await settle(() =>
+    prisma.$transaction(async (tx) => {
+      const created = await tx.sale.create({
+        data: {
+          invoiceNumber,
+          branchId: input.branchId,
+          userId: user.id,
+          customerId: input.customerId || null,
+          saleType: input.wholesale ? "WHOLESALE" : "RETAIL",
+          isWholesale: Boolean(input.wholesale),
+          status: "COMPLETED",
+          subtotal: subtotal.toFixed(2),
+          totalAmount: subtotal.toFixed(2),
+          paidAmount: paid.toFixed(2),
+          paymentMethod: method,
+          notes: input.notes,
+          items: {
+            create: input.items.map((item) => ({
+              productId: item.productId,
+              imeiId: item.imeiId || null,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice.toFixed(2),
+              totalPrice: (item.unitPrice * item.quantity).toFixed(2),
+            })),
+          },
+          payments:
+            paid > 0
+              ? {
+                  create: {
+                    amount: paid.toFixed(2),
+                    method: input.paymentMethod,
+                  },
+                }
+              : undefined,
+        },
+      })
+
+      // The checks above are for a helpful message. These are the ones that
+      // decide the sale: a guarded write that only lands while the unit is still
+      // In shop here, so two tills cannot both sell the same phone.
+      for (const item of input.items) {
+        if (!item.imeiId) continue
+        const label = imeiById.get(item.imeiId)?.imei1 ?? "That phone"
+        await claimImei(tx, {
+          imeiId: item.imeiId,
+          branchId: input.branchId,
+          label,
           data: {
             status: "SOLD",
             saleId: created.id,
             customerId: input.customerId || null,
           },
         })
-        const sold = await tx.imeiRecord.findUnique({ where: { id: item.imeiId } })
-        if (sold) {
-          await tx.auditLog.create({
-            data: {
-              userId: user.id,
-              action: "UPDATE",
-              entityType: "IMEIRecord",
-              entityId: sold.imei1,
-              oldValue: "IN_STOCK",
-              newValue: JSON.stringify({ status: "SOLD", invoice: invoiceNumber }),
-              branchId: input.branchId,
-            },
-          })
-        }
+        await tx.auditLog.create({
+          data: {
+            userId: user.id,
+            action: "UPDATE",
+            entityType: "IMEIRecord",
+            entityId: label,
+            oldValue: "IN_STOCK",
+            newValue: JSON.stringify({ status: "SOLD", invoice: invoiceNumber }),
+            branchId: input.branchId,
+          },
+        })
       }
-      await tx.inventory.upsert({
-        where: { productId_branchId: { productId: item.productId, branchId: input.branchId } },
-        update: { quantity: { decrement: item.quantity } },
-        create: { productId: item.productId, branchId: input.branchId, quantity: 0 },
-      })
-    }
 
-    if (input.customerId) {
-      const customer = await tx.customer.findUnique({ where: { id: input.customerId } })
-      const due = subtotal - paid
-      const nextBalance = money(customer?.currentBalance) + due
-      await tx.customer.update({
-        where: { id: input.customerId },
-        data: { currentBalance: nextBalance.toFixed(2) },
-      })
-      await tx.ledgerEntry.create({
-        data: {
-          customerId: input.customerId,
-          type: "SALE",
-          amount: subtotal.toFixed(2),
-          balance: (money(customer?.currentBalance) + subtotal).toFixed(2),
-          reference: invoiceNumber,
-          description: "Retail/wholesale sale",
-        },
-      })
-      if (paid > 0) {
+      for (const [productId, wanted] of wantByProduct) {
+        await drawStock(tx, {
+          productId,
+          branchId: input.branchId,
+          quantity: wanted,
+          label: productById.get(productId)?.name ?? "This item",
+        })
+      }
+
+      if (input.customerId) {
+        // The database does the addition and hands back the real figure, so two
+        // clerks posting to one customer at the same time cannot overwrite each
+        // other's debt.
+        const customer = await shiftCustomerBalance(tx, input.customerId, due)
+        const nextBalance = money(customer.currentBalance)
+        if (
+          due > 0 &&
+          money(customer.creditLimit) > 0 &&
+          nextBalance > money(customer.creditLimit) &&
+          !canOverrideCredit
+        ) {
+          throw new ConflictError(
+            `${customer.name} went over their credit limit while this sale was being typed. They now owe ₦${nextBalance.toLocaleString("en-NG")}. Collect first, or ask Super Admin.`
+          )
+        }
         await tx.ledgerEntry.create({
           data: {
             customerId: input.customerId,
-            type: "PAYMENT",
-            amount: (-paid).toFixed(2),
-            balance: nextBalance.toFixed(2),
+            type: "SALE",
+            amount: subtotal.toFixed(2),
+            balance: (nextBalance + paid).toFixed(2),
             reference: invoiceNumber,
-            description: "Payment on invoice",
+            description: "Retail/wholesale sale",
           },
         })
-      }
-    }
-
-    if (paid > 0) {
-      await tx.financeEntry.create({
-        data: {
-          branchId: input.branchId,
-          account: input.paymentMethod === "CASH" ? "CASH" : "BANK",
-          type: "INCOME",
-          amount: paid.toFixed(2),
-          reference: invoiceNumber,
-          description: "Sale collection",
-        },
-      })
-    }
-
-    await tx.auditLog.create({
-      data: {
-        userId: user.id,
-        action: "CREATE",
-        entityType: "Sale",
-        entityId: invoiceNumber,
-        newValue: JSON.stringify({
-          total: subtotal,
-          paid,
-          method,
-          ...(input.queuedAt
-            ? { postedFromOffline: true, queuedAt: input.queuedAt, offlineId: input.offlineId ?? null }
-            : {}),
-        }),
-        branchId: input.branchId,
-      },
-    })
-
-    for (const item of input.items) {
-      const stock = await tx.inventory.findUnique({
-        where: { productId_branchId: { productId: item.productId, branchId: input.branchId } },
-      })
-      if (stock) {
-      const limit = lowStockLimit(stock.minStock, settings.lowStockThreshold)
-      if (stock.quantity <= limit) {
-        const staff = await tx.user.findMany({
-          where: {
-            isActive: true,
-            OR: [{ branchId: input.branchId }, { role: { in: ["VAULT_MANAGER", "CEO", "BRANCH_MANAGER"] } }],
-          },
-        })
-        for (const person of staff) {
-          await tx.notification.create({
+        if (paid > 0) {
+          await tx.ledgerEntry.create({
             data: {
-              userId: person.id,
-              type: "LOW_STOCK",
-              title: "Low stock",
-              message: `${products.find((row) => row.id === item.productId)?.name ?? "Item"} is at ${stock.quantity} on this branch (alert at ${limit})`,
-              actionUrl: "/inventory",
+              customerId: input.customerId,
+              type: "PAYMENT",
+              amount: (-paid).toFixed(2),
+              balance: nextBalance.toFixed(2),
+              reference: invoiceNumber,
+              description: "Payment on invoice",
             },
           })
         }
       }
-      }
-    }
 
-    if (due > 0 && input.customerId) {
-      const watchers = await tx.user.findMany({
-        where: {
-          isActive: true,
-          OR: [
-            { role: { in: ["ACCOUNTANT", "CEO", "SUPER_ADMIN"] } },
-            { role: "BRANCH_MANAGER", branchId: input.branchId },
-          ],
-        },
-      })
-      const customer = await tx.customer.findUnique({ where: { id: input.customerId } })
-      for (const person of watchers) {
-        await tx.notification.create({
+      if (paid > 0) {
+        await tx.financeEntry.create({
           data: {
-            userId: person.id,
-            type: "DUE_PAYMENT",
-            title: "Invoice still due",
-            message: `${customer?.name ?? "Customer"} owes ₦${due.toLocaleString("en-NG")} on ${invoiceNumber}`,
-            actionUrl: `/sales/${created.id}`,
+            branchId: input.branchId,
+            account: input.paymentMethod === "CASH" ? "CASH" : "BANK",
+            type: "INCOME",
+            amount: paid.toFixed(2),
+            reference: invoiceNumber,
+            description: "Sale collection",
           },
         })
       }
-    }
 
-    return created
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "CREATE",
+          entityType: "Sale",
+          entityId: invoiceNumber,
+          newValue: JSON.stringify({
+            total: subtotal,
+            paid,
+            method,
+            ...(input.queuedAt
+              ? { postedFromOffline: true, queuedAt: input.queuedAt, offlineId: input.offlineId ?? null }
+              : {}),
+          }),
+          branchId: input.branchId,
+        },
+      })
+
+      for (const [productId] of wantByProduct) {
+        const stock = await tx.inventory.findUnique({
+          where: { productId_branchId: { productId, branchId: input.branchId } },
+          select: { quantity: true, minStock: true },
+        })
+        if (!stock) continue
+        const limit = lowStockLimit(stock.minStock, settings.lowStockThreshold)
+        if (stock.quantity <= limit) lowStockAlerts.push({ productId, quantity: stock.quantity, limit })
+      }
+
+      return created
+    })
+  )
+
+  if ("error" in posted) return { error: posted.error }
+  const sale = posted.data
+
+  await fanOutSaleAlerts({
+    branchId: input.branchId,
+    invoiceNumber,
+    saleId: sale.id,
+    due,
+    customerId: input.customerId,
+    lowStockAlerts: lowStockAlerts.map((row) => ({
+      ...row,
+      name: productById.get(row.productId)?.name ?? "Item",
+    })),
   })
 
   if (input.offlineId) await markParkedPosted(input.offlineId, sale.id)
@@ -373,6 +411,72 @@ export async function checkoutSale(input: {
   return { success: true, saleId: sale.id }
 }
 
+/**
+ * Low stock and unpaid-invoice alerts, sent after the sale is safely written.
+ * One createMany per alert type rather than a row at a time, so a shop with
+ * twenty staff still costs two writes.
+ */
+async function fanOutSaleAlerts(input: {
+  branchId: string
+  invoiceNumber: string
+  saleId: string
+  due: number
+  customerId?: string
+  lowStockAlerts: Array<{ name: string; quantity: number; limit: number }>
+}) {
+  try {
+    if (input.lowStockAlerts.length) {
+      const staff = await prisma.user.findMany({
+        where: {
+          isActive: true,
+          OR: [{ branchId: input.branchId }, { role: { in: ["VAULT_MANAGER", "CEO", "BRANCH_MANAGER"] } }],
+        },
+        select: { id: true },
+      })
+      const rows = staff.flatMap((person) =>
+        input.lowStockAlerts.map((alert) => ({
+          userId: person.id,
+          type: "LOW_STOCK" as const,
+          title: "Low stock",
+          message: `${alert.name} is at ${alert.quantity} on this branch (alert at ${alert.limit})`,
+          actionUrl: "/inventory",
+        }))
+      )
+      if (rows.length) await prisma.notification.createMany({ data: rows })
+    }
+
+    if (input.due > 0 && input.customerId) {
+      const [watchers, customer] = await Promise.all([
+        prisma.user.findMany({
+          where: {
+            isActive: true,
+            OR: [
+              { role: { in: ["ACCOUNTANT", "CEO", "SUPER_ADMIN"] } },
+              { role: "BRANCH_MANAGER", branchId: input.branchId },
+            ],
+          },
+          select: { id: true },
+        }),
+        prisma.customer.findUnique({ where: { id: input.customerId }, select: { name: true } }),
+      ])
+      if (watchers.length) {
+        await prisma.notification.createMany({
+          data: watchers.map((person) => ({
+            userId: person.id,
+            type: "DUE_PAYMENT" as const,
+            title: "Invoice still due",
+            message: `${customer?.name ?? "Customer"} owes ₦${input.due.toLocaleString("en-NG")} on ${input.invoiceNumber}`,
+            actionUrl: `/sales/${input.saleId}`,
+          })),
+        })
+      }
+    }
+  } catch {
+    // The sale is already written and correct. A failed alert must never make
+    // the till think the sale did not go through.
+  }
+}
+
 export async function collectPayment(formData: FormData) {
   const user = await requireUser()
   const customerId = String(formData.get("customerId"))
@@ -380,80 +484,91 @@ export async function collectPayment(formData: FormData) {
   const method = String(formData.get("method") || "TRANSFER") as PaymentMethod
   if (!customerId || amount <= 0) return { error: "Enter a valid payment." }
 
-  const customer = await prisma.customer.findUnique({ where: { id: customerId } })
-  if (!customer) return { error: "Customer not found." }
-  if (money(customer.currentBalance) <= 0) return { error: "This customer has no outstanding balance." }
-
-  const collected = Math.min(amount, money(customer.currentBalance))
   const payRef = generateDocNumber("PAY")
 
-  await prisma.$transaction(async (tx) => {
-    const next = money(customer.currentBalance) - collected
-    await tx.customer.update({
-      where: { id: customerId },
-      data: { currentBalance: next.toFixed(2) },
-    })
-    await tx.ledgerEntry.create({
-      data: {
-        customerId,
-        type: "PAYMENT",
-        amount: (-collected).toFixed(2),
-        balance: next.toFixed(2),
-        reference: payRef,
-        description: "Ledger collection. Invoice lines were not rewritten",
-      },
-    })
-    await tx.financeEntry.create({
-      data: {
-        branchId: customer.branchId,
-        account: method === "CASH" ? "CASH" : "BANK",
-        type: "INCOME",
-        amount: collected.toFixed(2),
-        reference: payRef,
-        description: `Debt collection · ${customer.name}`,
-      },
-    })
-
-    let remaining = collected
-    const openSales = await tx.sale.findMany({
-      where: { customerId, status: "COMPLETED" },
-      orderBy: { saleDate: "asc" },
-    })
-    for (const sale of openSales) {
-      const due = money(sale.totalAmount) - money(sale.paidAmount)
-      if (due <= 0 || remaining <= 0) continue
-      const apply = Math.min(due, remaining)
-      const nextPaid = money(sale.paidAmount) + apply
-      await tx.sale.update({
-        where: { id: sale.id },
-        data: {
-          paidAmount: nextPaid.toFixed(2),
-          paymentMethod: nextPaid >= money(sale.totalAmount) ? method : sale.paymentMethod,
-        },
+  const posted = await settle(() =>
+    prisma.$transaction(async (tx) => {
+      // Read the debt inside the posting, not before it. Two clerks taking money
+      // from the same customer at once used to each work from the balance they
+      // saw on their own screen, and the second write wiped out the first.
+      const customer = await tx.customer.findUnique({
+        where: { id: customerId },
+        select: { id: true, name: true, branchId: true, currentBalance: true },
       })
-      await tx.payment.create({
+      if (!customer) throw new ConflictError("Customer not found.")
+      const owing = money(customer.currentBalance)
+      if (owing <= 0) throw new ConflictError("This customer has no outstanding balance.")
+
+      const collected = Math.min(amount, owing)
+      const after = await shiftCustomerBalance(tx, customerId, -collected)
+      const next = money(after.currentBalance)
+      if (next < -0.005) {
+        throw new ConflictError(
+          `${customer.name} was collected from while you were typing. Open their page again to see what is still owed.`
+        )
+      }
+
+      await tx.ledgerEntry.create({
         data: {
-          saleId: sale.id,
-          amount: apply.toFixed(2),
-          method,
+          customerId,
+          type: "PAYMENT",
+          amount: (-collected).toFixed(2),
+          balance: next.toFixed(2),
           reference: payRef,
-          notes: "Applied from customer ledger. Line items untouched.",
+          description: "Ledger collection. Invoice lines were not rewritten",
         },
       })
-      remaining -= apply
-    }
+      await tx.financeEntry.create({
+        data: {
+          branchId: customer.branchId,
+          account: method === "CASH" ? "CASH" : "BANK",
+          type: "INCOME",
+          amount: collected.toFixed(2),
+          reference: payRef,
+          description: `Debt collection · ${customer.name}`,
+        },
+      })
 
-    await tx.auditLog.create({
-      data: {
-        userId: user.id,
-        action: "CREATE",
-        entityType: "LedgerEntry",
-        entityId: payRef,
-        newValue: JSON.stringify({ customerId, collected, method }),
-        branchId: customer.branchId,
-      },
+      let remaining = collected
+      const openSales = await tx.sale.findMany({
+        where: { customerId, status: "COMPLETED" },
+        orderBy: { saleDate: "asc" },
+        select: { id: true, totalAmount: true, paidAmount: true, paymentMethod: true },
+      })
+      for (const sale of openSales) {
+        const due = money(sale.totalAmount) - money(sale.paidAmount)
+        if (due <= 0 || remaining <= 0) continue
+        const apply = Math.min(due, remaining)
+        const credited = await creditInvoice(tx, sale.id, apply)
+        if (money(credited.paidAmount) >= money(credited.totalAmount)) {
+          await tx.sale.update({ where: { id: sale.id }, data: { paymentMethod: method } })
+        }
+        await tx.payment.create({
+          data: {
+            saleId: sale.id,
+            amount: apply.toFixed(2),
+            method,
+            reference: payRef,
+            notes: "Applied from customer ledger. Line items untouched.",
+          },
+        })
+        remaining -= apply
+      }
+
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "CREATE",
+          entityType: "LedgerEntry",
+          entityId: payRef,
+          newValue: JSON.stringify({ customerId, collected, method }),
+          branchId: customer.branchId,
+        },
+      })
     })
-  })
+  )
+
+  if ("error" in posted) return { error: posted.error }
 
   revalidatePath("/customers")
   revalidatePath(`/customers/${customerId}`)
@@ -475,70 +590,78 @@ export async function collectInvoicePayment(formData: FormData) {
 
   const sale = await prisma.sale.findUnique({
     where: { id: saleId },
-    include: { customer: true, items: true },
+    select: { id: true, status: true, branchId: true, customerId: true, invoiceNumber: true, totalAmount: true, paidAmount: true },
   })
   if (!sale) return { error: "Invoice not found." }
   if (sale.status !== "COMPLETED") return { error: "Only completed invoices can receive collection." }
+  if (money(sale.totalAmount) - money(sale.paidAmount) <= 0) return { error: "This invoice is already settled." }
 
-  const due = money(sale.totalAmount) - money(sale.paidAmount)
-  if (due <= 0) return { error: "This invoice is already settled." }
-  const collected = Math.min(amount, due)
-
-  await prisma.$transaction(async (tx) => {
-    const nextPaid = money(sale.paidAmount) + collected
-    await tx.sale.update({
-      where: { id: sale.id },
-      data: {
-        paidAmount: nextPaid.toFixed(2),
-        paymentMethod: nextPaid >= money(sale.totalAmount) ? method : sale.paymentMethod,
-      },
-    })
-    await tx.payment.create({
-      data: {
-        saleId: sale.id,
-        amount: collected.toFixed(2),
-        method,
-        notes: "Collection on frozen invoice. Items and IMEIs were not edited",
-      },
-    })
-    if (sale.customerId && sale.customer) {
-      const next = Math.max(0, money(sale.customer.currentBalance) - collected)
-      await tx.customer.update({
-        where: { id: sale.customerId },
-        data: { currentBalance: next.toFixed(2) },
+  const posted = await settle(() =>
+    prisma.$transaction(async (tx) => {
+      // What is still owed is read inside the posting. Two clerks collecting on
+      // one invoice used to both work from the same starting figure, so the shop
+      // banked two payments but the invoice only recorded one.
+      const fresh = await tx.sale.findUnique({
+        where: { id: saleId },
+        select: { totalAmount: true, paidAmount: true },
       })
-      await tx.ledgerEntry.create({
+      if (!fresh) throw new ConflictError("Invoice not found.")
+      const due = money(fresh.totalAmount) - money(fresh.paidAmount)
+      if (due <= 0) {
+        throw new ConflictError(`${sale.invoiceNumber} was settled while you were typing. Nothing is owed on it now.`)
+      }
+      const collected = Math.min(amount, due)
+
+      const credited = await creditInvoice(tx, sale.id, collected)
+      if (money(credited.paidAmount) >= money(credited.totalAmount)) {
+        await tx.sale.update({ where: { id: sale.id }, data: { paymentMethod: method } })
+      }
+      await tx.payment.create({
         data: {
-          customerId: sale.customerId,
-          type: "PAYMENT",
-          amount: (-collected).toFixed(2),
-          balance: next.toFixed(2),
-          reference: sale.invoiceNumber,
-          description: `Collection on ${sale.invoiceNumber}`,
+          saleId: sale.id,
+          amount: collected.toFixed(2),
+          method,
+          notes: "Collection on frozen invoice. Items and IMEIs were not edited",
         },
       })
-    }
-    await tx.financeEntry.create({
-      data: {
-        branchId: sale.branchId,
-        account: method === "CASH" ? "CASH" : "BANK",
-        type: "INCOME",
-        amount: collected.toFixed(2),
-        reference: sale.invoiceNumber,
-        description: `Invoice collection ${sale.invoiceNumber}`,
-      },
+      if (sale.customerId) {
+        const after = await shiftCustomerBalance(tx, sale.customerId, -collected)
+        const next = Math.max(0, money(after.currentBalance))
+        await tx.ledgerEntry.create({
+          data: {
+            customerId: sale.customerId,
+            type: "PAYMENT",
+            amount: (-collected).toFixed(2),
+            balance: next.toFixed(2),
+            reference: sale.invoiceNumber,
+            description: `Collection on ${sale.invoiceNumber}`,
+          },
+        })
+      }
+      await tx.financeEntry.create({
+        data: {
+          branchId: sale.branchId,
+          account: method === "CASH" ? "CASH" : "BANK",
+          type: "INCOME",
+          amount: collected.toFixed(2),
+          reference: sale.invoiceNumber,
+          description: `Invoice collection ${sale.invoiceNumber}`,
+        },
+      })
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "CREATE",
+          entityType: "Payment",
+          entityId: sale.invoiceNumber,
+          newValue: JSON.stringify({ collected, method, itemsUntouched: true }),
+          branchId: sale.branchId,
+        },
+      })
     })
-    await tx.auditLog.create({
-      data: {
-        userId: user.id,
-        action: "CREATE",
-        entityType: "Payment",
-        entityId: sale.invoiceNumber,
-        newValue: JSON.stringify({ collected, method, itemsUntouched: true }),
-        branchId: sale.branchId,
-      },
-    })
-  })
+  )
+
+  if ("error" in posted) return { error: posted.error }
 
   revalidatePath("/sales")
   revalidatePath(`/sales/${sale.id}`)
@@ -602,44 +725,51 @@ export async function attachSaleCustomer(formData: FormData) {
     }
   }
 
-  await prisma.$transaction(async (tx) => {
-    await tx.sale.update({
-      where: { id: sale.id },
-      data: { customerId: customer.id },
-    })
-    await tx.imeiRecord.updateMany({
-      where: { saleId: sale.id },
-      data: { customerId: customer.id },
-    })
-    if (due > 0) {
-      const next = money(customer.currentBalance) + due
-      await tx.customer.update({
-        where: { id: customer.id },
-        data: { currentBalance: next.toFixed(2) },
+  const buyer = customer
+
+  const posted = await settle(() =>
+    prisma.$transaction(async (tx) => {
+      // Only attach if the sale is still a walk-in. Two clerks naming the same
+      // invoice at once would otherwise post the debt to the customer twice.
+      const claimed = await tx.sale.updateMany({
+        where: { id: sale.id, customerId: null },
+        data: { customerId: buyer.id },
       })
-      await tx.ledgerEntry.create({
+      if (claimed.count !== 1) {
+        throw new ConflictError("Someone else just put a customer name on this sale. Refresh to see it.")
+      }
+      await tx.imeiRecord.updateMany({
+        where: { saleId: sale.id },
+        data: { customerId: buyer.id },
+      })
+      if (due > 0) {
+        const after = await shiftCustomerBalance(tx, buyer.id, due)
+        await tx.ledgerEntry.create({
+          data: {
+            customerId: buyer.id,
+            type: "SALE",
+            amount: due.toFixed(2),
+            balance: money(after.currentBalance).toFixed(2),
+            reference: sale.invoiceNumber,
+            description: `Named buyer attached to unpaid ${sale.invoiceNumber}`,
+          },
+        })
+      }
+      await tx.auditLog.create({
         data: {
-          customerId: customer.id,
-          type: "SALE",
-          amount: due.toFixed(2),
-          balance: next.toFixed(2),
-          reference: sale.invoiceNumber,
-          description: `Named buyer attached to unpaid ${sale.invoiceNumber}`,
+          userId: user.id,
+          action: "UPDATE",
+          entityType: "Sale",
+          entityId: sale.invoiceNumber,
+          oldValue: "WALK_IN",
+          newValue: JSON.stringify({ customerId: buyer.id, customer: buyer.name, itemsUntouched: true, due }),
+          branchId: sale.branchId,
         },
       })
-    }
-    await tx.auditLog.create({
-      data: {
-        userId: user.id,
-        action: "UPDATE",
-        entityType: "Sale",
-        entityId: sale.invoiceNumber,
-        oldValue: "WALK_IN",
-        newValue: JSON.stringify({ customerId: customer.id, customer: customer.name, itemsUntouched: true, due }),
-        branchId: sale.branchId,
-      },
     })
-  })
+  )
+
+  if ("error" in posted) return { error: posted.error }
 
   revalidatePath("/sales")
   revalidatePath(`/sales/${sale.id}`)

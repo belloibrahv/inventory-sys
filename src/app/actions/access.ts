@@ -3,6 +3,7 @@
 import { UserRole } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
+import { shiftCustomerBalance } from "@/lib/concurrency"
 import { requireUser } from "@/lib/session"
 import { isSuperAdmin } from "@/lib/rbac"
 import { ALL_PERM_KEYS, ensureRolePermissions } from "@/lib/permissions"
@@ -95,23 +96,24 @@ export async function reverseInvoicePayment(formData: FormData) {
   const amount = Number(last.amount)
   await prisma.$transaction(async (tx) => {
     await tx.payment.delete({ where: { id: last.id } })
-    const nextPaid = Math.max(0, Number(sale.paidAmount) - amount)
-    await tx.sale.update({
+    // The database does the subtraction and the addition, so an undo landing at
+    // the same moment as a collection cannot wipe the other one out.
+    const reversed = await tx.sale.update({
       where: { id: sale.id },
-      data: { paidAmount: nextPaid.toFixed(2) },
+      data: { paidAmount: { decrement: amount } },
+      select: { paidAmount: true },
     })
+    if (Number(reversed.paidAmount) < -0.005) {
+      await tx.sale.update({ where: { id: sale.id }, data: { paidAmount: "0.00" } })
+    }
     if (sale.customerId && sale.customer) {
-      const next = Number(sale.customer.currentBalance) + amount
-      await tx.customer.update({
-        where: { id: sale.customerId },
-        data: { currentBalance: next.toFixed(2) },
-      })
+      const after = await shiftCustomerBalance(tx, sale.customerId, amount)
       await tx.ledgerEntry.create({
         data: {
           customerId: sale.customerId,
           type: "ADJUSTMENT",
           amount: amount.toFixed(2),
-          balance: next.toFixed(2),
+          balance: Number(after.currentBalance).toFixed(2),
           reference: sale.invoiceNumber,
           description: `Super Admin reversed collection on ${sale.invoiceNumber}`,
         },

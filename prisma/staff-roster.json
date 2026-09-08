@@ -1,0 +1,15 @@
+[
+  { "name": "REPLACE WITH REAL NAME", "email": "owner@abutwins.com", "role": "CEO", "shop": null, "note": "Sees every shop. No shop of their own." },
+
+  { "name": "REPLACE WITH REAL NAME", "email": "iwo.manager@abutwins.com", "role": "BRANCH_MANAGER", "shop": "IWO" },
+  { "name": "REPLACE WITH REAL NAME", "email": "iwo.cashier@abutwins.com", "role": "CASHIER", "shop": "IWO" },
+  { "name": "REPLACE WITH REAL NAME", "email": "iwo.sales@abutwins.com", "role": "SALES_EXECUTIVE", "shop": "IWO" },
+
+  { "name": "REPLACE WITH REAL NAME", "email": "bodija.manager@abutwins.com", "role": "BRANCH_MANAGER", "shop": "BOD" },
+  { "name": "REPLACE WITH REAL NAME", "email": "bodija.cashier@abutwins.com", "role": "CASHIER", "shop": "BOD" },
+  { "name": "REPLACE WITH REAL NAME", "email": "bodija.sales@abutwins.com", "role": "SALES_EXECUTIVE", "shop": "BOD" },
+
+  { "name": "REPLACE WITH REAL NAME", "email": "challenge.manager@abutwins.com", "role": "BRANCH_MANAGER", "shop": "CHL" },
+  { "name": "REPLACE WITH REAL NAME", "email": "challenge.cashier@abutwins.com", "role": "CASHIER", "shop": "CHL" },
+  { "name": "REPLACE WITH REAL NAME", "email": "challenge.sales@abutwins.com", "role": "SALES_EXECUTIVE", "shop": "CHL" }
+]

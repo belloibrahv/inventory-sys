@@ -21,11 +21,59 @@ Open [http://localhost:3000](http://localhost:3000).
 
 Super Admin is the only role that can grant screens, disable staff, and undo cash. Other roles only see what Super Admin ticks on **Who can see what**.
 
+These are **test logins** for the three Ibadan shops. They are seeded on every
+deploy so the shops can be exercised end to end before going live.
+
+**Head office** (sees every shop, and can switch between them in the header)
+
 | Role | Email | Password |
 | --- | --- | --- |
 | Super Admin | admin@abutwins.com | admin123 |
+| CEO | ceo@abutwins.com | ceo123 |
+| Auditor | auditor@abutwins.com | auditor123 |
+| Accountant | accountant@abutwins.com | accountant123 |
 
-Change this password before any live shop uses the system. Create every other login from Staff.
+**Iwo Road** (HQ)
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Branch Manager | manager@abutwins.com | manager123 |
+| Vault Manager | vault@abutwins.com | vault123 |
+| Cashier | cashier@abutwins.com | cashier123 |
+| Sales | sales@abutwins.com | sales123 |
+| Engineer | engineer@abutwins.com | engineer123 |
+
+**Bodija**
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Branch Manager | bodija.manager@abutwins.com | manager123 |
+| Vault Manager | bodija.vault@abutwins.com | vault123 |
+| Cashier | bodija.cashier@abutwins.com | cashier123 |
+| Sales | bodija.sales@abutwins.com | sales123 |
+| Engineer | bodija.engineer@abutwins.com | engineer123 |
+
+**Challenge**
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Branch Manager | challenge.manager@abutwins.com | manager123 |
+| Vault Manager | challenge.vault@abutwins.com | vault123 |
+| Cashier | challenge.cashier@abutwins.com | cashier123 |
+| Sales | challenge.sales@abutwins.com | sales123 |
+| Engineer | challenge.engineer@abutwins.com | engineer123 |
+
+> These passwords are public in this repository and are for testing only.
+> Before the shops trade on this system for real, delete every test login above
+> and create the real staff with `npm run staff:apply`, which issues each person
+> their own password and forces a change on first sign in.
+
+## Which shop you are looking at
+
+Shop staff only ever see their own shop's stock, sales, customers and money.
+Head office roles get a shop selector in the header: **All shops together**,
+or one of Iwo Road, Bodija and Challenge on its own. Picking one shop changes
+what every screen reports without limiting what head office can correct.
 
 ## Railway
 

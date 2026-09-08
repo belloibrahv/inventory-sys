@@ -411,6 +411,8 @@ model ImeiRecord {
   @@index([branchId])
   @@index([status])
   @@index([purchaseId])
+  @@index([branchId, status])
+  @@index([status, productId])
 }
 
 model Inventory {
@@ -535,6 +537,8 @@ model Sale {
   @@index([customerId])
   @@index([status])
   @@index([saleDate])
+  @@index([branchId, status, saleDate])
+  @@index([customerId, status])
 }
 
 model SaleItem {
@@ -874,6 +878,8 @@ model Notification {
 
   @@index([userId])
   @@index([status])
+  @@index([userId, status])
+  @@index([userId, createdAt])
 }
 
 model Setting {

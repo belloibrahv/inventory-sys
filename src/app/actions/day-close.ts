@@ -143,22 +143,35 @@ export async function closeDay(formData: FormData) {
   const countedCash = Number(formData.get("countedCash") || 0)
   if (Number.isNaN(countedCash)) return { error: "Enter the cash you counted." }
 
-  await prisma.dayClose.create({
-    data: {
-      branchId: preview.branchId,
-      userId: user.id,
-      closeDate: new Date(),
-      businessDate,
-      expectedCash: preview.expectedCash.toFixed(2),
-      countedCash: countedCash.toFixed(2),
-      variance: (countedCash - preview.expectedCash).toFixed(2),
-      transferTotal: preview.transferTotal.toFixed(2),
-      posTotal: preview.posTotal.toFixed(2),
-      creditTotal: preview.creditTotal.toFixed(2),
-      saleCount: preview.saleCount,
-      notes: String(formData.get("notes") || "") || null,
-    },
+  // Re-check inside the posting. Two clicks on Close the day used to write two
+  // closes for the same date, which then confused the till lock and the books.
+  // The lasting fix is the unique index noted in scripts/check-day-closes.ts;
+  // this stops the double click that actually happens on the shop floor.
+  const closed = await prisma.$transaction(async (tx) => {
+    const existing = await tx.dayClose.findFirst({
+      where: { branchId: preview.branchId, businessDate },
+      select: { id: true },
+    })
+    if (existing) return null
+    return tx.dayClose.create({
+      data: {
+        branchId: preview.branchId,
+        userId: user.id,
+        closeDate: new Date(),
+        businessDate,
+        expectedCash: preview.expectedCash.toFixed(2),
+        countedCash: countedCash.toFixed(2),
+        variance: (countedCash - preview.expectedCash).toFixed(2),
+        transferTotal: preview.transferTotal.toFixed(2),
+        posTotal: preview.posTotal.toFixed(2),
+        creditTotal: preview.creditTotal.toFixed(2),
+        saleCount: preview.saleCount,
+        notes: String(formData.get("notes") || "") || null,
+      },
+    })
   })
+  if (!closed) return { error: "This shop already closed that day." }
+
   await prisma.auditLog.create({
     data: {
       userId: user.id,

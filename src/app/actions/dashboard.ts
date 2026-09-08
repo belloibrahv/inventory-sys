@@ -1,6 +1,7 @@
 "use server"
 
 import { prisma } from "@/lib/prisma"
+import { viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
 import { scopedBranchId } from "@/lib/rbac"
 import { money } from "@/lib/utils"
@@ -9,7 +10,7 @@ import { getParkedWatch } from "@/app/actions/parked"
 
 export async function getDashboardData() {
   const user = await requireUser()
-  const branchId = await scopedBranchId(user.role, user.branchId)
+  const branchId = await viewBranchFilter(user)
 
   const saleWhere = {
     status: "COMPLETED" as const,
@@ -43,6 +44,8 @@ export async function getDashboardData() {
     openPurchases,
     vaultCounts,
     overdueIncoming,
+    revenueByBranch,
+    inStockByProduct,
     pendingTransfers,
   ] = await Promise.all([
     prisma.sale.aggregate({
@@ -80,7 +83,7 @@ export async function getDashboardData() {
     }),
     prisma.inventory.findMany({
       where: branchId ? { branchId } : {},
-      include: { product: { include: { brand: true } }, branch: true },
+      select: { productId: true, branchId: true, quantity: true, minStock: true },
     }),
     prisma.sale.findMany({
       where: saleWhere,
@@ -88,21 +91,29 @@ export async function getDashboardData() {
       orderBy: { saleDate: "desc" },
       take: 6,
     }),
+    // Names, cost and brand only. This used to pull every IMEI record in the
+    // business into memory on every dashboard load, just to count them.
     prisma.product.findMany({
-      include: { brand: true, imeiRecords: true },
+      select: {
+        id: true,
+        name: true,
+        tracking: true,
+        costPrice: true,
+        brand: { select: { name: true } },
+      },
     }),
     prisma.stockReturn.count({ where: branchId ? { branchId } : {} }),
     prisma.swap.count({ where: { ...(branchId ? { branchId } : {}), status: "COMPLETED" } }),
     prisma.notification.count({ where: { userId: user.id, status: "UNREAD" } }),
     prisma.branch.findMany({
       where: { isActive: true },
-      include: { sales: { where: { status: "COMPLETED" } } },
+      select: { id: true, name: true, code: true },
     }),
     prisma.approval.count({ where: { status: "PENDING" } }),
     prisma.sale.count({ where: { ...saleWhere, customerId: null } }),
-    prisma.purchase.findMany({
+    prisma.purchase.aggregate({
       where: { ...(branchId ? { branchId } : {}), status: { not: "CANCELLED" } },
-      select: { totalAmount: true, paidAmount: true },
+      _sum: { totalAmount: true, paidAmount: true },
     }),
     prisma.imeiRecord.groupBy({
       by: ["productId", "branchId"],
@@ -115,6 +126,20 @@ export async function getDashboardData() {
         expectedDate: { lt: new Date(now.getFullYear(), now.getMonth(), now.getDate()) },
         ...(branchId ? { branchId } : {}),
       },
+    }),
+    // Revenue per shop, added up by the database. Reading every completed sale
+    // to add them up in memory was the heaviest query on the busiest page.
+    prisma.sale.groupBy({
+      by: ["branchId"],
+      where: { status: "COMPLETED" },
+      _sum: { totalAmount: true },
+    }),
+    // In-shop units per item, for the device mix. Left unscoped so the chart
+    // shows the same figures it always has.
+    prisma.imeiRecord.groupBy({
+      by: ["productId"],
+      where: { status: "IN_STOCK" },
+      _count: { _all: true },
     }),
     prisma.stockTransfer.count({
       where: {
@@ -139,7 +164,15 @@ export async function getDashboardData() {
     )._sum.paidAmount
   ) + prevExp
 
-  const stockValue = stock.reduce((sum, row) => sum + row.quantity * money(row.product.costPrice), 0)
+  // One pass to index the catalogue, then every figure below is a map lookup
+  // instead of a nested query result.
+  const productById = new Map(brandGroups.map((row) => [row.id, row]))
+  const branchById = new Map(branches.map((row) => [row.id, row]))
+
+  const stockValue = stock.reduce(
+    (sum, row) => sum + row.quantity * money(productById.get(row.productId)?.costPrice),
+    0
+  )
 
   const months = Array.from({ length: 6 }, (_, index) => {
     const date = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1)
@@ -173,18 +206,20 @@ export async function getDashboardData() {
   )
 
   const devices = Object.values(
-    brandGroups.reduce<Record<string, { name: string; value: number }>>((acc, product) => {
-      const name = product.brand.name
+    inStockByProduct.reduce<Record<string, { name: string; value: number }>>((acc, row) => {
+      const name = productById.get(row.productId)?.brand.name
+      if (!name) return acc
       acc[name] = acc[name] ?? { name, value: 0 }
-      acc[name].value += product.imeiRecords.filter((item) => item.status === "IN_STOCK").length
+      acc[name].value += row._count._all
       return acc
     }, {})
   )
 
+  const revenueById = new Map(revenueByBranch.map((row) => [row.branchId, money(row._sum.totalAmount)]))
   const ranking = branches
     .map((branch) => ({
       name: branch.name,
-      revenue: branch.sales.reduce((sum, sale) => sum + money(sale.totalAmount), 0),
+      revenue: revenueById.get(branch.id) ?? 0,
     }))
     .sort((a, b) => b.revenue - a.revenue)
 
@@ -194,19 +229,24 @@ export async function getDashboardData() {
   ])
   const unclosedCount = unclosedLists.reduce((sum, days) => sum + days.length, 0)
 
+  // Indexed once. Matching these two lists with .find() inside a loop was
+  // catalogue-size squared work on every load.
+  const vaultByKey = new Map(
+    vaultCounts.map((row) => [`${row.productId}:${row.branchId}`, row._count._all])
+  )
   const seenImeiKeys = new Set<string>()
   const imeiCheck = stock
     .flatMap((row) => {
-      const product = brandGroups.find((item) => item.id === row.productId)
+      const product = productById.get(row.productId)
       if (!product || product.tracking === "NONE") return []
       const key = `${row.productId}:${row.branchId}`
       seenImeiKeys.add(key)
-      const imeis = vaultCounts.find((item) => item.productId === row.productId && item.branchId === row.branchId)?._count._all ?? 0
+      const imeis = vaultByKey.get(key) ?? 0
       return [
         {
           id: key,
-          product: row.product.name,
-          shop: row.branch.code,
+          product: product.name,
+          shop: branchById.get(row.branchId)?.code ?? "Shop",
           shopQty: row.quantity,
           imeis,
           delta: imeis - row.quantity,
@@ -217,13 +257,13 @@ export async function getDashboardData() {
       vaultCounts.flatMap((vault) => {
         const key = `${vault.productId}:${vault.branchId}`
         if (seenImeiKeys.has(key)) return []
-        const product = brandGroups.find((item) => item.id === vault.productId)
+        const product = productById.get(vault.productId)
         if (!product || product.tracking === "NONE") return []
         return [
           {
             id: key,
             product: product.name,
-            shop: branches.find((branch) => branch.id === vault.branchId)?.code ?? "Shop",
+            shop: branchById.get(vault.branchId)?.code ?? "Shop",
             shopQty: 0,
             imeis: vault._count._all,
             delta: vault._count._all,
@@ -254,16 +294,25 @@ export async function getDashboardData() {
     chartSales,
     devices,
     recentSales,
+    // Only the six thinnest lines reach the screen, so only those six are
+    // dressed with a product and shop name.
     stock: stock
       .slice()
       .sort((a, b) => a.quantity - b.quantity)
-      .slice(0, 6),
+      .slice(0, 6)
+      .map((row) => ({
+        id: `${row.productId}:${row.branchId}`,
+        quantity: row.quantity,
+        minStock: row.minStock,
+        product: { name: productById.get(row.productId)?.name ?? "Item" },
+        branch: { code: branchById.get(row.branchId)?.code ?? "Shop" },
+      })),
     ranking,
     imeiCheck,
     exceptions: {
       pendingApprovals,
       walkIns,
-      creditorOwed: openPurchases.reduce((sum, row) => sum + money(row.totalAmount) - money(row.paidAmount), 0),
+      creditorOwed: money(openPurchases._sum.totalAmount) - money(openPurchases._sum.paidAmount),
       imeiGaps: imeiCheck.filter((row) => row.delta !== 0).length,
     },
     tasks: [
