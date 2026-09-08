@@ -54,7 +54,7 @@ export function OfflineTill() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="min-h-screen bg-background text-foreground">
       <header className="bg-[#001BCE] px-6 py-6 text-white">
         <div className={`mx-auto flex items-center gap-3 ${snapshot ? "max-w-6xl" : "max-w-xl"}`}>
           <img src="/brand/ab-mark.jpg" alt="" width={48} height={48} className="rounded-full bg-white ring-2 ring-[#7CFF86]" />

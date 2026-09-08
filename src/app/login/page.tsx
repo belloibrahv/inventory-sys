@@ -69,17 +69,40 @@ export default function LoginPage() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              autoFocus
+              inputMode="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="min-h-12" />
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="min-h-12"
+            />
           </div>
-          <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-950">
+          <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:bg-amber-500/15 dark:text-amber-200">
             Practice logins such as ceo@abutwins.com are for training. Change or remove them before this shop goes live.
           </p>
-          {error ? <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
-          <Button className="w-full" disabled={loading}>
+          {error ? (
+            <p role="alert" aria-live="assertive" className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">
+              {error}
+            </p>
+          ) : null}
+          <Button className="w-full" disabled={loading} aria-busy={loading}>
             {loading ? "Checking your sign-in" : "Sign in"}
           </Button>
           <p className="pt-2 text-center text-xs text-muted-foreground">

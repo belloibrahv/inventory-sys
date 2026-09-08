@@ -58,7 +58,7 @@ export default async function DayClosePage({
         </div>
       </div>
       {preview.alreadyClosed ? (
-        <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+        <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">
           This shop already closed {preview.businessDate}.
         </p>
       ) : (
