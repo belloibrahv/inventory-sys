@@ -77,6 +77,9 @@ const CHANGE_KEYS: Record<string, string> = {
   sellingPrice: "Sell price",
   transfer: "Shop to shop send",
   count: "How many",
+  updated: "Items updated",
+  names: "Items",
+  reason: "Reason",
 }
 
 const HIDDEN_KEYS = new Set([
@@ -178,6 +181,9 @@ function describeValue(value: unknown, key?: string): string[] {
   }
   if (Array.isArray(value)) {
     if (value.length === 0) return []
+    if (key === "names" && value.every((item) => typeof item === "string")) {
+      return [`Items: ${value.filter((item) => item && !looksLikeSecretId(item)).join(", ")}`]
+    }
     if (value.every((item) => typeof item === "string" && item.length >= 8 && !looksLikeSecretId(item))) {
       const label = key === "imeis" ? "IMEIs" : key ? CHANGE_KEYS[key] ?? shopKey(key) : "List"
       return [`${label}: ${value.join(", ")}`]

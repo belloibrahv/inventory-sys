@@ -1,69 +1,53 @@
-import { bulkAdjustPrices, createProduct, getProductLookups, getProducts, updateProductPrice, updateProductWarranty } from "@/app/actions/catalog"
+import { createProduct, getProductLookups, getProducts, updateProductWarranty } from "@/app/actions/catalog"
 import { BulkProductUpload } from "@/app/(app)/products/bulk-upload"
+import { ProductPriceList, type PriceRow } from "@/app/(app)/products/price-list"
 import { ActionForm } from "@/components/action-form"
-import { PageHeader, StatusBadge } from "@/components/shared"
+import { PageHeader } from "@/components/shared"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { canManageCatalog } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
-import { formatCurrency, money } from "@/lib/utils"
+import { money } from "@/lib/utils"
 
 const conditions = ["BRAND_NEW", "OPEN_BOX", "UK_USED", "REFURBISHED", "SWAP_DEVICE", "FAULTY", "REPAIR_DEVICE"]
+
+function toPriceRow(product: Awaited<ReturnType<typeof getProducts>>[number]): PriceRow {
+  return {
+    id: product.id,
+    sku: product.sku,
+    name: product.name,
+    brand: product.brand.name,
+    color: product.color,
+    storage: product.storage,
+    tracking: product.tracking,
+    condition: product.condition,
+    costPrice: money(product.costPrice),
+    minimumPrice: money(product.minimumPrice),
+    sellingPrice: money(product.sellingPrice),
+    warrantyDays: product.warrantyDays,
+    units: product.inventory.reduce((sum, row) => sum + row.quantity, 0),
+  }
+}
 
 export default async function ProductsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const { q } = await searchParams
   const me = await requireUser()
   const [products, lookups, canEdit] = await Promise.all([
-    getProducts(q),
+    getProducts(),
     getProductLookups(),
     canManageCatalog(me.role),
   ])
+  const rows = products.map(toPriceRow)
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Phones & items" description="Add phones, accessories, and selling prices. Lowest price is the floor staff cannot go below." />
+      <PageHeader
+        title="Phones & items"
+        description="Add phones, accessories, and selling prices. Lowest price is the floor staff cannot go below. Tick several items to change many selling prices in one save. Sales stay by the unit."
+      />
       <div className="page-split">
-        <div className="surface-card overflow-hidden">
-          <form className="border-b border-border p-4">
-            <Input name="q" defaultValue={q} placeholder="Search item code or model" />
-          </form>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-left text-muted-foreground">
-                <tr className="border-b border-border">
-                  <th className="px-4 py-3">Product</th>
-                  <th className="px-4 py-3">Condition</th>
-                  <th className="px-4 py-3">Cost / Min / Sell</th>
-                  <th className="px-4 py-3">Warranty</th>
-                  <th className="px-4 py-3">Units</th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.map((product) => (
-                  <tr key={product.id} className="border-b border-border/70">
-                    <td className="px-4 py-3">
-                      <p className="font-medium">{product.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {product.sku} · {product.brand.name} · {product.color} {product.storage}
-                        {product.tracking === "SERIAL" ? " · serial" : product.tracking === "NONE" ? " · no number" : " · IMEI"}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge value={product.condition} />
-                    </td>
-                    <td className="px-4 py-3">
-                      {formatCurrency(money(product.costPrice))} / {formatCurrency(money(product.minimumPrice))} /{" "}
-                      {formatCurrency(money(product.sellingPrice))}
-                    </td>
-                    <td className="px-4 py-3">{product.warrantyDays} days</td>
-                    <td className="px-4 py-3">{product.inventory.reduce((sum, row) => sum + row.quantity, 0)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <ProductPriceList products={rows} canEdit={canEdit} initialQuery={q} />
         <div className="space-y-4">
           {!canEdit ? (
             <div className="surface-card p-5 text-sm text-muted-foreground">
@@ -115,48 +99,14 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
             </ActionForm>
           </div>
           <div className="surface-card p-5">
-            <h3 className="mb-4 font-semibold">Single price update</h3>
-            <ActionForm action={updateProductPrice} submit="Update price" className="space-y-3">
-              <Select name="id" required>
-                {products.map((product) => (
-                  <option key={product.id} value={product.id}>{product.name}</option>
-                ))}
-              </Select>
-              <Input name="sellingPrice" type="number" placeholder="New selling price" required />
-              <Input name="reason" placeholder="Reason" />
-            </ActionForm>
-          </div>
-          <div className="surface-card p-5">
             <h3 className="mb-4 font-semibold">Warranty days</h3>
             <ActionForm action={updateProductWarranty} submit="Update warranty" className="space-y-3">
               <Select name="id" required>
                 {products.map((product) => (
-                  <option key={product.id} value={product.id}>{product.name} · {product.warrantyDays}d</option>
+                  <option key={product.id} value={product.id}>{product.name} · {product.warrantyDays} days</option>
                 ))}
               </Select>
               <Input name="warrantyDays" type="number" defaultValue={365} required />
-            </ActionForm>
-          </div>
-          <div className="surface-card p-5">
-            <h3 className="mb-4 font-semibold">Bulk / category pricing</h3>
-            <ActionForm action={bulkAdjustPrices} submit="Apply" className="space-y-3">
-              <Select name="mode" defaultValue="amount">
-                <option value="amount">Increase / decrease ₦</option>
-                <option value="percent">Percentage</option>
-              </Select>
-              <Input name="amount" type="number" placeholder="5000 or 5" required />
-              <Select name="brandId">
-                <option value="">All brands</option>
-                {lookups.brands.map((brand) => (
-                  <option key={brand.id} value={brand.id}>{brand.name}</option>
-                ))}
-              </Select>
-              <Select name="condition">
-                <option value="">All conditions</option>
-                {conditions.map((item) => (
-                  <option key={item} value={item}>{item.replaceAll("_", " ")}</option>
-                ))}
-              </Select>
             </ActionForm>
           </div>
           </>

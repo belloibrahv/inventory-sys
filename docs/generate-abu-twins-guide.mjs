@@ -211,9 +211,9 @@ const children = [
       ["Prepared for", "The Chief Executive Officer, Abu Twins Softskills Investment"],
       ["Prepared by", "Product Team, Techvaults Limited"],
       ["Document type", "User guide and test plan"],
-      ["Date", "7 September 2026"],
-      ["Version", "1.13"],
-      ["Status", "Updated: Shop screens speak shop words, not computer notes"],
+      ["Date", "8 September 2026"],
+      ["Version", "1.14"],
+      ["Status", "Updated: Full shop book, including mixed-item price save"],
     ].map(([k, v]) =>
       new TableRow({
         children: [
@@ -245,6 +245,7 @@ const children = [
   body("Version 1.11 makes Goods from supplier the carton trail for missing products. Each bill shows how many the supplier sent, how many were scanned, how many already have an invoice (including sold today before close), and how many the system still says are In shop. Search by IMEI opens that bill. If the shelf is short of Still in shop, count stock. Do not type a new number by hand."),
   body("Version 1.12 writes that next step into Stock count. If a supplier bill says Still in shop but the shelf is short, you count with your hands. A manager must approve before numbers change. Do not type a new shop number because it looks low."),
   body("Version 1.13 keeps computer notes off the shop screens. Who did what, Alerts, Needs approval, and the phone diary speak shop words. A tap shows what changed in plain language, not a computer file. Sign in still works the same way."),
+  body("Version 1.14 lets staff change many selling prices in one save. Tick any mix of phones and accessories, type each new selling price, and click Update selected prices. This is not selling by carton. Sales stay by the unit. It is not limited to one brand. This Word book now names every left-menu page, plus Your login, the shop calculator, the till when the line is down, Excel upload of the item list, warranty days, and a Super Admin shop backup."),
   body("Today Abu Twins has two shops: Iwo Road, Ibadan (head office) and Challenge, Ibadan. The system can add more shops in Nigeria later. Super Admin opens a new shop when you are ready."),
   body("Please treat the login list at the end as practice only. Those names and passwords are for testing. You can lock them or remove them when live work starts."),
   body("If a page is missing on the live website, ask Techvaults. We will put the newest version up for you."),
@@ -302,6 +303,7 @@ const children = [
       ["Watch money", "Money in & out, Close the day, expenses, and reports show real figures."],
       ["Check a past day's books", "Check the books reprints money, phones, and the trail for any Lagos day. You can compare two periods."],
       ["Print official books", "Download a branded PDF or CSV, or print the statement. It does not change any invoice."],
+      ["Change many selling prices at once", "On Phones & items, tick any mix of phones and accessories, type each new selling price, and click Update selected prices. Sales stay by the unit."],
       ["Control who sees what", "Super Admin ticks pages for each job."],
       ["See who changed a record", "Who did what keeps a list that is not deleted."],
     ],
@@ -338,6 +340,10 @@ const children = [
       ["Needs approval", "A request waiting for a yes or a no from a manager."],
       ["Walk-in", "A buyer with no name on the sale yet."],
       ["Lowest price", "The floor. Staff cannot sell below it unless Super Admin allows it."],
+      ["Update selected prices", "Tick any mix of phones and accessories, type each new selling price, and save once. Sales stay by the unit."],
+      ["Upload list", "Add many item names from an Excel or CSV file. This does not put stock on the shelf. Use Goods on the way for that."],
+      ["Your login", "The page where a person changes their own password."],
+      ["Shop backup", "A Super Admin copy of shops, staff emails, stock, IMEIs, sales, and purchases. Keep that file off this computer."],
       ["How to use this", "The handbook for your job. Look up a word. Print the book. It only covers pages you can open."],
       ["Shop to shop", "Send stock that already belongs to Abu Twins from Iwo Road to Challenge, or the other way. The list is a CSV of IMEIs and accessory lines."],
       ["Neighbor shop fill", "Collect one unit from a neighboring dealer for a named customer. Sell it here. Return their money. Keep the profit."],
@@ -414,7 +420,7 @@ const children = [
     ["Group", "Pages", "In one sentence"],
     [
       ["Start", "Home, How to use this", "Today’s numbers, IMEI versus shop count, and the printable handbook for this job."],
-      ["Stock", "Phones & items, Phone IMEIs, Shop stock, Goods on the way", "What you sell, each phone number, what is here, what is still coming."],
+      ["Stock", "Phones & items, Phone IMEIs, Shop stock, Goods on the way", "What you sell, selling prices, each phone number, what is here, what is still coming."],
       ["Sell & buy", "Sales, Sell now, Close the day, Goods from supplier, Customers, Suppliers", "Sell, count the till, print invoices, buy from a supplier, trace a carton if a unit is missing, keep people lists."],
       ["Daily work", "Shop to shop, Neighbor shop fill, Returns, Swaps, Repairs, Stock count", "Move our stock, fill from next door, take phones back, trade, fix, count shelves."],
       ["Money", "Money in & out, Check the books, Profit, Expenses, Needs approval", "Cash movement, official books, profit, bills, and yes-or-no requests."],
@@ -456,20 +462,26 @@ const children = [
 
   ...feature({
     title: "10.2 Phones & items",
-    what: "This is the list of things Abu Twins sells: phones, tablets, buds, charger cords, and more. Each item has a name, an item code, a cost, a lowest price, a selling price, and a tracking type.",
-    why: "If staff invent names at the till, reports become junk. One list keeps names and prices the same in every shop.",
-    story: "Goods intake adds Type-C charger cord. They pick No number (cords, chargers). Later a cashier can sell five cords without typing a phone number. The same day they add iPhone 15 Pro and pick Phone — IMEI, because every iPhone must keep its unique number.",
+    what: "This is the list of things Abu Twins sells: phones, tablets, buds, charger cords, and more. Each line has a name, an item code, a brand, a condition, cost, lowest price, selling price, warranty days, units in shop, and a tracking type: IMEI, serial, or no number. Staff who can add items may upload many names from Excel or CSV, add one product by hand, and change warranty days. Staff who can change prices can tick many lines at once, type a new selling price on each line, and save them together. Find item code, brand, or model to narrow the list first.",
+    why: "If staff invent names at the till, reports become junk. One list keeps names and prices the same in every shop. Uploading a file is how you add fifty names without typing each one. When ten or fifty prices move on the same morning, ticking those lines is faster than opening each item one by one. The mix can be iPhone, Samsung, and accessories on the same save. That is not a carton sale. You still sell by the unit. Upload does not put stock on the shelf.",
+    story: "Monday at Iwo Road. Goods intake downloads the sample file, adds Type-C charger cord with no number, and uploads the list. The cord appears as a name with zero units. Later the manager must raise selling prices on two iPhones, one Samsung, and that charger cord. They tick those four lines, type the four new selling prices, write Weekend price review, and click Update selected prices. Sell now shows the new numbers. Who did what names the four items.",
     steps: [
       "Sign in as Super Admin or shop manager.",
       "Click Phones & items.",
-      "Read the list. Each line shows IMEI, serial, or no number under the name.",
-      "On the right, add a test item only if Super Admin agrees you may create practice items. Pick the tracking type that matches the item.",
-      "Set cost, lowest price, and selling price. Save.",
+      "Read the list. Each line shows IMEI, serial, or no number under the name, plus cost, lowest price, selling price, warranty days, and units.",
+      "On the right, download the sample file. That Excel or CSV is for names and prices only. Upload list does not book Coming stock. Use Goods on the way when the carton is coming.",
+      "Add one product by hand only if Super Admin agrees you may create practice items. Pick Phone, IMEI, Accessory with serial, or No number. Set cost, lowest price, selling price, and warranty days. Save.",
+      "If you can change prices, tick two or more items from different brands, including an accessory. Type a new selling price on each ticked line. You may write why these prices changed. Click Update selected prices.",
+      "To change warranty days for one item, pick it under Warranty days and save.",
     ],
     expect: [
       "Phones show · IMEI. Buds or tablets can show · serial. Cords show · no number.",
-      "The new item appears in the list.",
-      "A person without Add items and change prices cannot use the add form. They only see the list.",
+      "An uploaded file adds names to the list. Shop stock units stay at zero until goods arrive.",
+      "The new hand-added item appears in the list with the tracking type you picked.",
+      "Ticked lines take a new selling price. One save updates all of them. The list then shows the new Sell figures.",
+      "A mix of brands and accessories is allowed. The save is not limited to one brand or one carton. Sales stay by the unit.",
+      "Warranty days on that item change after you save Warranty days.",
+      "A person without Add items and change prices cannot use upload, add, ticks, or warranty. They only see the list.",
     ],
   }),
 
@@ -1012,18 +1024,20 @@ const children = [
 
   ...feature({
     title: "10.29 Settings",
-    what: "Settings holds the shop name, phone, address, and email that print on invoices and on Check the books. It also holds the low stock alert and whether cashiers may sell below the lowest price. Only Super Admin can change these.",
-    why: "The invoice header and the books statement should be the real Ibadan address, not a leftover Lagos line.",
-    story: "Techvaults set the invoice address to Iwo Road, Ibadan, Oyo State and the phone to 07062454854. If the phone number changes, Super Admin updates Settings. The next printed invoice and the next books PDF show the new number.",
+    what: "Settings holds the shop name, phone, address, and email that print on invoices and on Check the books. It also holds the low stock alert, default warranty days, and whether cashiers may sell below the lowest price. Only Super Admin can change these. Super Admin can also download a shop backup: a copy of shops, staff emails (not passwords), stock, IMEIs, sales, and purchases. Keep that file off this computer.",
+    why: "The invoice header and the books statement should be the real Ibadan address, not a leftover Lagos line. A backup is how you keep a copy if the computer fails. It is not a way to sell, and it is not a password list.",
+    story: "Techvaults set the invoice address to Iwo Road, Ibadan, Oyo State and the phone to 07062454854. If the phone number changes, Super Admin updates Settings. The next printed invoice and the next books PDF show the new number. Before a long holiday, Super Admin downloads a shop backup and keeps it off the till computer.",
     steps: [
       "Sign in as Super Admin.",
       "Click Settings.",
       "Read Shop name on invoices, Address on invoices, and Phone on invoices.",
+      "Read Shop backup. Download shop backup only if leadership wants a copy kept off this computer.",
       "Do not change live details during a first test unless the CEO asks.",
     ],
     expect: [
-      "CEO can read settings but cannot change them.",
+      "CEO can read settings but cannot change them. CEO does not see Download shop backup.",
       "Printed invoices and the books statement use these values.",
+      "The backup file is a shop copy. It does not show passwords.",
     ],
   }),
 
@@ -1087,6 +1101,25 @@ const children = [
       "The till is still here shows the item count, the amount, and Sell from the list on this phone.",
       "After send, Who did what has the posted-from-offline trail.",
       "No invoice is created until the server accepts the parked sale.",
+    ],
+  }),
+
+  ...feature({
+    title: "10.33 Your login",
+    what: "Your login is where a person changes their own password. It sits beside the job name on the top bar, with How to use this and Sign out. Super Admin can see that the password changed in Who did what. Super Admin cannot see the new password.",
+    why: "Practice passwords such as admin123 must not stay on a live shop. Each person should set a password only they know.",
+    story: "Blessing finishes training at Iwo Road. She opens Your login, types the practice password, then a new password twice, and saves. The next morning the old practice password does not let her in. Who did what shows that her password was changed.",
+    steps: [
+      "Sign in with a practice login.",
+      "Click Your login on the top bar.",
+      "Type the current password, a new password, and the same new password again.",
+      "Click Save new password.",
+      "Sign out. Sign in with the new password.",
+    ],
+    expect: [
+      "The page title is Your login, not a computer word.",
+      "After save, the old password does not work.",
+      "Who did what records that the password was changed, not the password itself.",
     ],
   }),
 
@@ -1196,6 +1229,9 @@ const children = [
       ["33", "Trace a missing unit on a supplier bill", "manager or CEO", "Search the IMEI. The bill opens. Never scanned versus the bill, Sold on the system, and Still in shop are visible. If the shelf is short of Still in shop, Stock count is the next step."],
       ["34", "Stock count after a supplier bill gap", "manager then CEO or auditor", "Shelf count is entered. Difference waits for approval. Shop stock does not change until yes. Who did what keeps the names."],
       ["35", "Who did what speaks shop words", "auditor@abutwins.com", "A row shows supplier bill or parked sale, not a computer file. Tap shows what changed in everyday words."],
+      ["36", "Update many selling prices at once", "manager@abutwins.com or Super Admin", "Tick mixed phones and accessories. Type each new selling price. One save updates all. Sell now shows the new figures. A cashier cannot use the ticks."],
+      ["37", "Upload an item list without adding stock", "manager@abutwins.com or Super Admin", "Sample file uploads. New names appear. Units stay at zero until Goods on the way and arrival."],
+      ["38", "Change own password on Your login", "cashier@abutwins.com", "New password works. Old practice password does not. Who did what shows the password was changed, not the secret."],
     ],
     [600, 2800, 2600, 3360]
   ),
@@ -1209,6 +1245,7 @@ const children = [
   bullet("The same IMEI cannot live two lives. The system will stop a copy."),
   bullet("A walk-in sale needs a name before a return."),
   bullet("Staff cannot sell below the lowest price unless Super Admin turns that on."),
+  bullet("Many selling prices can change in one save. Tick the items, type each new figure, and update. That is not a carton sale. You still sell by the unit. The mix can be any brand or accessory."),
   bullet("If a past business day had sales and is not closed, nobody starts a new live sale. Super Admin is locked too. Already parked sales may still post."),
   bullet("A parked sale that sits more than two hours, or vanishes from a device, alerts Super Admin, the CEO, and the records checker."),
   bullet("A refresh on a dead line must not wipe a parked sale. The invoice is still only born on the server."),

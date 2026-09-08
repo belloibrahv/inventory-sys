@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { requireUser } from "@/lib/session"
 import { canManageCatalog } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
+import { shopError } from "@/lib/shop-speak"
 
 export async function getProductLookups() {
   await requireUser()
@@ -97,46 +98,109 @@ export async function createProduct(formData: FormData) {
   return { success: true }
 }
 
-export async function updateProductPrice(formData: FormData) {
+export async function updateSelectedPrices(formData: FormData) {
   const user = await requireUser()
   if (!(await canManageCatalog(user.role))) return { error: "You cannot change prices." }
 
-  const id = String(formData.get("id"))
-  const sellingPrice = Number(formData.get("sellingPrice"))
-  const reason = String(formData.get("reason") || "Manual update")
-  const product = await prisma.product.findUnique({ where: { id } })
-  if (!product) return { error: "That item was not found." }
-  if (sellingPrice < Number(product.minimumPrice) && !(await can(user.role, "action.override_floor"))) {
-    return { error: "Selling price is below the lowest allowed. Ask Super Admin." }
+  const reason = String(formData.get("reason") || "Several prices updated together").trim() || "Several prices updated together"
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(String(formData.get("changes") || "[]"))
+  } catch {
+    return { error: "Tick the items and type each new selling price." }
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    return { error: "Tick the items whose prices you want to change." }
+  }
+  if (parsed.length > 200) return { error: "Update up to 200 items at a time." }
+
+  const changes: Array<{ id: string; sellingPrice: number }> = []
+  for (const row of parsed) {
+    if (!row || typeof row !== "object") continue
+    const id = String((row as { id?: unknown }).id || "")
+    const sellingPrice = Number((row as { sellingPrice?: unknown }).sellingPrice)
+    if (!id) continue
+    changes.push({ id, sellingPrice })
+  }
+  if (changes.length === 0) return { error: "Tick the items whose prices you want to change." }
+
+  const canFloor = await can(user.role, "action.override_floor")
+  const products = await prisma.product.findMany({
+    where: { id: { in: [...new Set(changes.map((row) => row.id))] } },
+  })
+  const byId = new Map(products.map((product) => [product.id, product]))
+  const problems: string[] = []
+  const work: Array<{ id: string; name: string; oldPrice: string; next: number }> = []
+
+  for (const change of changes) {
+    const product = byId.get(change.id)
+    if (!product) {
+      problems.push("One ticked item was not found. Refresh the page and try again.")
+      continue
+    }
+    if (!Number.isFinite(change.sellingPrice) || change.sellingPrice <= 0) {
+      problems.push(`${product.name}: selling price must be a number above 0.`)
+      continue
+    }
+    if (change.sellingPrice < Number(product.minimumPrice) && !canFloor) {
+      problems.push(`${product.name} is below the lowest allowed price. Raise it, or ask Super Admin.`)
+      continue
+    }
+    if (Number(product.sellingPrice) === change.sellingPrice) continue
+    work.push({
+      id: product.id,
+      name: product.name,
+      oldPrice: String(product.sellingPrice),
+      next: change.sellingPrice,
+    })
   }
 
-  await prisma.product.update({
-    where: { id },
-    data: { sellingPrice: sellingPrice.toFixed(2) },
-  })
-  await prisma.priceHistory.create({
-    data: {
-      productId: id,
-      oldPrice: product.sellingPrice,
-      newPrice: sellingPrice.toFixed(2),
-      priceType: "SELLING_PRICE",
-      reason,
-      changedBy: user.id,
-    },
-  })
-  await prisma.auditLog.create({
-    data: {
-      userId: user.id,
-      action: "UPDATE",
-      entityType: "Product",
-      entityId: id,
-      oldValue: String(product.sellingPrice),
-      newValue: String(sellingPrice),
-      branchId: user.branchId,
-    },
-  })
+  if (problems.length) return { error: problems.slice(0, 4).join(" ") }
+  if (work.length === 0) return { error: "Those selling prices are already the numbers you typed." }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      for (const row of work) {
+        const newPrice = row.next.toFixed(2)
+        await tx.product.update({
+          where: { id: row.id },
+          data: { sellingPrice: newPrice },
+        })
+        await tx.priceHistory.create({
+          data: {
+            productId: row.id,
+            oldPrice: row.oldPrice,
+            newPrice,
+            priceType: "SELLING_PRICE",
+            reason,
+            changedBy: user.id,
+          },
+        })
+      }
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "UPDATE",
+          entityType: "Product",
+          entityId: work[0].id,
+          oldValue: JSON.stringify(work.map((row) => ({ name: row.name, sellingPrice: Number(row.oldPrice) }))),
+          newValue: JSON.stringify({
+            updated: work.length,
+            names: work.map((row) => row.name),
+            reason,
+          }),
+          branchId: user.branchId,
+        },
+      })
+    })
+  } catch (error) {
+    return { error: shopError(error, "We could not save those selling prices. Try again.") }
+  }
+
   revalidatePath("/products")
-  return { success: true }
+  revalidatePath("/pos")
+  revalidatePath("/inventory")
+  return { success: true, updated: work.length }
 }
 
 export async function updateProductWarranty(formData: FormData) {
@@ -163,47 +227,6 @@ export async function updateProductWarranty(formData: FormData) {
   revalidatePath("/imei")
   revalidatePath("/sales")
   return { success: true }
-}
-
-export async function bulkAdjustPrices(formData: FormData) {
-  const user = await requireUser()
-  if (!(await canManageCatalog(user.role))) {
-    return { error: "You cannot change prices for every item at once." }
-  }
-
-  const mode = String(formData.get("mode"))
-  const amount = Number(formData.get("amount") || 0)
-  const brandId = String(formData.get("brandId") || "")
-  const condition = String(formData.get("condition") || "")
-
-  const products = await prisma.product.findMany({
-    where: {
-      ...(brandId ? { brandId } : {}),
-      ...(condition ? { condition: condition as ProductCondition } : {}),
-    },
-  })
-
-  for (const product of products) {
-    const current = Number(product.sellingPrice)
-    const next = mode === "percent" ? current * (1 + amount / 100) : current + amount
-    await prisma.product.update({
-      where: { id: product.id },
-      data: { sellingPrice: Math.max(next, Number(product.minimumPrice)).toFixed(2) },
-    })
-    await prisma.priceHistory.create({
-      data: {
-        productId: product.id,
-        oldPrice: product.sellingPrice,
-        newPrice: Math.max(next, Number(product.minimumPrice)).toFixed(2),
-        priceType: "SELLING_PRICE",
-        reason: `Bulk ${mode} ${amount}`,
-        changedBy: user.id,
-      },
-    })
-  }
-
-  revalidatePath("/products")
-  return { success: true, updated: products.length }
 }
 
 const CONDITIONS: Record<string, ProductCondition> = {
