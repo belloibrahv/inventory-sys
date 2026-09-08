@@ -1,0 +1,33 @@
+Good evening,
+
+Please find attached an Excel file: Abu-Twins-Current-Stock-Template.xlsx
+
+We are ready to load what you have on the shelf now, so Iwo Road and Challenge can start using the shop system and test the real work tomorrow. The file has the tabs and sample rows we need. The SAMPLE rows are only a picture of the shape. Please delete them (or leave them marked SAMPLE) and add your live rows marked REAL.
+
+What we need tonight
+
+1. Items
+The list of things you sell. One row per model, not per box. Include item code, name, brand, category, tracking (IMEI, SERIAL, or NONE), condition, cost, lowest price, selling price, and warranty days.
+
+2. Phones in shop
+One row for every phone, tablet, or serial item sitting in a shop tonight. Write Iwo Road, Ibadan or Challenge, Ibadan. Put IMEI 1 from the box (at least 14 digits). Serial items need the serial. Do not invent a number if the box is missing. Leave that unit off the list until you find it.
+
+3. Pieces in shop
+Cords, chargers, and other goods with no unique number. Count the pieces with your hands, per shop.
+
+4. Staff
+Full name, work email, job, and shop. Use the job names on the Allowed words tab (Cashier, Shop manager, Goods intake, and so on).
+
+If you can also fill Suppliers and Coming goods, that helps. It is not required for a first live sale. Coming goods are cartons still on the road. Do not mix those with phones already in the drawer.
+
+How to send it back
+
+Save the Excel and send this same file filled in. Please say that both shops were counted tonight. We will load the names, put the IMEIs In shop at the right shop, set the piece counts, and tell you when Sell now is ready.
+
+Please do not guess counts. Please do not invent a buyer name or an IMEI. Old paper invoices are not needed for tomorrow. We start from what is on the shelf now. You can still correct selling prices later with Update selected prices.
+
+If a tab is not ready, send Items, Phones in shop, and Pieces in shop first. We can load staff emails in the morning.
+
+Thank you.
+Techvaults Limited
+techvaults.com
