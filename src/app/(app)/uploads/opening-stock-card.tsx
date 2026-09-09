@@ -25,8 +25,8 @@ export function OpeningStockCard({ shops }: { shops: Shop[] }) {
     <div className="surface-card border-primary/30 p-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-primary">Easiest way</p>
-          <h2 className="text-lg font-semibold tracking-tight">Abu Twins opening stock sheet</h2>
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary">Many items at once</p>
+          <h2 className="text-lg font-semibold tracking-tight">Abu Twins opening stock Excel</h2>
         </div>
       </div>
 

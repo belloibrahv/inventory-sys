@@ -93,12 +93,14 @@ const PAGES: Array<
     href: "/uploads",
     title: "Upload stock",
     needAction: "action.upload",
-    what: "Loading the shop system from Excel. The easiest way is the Abu Twins opening stock sheet: one file per shop, with PHONES, ACCESSORIES, SCREEN, and LAPTOPS. Pick the shop, upload the file, and the system adds item names, books phones and laptops In shop, and sets piece counts. Older four-step sheets remain for later top-ups.",
+    what: "Put stock on the shelf. Add one phone or cord at a time at the top of the page, or load many from the Abu Twins opening stock Excel. Phones and serial items book In shop. Piece items raise the shelf count. Older step-by-step sheets sit under Advanced for later top-ups.",
     doThis: [
-      "For day-one stock, fill the opening stock Excel one shop at a time.",
-      "Open Upload stock, pick the shop, and upload that shop's file.",
+      "For one or a few units, open Upload stock and use Add one item to the shelf.",
+      "Pick the shop, pick the item from the list or add a new name, then scan or type the IMEI, serial, or piece count.",
+      "When the form saves, the number fields clear so you can add the next unit.",
+      "For a full shop count, fill the opening stock Excel one shop at a time and upload it below.",
       "PHONES: one row per phone with the IMEI. LAPTOPS: one row per laptop with the serial. ACCESSORIES and SCREEN: how many pieces.",
-      "Use the older steps only when the item list is already on the system and you are topping up.",
+      "Use Advanced sheet uploads only when the item list is already on the system and you are topping up from CSV.",
     ],
     watch: [
       "Nothing is saved until the whole file has been read. One bad line means nothing is loaded.",
@@ -109,7 +111,7 @@ const PAGES: Array<
       "Do not invent an IMEI because the box is missing.",
       "This does not sell anything and does not touch money.",
     ],
-    lookup: ["upload", "excel", "opening stock", "phones", "accessories", "screen", "laptops", "imei", "bulk", "import"],
+    lookup: ["upload", "excel", "opening stock", "phones", "accessories", "screen", "laptops", "imei", "bulk", "import", "manual", "one at a time", "serial", "add one"],
   },
   {
     id: "products",

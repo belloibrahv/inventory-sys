@@ -1,11 +1,12 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { ProductCondition, ProductTracking } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { requireUser } from "@/lib/session"
 import { can } from "@/lib/permissions"
 import { readTableFile, readWorkbookGrids } from "@/lib/table-file"
-import { planOpeningStock } from "@/lib/opening-stock"
+import { makeOpeningSku, planOpeningStock } from "@/lib/opening-stock"
 import { planCustomers, planImeis, planStock, type CatalogItem, type ShopRef } from "@/lib/upload-plan"
 
 /**
@@ -444,16 +445,231 @@ export async function importCustomers(formData: FormData): Promise<UploadResult>
   return { success: true, added: fresh.length, skipped: already.size }
 }
 
+function cleanIdentity(raw: string) {
+  return raw.replace(/\s+/g, " ").trim()
+}
+
+function revalidateStockViews() {
+  revalidatePath("/uploads")
+  revalidatePath("/products")
+  revalidatePath("/imei")
+  revalidatePath("/inventory")
+  revalidatePath("/dashboard")
+  revalidatePath("/pos")
+}
+
+/**
+ * Add one phone, one serial item, or a piece count by hand on Upload stock.
+ * For a few units at a time. Large loads still use the opening stock Excel.
+ */
+export async function addStockManually(formData: FormData): Promise<UploadResult> {
+  const gate = await requireUploader()
+  if ("error" in gate) return { error: gate.error }
+  const { user } = gate
+
+  const branchId = String(formData.get("branchId") || "")
+  const shop = await prisma.branch.findFirst({ where: { id: branchId, isActive: true } })
+  if (!shop) return { error: "Pick the shop this item belongs to: Iwo Road, Bodija, or Challenge." }
+
+  const productMode = String(formData.get("productMode") || "existing")
+  let productId = String(formData.get("productId") || "")
+  let tracking: ProductTracking
+  let productName = ""
+  let createdProduct = false
+
+  if (productMode === "new") {
+    if (!(await can(user.role, "action.catalog"))) {
+      return { error: "You cannot add a new item name. Pick one from the list or ask Super Admin." }
+    }
+
+    const name = cleanIdentity(String(formData.get("name") || ""))
+    const brandId = String(formData.get("brandId") || "")
+    const categoryId = String(formData.get("categoryId") || "")
+    tracking = String(formData.get("tracking") || "IMEI") as ProductTracking
+    const condition = (String(formData.get("condition") || "BRAND_NEW") as ProductCondition) || "BRAND_NEW"
+    const storage = cleanIdentity(String(formData.get("storage") || "")) || null
+    const costPrice = Number(formData.get("costPrice") || 0)
+    const minimumPrice = Number(formData.get("minimumPrice") || 0)
+    const sellingPrice = Number(formData.get("sellingPrice") || 0)
+
+    if (!name) return { error: "Type the item name, for example iPhone 17 Pro Max." }
+    if (!brandId || !categoryId) return { error: "Pick a brand and a category." }
+    if (!Number.isFinite(costPrice) || !Number.isFinite(minimumPrice) || !Number.isFinite(sellingPrice)) {
+      return { error: "Enter cost, lowest price, and selling price as numbers." }
+    }
+    if (costPrice < 0 || minimumPrice < 0 || sellingPrice < 0) {
+      return { error: "Prices cannot be below zero." }
+    }
+
+    const [brand, category] = await Promise.all([
+      prisma.brand.findUnique({ where: { id: brandId } }),
+      prisma.category.findUnique({ where: { id: categoryId } }),
+    ])
+    if (!brand || !category) return { error: "Pick a brand and a category from the list." }
+
+    const sku = makeOpeningSku({
+      brand: brand.name,
+      name,
+      storage: storage || "",
+      condition,
+    })
+
+    const existing =
+      (await prisma.product.findUnique({ where: { sku } })) ||
+      (await prisma.product.findFirst({
+        where: { name, brandId, condition, tracking, storage },
+      }))
+
+    if (existing) {
+      productId = existing.id
+      tracking = existing.tracking
+      productName = existing.name
+    } else {
+      const activeShops = await prisma.branch.findMany({ where: { isActive: true }, select: { id: true } })
+      const product = await prisma.product.create({
+        data: {
+          sku,
+          name,
+          brandId,
+          categoryId,
+          tracking,
+          condition,
+          storage,
+          costPrice: costPrice.toFixed(2),
+          minimumPrice: minimumPrice.toFixed(2),
+          sellingPrice: sellingPrice.toFixed(2),
+          warrantyDays: 365,
+          description: "Added on Upload stock",
+        },
+      })
+      if (activeShops.length) {
+        await prisma.inventory.createMany({
+          data: activeShops.map((row) => ({ productId: product.id, branchId: row.id, quantity: 0 })),
+        })
+      }
+      productId = product.id
+      productName = product.name
+      createdProduct = true
+    }
+  } else {
+    if (!productId) return { error: "Pick the item from the list." }
+    const product = await prisma.product.findFirst({ where: { id: productId, isActive: true } })
+    if (!product) return { error: "That item is not on the list. Add the name first or pick another." }
+    tracking = product.tracking
+    productName = product.name
+  }
+
+  if (tracking === "NONE") {
+    const quantity = Number(formData.get("quantity") || 1)
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      return { error: "Enter how many pieces you are putting on the shelf. Use a whole number of 1 or more." }
+    }
+
+    await prisma.inventory.upsert({
+      where: { productId_branchId: { productId, branchId: shop.id } },
+      update: { quantity: { increment: quantity }, lastStockCheck: new Date() },
+      create: { productId, branchId: shop.id, quantity },
+    })
+
+    await trail(
+      user.id,
+      "Inventory",
+      { shop: shop.name, product: productName, pieces: quantity, manual: true, newItem: createdProduct },
+      shop.id
+    )
+    revalidateStockViews()
+    return { success: true, added: quantity, pieces: quantity, products: createdProduct ? 1 : 0 }
+  }
+
+  const identity = cleanIdentity(String(formData.get("identity") || ""))
+  if (!identity) {
+    return {
+      error:
+        tracking === "IMEI"
+          ? "Scan or type the IMEI from the box."
+          : "Scan or type the serial number from the box.",
+    }
+  }
+
+  let imei1 = identity
+  let serialNumber: string | null = null
+
+  if (tracking === "IMEI") {
+    const digits = identity.replace(/\D/g, "")
+    if (digits.length < 14) {
+      return { error: "That IMEI is too short. Copy all the digits from the box or scan again." }
+    }
+    imei1 = digits
+  } else {
+    if (identity.length < 4) return { error: "That serial is too short." }
+    serialNumber = identity
+  }
+
+  const duplicate = await prisma.imeiRecord.findFirst({
+    where: {
+      OR: [{ imei1 }, ...(serialNumber ? [{ serialNumber }] : [])],
+    },
+    select: { imei1: true, serialNumber: true, status: true },
+  })
+  if (duplicate) {
+    return {
+      error: duplicate.imei1 === imei1
+        ? "This IMEI is already on the system."
+        : "This serial is already on the system.",
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.imeiRecord.create({
+      data: {
+        imei1,
+        serialNumber,
+        productId,
+        branchId: shop.id,
+        status: "IN_STOCK",
+        notes: "Added on Upload stock",
+      },
+    })
+    await tx.inventory.upsert({
+      where: { productId_branchId: { productId, branchId: shop.id } },
+      update: { quantity: { increment: 1 } },
+      create: { productId, branchId: shop.id, quantity: 1 },
+    })
+  })
+
+  await trail(
+    user.id,
+    "IMEIRecord",
+    { shop: shop.name, product: productName, identity: imei1, manual: true, newItem: createdProduct },
+    shop.id
+  )
+  revalidateStockViews()
+  return { success: true, added: 1, phones: 1, products: createdProduct ? 1 : 0 }
+}
+
 /** What the upload screen shows about how far the shop has got. */
 export async function getUploadProgress() {
   const user = await requireUser()
   if (!(await can(user.role, "view.uploads"))) return null
-  const [items, withStock, phones, customers, branches] = await Promise.all([
+  const [items, withStock, phones, customers, branches, brands, categories, products] = await Promise.all([
     prisma.product.count({ where: { isActive: true } }),
     prisma.inventory.count({ where: { quantity: { gt: 0 } } }),
     prisma.imeiRecord.count({ where: { status: "IN_STOCK" } }),
     prisma.customer.count(),
     prisma.branch.findMany({ where: { isActive: true }, select: { id: true, name: true, code: true }, orderBy: { name: "asc" } }),
+    prisma.brand.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.category.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.product.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        name: true,
+        sku: true,
+        tracking: true,
+        brand: { select: { name: true } },
+      },
+      orderBy: { name: "asc" },
+    }),
   ])
-  return { items, withStock, phones, customers, branches }
+  return { items, withStock, phones, customers, branches, brands, categories, products }
 }
