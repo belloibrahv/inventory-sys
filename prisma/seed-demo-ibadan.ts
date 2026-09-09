@@ -1,15 +1,24 @@
 /**
- * Safe study data for the three Ibadan shops.
+ * Bulk study data for Iwo Road, Bodija, and Challenge.
  *
- * Does NOT wipe anything. Upserts by natural keys (SKU, phone, invoice, IMEI).
- * Safe to re-run on production. Requires seed-users shops IWO / BOD / CHL first.
+ * Safe upsert by SKU / phone / invoice / IMEI. Does not wipe.
+ * Covers phones, UK-used and new laptops, accessories, 12+ suppliers,
+ * purchases, sales, incoming, transfers, returns, repairs, neighbor fills,
+ * expenses, day closes, and alerts.
  *
- * Run: npm run db:seed-demo
- * Prod: railway run npm run db:seed-demo
+ * npm run db:seed-demo
+ * railway ssh -- npm run db:seed-demo
  */
-import { PrismaClient, type ProductCondition, type ProductTracking } from "@prisma/client"
+import {
+  PrismaClient,
+  type ProductCondition,
+  type ProductTracking,
+  type ExpenseCategory,
+} from "@prisma/client"
 
 const prisma = new PrismaClient()
+
+type ShopCode = "IWO" | "BOD" | "CHL"
 
 function naira(value: number) {
   return value.toFixed(2)
@@ -19,22 +28,30 @@ function daysAgo(days: number) {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000)
 }
 
-/** Stable study IMEIs so re-runs skip duplicates. 15 digits. */
-function studyImei(shopCode: string, seq: number) {
-  const shop = shopCode === "IWO" ? "1" : shopCode === "BOD" ? "2" : "3"
-  return `359900${shop}${String(seq).padStart(8, "0")}`
+function watDay(daysBack: number) {
+  const d = daysAgo(daysBack)
+  // Approximate WAT calendar day as YYYY-MM-DD from local UTC+1 shift.
+  const wat = new Date(d.getTime() + 60 * 60 * 1000)
+  return wat.toISOString().slice(0, 10)
+}
+
+function studyImei(shop: ShopCode, seq: number) {
+  const digit = shop === "IWO" ? "1" : shop === "BOD" ? "2" : "3"
+  return `359900${digit}${String(seq).padStart(8, "0")}`
 }
 
 async function upsertBrand(name: string) {
-  const existing = await prisma.brand.findFirst({ where: { name } })
-  if (existing) return existing
-  return prisma.brand.create({ data: { name } })
+  return (
+    (await prisma.brand.findFirst({ where: { name } })) ||
+    (await prisma.brand.create({ data: { name } }))
+  )
 }
 
 async function upsertCategory(name: string) {
-  const existing = await prisma.category.findFirst({ where: { name } })
-  if (existing) return existing
-  return prisma.category.create({ data: { name } })
+  return (
+    (await prisma.category.findFirst({ where: { name } })) ||
+    (await prisma.category.create({ data: { name } }))
+  )
 }
 
 async function upsertSupplier(data: {
@@ -51,29 +68,11 @@ async function upsertSupplier(data: {
   if (existing) {
     return prisma.supplier.update({
       where: { id: existing.id },
-      data: {
-        name: data.name,
-        contactPerson: data.contactPerson,
-        email: data.email,
-        address: data.address,
-        country: data.country,
-        city: data.city,
-        kind: data.kind ?? "SUPPLIER",
-        isActive: true,
-      },
+      data: { ...data, kind: data.kind ?? "SUPPLIER", isActive: true },
     })
   }
   return prisma.supplier.create({
-    data: {
-      name: data.name,
-      phone: data.phone,
-      contactPerson: data.contactPerson,
-      email: data.email,
-      address: data.address,
-      country: data.country,
-      city: data.city,
-      kind: data.kind ?? "SUPPLIER",
-    },
+    data: { ...data, kind: data.kind ?? "SUPPLIER" },
   })
 }
 
@@ -125,69 +124,40 @@ async function upsertProduct(data: {
   warrantyDays?: number
   description?: string
 }) {
+  const payload = {
+    name: data.name,
+    brandId: data.brandId,
+    categoryId: data.categoryId,
+    tracking: data.tracking,
+    condition: data.condition,
+    color: data.color ?? null,
+    storage: data.storage ?? null,
+    costPrice: naira(data.costPrice),
+    minimumPrice: naira(data.minimumPrice),
+    sellingPrice: naira(data.sellingPrice),
+    warrantyDays: data.warrantyDays ?? 365,
+    description: data.description ?? "Bulk study stock for Abu Twins",
+    isActive: true,
+  }
   const existing = await prisma.product.findUnique({ where: { sku: data.sku } })
-  if (existing) {
-    return prisma.product.update({
-      where: { id: existing.id },
-      data: {
-        name: data.name,
-        brandId: data.brandId,
-        categoryId: data.categoryId,
-        tracking: data.tracking,
-        condition: data.condition,
-        color: data.color ?? null,
-        storage: data.storage ?? null,
-        costPrice: naira(data.costPrice),
-        minimumPrice: naira(data.minimumPrice),
-        sellingPrice: naira(data.sellingPrice),
-        warrantyDays: data.warrantyDays ?? 365,
-        description: data.description ?? existing.description,
-        isActive: true,
-      },
-    })
-  }
-  return prisma.product.create({
-    data: {
-      sku: data.sku,
-      name: data.name,
-      brandId: data.brandId,
-      categoryId: data.categoryId,
-      tracking: data.tracking,
-      condition: data.condition,
-      color: data.color ?? null,
-      storage: data.storage ?? null,
-      costPrice: naira(data.costPrice),
-      minimumPrice: naira(data.minimumPrice),
-      sellingPrice: naira(data.sellingPrice),
-      warrantyDays: data.warrantyDays ?? 365,
-      description: data.description ?? "Study data for Abu Twins shops",
-    },
-  })
-}
-
-async function ensureInventoryZero(productId: string, branchIds: string[]) {
-  for (const branchId of branchIds) {
-    await prisma.inventory.upsert({
-      where: { productId_branchId: { productId, branchId } },
-      update: {},
-      create: { productId, branchId, quantity: 0, minStock: 2 },
-    })
-  }
+  if (existing) return prisma.product.update({ where: { id: existing.id }, data: payload })
+  return prisma.product.create({ data: { sku: data.sku, ...payload } })
 }
 
 async function main() {
-  console.log("Loading Ibadan study data (safe upsert, no wipe)...")
+  console.log("Loading bulk Ibadan study data (safe upsert)...")
 
   const branches = await prisma.branch.findMany({
     where: { code: { in: ["IWO", "BOD", "CHL"] }, isActive: true },
   })
   const byCode = Object.fromEntries(branches.map((b) => [b.code, b])) as Record<
-    string,
+    ShopCode,
     (typeof branches)[number]
   >
   if (!byCode.IWO || !byCode.BOD || !byCode.CHL) {
-    throw new Error("IWO, BOD, and CHL shops must exist first. Run: npm run db:seed-users")
+    throw new Error("IWO, BOD, and CHL must exist. Run db:seed-users first.")
   }
+  const allBranchIds = [byCode.IWO.id, byCode.BOD.id, byCode.CHL.id]
 
   const users = await prisma.user.findMany({
     where: {
@@ -200,12 +170,15 @@ async function main() {
           "accountant@abutwins.com",
           "manager@abutwins.com",
           "vault@abutwins.com",
+          "engineer@abutwins.com",
           "bodija.cashier@abutwins.com",
           "bodija.manager@abutwins.com",
           "bodija.vault@abutwins.com",
+          "bodija.engineer@abutwins.com",
           "challenge.cashier@abutwins.com",
           "challenge.manager@abutwins.com",
           "challenge.vault@abutwins.com",
+          "challenge.engineer@abutwins.com",
         ],
       },
     },
@@ -213,461 +186,535 @@ async function main() {
   const userByEmail = Object.fromEntries(users.map((u) => [u.email, u]))
   const need = (email: string) => {
     const u = userByEmail[email]
-    if (!u) throw new Error(`Missing user ${email}. Run db:seed-users first.`)
+    if (!u) throw new Error(`Missing ${email}`)
     return u
   }
 
-  const [apple, samsung, tecno, infinix, generic] = await Promise.all([
-    upsertBrand("Apple"),
-    upsertBrand("Samsung"),
-    upsertBrand("Tecno"),
-    upsertBrand("Infinix"),
-    upsertBrand("Generic"),
-  ])
-  const [phones, laptops, accessories, screens] = await Promise.all([
-    upsertCategory("Phones"),
-    upsertCategory("Laptops"),
-    upsertCategory("Accessories"),
-    upsertCategory("Screens"),
-  ])
+  // ——— Brands & categories ———
+  const brandNames = [
+    "Apple",
+    "Samsung",
+    "Tecno",
+    "Infinix",
+    "Xiaomi",
+    "Dell",
+    "HP",
+    "Lenovo",
+    "Anker",
+    "Oraimo",
+    "Baseus",
+    "Generic",
+  ]
+  const brands: Record<string, { id: string }> = {}
+  for (const name of brandNames) brands[name] = await upsertBrand(name)
 
-  const dubai = await upsertSupplier({
-    name: "Dubai Phone House",
-    phone: "+971500001001",
-    contactPerson: "Hassan Al Farsi",
-    email: "orders@dubaiphone.ae",
-    address: "Al Ras, Deira, Dubai",
-    country: "UAE",
-    city: "Dubai",
-  })
-  const china = await upsertSupplier({
-    name: "Shenzhen Mobile Link",
-    phone: "+8613800010002",
-    contactPerson: "Li Wei",
-    email: "export@szmobile.cn",
-    address: "Huaqiangbei, Shenzhen",
-    country: "China",
-    city: "Shenzhen",
-  })
-  const lagos = await upsertSupplier({
-    name: "Alaba Twin Supplies",
-    phone: "+2348025552001",
-    contactPerson: "Tunde Bakare",
-    email: "tunde@alabatwin.ng",
-    address: "Alaba International, Lagos",
-    country: "Nigeria",
-    city: "Lagos",
-  })
-  const neighbor = await upsertSupplier({
-    name: "Next Door Gadget (Neighbor)",
-    phone: "+2348035553001",
-    contactPerson: "Bola Ade",
-    email: "bola@nextdoor.ng",
-    address: "Beside Iwo Road shop",
-    country: "Nigeria",
-    city: "Ibadan",
-    kind: "NEIGHBOR",
-  })
-
-  const ip17 = await upsertProduct({
-    sku: "DEMO-IP17PM-256",
-    name: "iPhone 17 Pro Max 256GB",
-    brandId: apple.id,
-    categoryId: phones.id,
-    tracking: "IMEI",
-    condition: "BRAND_NEW",
-    color: "Cosmic Orange",
-    storage: "256GB",
-    costPrice: 1_650_000,
-    minimumPrice: 1_780_000,
-    sellingPrice: 1_850_000,
-    description: "Study phone · flagship",
-  })
-  const ip15 = await upsertProduct({
-    sku: "DEMO-IP15-128",
-    name: "iPhone 15 128GB",
-    brandId: apple.id,
-    categoryId: phones.id,
-    tracking: "IMEI",
-    condition: "BRAND_NEW",
-    color: "Black",
-    storage: "128GB",
-    costPrice: 780_000,
-    minimumPrice: 860_000,
-    sellingPrice: 920_000,
-  })
-  const s24 = await upsertProduct({
-    sku: "DEMO-S24-256",
-    name: "Samsung Galaxy S24 256GB",
-    brandId: samsung.id,
-    categoryId: phones.id,
-    tracking: "IMEI",
-    condition: "BRAND_NEW",
-    color: "Onyx Black",
-    storage: "256GB",
-    costPrice: 720_000,
-    minimumPrice: 800_000,
-    sellingPrice: 865_000,
-  })
-  const camon = await upsertProduct({
-    sku: "DEMO-CAMON30-256",
-    name: "Tecno Camon 30 256GB",
-    brandId: tecno.id,
-    categoryId: phones.id,
-    tracking: "IMEI",
-    condition: "BRAND_NEW",
-    color: "Basaltic Dark",
-    storage: "256GB",
-    costPrice: 145_000,
-    minimumPrice: 168_000,
-    sellingPrice: 185_000,
-  })
-  const hot = await upsertProduct({
-    sku: "DEMO-HOT40-256",
-    name: "Infinix Hot 40 256GB",
-    brandId: infinix.id,
-    categoryId: phones.id,
-    tracking: "IMEI",
-    condition: "BRAND_NEW",
-    color: "Green",
-    storage: "256GB",
-    costPrice: 98_000,
-    minimumPrice: 115_000,
-    sellingPrice: 128_000,
-  })
-  const macbook = await upsertProduct({
-    sku: "DEMO-MBA-M2-256",
-    name: "MacBook Air M2 256GB",
-    brandId: apple.id,
-    categoryId: laptops.id,
-    tracking: "SERIAL",
-    condition: "BRAND_NEW",
-    color: "Midnight",
-    storage: "256GB",
-    costPrice: 980_000,
-    minimumPrice: 1_080_000,
-    sellingPrice: 1_150_000,
-    description: "Study laptop · serial tracked",
-  })
-  const cord = await upsertProduct({
-    sku: "DEMO-CORD-TYPEC",
-    name: "Type-C charger cord",
-    brandId: generic.id,
-    categoryId: accessories.id,
-    tracking: "NONE",
-    condition: "BRAND_NEW",
-    color: "Black",
-    costPrice: 1_500,
-    minimumPrice: 2_000,
-    sellingPrice: 2_500,
-    warrantyDays: 90,
-    description: "Study accessory · piece count",
-  })
-  const screen = await upsertProduct({
-    sku: "DEMO-SCR-IP15",
-    name: "iPhone 15 screen (OEM)",
-    brandId: apple.id,
-    categoryId: screens.id,
-    tracking: "NONE",
-    condition: "BRAND_NEW",
-    costPrice: 45_000,
-    minimumPrice: 55_000,
-    sellingPrice: 68_000,
-    warrantyDays: 90,
-  })
-
-  const allBranchIds = [byCode.IWO.id, byCode.BOD.id, byCode.CHL.id]
-  for (const p of [ip17, ip15, s24, camon, hot, macbook, cord, screen]) {
-    await ensureInventoryZero(p.id, allBranchIds)
+  const cats: Record<string, { id: string }> = {}
+  for (const name of ["Phones", "Laptops", "Accessories", "Screens", "Power"]) {
+    cats[name] = await upsertCategory(name)
   }
 
-  const customers = {
-    iwoAde: await upsertCustomer({
-      name: "Adewale Okonkwo",
-      phone: "08031110001",
-      branchId: byCode.IWO.id,
-      address: "Iwo Road, Ibadan",
-      creditLimit: 500_000,
-    }),
-    iwoFunmi: await upsertCustomer({
-      name: "Funmilayo Adebayo",
-      phone: "08031110002",
-      branchId: byCode.IWO.id,
-      address: "Gate, Ibadan",
-    }),
-    bodTunde: await upsertCustomer({
-      name: "Tunde Salami",
-      phone: "08032220001",
-      branchId: byCode.BOD.id,
-      address: "Bodija Market",
-      creditLimit: 200_000,
-    }),
-    bodNgozi: await upsertCustomer({
-      name: "Ngozi Eze",
-      phone: "08032220002",
-      branchId: byCode.BOD.id,
-    }),
-    chlKemi: await upsertCustomer({
-      name: "Kemi Oladipo",
-      phone: "08033330001",
-      branchId: byCode.CHL.id,
-      address: "Challenge, Ibadan",
-    }),
-    chlIbrahim: await upsertCustomer({
-      name: "Ibrahim Yusuf",
-      phone: "08033330002",
-      branchId: byCode.CHL.id,
-      creditLimit: 150_000,
-    }),
+  // ——— 12+ suppliers (bulk houses) ———
+  const supplierDefs = [
+    { name: "Dubai Phone House", phone: "+971500001001", contactPerson: "Hassan Al Farsi", email: "orders@dubaiphone.ae", address: "Al Ras, Deira", country: "UAE", city: "Dubai" },
+    { name: "Shenzhen Mobile Link", phone: "+8613800010002", contactPerson: "Li Wei", email: "export@szmobile.cn", address: "Huaqiangbei", country: "China", city: "Shenzhen" },
+    { name: "Alaba Twin Supplies", phone: "+2348025552001", contactPerson: "Tunde Bakare", email: "tunde@alabatwin.ng", address: "Alaba International", country: "Nigeria", city: "Lagos" },
+    { name: "UK Used Device Hub", phone: "+447700900101", contactPerson: "James Okoro", email: "james@ukusedhub.co.uk", address: "Tottenham Court Road", country: "United Kingdom", city: "London" },
+    { name: "Guangzhou Screen Factory", phone: "+8613900010003", contactPerson: "Chen Mei", email: "screens@gzfactory.cn", address: "Baiyun District", country: "China", city: "Guangzhou" },
+    { name: "Ikeja Computer Plaza Co", phone: "+2348035552002", contactPerson: "Chioma Nwosu", email: "chioma@ikejaplaza.ng", address: "Computer Village", country: "Nigeria", city: "Lagos" },
+    { name: "Hong Kong Gadget Export", phone: "+85290001004", contactPerson: "Wong Kai", email: "sales@hkgadget.hk", address: "Sham Shui Po", country: "Hong Kong", city: "Hong Kong" },
+    { name: "Accra West Africa Phones", phone: "+233200001005", contactPerson: "Kwame Mensah", email: "kwame@awaphones.gh", address: "Circle", country: "Ghana", city: "Accra" },
+    { name: "Dell Partner Nigeria", phone: "+2348055552003", contactPerson: "Femi Ade", email: "femi@dellpartner.ng", address: "Victoria Island", country: "Nigeria", city: "Lagos" },
+    { name: "Anker Official Grey", phone: "+8613700010006", contactPerson: "Zhao Rui", email: "grey@anker-export.cn", address: "Shenzhen", country: "China", city: "Shenzhen" },
+    { name: "Ibadan Bulk Accessories", phone: "+2348065552004", contactPerson: "Sola Akin", email: "sola@ibadanbulk.ng", address: "Challenge Market", country: "Nigeria", city: "Ibadan" },
+    { name: "Apple Grey Line Dubai", phone: "+971500001007", contactPerson: "Omar Haddad", email: "omar@applegrey.ae", address: "Bur Dubai", country: "UAE", city: "Dubai" },
+    { name: "Next Door Gadget (Neighbor)", phone: "+2348035553001", contactPerson: "Bola Ade", email: "bola@nextdoor.ng", address: "Beside Iwo Road", country: "Nigeria", city: "Ibadan", kind: "NEIGHBOR" as const },
+    { name: "Bodija Corner Phones (Neighbor)", phone: "+2348035553002", contactPerson: "Yemi Lawal", email: "yemi@bodijacorner.ng", address: "Bodija Market edge", country: "Nigeria", city: "Ibadan", kind: "NEIGHBOR" as const },
+  ]
+  const suppliers = []
+  for (const s of supplierDefs) suppliers.push(await upsertSupplier(s))
+  const [
+    dubai,
+    china,
+    alaba,
+    ukUsed,
+    gzScreen,
+    ikeja,
+    hk,
+    accra,
+    dellNg,
+    anker,
+    ibadanBulk,
+    appleGrey,
+    neighborIwo,
+    neighborBod,
+  ] = suppliers
+
+  // ——— Catalog: flagship phones, UK MacBooks, Dell/HP, accessories ———
+  type PDef = {
+    sku: string
+    name: string
+    brand: string
+    category: string
+    tracking: ProductTracking
+    condition: ProductCondition
+    color?: string
+    storage?: string
+    cost: number
+    min: number
+    sell: number
+    warranty?: number
   }
 
-  type UnitPlan = {
-    shop: "IWO" | "BOD" | "CHL"
-    productId: string
-    supplierId: string
-    count: number
-    startSeq: number
-    serialPrefix?: string
+  const catalog: PDef[] = [
+    // iPhones
+    { sku: "BULK-IP17PM-256", name: "iPhone 17 Pro Max 256GB", brand: "Apple", category: "Phones", tracking: "IMEI", condition: "BRAND_NEW", color: "Cosmic Orange", storage: "256GB", cost: 1_650_000, min: 1_780_000, sell: 1_850_000 },
+    { sku: "BULK-IP17PM-512", name: "iPhone 17 Pro Max 512GB", brand: "Apple", category: "Phones", tracking: "IMEI", condition: "BRAND_NEW", color: "Deep Blue", storage: "512GB", cost: 1_950_000, min: 2_100_000, sell: 2_250_000 },
+    { sku: "BULK-IP17P-256", name: "iPhone 17 Pro 256GB", brand: "Apple", category: "Phones", tracking: "IMEI", condition: "BRAND_NEW", color: "Silver", storage: "256GB", cost: 1_420_000, min: 1_520_000, sell: 1_620_000 },
+    { sku: "BULK-IP17-128", name: "iPhone 17 128GB", brand: "Apple", category: "Phones", tracking: "IMEI", condition: "BRAND_NEW", color: "Black", storage: "128GB", cost: 980_000, min: 1_080_000, sell: 1_150_000 },
+    { sku: "BULK-IP16PM-256", name: "iPhone 16 Pro Max 256GB", brand: "Apple", category: "Phones", tracking: "IMEI", condition: "BRAND_NEW", color: "Desert Titanium", storage: "256GB", cost: 1_380_000, min: 1_480_000, sell: 1_580_000 },
+    { sku: "BULK-IP16P-128", name: "iPhone 16 Pro 128GB", brand: "Apple", category: "Phones", tracking: "IMEI", condition: "BRAND_NEW", color: "Black Titanium", storage: "128GB", cost: 1_150_000, min: 1_250_000, sell: 1_350_000 },
+    { sku: "BULK-IP16-128", name: "iPhone 16 128GB", brand: "Apple", category: "Phones", tracking: "IMEI", condition: "BRAND_NEW", color: "Teal", storage: "128GB", cost: 820_000, min: 900_000, sell: 980_000 },
+    { sku: "BULK-IP15PM-256", name: "iPhone 15 Pro Max 256GB", brand: "Apple", category: "Phones", tracking: "IMEI", condition: "BRAND_NEW", color: "Natural Titanium", storage: "256GB", cost: 1_120_000, min: 1_220_000, sell: 1_320_000 },
+    { sku: "BULK-IP15-128", name: "iPhone 15 128GB", brand: "Apple", category: "Phones", tracking: "IMEI", condition: "BRAND_NEW", color: "Blue", storage: "128GB", cost: 720_000, min: 800_000, sell: 880_000 },
+    { sku: "BULK-IP15-128-UK", name: "iPhone 15 128GB UK Used", brand: "Apple", category: "Phones", tracking: "IMEI", condition: "UK_USED", color: "Pink", storage: "128GB", cost: 480_000, min: 540_000, sell: 595_000 },
+    { sku: "BULK-IP14-128-UK", name: "iPhone 14 128GB UK Used", brand: "Apple", category: "Phones", tracking: "IMEI", condition: "UK_USED", color: "Midnight", storage: "128GB", cost: 380_000, min: 430_000, sell: 475_000 },
+    { sku: "BULK-IP13-128-RF", name: "iPhone 13 128GB Refurbished", brand: "Apple", category: "Phones", tracking: "IMEI", condition: "REFURBISHED", color: "Starlight", storage: "128GB", cost: 290_000, min: 340_000, sell: 385_000 },
+    // Samsung / Android volume
+    { sku: "BULK-S24U-256", name: "Samsung Galaxy S24 Ultra 256GB", brand: "Samsung", category: "Phones", tracking: "IMEI", condition: "BRAND_NEW", color: "Titanium Gray", storage: "256GB", cost: 980_000, min: 1_080_000, sell: 1_180_000 },
+    { sku: "BULK-S24-256", name: "Samsung Galaxy S24 256GB", brand: "Samsung", category: "Phones", tracking: "IMEI", condition: "BRAND_NEW", color: "Onyx Black", storage: "256GB", cost: 680_000, min: 760_000, sell: 845_000 },
+    { sku: "BULK-A55-128", name: "Samsung Galaxy A55 128GB", brand: "Samsung", category: "Phones", tracking: "IMEI", condition: "BRAND_NEW", color: "Awesome Navy", storage: "128GB", cost: 245_000, min: 280_000, sell: 315_000 },
+    { sku: "BULK-NOTE13P-256", name: "Redmi Note 13 Pro 256GB", brand: "Xiaomi", category: "Phones", tracking: "IMEI", condition: "BRAND_NEW", color: "Black", storage: "256GB", cost: 195_000, min: 230_000, sell: 255_000 },
+    { sku: "BULK-CAMON30-256", name: "Tecno Camon 30 256GB", brand: "Tecno", category: "Phones", tracking: "IMEI", condition: "BRAND_NEW", color: "Basaltic Dark", storage: "256GB", cost: 145_000, min: 168_000, sell: 185_000 },
+    { sku: "BULK-SPARK20-128", name: "Tecno Spark 20 128GB", brand: "Tecno", category: "Phones", tracking: "IMEI", condition: "BRAND_NEW", color: "White", storage: "128GB", cost: 85_000, min: 98_000, sell: 112_000 },
+    { sku: "BULK-HOT40-256", name: "Infinix Hot 40 256GB", brand: "Infinix", category: "Phones", tracking: "IMEI", condition: "BRAND_NEW", color: "Green", storage: "256GB", cost: 98_000, min: 115_000, sell: 128_000 },
+    { sku: "BULK-NOTE30-256", name: "Infinix Note 30 256GB", brand: "Infinix", category: "Phones", tracking: "IMEI", condition: "BRAND_NEW", color: "Gold", storage: "256GB", cost: 125_000, min: 145_000, sell: 165_000 },
+    // Laptops — serial
+    { sku: "BULK-MBA-M2-256-BN", name: "MacBook Air M2 256GB", brand: "Apple", category: "Laptops", tracking: "SERIAL", condition: "BRAND_NEW", color: "Midnight", storage: "256GB", cost: 980_000, min: 1_080_000, sell: 1_180_000 },
+    { sku: "BULK-MBA-M2-256-UK", name: "MacBook Air M2 256GB UK Used", brand: "Apple", category: "Laptops", tracking: "SERIAL", condition: "UK_USED", color: "Starlight", storage: "256GB", cost: 620_000, min: 700_000, sell: 780_000 },
+    { sku: "BULK-MBP14-M3-512-UK", name: "MacBook Pro 14 M3 512GB UK Used", brand: "Apple", category: "Laptops", tracking: "SERIAL", condition: "UK_USED", color: "Space Black", storage: "512GB", cost: 1_150_000, min: 1_280_000, sell: 1_420_000 },
+    { sku: "BULK-MBA-M1-256-UK", name: "MacBook Air M1 256GB UK Used", brand: "Apple", category: "Laptops", tracking: "SERIAL", condition: "UK_USED", color: "Silver", storage: "256GB", cost: 420_000, min: 480_000, sell: 545_000 },
+    { sku: "BULK-DELL-XPS13-512", name: "Dell XPS 13 512GB", brand: "Dell", category: "Laptops", tracking: "SERIAL", condition: "BRAND_NEW", color: "Platinum", storage: "512GB", cost: 780_000, min: 880_000, sell: 980_000 },
+    { sku: "BULK-DELL-LAT5420-UK", name: "Dell Latitude 5420 UK Used", brand: "Dell", category: "Laptops", tracking: "SERIAL", condition: "UK_USED", color: "Black", storage: "256GB", cost: 280_000, min: 330_000, sell: 385_000 },
+    { sku: "BULK-HP-ELITE840-UK", name: "HP EliteBook 840 G8 UK Used", brand: "HP", category: "Laptops", tracking: "SERIAL", condition: "UK_USED", color: "Silver", storage: "512GB", cost: 310_000, min: 360_000, sell: 420_000 },
+    { sku: "BULK-LEN-T14-UK", name: "Lenovo ThinkPad T14 UK Used", brand: "Lenovo", category: "Laptops", tracking: "SERIAL", condition: "UK_USED", color: "Black", storage: "512GB", cost: 295_000, min: 345_000, sell: 405_000 },
+    // Accessories / power / screens — piece count
+    { sku: "BULK-CORD-TYPEC", name: "Type-C charger cord", brand: "Generic", category: "Accessories", tracking: "NONE", condition: "BRAND_NEW", color: "Black", cost: 1_500, min: 2_000, sell: 2_500, warranty: 90 },
+    { sku: "BULK-CORD-LIGHT", name: "Lightning cord", brand: "Generic", category: "Accessories", tracking: "NONE", condition: "BRAND_NEW", color: "White", cost: 1_800, min: 2_500, sell: 3_500, warranty: 90 },
+    { sku: "BULK-CHG-20W", name: "20W USB-C wall charger", brand: "Anker", category: "Accessories", tracking: "NONE", condition: "BRAND_NEW", color: "White", cost: 8_500, min: 11_000, sell: 14_000, warranty: 180 },
+    { sku: "BULK-CHG-65W", name: "65W GaN charger", brand: "Baseus", category: "Accessories", tracking: "NONE", condition: "BRAND_NEW", color: "Black", cost: 18_000, min: 24_000, sell: 32_000, warranty: 180 },
+    { sku: "BULK-PB-20000", name: "Oraimo 20000mAh power bank", brand: "Oraimo", category: "Power", tracking: "NONE", condition: "BRAND_NEW", color: "Black", cost: 12_000, min: 16_000, sell: 22_000, warranty: 180 },
+    { sku: "BULK-CASE-IP16", name: "iPhone 16 clear case", brand: "Generic", category: "Accessories", tracking: "NONE", condition: "BRAND_NEW", color: "Clear", cost: 2_500, min: 4_000, sell: 6_500, warranty: 30 },
+    { sku: "BULK-CASE-IP17PM", name: "iPhone 17 Pro Max silicone case", brand: "Generic", category: "Accessories", tracking: "NONE", condition: "BRAND_NEW", color: "Navy", cost: 4_500, min: 7_000, sell: 12_000, warranty: 30 },
+    { sku: "BULK-EAR-BUDS3", name: "Galaxy Buds3", brand: "Samsung", category: "Accessories", tracking: "SERIAL", condition: "BRAND_NEW", color: "White", cost: 42_000, min: 52_000, sell: 68_000, warranty: 180 },
+    { sku: "BULK-AIRPODS-PRO2", name: "AirPods Pro 2", brand: "Apple", category: "Accessories", tracking: "SERIAL", condition: "BRAND_NEW", color: "White", cost: 185_000, min: 210_000, sell: 245_000, warranty: 365 },
+    { sku: "BULK-SCR-IP15", name: "iPhone 15 screen (OEM)", brand: "Apple", category: "Screens", tracking: "NONE", condition: "BRAND_NEW", cost: 45_000, min: 55_000, sell: 68_000, warranty: 90 },
+    { sku: "BULK-SCR-IP16", name: "iPhone 16 screen (OEM)", brand: "Apple", category: "Screens", tracking: "NONE", condition: "BRAND_NEW", cost: 58_000, min: 72_000, sell: 95_000, warranty: 90 },
+    { sku: "BULK-SCR-S24", name: "Galaxy S24 screen", brand: "Samsung", category: "Screens", tracking: "NONE", condition: "BRAND_NEW", cost: 52_000, min: 68_000, sell: 88_000, warranty: 90 },
+  ]
+
+  const products: Record<string, Awaited<ReturnType<typeof upsertProduct>>> = {}
+  for (const row of catalog) {
+    products[row.sku] = await upsertProduct({
+      sku: row.sku,
+      name: row.name,
+      brandId: brands[row.brand].id,
+      categoryId: cats[row.category].id,
+      tracking: row.tracking,
+      condition: row.condition,
+      color: row.color,
+      storage: row.storage,
+      costPrice: row.cost,
+      minimumPrice: row.min,
+      sellingPrice: row.sell,
+      warrantyDays: row.warranty,
+    })
   }
 
-  const stockPlans: UnitPlan[] = [
-    { shop: "IWO", productId: ip17.id, supplierId: dubai.id, count: 4, startSeq: 101 },
-    { shop: "IWO", productId: ip15.id, supplierId: dubai.id, count: 5, startSeq: 111 },
-    { shop: "IWO", productId: s24.id, supplierId: china.id, count: 4, startSeq: 121 },
-    { shop: "IWO", productId: camon.id, supplierId: lagos.id, count: 6, startSeq: 131 },
-    { shop: "IWO", productId: macbook.id, supplierId: dubai.id, count: 2, startSeq: 141, serialPrefix: "MBA-IWO" },
-    { shop: "BOD", productId: ip15.id, supplierId: dubai.id, count: 4, startSeq: 201 },
-    { shop: "BOD", productId: s24.id, supplierId: china.id, count: 3, startSeq: 211 },
-    { shop: "BOD", productId: hot.id, supplierId: lagos.id, count: 8, startSeq: 221 },
-    { shop: "BOD", productId: camon.id, supplierId: lagos.id, count: 5, startSeq: 231 },
-    { shop: "BOD", productId: macbook.id, supplierId: dubai.id, count: 1, startSeq: 241, serialPrefix: "MBA-BOD" },
-    { shop: "CHL", productId: ip17.id, supplierId: dubai.id, count: 3, startSeq: 301 },
-    { shop: "CHL", productId: ip15.id, supplierId: dubai.id, count: 3, startSeq: 311 },
-    { shop: "CHL", productId: hot.id, supplierId: lagos.id, count: 7, startSeq: 321 },
-    { shop: "CHL", productId: s24.id, supplierId: china.id, count: 3, startSeq: 331 },
-    { shop: "CHL", productId: macbook.id, supplierId: dubai.id, count: 1, startSeq: 341, serialPrefix: "MBA-CHL" },
+  for (const p of Object.values(products)) {
+    for (const branchId of allBranchIds) {
+      await prisma.inventory.upsert({
+        where: { productId_branchId: { productId: p.id, branchId } },
+        update: {},
+        create: { productId: p.id, branchId, quantity: 0, minStock: 2 },
+      })
+    }
+  }
+
+  // ——— Customers (many named buyers per shop) ———
+  const customerSeeds = [
+    ...Array.from({ length: 8 }, (_, i) => ({
+      name: ["Adewale Okonkwo", "Funmilayo Adebayo", "Chinedu Obi", "Blessing Lawal", "Segun Ayo", "Maryam Bello", "Kunle Peters", "Grace Okafor"][i],
+      phone: `0803111${String(1001 + i).padStart(4, "0")}`,
+      shop: "IWO" as ShopCode,
+      credit: i % 3 === 0 ? 500_000 : 0,
+    })),
+    ...Array.from({ length: 7 }, (_, i) => ({
+      name: ["Tunde Salami", "Ngozi Eze", "Ifeanyi Okoro", "Amina Yusuf", "Bayo Fashola", "Rita Okeke", "Dayo Martins"][i],
+      phone: `0803222${String(1001 + i).padStart(4, "0")}`,
+      shop: "BOD" as ShopCode,
+      credit: i % 2 === 0 ? 200_000 : 0,
+    })),
+    ...Array.from({ length: 7 }, (_, i) => ({
+      name: ["Kemi Oladipo", "Ibrahim Yusuf", "Sade Ajayi", "Paul Nwosu", "Halima Garba", "Tony Eke", "Zainab Musa"][i],
+      phone: `0803333${String(1001 + i).padStart(4, "0")}`,
+      shop: "CHL" as ShopCode,
+      credit: i === 0 ? 150_000 : 0,
+    })),
+  ]
+  const customersByPhone: Record<string, { id: string }> = {}
+  for (const c of customerSeeds) {
+    customersByPhone[c.phone] = await upsertCustomer({
+      name: c.name,
+      phone: c.phone,
+      branchId: byCode[c.shop].id,
+      address: `${c.shop === "IWO" ? "Iwo Road" : c.shop === "BOD" ? "Bodija" : "Challenge"}, Ibadan`,
+      creditLimit: c.credit,
+    })
+  }
+
+  // ——— Bulk In shop units (phones + serial laptops/earbuds) ———
+  // Per shop counts: flagships moderate, volume Android high, UK used good stock.
+  type StockLine = { sku: string; supplierId: string; iwo: number; bod: number; chl: number; seqBase: number }
+  const stockLines: StockLine[] = [
+    { sku: "BULK-IP17PM-256", supplierId: appleGrey.id, iwo: 12, bod: 8, chl: 10, seqBase: 1100 },
+    { sku: "BULK-IP17PM-512", supplierId: dubai.id, iwo: 6, bod: 4, chl: 4, seqBase: 1200 },
+    { sku: "BULK-IP17P-256", supplierId: appleGrey.id, iwo: 10, bod: 6, chl: 8, seqBase: 1300 },
+    { sku: "BULK-IP17-128", supplierId: dubai.id, iwo: 14, bod: 10, chl: 12, seqBase: 1400 },
+    { sku: "BULK-IP16PM-256", supplierId: appleGrey.id, iwo: 10, bod: 8, chl: 8, seqBase: 1500 },
+    { sku: "BULK-IP16P-128", supplierId: dubai.id, iwo: 12, bod: 8, chl: 10, seqBase: 1600 },
+    { sku: "BULK-IP16-128", supplierId: hk.id, iwo: 16, bod: 12, chl: 14, seqBase: 1700 },
+    { sku: "BULK-IP15PM-256", supplierId: dubai.id, iwo: 8, bod: 6, chl: 6, seqBase: 1800 },
+    { sku: "BULK-IP15-128", supplierId: alaba.id, iwo: 18, bod: 14, chl: 16, seqBase: 1900 },
+    { sku: "BULK-IP15-128-UK", supplierId: ukUsed.id, iwo: 15, bod: 12, chl: 12, seqBase: 2000 },
+    { sku: "BULK-IP14-128-UK", supplierId: ukUsed.id, iwo: 20, bod: 16, chl: 18, seqBase: 2100 },
+    { sku: "BULK-IP13-128-RF", supplierId: ikeja.id, iwo: 12, bod: 10, chl: 10, seqBase: 2200 },
+    { sku: "BULK-S24U-256", supplierId: china.id, iwo: 8, bod: 6, chl: 6, seqBase: 2300 },
+    { sku: "BULK-S24-256", supplierId: china.id, iwo: 14, bod: 10, chl: 12, seqBase: 2400 },
+    { sku: "BULK-A55-128", supplierId: alaba.id, iwo: 25, bod: 20, chl: 22, seqBase: 2500 },
+    { sku: "BULK-NOTE13P-256", supplierId: china.id, iwo: 22, bod: 18, chl: 20, seqBase: 2600 },
+    { sku: "BULK-CAMON30-256", supplierId: accra.id, iwo: 30, bod: 28, chl: 32, seqBase: 2700 },
+    { sku: "BULK-SPARK20-128", supplierId: alaba.id, iwo: 35, bod: 30, chl: 34, seqBase: 2800 },
+    { sku: "BULK-HOT40-256", supplierId: ibadanBulk.id, iwo: 28, bod: 32, chl: 30, seqBase: 2900 },
+    { sku: "BULK-NOTE30-256", supplierId: china.id, iwo: 18, bod: 16, chl: 16, seqBase: 3000 },
+    { sku: "BULK-MBA-M2-256-BN", supplierId: dubai.id, iwo: 4, bod: 2, chl: 3, seqBase: 3100 },
+    { sku: "BULK-MBA-M2-256-UK", supplierId: ukUsed.id, iwo: 8, bod: 6, chl: 7, seqBase: 3200 },
+    { sku: "BULK-MBP14-M3-512-UK", supplierId: ukUsed.id, iwo: 3, bod: 2, chl: 2, seqBase: 3300 },
+    { sku: "BULK-MBA-M1-256-UK", supplierId: ukUsed.id, iwo: 10, bod: 8, chl: 8, seqBase: 3400 },
+    { sku: "BULK-DELL-XPS13-512", supplierId: dellNg.id, iwo: 5, bod: 3, chl: 4, seqBase: 3500 },
+    { sku: "BULK-DELL-LAT5420-UK", supplierId: ukUsed.id, iwo: 12, bod: 10, chl: 10, seqBase: 3600 },
+    { sku: "BULK-HP-ELITE840-UK", supplierId: ukUsed.id, iwo: 10, bod: 8, chl: 8, seqBase: 3700 },
+    { sku: "BULK-LEN-T14-UK", supplierId: ukUsed.id, iwo: 9, bod: 7, chl: 7, seqBase: 3800 },
+    { sku: "BULK-EAR-BUDS3", supplierId: china.id, iwo: 15, bod: 12, chl: 12, seqBase: 3900 },
+    { sku: "BULK-AIRPODS-PRO2", supplierId: appleGrey.id, iwo: 10, bod: 8, chl: 8, seqBase: 4000 },
   ]
 
   let unitsCreated = 0
-  const unitsByKey = new Map<string, string[]>() // productId:branchId -> imei ids
+  const unitIdsBySkuShop = new Map<string, string[]>()
 
-  for (const plan of stockPlans) {
-    const branch = byCode[plan.shop]
-    const ids: string[] = []
-    for (let i = 0; i < plan.count; i++) {
-      const imei1 = studyImei(plan.shop, plan.startSeq + i)
-      const existing = await prisma.imeiRecord.findUnique({ where: { imei1 } })
-      if (existing) {
-        ids.push(existing.id)
-        continue
-      }
-      const serial = plan.serialPrefix
-        ? `${plan.serialPrefix}-${String(plan.startSeq + i).padStart(4, "0")}`
-        : `SN-DEMO-${plan.shop}-${plan.startSeq + i}`
-      const row = await prisma.imeiRecord.create({
-        data: {
+  for (const line of stockLines) {
+    const product = products[line.sku]
+    const counts: Array<[ShopCode, number]> = [
+      ["IWO", line.iwo],
+      ["BOD", line.bod],
+      ["CHL", line.chl],
+    ]
+    for (const [shop, count] of counts) {
+      const ids: string[] = []
+      const batch: Array<{
+        imei1: string
+        imei2: string
+        serialNumber: string
+        productId: string
+        branchId: string
+        supplierId: string
+        status: "IN_STOCK"
+        notes: string
+      }> = []
+      for (let i = 0; i < count; i++) {
+        const seq = line.seqBase + (shop === "IWO" ? 0 : shop === "BOD" ? 400 : 800) + i
+        const imei1 = studyImei(shop, seq)
+        const existing = await prisma.imeiRecord.findUnique({ where: { imei1 }, select: { id: true } })
+        if (existing) {
+          ids.push(existing.id)
+          continue
+        }
+        batch.push({
           imei1,
-          imei2: studyImei(plan.shop, plan.startSeq + i + 5000),
-          serialNumber: serial,
-          productId: plan.productId,
-          branchId: branch.id,
-          supplierId: plan.supplierId,
+          imei2: studyImei(shop, seq + 50_000),
+          serialNumber: `${line.sku}-${shop}-${seq}`,
+          productId: product.id,
+          branchId: byCode[shop].id,
+          supplierId: line.supplierId,
           status: "IN_STOCK",
-          notes: "Study data · In shop for client walkthrough",
+          notes: "Bulk study stock",
+        })
+      }
+      if (batch.length) {
+        await prisma.imeiRecord.createMany({ data: batch })
+        unitsCreated += batch.length
+        const created = await prisma.imeiRecord.findMany({
+          where: { imei1: { in: batch.map((b) => b.imei1) } },
+          select: { id: true, imei1: true },
+        })
+        ids.push(...created.map((c) => c.id))
+      }
+      unitIdsBySkuShop.set(`${line.sku}:${shop}`, ids)
+    }
+  }
+
+  // Piece accessories — bulk shelf counts
+  const pieceStock: Array<{ sku: string; iwo: number; bod: number; chl: number }> = [
+    { sku: "BULK-CORD-TYPEC", iwo: 120, bod: 90, chl: 100 },
+    { sku: "BULK-CORD-LIGHT", iwo: 80, bod: 60, chl: 70 },
+    { sku: "BULK-CHG-20W", iwo: 45, bod: 35, chl: 40 },
+    { sku: "BULK-CHG-65W", iwo: 25, bod: 18, chl: 20 },
+    { sku: "BULK-PB-20000", iwo: 40, bod: 30, chl: 35 },
+    { sku: "BULK-CASE-IP16", iwo: 60, bod: 45, chl: 50 },
+    { sku: "BULK-CASE-IP17PM", iwo: 35, bod: 28, chl: 30 },
+    { sku: "BULK-SCR-IP15", iwo: 18, bod: 12, chl: 14 },
+    { sku: "BULK-SCR-IP16", iwo: 14, bod: 10, chl: 12 },
+    { sku: "BULK-SCR-S24", iwo: 10, bod: 8, chl: 8 },
+  ]
+  for (const row of pieceStock) {
+    for (const shop of ["IWO", "BOD", "CHL"] as ShopCode[]) {
+      const qty = shop === "IWO" ? row.iwo : shop === "BOD" ? row.bod : row.chl
+      await prisma.inventory.upsert({
+        where: { productId_branchId: { productId: products[row.sku].id, branchId: byCode[shop].id } },
+        update: { quantity: qty, minStock: 10, lastStockCheck: new Date() },
+        create: {
+          productId: products[row.sku].id,
+          branchId: byCode[shop].id,
+          quantity: qty,
+          minStock: 10,
+          lastStockCheck: new Date(),
         },
       })
-      ids.push(row.id)
-      unitsCreated += 1
     }
-    unitsByKey.set(`${plan.productId}:${branch.id}`, ids)
   }
 
-  // Piece counts on the shelf (cords and screens).
-  const piecePlans: Array<{ shop: "IWO" | "BOD" | "CHL"; productId: string; qty: number }> = [
-    { shop: "IWO", productId: cord.id, qty: 40 },
-    { shop: "IWO", productId: screen.id, qty: 8 },
-    { shop: "BOD", productId: cord.id, qty: 25 },
-    { shop: "BOD", productId: screen.id, qty: 5 },
-    { shop: "CHL", productId: cord.id, qty: 30 },
-    { shop: "CHL", productId: screen.id, qty: 6 },
-  ]
-  for (const plan of piecePlans) {
-    await prisma.inventory.upsert({
-      where: { productId_branchId: { productId: plan.productId, branchId: byCode[plan.shop].id } },
-      update: { quantity: plan.qty, minStock: 5, lastStockCheck: new Date() },
-      create: {
-        productId: plan.productId,
-        branchId: byCode[plan.shop].id,
-        quantity: plan.qty,
-        minStock: 5,
-        lastStockCheck: new Date(),
-      },
-    })
-  }
-
-  // Align IMEI product shelf counts with In shop units.
-  for (const plan of stockPlans) {
-    const branchId = byCode[plan.shop].id
-    const inShop = await prisma.imeiRecord.count({
-      where: { productId: plan.productId, branchId, status: "IN_STOCK" },
-    })
-    await prisma.inventory.upsert({
-      where: { productId_branchId: { productId: plan.productId, branchId } },
-      update: { quantity: inShop, minStock: 2, lastStockCheck: new Date() },
-      create: { productId: plan.productId, branchId, quantity: inShop, minStock: 2 },
-    })
+  // Sync IMEI product inventory to In shop counts
+  for (const line of stockLines) {
+    for (const shop of ["IWO", "BOD", "CHL"] as ShopCode[]) {
+      const inShop = await prisma.imeiRecord.count({
+        where: { productId: products[line.sku].id, branchId: byCode[shop].id, status: "IN_STOCK" },
+      })
+      await prisma.inventory.upsert({
+        where: { productId_branchId: { productId: products[line.sku].id, branchId: byCode[shop].id } },
+        update: { quantity: inShop, minStock: 3, lastStockCheck: new Date() },
+        create: { productId: products[line.sku].id, branchId: byCode[shop].id, quantity: inShop, minStock: 3 },
+      })
+    }
   }
 
   async function ensurePurchase(opts: {
     invoiceNumber: string
     supplierId: string
-    branchId: string
-    userId: string
-    totalAmount: number
-    paidAmount: number
+    shop: ShopCode
+    userEmail: string
+    total: number
+    paid: number
     source?: string | null
     notes: string
     days: number
-    lines: Array<{ productId: string; quantity: number; costPrice: number }>
-    linkImeiIds?: string[]
+    lines: Array<{ sku: string; qty: number; cost: number }>
+    linkKeys?: string[]
   }) {
     const existing = await prisma.purchase.findUnique({ where: { invoiceNumber: opts.invoiceNumber } })
     if (existing) return existing
-
     const purchase = await prisma.purchase.create({
       data: {
         invoiceNumber: opts.invoiceNumber,
         supplierId: opts.supplierId,
-        branchId: opts.branchId,
-        userId: opts.userId,
+        branchId: byCode[opts.shop].id,
+        userId: need(opts.userEmail).id,
         status: "RECEIVED",
-        totalAmount: naira(opts.totalAmount),
-        paidAmount: naira(opts.paidAmount),
-        paymentMethod: opts.paidAmount >= opts.totalAmount ? "TRANSFER" : opts.paidAmount > 0 ? "TRANSFER" : null,
+        totalAmount: naira(opts.total),
+        paidAmount: naira(opts.paid),
+        paymentMethod: opts.paid > 0 ? "TRANSFER" : null,
         source: opts.source ?? null,
         sessionOpen: false,
         receivedDate: daysAgo(opts.days),
         createdAt: daysAgo(opts.days),
         notes: opts.notes,
-        originCountry: null,
-        originCity: null,
         items: {
-          create: opts.lines.map((line) => ({
-            productId: line.productId,
-            quantity: line.quantity,
-            receivedQty: line.quantity,
-            costPrice: naira(line.costPrice),
-            totalAmount: naira(line.quantity * line.costPrice),
+          create: opts.lines.map((l) => ({
+            productId: products[l.sku].id,
+            quantity: l.qty,
+            receivedQty: l.qty,
+            costPrice: naira(l.cost),
+            totalAmount: naira(l.qty * l.cost),
           })),
         },
       },
     })
-
-    if (opts.linkImeiIds?.length) {
-      await prisma.imeiRecord.updateMany({
-        where: { id: { in: opts.linkImeiIds } },
-        data: { purchaseId: purchase.id },
-      })
+    if (opts.linkKeys?.length) {
+      const ids = opts.linkKeys.flatMap((k) => unitIdsBySkuShop.get(k) ?? []).slice(0, 80)
+      if (ids.length) {
+        await prisma.imeiRecord.updateMany({ where: { id: { in: ids } }, data: { purchaseId: purchase.id } })
+      }
     }
     return purchase
   }
 
-  const iwoIp17 = unitsByKey.get(`${ip17.id}:${byCode.IWO.id}`) ?? []
-  const iwoIp15 = unitsByKey.get(`${ip15.id}:${byCode.IWO.id}`) ?? []
-  const bodHot = unitsByKey.get(`${hot.id}:${byCode.BOD.id}`) ?? []
-  const chlIp17 = unitsByKey.get(`${ip17.id}:${byCode.CHL.id}`) ?? []
-
+  // Supplier bills — paid, unpaid, partial, upload-stock labelled
   await ensurePurchase({
-    invoiceNumber: "DEMO-PO-IWO-PAID-001",
-    supplierId: dubai.id,
-    branchId: byCode.IWO.id,
-    userId: need("uploader@abutwins.com").id,
-    totalAmount: 4 * 1_650_000 + 5 * 780_000,
-    paidAmount: 4 * 1_650_000 + 5 * 780_000,
+    invoiceNumber: "BULK-PO-IWO-DUBAI-01",
+    supplierId: appleGrey.id,
+    shop: "IWO",
+    userEmail: "uploader@abutwins.com",
+    total: 12 * 1_650_000 + 10 * 1_420_000,
+    paid: 12 * 1_650_000 + 10 * 1_420_000,
     source: "UPLOAD_STOCK",
-    notes: "Study bill · Loaded on Upload stock · Marked paid. Dubai phones for Iwo Road.",
-    days: 10,
+    notes: "Bulk upload · Dubai/Apple grey · iPhone 17 Pro Max + Pro · Paid",
+    days: 12,
     lines: [
-      { productId: ip17.id, quantity: 4, costPrice: 1_650_000 },
-      { productId: ip15.id, quantity: 5, costPrice: 780_000 },
+      { sku: "BULK-IP17PM-256", qty: 12, cost: 1_650_000 },
+      { sku: "BULK-IP17P-256", qty: 10, cost: 1_420_000 },
     ],
-    linkImeiIds: [...iwoIp17, ...iwoIp15],
+    linkKeys: ["BULK-IP17PM-256:IWO", "BULK-IP17P-256:IWO"],
   })
-
   await ensurePurchase({
-    invoiceNumber: "DEMO-PO-IWO-OWED-002",
+    invoiceNumber: "BULK-PO-IWO-CHINA-OWED",
     supplierId: china.id,
-    branchId: byCode.IWO.id,
-    userId: need("vault@abutwins.com").id,
-    totalAmount: 4 * 720_000,
-    paidAmount: 0,
+    shop: "IWO",
+    userEmail: "vault@abutwins.com",
+    total: 14 * 680_000 + 25 * 245_000,
+    paid: 0,
     source: "UPLOAD_STOCK",
-    notes: "Study bill · Loaded on Upload stock · Not paid yet. Shows on Finance still owed.",
-    days: 4,
-    lines: [{ productId: s24.id, quantity: 4, costPrice: 720_000 }],
-    linkImeiIds: unitsByKey.get(`${s24.id}:${byCode.IWO.id}`) ?? [],
+    notes: "Bulk upload · Not paid yet · S24 + A55 carton",
+    days: 5,
+    lines: [
+      { sku: "BULK-S24-256", qty: 14, cost: 680_000 },
+      { sku: "BULK-A55-128", qty: 25, cost: 245_000 },
+    ],
+    linkKeys: ["BULK-S24-256:IWO", "BULK-A55-128:IWO"],
   })
-
   await ensurePurchase({
-    invoiceNumber: "DEMO-PO-BOD-PARTIAL-003",
-    supplierId: lagos.id,
-    branchId: byCode.BOD.id,
-    userId: need("bodija.vault@abutwins.com").id,
-    totalAmount: 8 * 98_000 + 5 * 145_000,
-    paidAmount: 400_000,
-    notes: "Study bill · Bodija volume phones · Part paid.",
+    invoiceNumber: "BULK-PO-IWO-UK-LAPTOPS",
+    supplierId: ukUsed.id,
+    shop: "IWO",
+    userEmail: "uploader@abutwins.com",
+    total: 8 * 620_000 + 12 * 280_000 + 10 * 310_000,
+    paid: 2_000_000,
+    notes: "UK used MacBooks + Dell + HP · Part paid",
+    days: 8,
+    lines: [
+      { sku: "BULK-MBA-M2-256-UK", qty: 8, cost: 620_000 },
+      { sku: "BULK-DELL-LAT5420-UK", qty: 12, cost: 280_000 },
+      { sku: "BULK-HP-ELITE840-UK", qty: 10, cost: 310_000 },
+    ],
+    linkKeys: ["BULK-MBA-M2-256-UK:IWO", "BULK-DELL-LAT5420-UK:IWO", "BULK-HP-ELITE840-UK:IWO"],
+  })
+  await ensurePurchase({
+    invoiceNumber: "BULK-PO-BOD-VOLUME-01",
+    supplierId: alaba.id,
+    shop: "BOD",
+    userEmail: "bodija.vault@abutwins.com",
+    total: 28 * 98_000 + 30 * 85_000 + 14 * 720_000,
+    paid: 28 * 98_000 + 30 * 85_000 + 14 * 720_000,
+    source: "UPLOAD_STOCK",
+    notes: "Bodija volume · Hot 40 + Spark + iPhone 15 · Paid",
+    days: 9,
+    lines: [
+      { sku: "BULK-HOT40-256", qty: 28, cost: 98_000 },
+      { sku: "BULK-SPARK20-128", qty: 30, cost: 85_000 },
+      { sku: "BULK-IP15-128", qty: 14, cost: 720_000 },
+    ],
+    linkKeys: ["BULK-HOT40-256:BOD", "BULK-SPARK20-128:BOD", "BULK-IP15-128:BOD"],
+  })
+  await ensurePurchase({
+    invoiceNumber: "BULK-PO-BOD-UK-OWED",
+    supplierId: ukUsed.id,
+    shop: "BOD",
+    userEmail: "bodija.manager@abutwins.com",
+    total: 12 * 480_000 + 6 * 620_000,
+    paid: 0,
+    notes: "UK used iPhone 15 + MacBook Air · Not paid",
+    days: 3,
+    lines: [
+      { sku: "BULK-IP15-128-UK", qty: 12, cost: 480_000 },
+      { sku: "BULK-MBA-M2-256-UK", qty: 6, cost: 620_000 },
+    ],
+    linkKeys: ["BULK-IP15-128-UK:BOD", "BULK-MBA-M2-256-UK:BOD"],
+  })
+  await ensurePurchase({
+    invoiceNumber: "BULK-PO-CHL-FLAGSHIP",
+    supplierId: dubai.id,
+    shop: "CHL",
+    userEmail: "challenge.vault@abutwins.com",
+    total: 10 * 1_650_000 + 12 * 980_000,
+    paid: 10 * 1_650_000 + 12 * 980_000,
+    source: "UPLOAD_STOCK",
+    notes: "Challenge flagship carton · iPhone 17 Pro Max + iPhone 17 · Paid",
     days: 7,
     lines: [
-      { productId: hot.id, quantity: 8, costPrice: 98_000 },
-      { productId: camon.id, quantity: 5, costPrice: 145_000 },
+      { sku: "BULK-IP17PM-256", qty: 10, cost: 1_650_000 },
+      { sku: "BULK-IP17-128", qty: 12, cost: 980_000 },
     ],
-    linkImeiIds: [
-      ...(unitsByKey.get(`${hot.id}:${byCode.BOD.id}`) ?? []),
-      ...(unitsByKey.get(`${camon.id}:${byCode.BOD.id}`) ?? []),
-    ],
+    linkKeys: ["BULK-IP17PM-256:CHL", "BULK-IP17-128:CHL"],
   })
-
   await ensurePurchase({
-    invoiceNumber: "DEMO-PO-CHL-PAID-004",
-    supplierId: dubai.id,
-    branchId: byCode.CHL.id,
-    userId: need("challenge.vault@abutwins.com").id,
-    totalAmount: 3 * 1_650_000,
-    paidAmount: 3 * 1_650_000,
-    source: "UPLOAD_STOCK",
-    notes: "Study bill · Challenge iPhone 17 Pro Max carton · Paid.",
+    invoiceNumber: "BULK-PO-CHL-ACC-01",
+    supplierId: anker.id,
+    shop: "CHL",
+    userEmail: "uploader@abutwins.com",
+    total: 40 * 8_500 + 35 * 12_000 + 20 * 18_000,
+    paid: 500_000,
+    notes: "Accessories + power · Part paid",
+    days: 4,
+    lines: [
+      { sku: "BULK-CHG-20W", qty: 40, cost: 8_500 },
+      { sku: "BULK-PB-20000", qty: 35, cost: 12_000 },
+      { sku: "BULK-CHG-65W", qty: 20, cost: 18_000 },
+    ],
+  })
+  await ensurePurchase({
+    invoiceNumber: "BULK-PO-IWO-SCREENS",
+    supplierId: gzScreen.id,
+    shop: "IWO",
+    userEmail: "vault@abutwins.com",
+    total: 18 * 45_000 + 14 * 58_000,
+    paid: 18 * 45_000 + 14 * 58_000,
+    notes: "OEM screens carton · Paid",
     days: 6,
-    lines: [{ productId: ip17.id, quantity: 3, costPrice: 1_650_000 }],
-    linkImeiIds: chlIp17,
+    lines: [
+      { sku: "BULK-SCR-IP15", qty: 18, cost: 45_000 },
+      { sku: "BULK-SCR-IP16", qty: 14, cost: 58_000 },
+    ],
   })
 
+  // ——— Sales across shops ———
   async function ensureSale(opts: {
     invoice: string
-    branchId: string
-    userId: string
-    customerId: string
-    imeiId: string
-    productId: string
+    shop: ShopCode
+    userEmail: string
+    customerPhone: string
+    sku: string
     price: number
     method: "CASH" | "TRANSFER" | "POS" | "CREDIT"
     paid: number
     days: number
   }) {
-    const existing = await prisma.sale.findUnique({ where: { invoiceNumber: opts.invoice } })
-    if (existing) return existing
-
-    const imei = await prisma.imeiRecord.findUnique({ where: { id: opts.imeiId } })
-    if (!imei || imei.status !== "IN_STOCK") {
-      console.log(`  skip sale ${opts.invoice}: unit not In shop`)
-      return null
+    if (await prisma.sale.findUnique({ where: { invoiceNumber: opts.invoice } })) return
+    const pool = unitIdsBySkuShop.get(`${opts.sku}:${opts.shop}`) ?? []
+    let imeiId: string | null = null
+    for (const id of pool) {
+      const row = await prisma.imeiRecord.findUnique({ where: { id }, select: { id: true, status: true } })
+      if (row?.status === "IN_STOCK") {
+        imeiId = row.id
+        break
+      }
     }
-
+    if (!imeiId) {
+      console.log(`  skip sale ${opts.invoice}: no In shop unit for ${opts.sku}@${opts.shop}`)
+      return
+    }
     const sale = await prisma.sale.create({
       data: {
         invoiceNumber: opts.invoice,
-        branchId: opts.branchId,
-        userId: opts.userId,
-        customerId: opts.customerId,
+        branchId: byCode[opts.shop].id,
+        userId: need(opts.userEmail).id,
+        customerId: customersByPhone[opts.customerPhone].id,
         saleType: "RETAIL",
         status: "COMPLETED",
         subtotal: naira(opts.price),
@@ -675,10 +722,11 @@ async function main() {
         paidAmount: naira(opts.paid),
         paymentMethod: opts.method,
         saleDate: daysAgo(opts.days),
+        notes: "Bulk study sale",
         items: {
           create: {
-            productId: opts.productId,
-            imeiId: opts.imeiId,
+            productId: products[opts.sku].id,
+            imeiId,
             quantity: 1,
             unitPrice: naira(opts.price),
             totalPrice: naira(opts.price),
@@ -696,24 +744,23 @@ async function main() {
             : undefined,
       },
     })
-
     await prisma.imeiRecord.update({
-      where: { id: opts.imeiId },
-      data: { status: "SOLD", customerId: opts.customerId, saleId: sale.id },
+      where: { id: imeiId },
+      data: { status: "SOLD", customerId: customersByPhone[opts.customerPhone].id, saleId: sale.id },
     })
     await prisma.inventory.update({
-      where: { productId_branchId: { productId: opts.productId, branchId: opts.branchId } },
+      where: { productId_branchId: { productId: products[opts.sku].id, branchId: byCode[opts.shop].id } },
       data: { quantity: { decrement: 1 } },
     })
     if (opts.paid > 0) {
       await prisma.financeEntry.create({
         data: {
-          branchId: opts.branchId,
+          branchId: byCode[opts.shop].id,
           account: opts.method === "CASH" ? "CASH" : "BANK",
           type: "INCOME",
           amount: naira(opts.paid),
           reference: opts.invoice,
-          description: `Study sale ${opts.invoice}`,
+          description: `Sale ${opts.invoice}`,
           createdAt: daysAgo(opts.days),
         },
       })
@@ -721,7 +768,7 @@ async function main() {
     if (opts.paid < opts.price) {
       await prisma.ledgerEntry.create({
         data: {
-          customerId: opts.customerId,
+          customerId: customersByPhone[opts.customerPhone].id,
           type: "SALE",
           amount: naira(opts.price - opts.paid),
           balance: naira(opts.price - opts.paid),
@@ -731,194 +778,386 @@ async function main() {
         },
       })
     }
-    return sale
   }
 
-  // Sell one unit per shop so Sales, Finance, and Phone IMEIs show Sold.
-  const saleIwo = iwoIp15[0]
-  const saleBod = bodHot[0]
-  const saleChl = (unitsByKey.get(`${ip15.id}:${byCode.CHL.id}`) ?? [])[0]
-  const saleIwoS24 = (unitsByKey.get(`${s24.id}:${byCode.IWO.id}`) ?? [])[0]
+  const salesPlan = [
+    { invoice: "BULK-INV-IWO-2001", shop: "IWO" as ShopCode, userEmail: "cashier@abutwins.com", customerPhone: "08031111001", sku: "BULK-IP17PM-256", price: 1_850_000, method: "TRANSFER" as const, paid: 1_850_000, days: 1 },
+    { invoice: "BULK-INV-IWO-2002", shop: "IWO" as ShopCode, userEmail: "sales@abutwins.com", customerPhone: "08031111002", sku: "BULK-IP16-128", price: 980_000, method: "POS" as const, paid: 980_000, days: 2 },
+    { invoice: "BULK-INV-IWO-2003", shop: "IWO" as ShopCode, userEmail: "cashier@abutwins.com", customerPhone: "08031111003", sku: "BULK-S24-256", price: 845_000, method: "CASH" as const, paid: 845_000, days: 2 },
+    { invoice: "BULK-INV-IWO-2004", shop: "IWO" as ShopCode, userEmail: "cashier@abutwins.com", customerPhone: "08031111004", sku: "BULK-MBA-M2-256-UK", price: 780_000, method: "TRANSFER" as const, paid: 780_000, days: 3 },
+    { invoice: "BULK-INV-IWO-2005", shop: "IWO" as ShopCode, userEmail: "sales@abutwins.com", customerPhone: "08031111005", sku: "BULK-CAMON30-256", price: 185_000, method: "CREDIT" as const, paid: 50_000, days: 1 },
+    { invoice: "BULK-INV-IWO-2006", shop: "IWO" as ShopCode, userEmail: "cashier@abutwins.com", customerPhone: "08031111006", sku: "BULK-IP15-128-UK", price: 595_000, method: "POS" as const, paid: 595_000, days: 4 },
+    { invoice: "BULK-INV-IWO-2007", shop: "IWO" as ShopCode, userEmail: "cashier@abutwins.com", customerPhone: "08031111007", sku: "BULK-AIRPODS-PRO2", price: 245_000, method: "CASH" as const, paid: 245_000, days: 1 },
+    { invoice: "BULK-INV-BOD-2001", shop: "BOD" as ShopCode, userEmail: "bodija.cashier@abutwins.com", customerPhone: "08032221001", sku: "BULK-HOT40-256", price: 128_000, method: "CASH" as const, paid: 128_000, days: 1 },
+    { invoice: "BULK-INV-BOD-2002", shop: "BOD" as ShopCode, userEmail: "bodija.cashier@abutwins.com", customerPhone: "08032221002", sku: "BULK-IP15-128", price: 880_000, method: "TRANSFER" as const, paid: 880_000, days: 2 },
+    { invoice: "BULK-INV-BOD-2003", shop: "BOD" as ShopCode, userEmail: "bodija.cashier@abutwins.com", customerPhone: "08032221003", sku: "BULK-A55-128", price: 315_000, method: "POS" as const, paid: 315_000, days: 3 },
+    { invoice: "BULK-INV-BOD-2004", shop: "BOD" as ShopCode, userEmail: "bodija.cashier@abutwins.com", customerPhone: "08032221004", sku: "BULK-DELL-LAT5420-UK", price: 385_000, method: "TRANSFER" as const, paid: 200_000, days: 2 },
+    { invoice: "BULK-INV-BOD-2005", shop: "BOD" as ShopCode, userEmail: "bodija.cashier@abutwins.com", customerPhone: "08032221005", sku: "BULK-SPARK20-128", price: 112_000, method: "CASH" as const, paid: 112_000, days: 1 },
+    { invoice: "BULK-INV-CHL-2001", shop: "CHL" as ShopCode, userEmail: "challenge.cashier@abutwins.com", customerPhone: "08033331001", sku: "BULK-IP17PM-256", price: 1_850_000, method: "TRANSFER" as const, paid: 1_850_000, days: 1 },
+    { invoice: "BULK-INV-CHL-2002", shop: "CHL" as ShopCode, userEmail: "challenge.cashier@abutwins.com", customerPhone: "08033331002", sku: "BULK-IP17-128", price: 1_150_000, method: "POS" as const, paid: 1_150_000, days: 2 },
+    { invoice: "BULK-INV-CHL-2003", shop: "CHL" as ShopCode, userEmail: "challenge.cashier@abutwins.com", customerPhone: "08033331003", sku: "BULK-NOTE13P-256", price: 255_000, method: "CASH" as const, paid: 255_000, days: 3 },
+    { invoice: "BULK-INV-CHL-2004", shop: "CHL" as ShopCode, userEmail: "challenge.cashier@abutwins.com", customerPhone: "08033331004", sku: "BULK-HP-ELITE840-UK", price: 420_000, method: "TRANSFER" as const, paid: 420_000, days: 2 },
+    { invoice: "BULK-INV-CHL-2005", shop: "CHL" as ShopCode, userEmail: "challenge.cashier@abutwins.com", customerPhone: "08033331005", sku: "BULK-EAR-BUDS3", price: 68_000, method: "CASH" as const, paid: 68_000, days: 1 },
+  ]
+  for (const s of salesPlan) await ensureSale(s)
 
-  if (saleIwo) {
-    await ensureSale({
-      invoice: "DEMO-INV-IWO-1001",
-      branchId: byCode.IWO.id,
-      userId: need("cashier@abutwins.com").id,
-      customerId: customers.iwoAde.id,
-      imeiId: saleIwo,
-      productId: ip15.id,
-      price: 920_000,
-      method: "TRANSFER",
-      paid: 920_000,
-      days: 2,
-    })
-  }
-  if (saleIwoS24) {
-    await ensureSale({
-      invoice: "DEMO-INV-IWO-1002",
-      branchId: byCode.IWO.id,
-      userId: need("sales@abutwins.com").id,
-      customerId: customers.iwoFunmi.id,
-      imeiId: saleIwoS24,
-      productId: s24.id,
-      price: 865_000,
-      method: "POS",
-      paid: 865_000,
-      days: 1,
-    })
-  }
-  if (saleBod) {
-    await ensureSale({
-      invoice: "DEMO-INV-BOD-1001",
-      branchId: byCode.BOD.id,
-      userId: need("bodija.cashier@abutwins.com").id,
-      customerId: customers.bodTunde.id,
-      imeiId: saleBod,
-      productId: hot.id,
-      price: 128_000,
-      method: "CASH",
-      paid: 128_000,
-      days: 3,
-    })
-  }
-  if (saleChl) {
-    await ensureSale({
-      invoice: "DEMO-INV-CHL-1001",
-      branchId: byCode.CHL.id,
-      userId: need("challenge.cashier@abutwins.com").id,
-      customerId: customers.chlKemi.id,
-      imeiId: saleChl,
-      productId: ip15.id,
-      price: 920_000,
-      method: "CREDIT",
-      paid: 200_000,
-      days: 1,
-    })
-  }
-
-  // Neighbor shop fill at Iwo Road (sold).
-  const fillNumber = "DEMO-NF-IWO-001"
-  const existingFill = await prisma.neighborFill.findUnique({ where: { fillNumber } })
-  if (!existingFill) {
-    const neighborCost = 880_000
-    const sellPrice = 920_000
-    const sale = await prisma.sale.create({
+  // ——— Goods on the way (Coming) ———
+  async function ensureIncoming(lotNumber: string, shop: ShopCode, supplierId: string, userEmail: string, days: number, lines: Array<{ sku: string; qty: number }>) {
+    if (await prisma.incomingLot.findUnique({ where: { lotNumber } })) return
+    await prisma.incomingLot.create({
       data: {
-        invoiceNumber: "DEMO-INV-IWO-NF-001",
-        branchId: byCode.IWO.id,
-        userId: need("cashier@abutwins.com").id,
-        customerId: customers.iwoAde.id,
-        saleType: "RETAIL",
-        status: "COMPLETED",
-        subtotal: naira(sellPrice),
-        totalAmount: naira(sellPrice),
-        paidAmount: naira(sellPrice),
-        paymentMethod: "TRANSFER",
-        saleDate: daysAgo(5),
-        notes: "Neighbor shop fill study sale",
+        lotNumber,
+        branchId: byCode[shop].id,
+        supplierId,
+        userId: need(userEmail).id,
+        status: "COMING",
+        visible: true,
+        expectedDate: daysAgo(-days),
+        notes: "Bulk study · still on the road",
         items: {
-          create: {
-            productId: ip15.id,
-            quantity: 1,
-            unitPrice: naira(sellPrice),
-            totalPrice: naira(sellPrice),
-          },
-        },
-        payments: {
-          create: {
-            amount: naira(sellPrice),
-            method: "TRANSFER",
-            paidAt: daysAgo(5),
-          },
+          create: lines.map((l) => ({
+            productId: products[l.sku].id,
+            quantity: l.qty,
+            identity: products[l.sku].tracking === "NONE" ? "NONE" : products[l.sku].tracking === "SERIAL" ? "SERIAL" : "IMEI",
+          })),
         },
       },
     })
+    for (const l of lines) {
+      await prisma.inventory.update({
+        where: { productId_branchId: { productId: products[l.sku].id, branchId: byCode[shop].id } },
+        data: { incomingQty: { increment: l.qty } },
+      })
+    }
+  }
+  await ensureIncoming("BULK-IN-IWO-01", "IWO", dubai.id, "vault@abutwins.com", 5, [
+    { sku: "BULK-IP17PM-512", qty: 8 },
+    { sku: "BULK-IP16PM-256", qty: 10 },
+  ])
+  await ensureIncoming("BULK-IN-BOD-01", "BOD", china.id, "bodija.vault@abutwins.com", 3, [
+    { sku: "BULK-S24U-256", qty: 6 },
+    { sku: "BULK-NOTE13P-256", qty: 20 },
+  ])
+  await ensureIncoming("BULK-IN-CHL-01", "CHL", ukUsed.id, "challenge.vault@abutwins.com", 7, [
+    { sku: "BULK-MBP14-M3-512-UK", qty: 4 },
+    { sku: "BULK-IP14-128-UK", qty: 15 },
+  ])
+
+  // ——— Shop to shop transfer (completed) ———
+  if (!(await prisma.stockTransfer.findUnique({ where: { transferNumber: "BULK-TR-IWO-CHL-01" } }))) {
+    const moveSku = "BULK-CORD-TYPEC"
+    const qty = 20
+    await prisma.stockTransfer.create({
+      data: {
+        transferNumber: "BULK-TR-IWO-CHL-01",
+        fromBranchId: byCode.IWO.id,
+        toBranchId: byCode.CHL.id,
+        userId: need("manager@abutwins.com").id,
+        status: "RECEIVED",
+        notes: "Bulk study · cords sent to Challenge",
+        sentAt: daysAgo(4),
+        receivedAt: daysAgo(3),
+        items: { create: { productId: products[moveSku].id, quantity: qty, receivedQty: qty } },
+      },
+    })
+    await prisma.inventory.update({
+      where: { productId_branchId: { productId: products[moveSku].id, branchId: byCode.IWO.id } },
+      data: { quantity: { decrement: qty } },
+    })
+    await prisma.inventory.update({
+      where: { productId_branchId: { productId: products[moveSku].id, branchId: byCode.CHL.id } },
+      data: { quantity: { increment: qty } },
+    })
+  }
+  if (!(await prisma.stockTransfer.findUnique({ where: { transferNumber: "BULK-TR-BOD-IWO-02" } }))) {
+    await prisma.stockTransfer.create({
+      data: {
+        transferNumber: "BULK-TR-BOD-IWO-02",
+        fromBranchId: byCode.BOD.id,
+        toBranchId: byCode.IWO.id,
+        userId: need("bodija.manager@abutwins.com").id,
+        status: "PENDING",
+        notes: "Bulk study · pending confirmation at Iwo Road",
+        sentAt: daysAgo(1),
+        items: { create: { productId: products["BULK-PB-20000"].id, quantity: 10, receivedQty: 0 } },
+      },
+    })
+  }
+
+  // ——— Neighbor fills ———
+  async function ensureNeighborFill(fillNumber: string, shop: ShopCode, neighborId: string, customerPhone: string, sku: string, cost: number, sell: number, status: "OPEN" | "SOLD") {
+    if (await prisma.neighborFill.findUnique({ where: { fillNumber } })) return
+    let saleId: string | null = null
+    if (status === "SOLD") {
+      const inv = `BULK-INV-NF-${fillNumber.slice(-4)}`
+      if (!(await prisma.sale.findUnique({ where: { invoiceNumber: inv } }))) {
+        const sale = await prisma.sale.create({
+          data: {
+            invoiceNumber: inv,
+            branchId: byCode[shop].id,
+            userId: need(shop === "IWO" ? "cashier@abutwins.com" : shop === "BOD" ? "bodija.cashier@abutwins.com" : "challenge.cashier@abutwins.com").id,
+            customerId: customersByPhone[customerPhone].id,
+            saleType: "RETAIL",
+            status: "COMPLETED",
+            subtotal: naira(sell),
+            totalAmount: naira(sell),
+            paidAmount: naira(sell),
+            paymentMethod: "TRANSFER",
+            saleDate: daysAgo(2),
+            notes: "Neighbor fill",
+            items: {
+              create: {
+                productId: products[sku].id,
+                quantity: 1,
+                unitPrice: naira(sell),
+                totalPrice: naira(sell),
+              },
+            },
+            payments: { create: { amount: naira(sell), method: "TRANSFER", paidAt: daysAgo(2) } },
+          },
+        })
+        saleId = sale.id
+        await prisma.financeEntry.create({
+          data: {
+            branchId: byCode[shop].id,
+            account: "BANK",
+            type: "INCOME",
+            amount: naira(sell),
+            reference: inv,
+            description: `Neighbor fill ${fillNumber}`,
+            createdAt: daysAgo(2),
+          },
+        })
+        await prisma.financeEntry.create({
+          data: {
+            branchId: byCode[shop].id,
+            account: "CASH",
+            type: "EXPENSE",
+            amount: naira(cost),
+            reference: `${fillNumber}-PAY`,
+            description: `Paid neighbor ${fillNumber}`,
+            createdAt: daysAgo(2),
+          },
+        })
+      }
+    }
     await prisma.neighborFill.create({
       data: {
         fillNumber,
-        branchId: byCode.IWO.id,
-        neighborName: neighbor.name,
-        neighborPhone: neighbor.phone,
-        supplierId: neighbor.id,
-        customerId: customers.iwoAde.id,
-        productId: ip15.id,
-        imei1: "3599001990000001",
-        neighborCost: naira(neighborCost),
-        sellPrice: naira(sellPrice),
-        profit: naira(sellPrice - neighborCost),
-        moneySentToNeighbor: naira(neighborCost),
-        saleId: sale.id,
-        status: "SOLD",
-        paymentMethod: "TRANSFER",
-        notes: "Study neighbor fill · collected next door for named customer",
-        userId: need("cashier@abutwins.com").id,
-        soldAt: daysAgo(5),
-        settledAt: daysAgo(5),
+        branchId: byCode[shop].id,
+        neighborName: neighborId === neighborIwo.id ? neighborIwo.name : neighborBod.name,
+        neighborPhone: neighborId === neighborIwo.id ? neighborIwo.phone : neighborBod.phone,
+        supplierId: neighborId,
+        customerId: customersByPhone[customerPhone].id,
+        productId: products[sku].id,
+        imei1: studyImei(shop, 9000 + Number(fillNumber.replace(/\D/g, "").slice(-3) || "1")),
+        neighborCost: naira(cost),
+        sellPrice: naira(sell),
+        profit: naira(sell - cost),
+        moneySentToNeighbor: status === "SOLD" ? naira(cost) : naira(0),
+        saleId,
+        status,
+        paymentMethod: status === "SOLD" ? "TRANSFER" : null,
+        notes: "Bulk study neighbor fill",
+        userId: need(shop === "IWO" ? "cashier@abutwins.com" : "bodija.cashier@abutwins.com").id,
+        soldAt: status === "SOLD" ? daysAgo(2) : null,
+        settledAt: status === "SOLD" ? daysAgo(2) : null,
+      },
+    })
+  }
+  await ensureNeighborFill("BULK-NF-IWO-01", "IWO", neighborIwo.id, "08031111008", "BULK-IP16-128", 900_000, 980_000, "SOLD")
+  await ensureNeighborFill("BULK-NF-IWO-02", "IWO", neighborIwo.id, "08031111001", "BULK-IP15-128", 800_000, 880_000, "OPEN")
+  await ensureNeighborFill("BULK-NF-BOD-01", "BOD", neighborBod.id, "08032221006", "BULK-A55-128", 280_000, 315_000, "SOLD")
+
+  // ——— Repair + return ———
+  {
+    const repairImei = (unitIdsBySkuShop.get("BULK-IP14-128-UK:IWO") ?? [])[5]
+    if (repairImei && !(await prisma.repair.findUnique({ where: { repairNumber: "BULK-RP-IWO-01" } }))) {
+      await prisma.imeiRecord.update({ where: { id: repairImei }, data: { status: "FAULTY", notes: "Screen crack · study repair" } })
+      await prisma.repair.create({
+        data: {
+          repairNumber: "BULK-RP-IWO-01",
+          imeiId: repairImei,
+          customerId: customersByPhone["08031111002"].id,
+          branchId: byCode.IWO.id,
+          userId: need("engineer@abutwins.com").id,
+          issue: "Broken screen after drop",
+          diagnosis: "Needs OEM screen",
+          repairCost: naira(68_000),
+          status: "REPAIRING",
+          estimatedCompletion: daysAgo(-3),
+          notes: "Bulk study repair",
+        },
+      })
+    }
+  }
+  {
+    const sold = await prisma.sale.findUnique({
+      where: { invoiceNumber: "BULK-INV-IWO-2003" },
+      include: { items: true },
+    })
+    if (sold?.items[0]?.imeiId && !(await prisma.stockReturn.findUnique({ where: { returnNumber: "BULK-RT-IWO-01" } }))) {
+      await prisma.stockReturn.create({
+        data: {
+          returnNumber: "BULK-RT-IWO-01",
+          customerId: customersByPhone["08031111003"].id,
+          saleId: sold.id,
+          imeiId: sold.items[0].imeiId,
+          branchId: byCode.IWO.id,
+          userId: need("cashier@abutwins.com").id,
+          reason: "CUSTOMER_DISSATISFACTION",
+          outcome: "REFUND",
+          refundAmount: naira(845_000),
+          status: "PENDING",
+          notes: "Bulk study return awaiting approval",
+        },
+      })
+    }
+  }
+
+  // ——— Expenses ———
+  const expenses: Array<{ num: string; shop: ShopCode; cat: ExpenseCategory; amount: number; desc: string; days: number; email: string }> = [
+    { num: "BULK-EXP-IWO-01", shop: "IWO", cat: "RENT", amount: 850_000, desc: "Iwo Road shop rent", days: 15, email: "accountant@abutwins.com" },
+    { num: "BULK-EXP-IWO-02", shop: "IWO", cat: "FUEL", amount: 48_000, desc: "Generator diesel", days: 2, email: "manager@abutwins.com" },
+    { num: "BULK-EXP-IWO-03", shop: "IWO", cat: "UTILITIES", amount: 65_000, desc: "NEPA / prepaid meter", days: 5, email: "manager@abutwins.com" },
+    { num: "BULK-EXP-BOD-01", shop: "BOD", cat: "RENT", amount: 450_000, desc: "Bodija shop rent", days: 15, email: "bodija.manager@abutwins.com" },
+    { num: "BULK-EXP-BOD-02", shop: "BOD", cat: "TRANSPORT", amount: 22_000, desc: "Courier to Iwo Road", days: 3, email: "bodija.manager@abutwins.com" },
+    { num: "BULK-EXP-CHL-01", shop: "CHL", cat: "RENT", amount: 400_000, desc: "Challenge shop rent", days: 15, email: "challenge.manager@abutwins.com" },
+    { num: "BULK-EXP-CHL-02", shop: "CHL", cat: "MISCELLANEOUS", amount: 18_000, desc: "POS paper and bags", days: 1, email: "challenge.manager@abutwins.com" },
+    { num: "BULK-EXP-CHL-03", shop: "CHL", cat: "MARKETING", amount: 35_000, desc: "Roadside banner", days: 6, email: "challenge.manager@abutwins.com" },
+  ]
+  for (const e of expenses) {
+    if (await prisma.expense.findUnique({ where: { expenseNumber: e.num } })) continue
+    await prisma.expense.create({
+      data: {
+        expenseNumber: e.num,
+        branchId: byCode[e.shop].id,
+        userId: need(e.email).id,
+        category: e.cat,
+        amount: naira(e.amount),
+        description: e.desc,
+        date: daysAgo(e.days),
+        approvedBy: need(e.email).id,
+        approvedAt: daysAgo(e.days),
       },
     })
     await prisma.financeEntry.create({
       data: {
-        branchId: byCode.IWO.id,
-        account: "BANK",
-        type: "INCOME",
-        amount: naira(sellPrice),
-        reference: "DEMO-INV-IWO-NF-001",
-        description: "Neighbor fill customer payment",
-        createdAt: daysAgo(5),
-      },
-    })
-    await prisma.financeEntry.create({
-      data: {
-        branchId: byCode.IWO.id,
+        branchId: byCode[e.shop].id,
         account: "CASH",
         type: "EXPENSE",
-        amount: naira(neighborCost),
-        reference: "DEMO-NF-PAY-001",
-        description: "Paid neighbor for fill DEMO-NF-IWO-001",
-        createdAt: daysAgo(5),
+        amount: naira(e.amount),
+        reference: e.num,
+        description: e.desc,
+        createdAt: daysAgo(e.days),
       },
     })
   }
 
-  // Shop expenses so Money in & out has outflow too.
-  const expenseSeeds = [
-    { ref: "DEMO-EXP-IWO-001", branch: "IWO" as const, amount: 25_000, desc: "Generator fuel · Iwo Road", days: 2, category: "FUEL" as const },
-    { ref: "DEMO-EXP-BOD-001", branch: "BOD" as const, amount: 18_000, desc: "Shop cleaning · Bodija", days: 3, category: "MISCELLANEOUS" as const },
-    { ref: "DEMO-EXP-CHL-001", branch: "CHL" as const, amount: 22_000, desc: "POS roll paper · Challenge", days: 1, category: "MISCELLANEOUS" as const },
-  ]
-  for (const row of expenseSeeds) {
-    const exists = await prisma.expense.findUnique({ where: { expenseNumber: row.ref } })
-    if (exists) continue
-    const branchId = byCode[row.branch].id
-    const managerEmail =
-      row.branch === "IWO"
-        ? "manager@abutwins.com"
-        : row.branch === "BOD"
-          ? "bodija.manager@abutwins.com"
-          : "challenge.manager@abutwins.com"
-    await prisma.expense.create({
+  // ——— Day closes (yesterday) so Sell now can open ———
+  for (const shop of ["IWO", "BOD", "CHL"] as ShopCode[]) {
+    const businessDate = watDay(1)
+    const existing = await prisma.dayClose.findFirst({ where: { branchId: byCode[shop].id, businessDate } })
+    if (existing) continue
+    const manager =
+      shop === "IWO" ? "manager@abutwins.com" : shop === "BOD" ? "bodija.manager@abutwins.com" : "challenge.manager@abutwins.com"
+    await prisma.dayClose.create({
       data: {
-        expenseNumber: row.ref,
-        branchId,
-        userId: need(managerEmail).id,
-        category: row.category,
-        amount: naira(row.amount),
-        description: row.desc,
-        date: daysAgo(row.days),
-        approvedBy: need(managerEmail).id,
-        approvedAt: daysAgo(row.days),
+        branchId: byCode[shop].id,
+        userId: need(manager).id,
+        closeDate: daysAgo(1),
+        businessDate,
+        expectedCash: naira(150_000),
+        countedCash: naira(150_000),
+        variance: naira(0),
+        transferTotal: naira(500_000),
+        posTotal: naira(300_000),
+        creditTotal: naira(50_000),
+        saleCount: 3,
+        notes: "Bulk study · prior day closed",
       },
     })
-    await prisma.financeEntry.create({
+  }
+
+  // ——— Stock count with variance ———
+  if (!(await prisma.reconciliation.findFirst({ where: { notes: "BULK-RECON-IWO-01" } }))) {
+    const recon = await prisma.reconciliation.create({
       data: {
-        branchId,
-        account: "CASH",
-        type: "EXPENSE",
-        amount: naira(row.amount),
-        reference: row.ref,
-        description: row.desc,
-        createdAt: daysAgo(row.days),
+        branchId: byCode.IWO.id,
+        userId: need("manager@abutwins.com").id,
+        startDate: daysAgo(1),
+        endDate: daysAgo(1),
+        status: "PENDING_APPROVAL",
+        totalExpected: naira(117),
+        totalCounted: naira(113),
+        variance: naira(-4),
+        notes: "BULK-RECON-IWO-01",
+        items: {
+          create: [
+            {
+              productId: products["BULK-CORD-TYPEC"].id,
+              expectedQty: 100,
+              countedQty: 96,
+              variance: -4,
+              varianceValue: naira(-4 * 1_500),
+              reason: "Short on shelf count",
+            },
+            {
+              productId: products["BULK-IP15-128"].id,
+              expectedQty: 17,
+              countedQty: 17,
+              variance: 0,
+              varianceValue: naira(0),
+            },
+          ],
+        },
+      },
+    })
+    await prisma.approval.create({
+      data: {
+        type: "RECONCILIATION",
+        status: "PENDING",
+        requestedBy: need("manager@abutwins.com").id,
+        entityType: "Reconciliation",
+        entityId: recon.id,
+        reason: "Cord count short by 4 · study approval",
+      },
+    })
+  }
+
+  // ——— Notifications ———
+  const notifSeeds = [
+    {
+      title: "BULK-NOTE-LOW-IWO",
+      userId: () => need("manager@abutwins.com").id,
+      message: "Type-C cords are running low after the Challenge transfer. Reorder from Ibadan Bulk Accessories.",
+      type: "LOW_STOCK" as const,
+      actionUrl: "/inventory",
+    },
+    {
+      title: "BULK-NOTE-TRANSFER",
+      userId: () => need("manager@abutwins.com").id,
+      message: "Bodija sent power banks (BULK-TR-BOD-IWO-02). Confirm arrival on Shop to shop.",
+      type: "TRANSFER" as const,
+      actionUrl: "/transfers",
+    },
+    {
+      title: "BULK-NOTE-OWED",
+      userId: () => need("accountant@abutwins.com").id,
+      message: "Supplier bills still owed: BULK-PO-IWO-CHINA-OWED and BULK-PO-BOD-UK-OWED.",
+      type: "DUE_PAYMENT" as const,
+      actionUrl: "/purchases",
+    },
+  ]
+  for (const n of notifSeeds) {
+    if (await prisma.notification.findFirst({ where: { title: n.title } })) continue
+    await prisma.notification.create({
+      data: {
+        userId: n.userId(),
+        title: n.title,
+        message: n.message,
+        type: n.type,
+        actionUrl: n.actionUrl,
       },
     })
   }
@@ -926,40 +1165,39 @@ async function main() {
   await prisma.setting.upsert({
     where: { key: "demo.ibadan.study" },
     update: { value: new Date().toISOString() },
-    create: {
-      key: "demo.ibadan.study",
-      value: new Date().toISOString(),
-      description: "Ibadan study data last loaded",
-    },
+    create: { key: "demo.ibadan.study", value: new Date().toISOString(), description: "Bulk Ibadan study data last loaded" },
   })
 
   const summary = await Promise.all(
-    (["IWO", "BOD", "CHL"] as const).map(async (code) => {
+    (["IWO", "BOD", "CHL"] as ShopCode[]).map(async (code) => {
       const id = byCode[code].id
-      const [phonesIn, sales, purchases, customersCount] = await Promise.all([
+      const [phonesIn, sales, purchases, customers, productsActive] = await Promise.all([
         prisma.imeiRecord.count({ where: { branchId: id, status: "IN_STOCK" } }),
         prisma.sale.count({ where: { branchId: id } }),
         prisma.purchase.count({ where: { branchId: id } }),
         prisma.customer.count({ where: { branchId: id } }),
+        prisma.product.count({ where: { isActive: true, sku: { startsWith: "BULK-" } } }),
       ])
-      return { code, phonesIn, sales, purchases, customersCount }
+      return { code, phonesIn, sales, purchases, customers, productsActive }
     })
   )
+  const supplierCount = await prisma.supplier.count({ where: { isActive: true } })
 
-  console.log(`Created ${unitsCreated} new In shop units (existing study IMEIs were left alone).`)
-  console.log("Per shop:")
+  console.log(`New In shop units created this run: ${unitsCreated}`)
+  console.log(`Active BULK catalog SKUs: ${summary[0]?.productsActive ?? 0}`)
+  console.log(`Suppliers on books: ${supplierCount}`)
   for (const row of summary) {
     console.log(
-      `  ${row.code}: ${row.phonesIn} phones In shop · ${row.sales} sales · ${row.purchases} supplier bills · ${row.customersCount} customers`
+      `  ${row.code}: ${row.phonesIn} units In shop · ${row.sales} sales · ${row.purchases} bills · ${row.customers} customers`
     )
   }
-  console.log("Study invoices: DEMO-PO-*, DEMO-INV-*, DEMO-NF-IWO-001")
-  console.log("Done. Client can sign in and walk Upload stock, Goods from supplier, Sell now, Finance.")
+  console.log("Covered: Upload/PO trail, Coming lots, transfers, neighbor fills, sales, repairs, returns, expenses, day closes, approvals, alerts.")
+  console.log("Done.")
 }
 
 main()
-  .catch((error) => {
-    console.error(error)
+  .catch((e) => {
+    console.error(e)
     process.exit(1)
   })
   .finally(async () => {
