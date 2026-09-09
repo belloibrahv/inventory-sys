@@ -21,7 +21,8 @@
     "staff:plan": "tsx scripts/provision-staff.ts",
     "staff:apply": "tsx scripts/provision-staff.ts --apply",
     "data:move-plan": "tsx scripts/move-retired-shop-data.ts",
-    "data:move-apply": "tsx scripts/move-retired-shop-data.ts --apply"
+    "data:move-apply": "tsx scripts/move-retired-shop-data.ts --apply",
+    "check:uploads": "tsx scripts/check-uploads.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

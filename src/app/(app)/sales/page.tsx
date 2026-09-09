@@ -1,3 +1,4 @@
+import { ReceiptBatchButton } from "@/components/receipt-batch-button"
 import Link from "next/link"
 import { getSales } from "@/app/actions/sales"
 import { PageHeader, StatusBadge } from "@/components/shared"
@@ -52,6 +53,7 @@ export default async function SalesPage() {
           </tbody>
         </table>
       </div>
+      <ReceiptBatchButton />
     </div>
   )
 }

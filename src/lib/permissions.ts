@@ -7,6 +7,7 @@ export { isSuperAdmin } from "@/lib/roles"
 export const VIEW_PERMS = [
   { key: "view.dashboard", label: "Home", href: "/dashboard" },
   { key: "view.products", label: "Phones & items", href: "/products" },
+  { key: "view.uploads", label: "Upload stock", href: "/uploads" },
   { key: "view.imei", label: "Phone IMEIs", href: "/imei" },
   { key: "view.inventory", label: "Shop stock", href: "/inventory" },
   { key: "view.incoming", label: "Goods on the way", href: "/incoming" },
@@ -37,6 +38,7 @@ export const VIEW_PERMS = [
 export const ACTION_PERMS = [
   { key: "action.sell", label: "Sell and collect money" },
   { key: "action.catalog", label: "Add items and change prices" },
+  { key: "action.upload", label: "Upload the item list and stock from a sheet" },
   { key: "action.intake", label: "Receive phones and supplier goods" },
   { key: "action.incoming", label: "Book goods before they arrive" },
   { key: "action.transfer", label: "Send and receive goods between Abu Twins shops" },
@@ -61,7 +63,16 @@ const V = (...keys: string[]) => keys
 
 const DEFAULTS: Record<UserRole, string[]> = {
   SUPER_ADMIN: ALL,
-  CEO: ALL.filter((key) => key !== "view.access" && key !== "action.override_floor" && key !== "action.settings"),
+  // The CEO watches the business. Loading the item list and the stock is the
+  // uploader's job, so those two are left off deliberately.
+  CEO: ALL.filter(
+    (key) =>
+      key !== "view.access" &&
+      key !== "action.override_floor" &&
+      key !== "action.settings" &&
+      key !== "view.uploads" &&
+      key !== "action.upload"
+  ),
   AUDITOR: V(
     "view.dashboard", "view.products", "view.imei", "view.inventory", "view.incoming", "view.sales", "view.purchases",
     "view.customers", "view.suppliers", "view.transfers", "view.neighbor-fills", "view.returns", "view.swaps", "view.repairs",
@@ -79,13 +90,17 @@ const DEFAULTS: Record<UserRole, string[]> = {
     "view.purchases", "view.customers", "view.suppliers", "view.transfers", "view.neighbor-fills", "view.returns",
     "view.swaps", "view.repairs", "view.reconciliation", "view.finance", "view.expenses", "view.profits",
     "view.approvals", "view.staff", "view.reports", "view.notifications",
-    "action.sell", "action.catalog", "action.intake", "action.incoming", "action.transfer", "action.neighbor",
+    "action.sell", "action.intake", "action.incoming", "action.transfer", "action.neighbor",
     "action.return", "action.swap", "action.repair", "action.recon", "action.approve", "action.finance", "action.staff"
   ),
   VAULT_MANAGER: V(
     "view.dashboard", "view.products", "view.imei", "view.inventory", "view.incoming", "view.purchases",
     "view.suppliers", "view.transfers", "view.notifications",
-    "action.intake", "action.incoming", "action.transfer", "action.catalog"
+    "action.intake", "action.incoming", "action.transfer"
+  ),
+  STOCK_UPLOADER: V(
+    "view.dashboard", "view.uploads", "view.products", "view.imei", "view.inventory", "view.notifications",
+    "action.upload", "action.catalog", "action.all_branches"
   ),
   CASHIER: V(
     "view.dashboard", "view.pos", "view.sales", "view.customers", "view.neighbor-fills", "view.returns", "view.notifications",

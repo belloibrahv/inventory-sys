@@ -338,7 +338,11 @@ async function readUpload(file: File) {
 
 export async function importProducts(formData: FormData) {
   const user = await requireUser()
-  if (!(await canManageCatalog(user.role))) return { error: "You cannot add or change phones and items." }
+  // The item list is loaded centrally. If three shops could each add items,
+  // one phone would end up on the system under three different names.
+  if (!(await can(user.role, "action.upload"))) {
+    return { error: "Only Super Admin and the stock uploader can load the item list from a sheet." }
+  }
 
   const file = formData.get("file")
   if (!(file instanceof File) || file.size === 0) return { error: "Choose an Excel or CSV file first." }

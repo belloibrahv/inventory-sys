@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/session"
 import { prisma } from "@/lib/prisma"
 import { AppFrame } from "@/components/layout/frame"
 import { LiveRefresh } from "@/components/live-refresh"
-import { getAllowedKeys, hrefsForKeys, pathIsAllowed } from "@/lib/permissions"
+import { firstAllowedHref, getAllowedKeys, hrefsForKeys, pathIsAllowed } from "@/lib/permissions"
 import { writeAudit } from "@/lib/audit"
 import { getViewShopOptions } from "@/app/actions/view-shop"
 
@@ -25,9 +25,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (allowedHrefs.length === 0) redirect("/login")
 
   const pathname = (await headers()).get("x-pathname") || ""
+  let refused = false
+
   if (pathname && pathname !== "/account" && pathname !== "/help") {
+    refused = !pathIsAllowed(pathname, allowedHrefs)
     try {
-      if (!pathIsAllowed(pathname, allowedHrefs)) {
+      if (refused) {
         await writeAudit({
           userId: user.id,
           action: "DENIED",
@@ -54,6 +57,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       // never block the shop if the trail cannot write
     }
   }
+
+  // Outside the try on purpose. redirect() works by throwing, so a catch around
+  // it swallows the redirect and the screen is drawn after all. Send them to a
+  // screen their job does have instead of an empty one.
+  if (refused) redirect(firstAllowedHref(keys))
 
   return (
     <AppFrame unread={unread} shops={shops} user={{ name: user.name, role: user.role, mustChangePassword: user.mustChangePassword }} allowedHrefs={allowedHrefs}>

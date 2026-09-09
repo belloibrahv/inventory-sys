@@ -312,7 +312,9 @@ export function PosClient({
       return
     }
     toast.success("Sale saved. This invoice cannot be edited.")
-    router.push(`/sales/${result.saleId}`)
+    // Straight to the receipt, printing itself, so the customer is handed it
+    // before they leave the counter.
+    router.push(`/sales/${result.saleId}?receipt=1`)
     router.refresh()
   }
 

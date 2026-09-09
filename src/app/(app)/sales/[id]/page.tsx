@@ -7,6 +7,8 @@ import { getCustomers } from "@/app/actions/parties"
 import { ActionForm } from "@/components/action-form"
 import { PageHeader, StatusBadge } from "@/components/shared"
 import { PrintButton } from "@/components/print-button"
+import { ReceiptPdfButton } from "@/components/receipt-pdf-button"
+import { AutoPrint } from "@/components/auto-print"
 import { Receipt } from "@/components/receipt"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
@@ -16,8 +18,17 @@ import { formatCurrency, formatDateTime, money } from "@/lib/utils"
 import { statusLabel } from "@/lib/status"
 import { warrantyState } from "@/lib/warranty"
 
-export default async function SaleDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function SaleDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ receipt?: string }>
+}) {
   const { id } = await params
+  // The till sends the cashier straight here after a sale, asking for the
+  // receipt to print itself.
+  const { receipt } = await searchParams
   const [me, sale, settings, customers] = await Promise.all([requireUser(), getSale(id), getSettings(), getCustomers()])
   if (!sale) notFound()
   const due = money(sale.totalAmount) - money(sale.paidAmount)
@@ -26,12 +37,43 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
     (row) => row.branchId === sale.branchId && !row.name.toLowerCase().includes("walk-in")
   )
 
+  const receiptData = {
+    company,
+    invoiceNumber: sale.invoiceNumber,
+    branch: sale.branch.name,
+    address: settings.find((row) => row.key === "company.address")?.value || sale.branch.address,
+    shopPhone: settings.find((row) => row.key === "company.phone")?.value || sale.branch.phone,
+    email: settings.find((row) => row.key === "company.email")?.value,
+    cashier: sale.user.name ?? "Staff",
+    customer: sale.customer?.name ?? null,
+    customerPhone: sale.customer?.phone ?? null,
+    soldAt: formatDateTime(sale.saleDate),
+    items: sale.items.map((item) => ({
+      name: item.product.name,
+      imei: item.imei?.imei1,
+      quantity: item.quantity,
+      amount: money(item.totalPrice),
+      warranty: warrantyState(sale.saleDate, item.product.warrantyDays).label,
+    })),
+    total: money(sale.totalAmount),
+    paid: money(sale.paidAmount),
+    method: statusLabel(sale.paymentMethod),
+    notes: sale.notes,
+  }
+
   return (
+    <>
+      <AutoPrint when={receipt === "1"} />
     <div className="space-y-6">
       <PageHeader
         title={sale.invoiceNumber}
         description={`${sale.branch.name} · ${formatDateTime(sale.saleDate)} · posted by ${sale.user.name}`}
-        actions={<PrintButton label="Print invoice" />}
+        actions={
+          <>
+            <ReceiptPdfButton data={receiptData} />
+            <PrintButton label="Print invoice" />
+          </>
+        }
       />
       <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 print:hidden dark:border-amber-900 dark:bg-amber-500/10 dark:text-amber-100">
         This sale cannot be changed. Staff cannot edit items, IMEIs, or prices. Collect any remaining money below.
@@ -175,5 +217,6 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
         />
       </div>
     </div>
+    </>
   )
 }

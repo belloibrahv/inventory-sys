@@ -53,6 +53,7 @@ type SeedUser = {
 
 const USERS: SeedUser[] = [
   { email: "admin@abutwins.com", password: "admin123", name: "TechVaults Admin", role: "SUPER_ADMIN" },
+  { email: "uploader@abutwins.com", password: "uploader123", name: "Data Uploader", role: "STOCK_UPLOADER" },
   { email: "ceo@abutwins.com", password: "ceo123", name: "Abu Twins", role: "CEO" },
   { email: "auditor@abutwins.com", password: "auditor123", name: "Amaka Okonkwo", role: "AUDITOR" },
   { email: "accountant@abutwins.com", password: "accountant123", name: "Chinedu Bassey", role: "ACCOUNTANT", branchCode: "IWO" },
@@ -151,6 +152,49 @@ async function main() {
 
   const { ensureRolePermissions } = await import("../src/lib/permissions")
   await ensureRolePermissions()
+
+  // One-off changes to what a job may do.
+  //
+  // ensureRolePermissions only fills in rows that are missing. It never changes
+  // a row that is already there, because Super Admin's own ticks on Who can see
+  // what must survive a deploy. So a change of mind about a default needs its
+  // own step, and each one runs exactly once. A Super Admin who later ticks the
+  // box back on keeps it.
+  const REVISIONS: Array<{ key: string; why: string; apply: () => Promise<void> }> = [
+    {
+      key: "perm.revision.central_catalog",
+      why: "The item list is loaded centrally by the stock uploader, so shop managers and goods intake no longer add items or change prices.",
+      apply: async () => {
+        await prisma.rolePermission.updateMany({
+          where: { role: { in: ["BRANCH_MANAGER", "VAULT_MANAGER"] }, permKey: "action.catalog" },
+          data: { allowed: false },
+        })
+      },
+    },
+    {
+      key: "perm.revision.upload_only_roles",
+      why: "Loading the item list and the stock from a sheet is the stock uploader's job, so the CEO and every other role no longer has it.",
+      apply: async () => {
+        await prisma.rolePermission.updateMany({
+          where: {
+            role: { notIn: ["SUPER_ADMIN", "STOCK_UPLOADER"] },
+            permKey: { in: ["action.upload", "view.uploads"] },
+          },
+          data: { allowed: false },
+        })
+      },
+    },
+  ]
+
+  for (const revision of REVISIONS) {
+    const done = await prisma.setting.findUnique({ where: { key: revision.key } })
+    if (done) continue
+    await revision.apply()
+    await prisma.setting.create({
+      data: { key: revision.key, value: new Date().toISOString(), description: revision.why },
+    })
+    console.log(`applied ${revision.key}`)
+  }
 
   console.log("User seed complete.")
 }

@@ -780,3 +780,63 @@ export async function attachSaleCustomer(formData: FormData) {
   revalidatePath("/pos")
   return { success: true }
 }
+
+/**
+ * Every receipt for a stretch of days, for filing or handing to accounts.
+ *
+ * Read only. It reprints what the sales already say and changes nothing.
+ */
+export async function getReceiptsForRange(from: string, to: string) {
+  const user = await requireUser()
+  if (!(await can(user.role, "view.sales"))) return { error: "You cannot see sales." as const }
+
+  const branchId = await viewBranchFilter(user)
+  const start = new Date(`${from}T00:00:00`)
+  const end = new Date(`${to}T23:59:59.999`)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return { error: "Pick a first day and a last day." as const }
+  }
+  if (start > end) return { error: "The first day must come before the last day." as const }
+
+  const sales = await prisma.sale.findMany({
+    where: {
+      status: "COMPLETED",
+      saleDate: { gte: start, lte: end },
+      ...(branchId ? { branchId } : {}),
+    },
+    include: {
+      branch: true,
+      user: { select: { name: true } },
+      customer: { select: { name: true, phone: true } },
+      items: { include: { product: true, imei: { select: { imei1: true } } } },
+    },
+    orderBy: { saleDate: "asc" },
+    take: 500,
+  })
+
+  const settings = await getAppSettings()
+  return {
+    receipts: sales.map((sale) => ({
+      company: settings.productName,
+      invoiceNumber: sale.invoiceNumber,
+      branch: sale.branch.name,
+      address: settings.companyAddress || sale.branch.address,
+      shopPhone: settings.companyPhone || sale.branch.phone,
+      email: settings.companyEmail,
+      cashier: sale.user.name ?? "Staff",
+      customer: sale.customer?.name ?? null,
+      customerPhone: sale.customer?.phone ?? null,
+      soldAt: sale.saleDate.toISOString(),
+      items: sale.items.map((item) => ({
+        name: item.product.name,
+        imei: item.imei?.imei1 ?? null,
+        quantity: item.quantity,
+        amount: money(item.totalPrice),
+      })),
+      total: money(sale.totalAmount),
+      paid: money(sale.paidAmount),
+      method: String(sale.paymentMethod),
+      notes: sale.notes,
+    })),
+  }
+}

@@ -30,7 +30,7 @@ const ROLE_JOB: Record<UserRole, { job: string; shops: string }> = {
     shops: "You see every shop.",
   },
   CEO: {
-    job: "You watch both Ibadan shops: sales, stock, money, and the trail. You cannot change Who can see what, Settings, or sell below the lowest price.",
+    job: "You watch all three Ibadan shops: sales, stock, money, and the trail. You cannot change Who can see what, Settings, or sell below the lowest price.",
     shops: "You see every shop.",
   },
   AUDITOR: {
@@ -48,6 +48,10 @@ const ROLE_JOB: Record<UserRole, { job: string; shops: string }> = {
   VAULT_MANAGER: {
     job: "You book goods before they arrive, receive phones, and send stock to a shop. You do not take till money.",
     shops: "You work in the shop Super Admin set on your login.",
+  },
+  STOCK_UPLOADER: {
+    job: "You load the shop system with data from a sheet. First the item list, then how many of each are on the shelf, then the phones by IMEI, then customers. You do not sell, you do not touch money, and you do not approve anything.",
+    shops: "You load for every shop, and the sheet says which shop each line belongs to.",
   },
   CASHIER: {
     job: "You sell, collect money, close the day, and record a return. You do not book incoming goods or change prices.",
