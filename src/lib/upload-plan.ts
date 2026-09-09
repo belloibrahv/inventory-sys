@@ -34,6 +34,16 @@ export type CustomerLine = {
   creditLimit: number
 }
 
+
+/**
+ * A sheet handed to the shop carries sample rows showing the shape. The
+ * instructions say to delete them or leave them marked SAMPLE, so the second
+ * of those has to actually work: a row marked SAMPLE is never loaded.
+ */
+function isSample(row: Record<string, string>) {
+  return cell(row, "row_type", "type", "row").toUpperCase() === "SAMPLE"
+}
+
 function shopLookup(shops: ShopRef[]) {
   const index = new Map<string, string>()
   for (const shop of shops) {
@@ -79,6 +89,7 @@ export function planImeis(rows: Record<string, string>[], items: CatalogItem[], 
 
   rows.forEach((row, index) => {
     const line = index + 2
+    if (isSample(row)) return
     const imei1 = cell(row, "imei", "imei1", "imei_1", "phone")
     const serial = cell(row, "serial", "serial_number", "sn")
     const code = imei1 || serial
@@ -133,10 +144,12 @@ export function planStock(rows: Record<string, string>[], items: CatalogItem[], 
 
   rows.forEach((row, index) => {
     const line = index + 2
+    if (isSample(row)) return
     const sku = cell(row, "item_code", "sku", "code")
     const name = cell(row, "name", "product", "item")
     const shopName = cell(row, "shop", "branch", "store", "location")
-    const qtyRaw = cell(row, "quantity", "qty", "pieces", "count", "on_hand")
+    // pieces_on_shelf is what the sheet Techvaults hands the shop calls it.
+    const qtyRaw = cell(row, "quantity", "qty", "pieces", "count", "on_hand", "pieces_on_shelf", "shelf_count")
     if (!sku && !name && !shopName && !qtyRaw) return
 
     const found = findItem(lookup, sku, name)
@@ -179,6 +192,7 @@ export function planCustomers(rows: Record<string, string>[], shops: ShopRef[]):
 
   rows.forEach((row, index) => {
     const line = index + 2
+    if (isSample(row)) return
     const name = cell(row, "name", "customer", "full_name")
     const phone = cell(row, "phone", "number", "mobile")
     const shopName = cell(row, "shop", "branch", "store")

@@ -372,6 +372,8 @@ export async function importProducts(formData: FormData) {
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index]
     const line = index + 2
+    // Sample rows on the handed-out sheet are never loaded.
+    if (cell(row, "row_type", "type", "row").toUpperCase() === "SAMPLE") continue
     const sku = cell(row, "item_code", "sku", "code")
     const name = cell(row, "name", "product", "item")
     const brandName = cell(row, "brand")
@@ -402,7 +404,8 @@ export async function importProducts(formData: FormData) {
 
     const costPrice = Number(cell(row, "cost", "cost_price") || 0)
     const sellingPrice = Number(cell(row, "selling", "selling_price") || 0)
-    const minimumPrice = Number(cell(row, "minimum", "minimum_price", "min") || sellingPrice)
+    // lowest_price is what the sheet Techvaults hands the shop calls it.
+    const minimumPrice = Number(cell(row, "minimum", "minimum_price", "min", "lowest_price", "lowest") || sellingPrice)
     if (!Number.isFinite(costPrice) || !Number.isFinite(sellingPrice) || sellingPrice <= 0) {
       errors.push(`Line ${line}: selling price must be a number above 0.`)
       continue
