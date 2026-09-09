@@ -9,8 +9,9 @@ import { ScanField } from "@/components/scan-field"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
+import { formatCurrency } from "@/lib/utils"
+import type { OpenUploadBill } from "./upload-bill-session"
 
-type Shop = { id: string; name: string; code: string }
 type Brand = { id: string; name: string }
 type Category = { id: string; name: string }
 type Product = {
@@ -18,6 +19,7 @@ type Product = {
   name: string
   sku: string
   tracking: "IMEI" | "SERIAL" | "NONE"
+  costPrice: number
   brand: { name: string }
 }
 
@@ -44,19 +46,18 @@ function trackingHint(tracking: Product["tracking"]) {
 }
 
 /**
- * Add stock one unit at a time without a spreadsheet.
- * Phones and serial items book In shop. Piece items raise the shelf count.
+ * Add stock one unit at a time onto an open upload bill.
  */
 export function ManualStockForm({
-  shops,
   brands,
   categories,
   products,
+  openBill,
 }: {
-  shops: Shop[]
   brands: Brand[]
   categories: Category[]
   products: Product[]
+  openBill: OpenUploadBill | null
 }) {
   const router = useRouter()
   const formRef = useRef<HTMLFormElement>(null)
@@ -69,6 +70,7 @@ export function ManualStockForm({
 
   const selectedProduct = products.find((row) => row.id === productId)
   const activeTracking = productMode === "existing" ? selectedProduct?.tracking ?? "IMEI" : newTracking
+  const locked = !openBill
 
   const filteredProducts = useMemo(() => {
     const needle = search.trim().toLowerCase()
@@ -89,7 +91,12 @@ export function ManualStockForm({
   }, [filteredProducts, productId])
 
   async function handleSubmit(formData: FormData) {
+    if (!openBill) {
+      toast.error("Start an upload bill first. Pick the supplier and whether it is paid.")
+      return
+    }
     setBusy(true)
+    formData.set("purchaseId", openBill.id)
     formData.set("productMode", productMode)
     if (productMode === "existing") formData.set("productId", productId)
     if (activeTracking !== "NONE") formData.set("identity", identity)
@@ -113,6 +120,8 @@ export function ManualStockForm({
     if (result.products) parts.push(`${result.products} new item name on the list`)
     if (result.phones) parts.push(`${result.phones} unit booked In shop`)
     if (result.pieces) parts.push(`${result.pieces} piece${result.pieces === 1 ? "" : "s"} added to the shelf`)
+    if (result.invoiceNumber) parts.push(`bill ${result.invoiceNumber}`)
+    if (result.submissionValue != null) parts.push(`submission value ${formatCurrency(result.submissionValue)}`)
     toast.success(parts.join(". ") || "Added to the shelf.")
 
     setIdentity("")
@@ -124,33 +133,26 @@ export function ManualStockForm({
   }
 
   return (
-    <div className="surface-card border-primary/30 p-5">
+    <div className="surface-card p-5">
       <div className="mb-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-primary">Everyday way</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Everyday way</p>
         <h2 className="text-lg font-semibold tracking-tight">Add one item to the shelf</h2>
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Use this when you have one phone, one laptop, or a few cords to book in. Pick the shop, pick or add the item name,
-        then enter the IMEI, serial, or how many pieces. When the form saves, the fields clear so you can add the next unit.
-        For dozens or hundreds of lines, use the opening stock Excel below instead.
+        Units go onto the open upload bill above. Scan or type each IMEI or serial, or say how many cords. When the form
+        saves, the number fields clear for the next unit. For dozens or hundreds of lines, use the opening stock Excel
+        below instead.
       </p>
 
-      <form ref={formRef} className="mt-4 space-y-4" action={handleSubmit}>
-        <div>
-          <label className="mb-1 block text-sm font-medium" htmlFor="manual-branch">
-            Shop
-          </label>
-          <Select id="manual-branch" name="branchId" required defaultValue={shops[0]?.id || ""} disabled={busy}>
-            {shops.map((shop) => (
-              <option key={shop.id} value={shop.id}>
-                {shop.name} ({shop.code})
-              </option>
-            ))}
-          </Select>
-        </div>
+      {locked ? (
+        <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-100">
+          Start an upload bill first. That creates the PO number, supplier, and paid or not paid trail for this carton.
+        </p>
+      ) : null}
 
-        <fieldset className="space-y-2">
+      <form ref={formRef} className="mt-4 space-y-4" action={handleSubmit}>
+        <fieldset className="space-y-2" disabled={locked || busy}>
           <legend className="text-sm font-medium">Item on the list</legend>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -158,7 +160,7 @@ export function ManualStockForm({
               size="sm"
               variant={productMode === "existing" ? "default" : "outline"}
               onClick={() => setProductMode("existing")}
-              disabled={busy}
+              disabled={locked || busy}
             >
               Pick from the list
             </Button>
@@ -167,7 +169,7 @@ export function ManualStockForm({
               size="sm"
               variant={productMode === "new" ? "default" : "outline"}
               onClick={() => setProductMode("new")}
-              disabled={busy}
+              disabled={locked || busy}
             >
               Add a new item name
             </Button>
@@ -180,40 +182,41 @@ export function ManualStockForm({
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Find by name, item code, or brand"
-              disabled={busy}
+              disabled={locked || busy}
             />
             <Select
               name="productIdDisplay"
               required
               value={productId}
               onChange={(event) => setProductId(event.target.value)}
-              disabled={busy || filteredProducts.length === 0}
-              emptyLabel="No items on the list yet. Add a new item name below or upload the opening stock Excel."
+              disabled={locked || busy || filteredProducts.length === 0}
+              emptyLabel="No items on the list yet. Add a new item name or upload the opening stock Excel."
             >
               {filteredProducts.map((row) => (
                 <option key={row.id} value={row.id}>
-                  {row.name} · {row.brand.name} · {trackingLabel(row.tracking)}
+                  {row.name} · {row.brand.name} · {trackingLabel(row.tracking)} · cost {formatCurrency(row.costPrice)}
                 </option>
               ))}
             </Select>
             {selectedProduct ? (
               <p className="text-xs text-muted-foreground">
-                Item code {selectedProduct.sku}. {trackingHint(selectedProduct.tracking)}
+                Item code {selectedProduct.sku}. Cost {formatCurrency(selectedProduct.costPrice)} goes onto the bill.
+                {` ${trackingHint(selectedProduct.tracking)}`}
               </p>
             ) : null}
           </div>
         ) : (
           <div className="space-y-3 rounded-xl border border-dashed border-border p-3">
-            <Input name="name" placeholder="Item name, for example iPhone 17 Pro Max 256GB" required disabled={busy} />
+            <Input name="name" placeholder="Item name, for example iPhone 17 Pro Max 256GB" required disabled={locked || busy} />
             <div className="grid gap-2 sm:grid-cols-2">
-              <Select name="brandId" required disabled={busy} emptyLabel="Add a brand on Phones and items first.">
+              <Select name="brandId" required disabled={locked || busy} emptyLabel="Add a brand on Phones and items first.">
                 {brands.map((brand) => (
                   <option key={brand.id} value={brand.id}>
                     {brand.name}
                   </option>
                 ))}
               </Select>
-              <Select name="categoryId" required disabled={busy} emptyLabel="Add a category on Phones and items first.">
+              <Select name="categoryId" required disabled={locked || busy} emptyLabel="Add a category on Phones and items first.">
                 {categories.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.name}
@@ -225,24 +228,24 @@ export function ManualStockForm({
               name="tracking"
               value={newTracking}
               onChange={(event) => setNewTracking(event.target.value as Product["tracking"])}
-              disabled={busy}
+              disabled={locked || busy}
             >
               <option value="IMEI">Phone or tablet with IMEI</option>
               <option value="SERIAL">Laptop or accessory with serial</option>
               <option value="NONE">No number (cords, chargers, screens by count)</option>
             </Select>
-            <Select name="condition" defaultValue="BRAND_NEW" disabled={busy}>
+            <Select name="condition" defaultValue="BRAND_NEW" disabled={locked || busy}>
               {CONDITIONS.map((item) => (
                 <option key={item} value={item}>
                   {item.replaceAll("_", " ")}
                 </option>
               ))}
             </Select>
-            <Input name="storage" placeholder="Storage or size (optional)" disabled={busy} />
+            <Input name="storage" placeholder="Storage or size (optional)" disabled={locked || busy} />
             <div className="grid gap-2 sm:grid-cols-3">
-              <Input name="costPrice" type="number" min={0} step="0.01" placeholder="Cost price" required disabled={busy} />
-              <Input name="minimumPrice" type="number" min={0} step="0.01" placeholder="Lowest price" required disabled={busy} />
-              <Input name="sellingPrice" type="number" min={0} step="0.01" placeholder="Selling price" required disabled={busy} />
+              <Input name="costPrice" type="number" min={0} step="0.01" placeholder="Cost price" required disabled={locked || busy} />
+              <Input name="minimumPrice" type="number" min={0} step="0.01" placeholder="Lowest price" required disabled={locked || busy} />
+              <Input name="sellingPrice" type="number" min={0} step="0.01" placeholder="Selling price" required disabled={locked || busy} />
             </div>
             <p className="text-xs text-muted-foreground">{trackingHint(newTracking)}</p>
           </div>
@@ -260,44 +263,36 @@ export function ManualStockForm({
               step={1}
               defaultValue={1}
               required
-              disabled={busy}
+              disabled={locked || busy}
               placeholder="How many pieces you are putting on the shelf"
             />
           ) : activeTracking === "IMEI" ? (
             <>
-              <ScanField
-                kind="IMEI"
-                onScan={setIdentity}
-                placeholder="Scan IMEI from the box, then press Enter"
-              />
+              <ScanField kind="IMEI" onScan={setIdentity} placeholder="Scan IMEI from the box, then press Enter" />
               <Input
                 value={identity}
                 onChange={(event) => setIdentity(event.target.value.replace(/[\s-]/g, ""))}
                 placeholder="Or type the full IMEI"
-                disabled={busy}
+                disabled={locked || busy}
                 inputMode="numeric"
                 autoComplete="off"
               />
             </>
           ) : (
             <>
-              <ScanField
-                kind="SERIAL"
-                onScan={setIdentity}
-                placeholder="Scan serial from the box, then press Enter"
-              />
+              <ScanField kind="SERIAL" onScan={setIdentity} placeholder="Scan serial from the box, then press Enter" />
               <Input
                 value={identity}
                 onChange={(event) => setIdentity(event.target.value.trim())}
                 placeholder="Or type the serial number"
-                disabled={busy}
+                disabled={locked || busy}
                 autoComplete="off"
               />
             </>
           )}
         </div>
 
-        <Button type="submit" disabled={busy || shops.length === 0} aria-busy={busy}>
+        <Button type="submit" disabled={locked || busy} aria-busy={busy}>
           {busy ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />

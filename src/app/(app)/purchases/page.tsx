@@ -103,6 +103,9 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="font-semibold">{purchase.invoiceNumber}</p>
+                    {purchase.source === "UPLOAD_STOCK" ? (
+                      <p className="text-xs font-medium text-primary">Loaded on Upload stock</p>
+                    ) : null}
                     <p className="text-sm text-muted-foreground">
                       {purchase.supplier.name}
                       {origin ? ` · from ${origin}` : ""}

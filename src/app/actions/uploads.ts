@@ -8,16 +8,19 @@ import { can } from "@/lib/permissions"
 import { readTableFile, readWorkbookGrids } from "@/lib/table-file"
 import { makeOpeningSku, planOpeningStock } from "@/lib/opening-stock"
 import { planCustomers, planImeis, planStock, type CatalogItem, type ShopRef } from "@/lib/upload-plan"
+import {
+  MARKED_PAID_ON_UPLOAD,
+  UPLOAD_STOCK_SOURCE,
+  attachPurchaseLine,
+  isMarkedPaidOnUpload,
+} from "@/lib/upload-purchase"
+import { generateDocNumber, money } from "@/lib/utils"
 
 /**
- * Loading the shop system from a sheet.
+ * Loading the shop system from a sheet or by hand.
  *
- * Prefer the Abu Twins opening stock workbook (one file per shop, with PHONES,
- * ACCESSORIES, SCREEN, LAPTOPS). The older four-step sheets remain for cases
- * where stock arrives after the item list already exists.
- *
- * Every upload is checked from top to bottom before a single row is written, so
- * a mistake on the last line does not leave half a shop loaded.
+ * Manual adds and Excel loads create a real Goods from supplier bill (PO-…)
+ * so accountants can see supplier, submission value, and paid or not paid.
  */
 
 const MAX_BYTES = 4_000_000
@@ -32,6 +35,10 @@ export type UploadResult = {
   phones?: number
   pieces?: number
   problems?: string[]
+  invoiceNumber?: string
+  purchaseId?: string
+  submissionValue?: number
+  paid?: boolean
 }
 
 async function readSheet(formData: FormData): Promise<{ rows: Record<string, string>[]; name: string } | { error: string }> {
@@ -72,7 +79,8 @@ async function trail(userId: string, entity: string, detail: Record<string, unkn
 
 /**
  * Abu Twins opening stock: one workbook per shop.
- * Creates missing item names, books phones and serials In shop, and sets piece counts.
+ * Creates a Goods from supplier bill, missing item names, books phones and
+ * serials In shop, and sets piece counts.
  */
 export async function importOpeningStock(formData: FormData): Promise<UploadResult> {
   const gate = await requireUploader()
@@ -86,6 +94,16 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
   const branchId = String(formData.get("branchId") || "")
   const shop = await prisma.branch.findFirst({ where: { id: branchId, isActive: true } })
   if (!shop) return { error: "Pick the shop this file belongs to: Iwo Road, Bodija, or Challenge." }
+
+  const supplierId = String(formData.get("supplierId") || "")
+  const supplier = await prisma.supplier.findFirst({ where: { id: supplierId, isActive: true } })
+  if (!supplier) return { error: "Pick the supplier these goods were bought from." }
+  if (supplier.kind === "NEIGHBOR") {
+    return { error: "A neighboring shop is not a supplier carton. Use Neighbor shop fill for that." }
+  }
+
+  const paid = String(formData.get("paid") || "") === "yes"
+  const note = String(formData.get("notes") || "").trim()
 
   let sheets: Array<{ sheet: string; grid: string[][] }>
   try {
@@ -117,6 +135,7 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
   const categoryIds = new Map(categories.map((row) => [row.name.toLowerCase(), row.id]))
 
   const productIdByKey = new Map<string, string>()
+  const costByProductId = new Map<string, number>()
   let productsAdded = 0
 
   for (const draft of plan.products) {
@@ -155,6 +174,7 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
 
     if (existing) {
       productIdByKey.set(key, existing.id)
+      costByProductId.set(existing.id, draft.costPrice)
       continue
     }
 
@@ -180,8 +200,36 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
       })
     }
     productIdByKey.set(key, product.id)
+    costByProductId.set(product.id, draft.costPrice)
     productsAdded += 1
   }
+
+  const invoiceNumber = generateDocNumber("PO")
+  const purchase = await prisma.purchase.create({
+    data: {
+      invoiceNumber,
+      supplierId: supplier.id,
+      branchId: shop.id,
+      userId: user.id,
+      status: "RECEIVED",
+      totalAmount: "0.00",
+      paidAmount: "0.00",
+      paymentMethod: paid ? MARKED_PAID_ON_UPLOAD : null,
+      source: UPLOAD_STOCK_SOURCE,
+      sessionOpen: false,
+      receivedDate: new Date(),
+      originCountry: supplier.country,
+      originCity: supplier.city,
+      notes: [
+        "Loaded from opening stock Excel on Upload stock.",
+        paid ? "Marked paid when stock was uploaded." : "Not paid yet.",
+        note || null,
+        `File: ${file.name}`,
+      ]
+        .filter(Boolean)
+        .join(" "),
+    },
+  })
 
   const unitPayload = plan.units.map((row) => {
     const productId = productIdByKey.get(row.productKey)
@@ -191,8 +239,10 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
       serialNumber: row.identity.kind === "serial" ? row.identity.value : null,
       productId,
       branchId: shop.id,
+      supplierId: supplier.id,
+      purchaseId: purchase.id,
       status: "IN_STOCK" as const,
-      notes: `Opening stock · ${row.sheet}`,
+      notes: `Opening stock · ${row.sheet} · ${invoiceNumber}`,
     }
   })
 
@@ -219,6 +269,7 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
   )
 
   let phonesAdded = 0
+  const unitCounts = new Map<string, number>()
   for (let i = 0; i < freshUnits.length; i += 200) {
     const batch = freshUnits.slice(i, i + 200)
     await prisma.$transaction(async (tx) => {
@@ -227,6 +278,7 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
       for (const row of batch) {
         const key = `${row.productId}:${row.branchId}`
         perShop.set(key, (perShop.get(key) ?? 0) + 1)
+        unitCounts.set(row.productId, (unitCounts.get(row.productId) ?? 0) + 1)
       }
       for (const [key, count] of perShop) {
         const [productId, branchId] = key.split(":")
@@ -241,6 +293,7 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
   }
 
   let pieceLines = 0
+  const pieceCounts = new Map<string, number>()
   for (const row of plan.quantities) {
     const productId = productIdByKey.get(row.productKey)
     if (!productId) continue
@@ -249,8 +302,62 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
       update: { quantity: row.quantity, lastStockCheck: new Date() },
       create: { productId, branchId: shop.id, quantity: row.quantity },
     })
+    pieceCounts.set(productId, (pieceCounts.get(productId) ?? 0) + row.quantity)
     pieceLines += 1
   }
+
+  await prisma.$transaction(async (tx) => {
+    for (const [productId, quantity] of unitCounts) {
+      await attachPurchaseLine(tx, {
+        purchaseId: purchase.id,
+        productId,
+        quantity,
+        costPrice: costByProductId.get(productId) ?? 0,
+        markedPaid: paid,
+      })
+    }
+    for (const [productId, quantity] of pieceCounts) {
+      await attachPurchaseLine(tx, {
+        purchaseId: purchase.id,
+        productId,
+        quantity,
+        costPrice: costByProductId.get(productId) ?? 0,
+        markedPaid: paid,
+      })
+    }
+  })
+
+  if (phonesAdded === 0 && pieceLines === 0) {
+    await prisma.purchase.delete({ where: { id: purchase.id } })
+    await trail(
+      user.id,
+      "OpeningStock",
+      {
+        shop: shop.name,
+        file: file.name,
+        productsAdded,
+        phonesAdded: 0,
+        phonesAlready: unitPayload.length,
+        pieceLines: 0,
+        note: "Nothing new to add. No supplier bill was kept.",
+      },
+      shop.id
+    )
+    revalidateStockViews()
+    return {
+      success: true,
+      added: productsAdded,
+      products: productsAdded,
+      phones: 0,
+      pieces: 0,
+      skipped: unitPayload.length,
+    }
+  }
+
+  const refreshed = await prisma.purchase.findUnique({
+    where: { id: purchase.id },
+    select: { totalAmount: true, paidAmount: true },
+  })
 
   await trail(
     user.id,
@@ -258,20 +365,22 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
     {
       shop: shop.name,
       file: file.name,
+      invoiceNumber,
+      supplier: supplier.name,
       productsAdded,
       phonesAdded,
       phonesAlready: unitPayload.length - phonesAdded,
       pieceLines,
+      submissionValue: money(refreshed?.totalAmount),
+      paid,
     },
     shop.id
   )
 
-  revalidatePath("/uploads")
-  revalidatePath("/products")
-  revalidatePath("/imei")
-  revalidatePath("/inventory")
-  revalidatePath("/dashboard")
-  revalidatePath("/pos")
+  revalidateStockViews()
+  revalidatePath("/purchases")
+  revalidatePath("/finance")
+  revalidatePath("/suppliers")
 
   return {
     success: true,
@@ -280,6 +389,10 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
     phones: phonesAdded,
     pieces: pieceLines,
     skipped: unitPayload.length - phonesAdded,
+    invoiceNumber,
+    purchaseId: purchase.id,
+    submissionValue: money(refreshed?.totalAmount),
+    paid,
   }
 }
 
@@ -456,25 +569,162 @@ function revalidateStockViews() {
   revalidatePath("/inventory")
   revalidatePath("/dashboard")
   revalidatePath("/pos")
+  revalidatePath("/purchases")
+  revalidatePath("/finance")
+  revalidatePath("/suppliers")
 }
 
 /**
- * Add one phone, one serial item, or a piece count by hand on Upload stock.
- * For a few units at a time. Large loads still use the opening stock Excel.
+ * Open a Goods from supplier bill for a manual Upload stock session.
+ * Later adds share this PO until the session is closed or a new bill is started.
  */
-export async function addStockManually(formData: FormData): Promise<UploadResult> {
+export async function startUploadPurchase(formData: FormData): Promise<UploadResult> {
   const gate = await requireUploader()
   if ("error" in gate) return { error: gate.error }
   const { user } = gate
 
   const branchId = String(formData.get("branchId") || "")
   const shop = await prisma.branch.findFirst({ where: { id: branchId, isActive: true } })
-  if (!shop) return { error: "Pick the shop this item belongs to: Iwo Road, Bodija, or Challenge." }
+  if (!shop) return { error: "Pick the shop this bill belongs to: Iwo Road, Bodija, or Challenge." }
+
+  const supplierId = String(formData.get("supplierId") || "")
+  const supplier = await prisma.supplier.findFirst({ where: { id: supplierId, isActive: true } })
+  if (!supplier) return { error: "Pick the supplier these goods were bought from." }
+  if (supplier.kind === "NEIGHBOR") {
+    return { error: "A neighboring shop is not a supplier carton. Use Neighbor shop fill for that." }
+  }
+
+  const paid = String(formData.get("paid") || "") === "yes"
+  const note = String(formData.get("notes") || "").trim()
+  const invoiceNumber = generateDocNumber("PO")
+
+  await prisma.purchase.updateMany({
+    where: { userId: user.id, source: UPLOAD_STOCK_SOURCE, sessionOpen: true },
+    data: { sessionOpen: false },
+  })
+
+  const purchase = await prisma.purchase.create({
+    data: {
+      invoiceNumber,
+      supplierId: supplier.id,
+      branchId: shop.id,
+      userId: user.id,
+      status: "RECEIVED",
+      totalAmount: "0.00",
+      paidAmount: "0.00",
+      paymentMethod: paid ? MARKED_PAID_ON_UPLOAD : null,
+      source: UPLOAD_STOCK_SOURCE,
+      sessionOpen: true,
+      receivedDate: new Date(),
+      originCountry: supplier.country,
+      originCity: supplier.city,
+      notes: [
+        "Upload stock session. Units added by hand.",
+        paid ? "Marked paid when stock was uploaded." : "Not paid yet.",
+        note || null,
+      ]
+        .filter(Boolean)
+        .join(" "),
+    },
+  })
+
+  await trail(
+    user.id,
+    "Purchase",
+    {
+      invoiceNumber,
+      supplier: supplier.name,
+      shop: shop.name,
+      paid,
+      source: UPLOAD_STOCK_SOURCE,
+      action: "start-session",
+    },
+    shop.id
+  )
+
+  revalidateStockViews()
+  return {
+    success: true,
+    invoiceNumber,
+    purchaseId: purchase.id,
+    submissionValue: 0,
+    paid,
+  }
+}
+
+/** Stop adding units to the current upload bill. The PO stays on Goods from supplier. */
+export async function closeUploadPurchase(formData: FormData): Promise<UploadResult> {
+  const gate = await requireUploader()
+  if ("error" in gate) return { error: gate.error }
+  const { user } = gate
+
+  const purchaseId = String(formData.get("purchaseId") || "")
+  const purchase = await prisma.purchase.findFirst({
+    where: {
+      id: purchaseId,
+      userId: user.id,
+      source: UPLOAD_STOCK_SOURCE,
+      sessionOpen: true,
+    },
+  })
+  if (!purchase) return { error: "That upload bill is not open." }
+
+  await prisma.purchase.update({
+    where: { id: purchase.id },
+    data: { sessionOpen: false },
+  })
+
+  await trail(
+    user.id,
+    "Purchase",
+    {
+      invoiceNumber: purchase.invoiceNumber,
+      action: "close-session",
+      submissionValue: money(purchase.totalAmount),
+    },
+    purchase.branchId
+  )
+
+  revalidateStockViews()
+  return {
+    success: true,
+    invoiceNumber: purchase.invoiceNumber,
+    purchaseId: purchase.id,
+    submissionValue: money(purchase.totalAmount),
+    paid: isMarkedPaidOnUpload(purchase.paymentMethod) || money(purchase.paidAmount) >= money(purchase.totalAmount) - 0.005,
+  }
+}
+
+/**
+ * Add one phone, one serial item, or a piece count by hand on Upload stock.
+ * Must belong to an open upload bill so supplier, value, and payment stay on one PO.
+ */
+export async function addStockManually(formData: FormData): Promise<UploadResult> {
+  const gate = await requireUploader()
+  if ("error" in gate) return { error: gate.error }
+  const { user } = gate
+
+  const purchaseId = String(formData.get("purchaseId") || "")
+  const purchase = await prisma.purchase.findFirst({
+    where: {
+      id: purchaseId,
+      source: UPLOAD_STOCK_SOURCE,
+      sessionOpen: true,
+    },
+    include: { supplier: true, branch: true },
+  })
+  if (!purchase) {
+    return { error: "Start an upload bill first. Pick the supplier and whether it is paid, then add units." }
+  }
+
+  const shop = purchase.branch
+  const markedPaid = isMarkedPaidOnUpload(purchase.paymentMethod)
 
   const productMode = String(formData.get("productMode") || "existing")
   let productId = String(formData.get("productId") || "")
   let tracking: ProductTracking
   let productName = ""
+  let costPrice = 0
   let createdProduct = false
 
   if (productMode === "new") {
@@ -488,7 +738,7 @@ export async function addStockManually(formData: FormData): Promise<UploadResult
     tracking = String(formData.get("tracking") || "IMEI") as ProductTracking
     const condition = (String(formData.get("condition") || "BRAND_NEW") as ProductCondition) || "BRAND_NEW"
     const storage = cleanIdentity(String(formData.get("storage") || "")) || null
-    const costPrice = Number(formData.get("costPrice") || 0)
+    costPrice = Number(formData.get("costPrice") || 0)
     const minimumPrice = Number(formData.get("minimumPrice") || 0)
     const sellingPrice = Number(formData.get("sellingPrice") || 0)
 
@@ -524,6 +774,7 @@ export async function addStockManually(formData: FormData): Promise<UploadResult
       productId = existing.id
       tracking = existing.tracking
       productName = existing.name
+      costPrice = money(existing.costPrice)
     } else {
       const activeShops = await prisma.branch.findMany({ where: { isActive: true }, select: { id: true } })
       const product = await prisma.product.create({
@@ -557,6 +808,7 @@ export async function addStockManually(formData: FormData): Promise<UploadResult
     if (!product) return { error: "That item is not on the list. Add the name first or pick another." }
     tracking = product.tracking
     productName = product.name
+    costPrice = money(product.costPrice)
   }
 
   if (tracking === "NONE") {
@@ -565,20 +817,52 @@ export async function addStockManually(formData: FormData): Promise<UploadResult
       return { error: "Enter how many pieces you are putting on the shelf. Use a whole number of 1 or more." }
     }
 
-    await prisma.inventory.upsert({
-      where: { productId_branchId: { productId, branchId: shop.id } },
-      update: { quantity: { increment: quantity }, lastStockCheck: new Date() },
-      create: { productId, branchId: shop.id, quantity },
+    let submissionValue = 0
+    await prisma.$transaction(async (tx) => {
+      await tx.inventory.upsert({
+        where: { productId_branchId: { productId, branchId: shop.id } },
+        update: { quantity: { increment: quantity }, lastStockCheck: new Date() },
+        create: { productId, branchId: shop.id, quantity },
+      })
+      await attachPurchaseLine(tx, {
+        purchaseId: purchase.id,
+        productId,
+        quantity,
+        costPrice,
+        markedPaid,
+      })
+      const refreshed = await tx.purchase.findUnique({
+        where: { id: purchase.id },
+        select: { totalAmount: true },
+      })
+      submissionValue = money(refreshed?.totalAmount)
     })
 
     await trail(
       user.id,
       "Inventory",
-      { shop: shop.name, product: productName, pieces: quantity, manual: true, newItem: createdProduct },
+      {
+        shop: shop.name,
+        product: productName,
+        pieces: quantity,
+        manual: true,
+        newItem: createdProduct,
+        invoiceNumber: purchase.invoiceNumber,
+        submissionValue,
+      },
       shop.id
     )
     revalidateStockViews()
-    return { success: true, added: quantity, pieces: quantity, products: createdProduct ? 1 : 0 }
+    return {
+      success: true,
+      added: quantity,
+      pieces: quantity,
+      products: createdProduct ? 1 : 0,
+      invoiceNumber: purchase.invoiceNumber,
+      purchaseId: purchase.id,
+      submissionValue,
+      paid: markedPaid,
+    }
   }
 
   const identity = cleanIdentity(String(formData.get("identity") || ""))
@@ -619,6 +903,7 @@ export async function addStockManually(formData: FormData): Promise<UploadResult
     }
   }
 
+  let submissionValue = 0
   await prisma.$transaction(async (tx) => {
     await tx.imeiRecord.create({
       data: {
@@ -626,8 +911,10 @@ export async function addStockManually(formData: FormData): Promise<UploadResult
         serialNumber,
         productId,
         branchId: shop.id,
+        supplierId: purchase.supplierId,
+        purchaseId: purchase.id,
         status: "IN_STOCK",
-        notes: "Added on Upload stock",
+        notes: `Added on Upload stock · ${purchase.invoiceNumber}`,
       },
     })
     await tx.inventory.upsert({
@@ -635,41 +922,129 @@ export async function addStockManually(formData: FormData): Promise<UploadResult
       update: { quantity: { increment: 1 } },
       create: { productId, branchId: shop.id, quantity: 1 },
     })
+    await attachPurchaseLine(tx, {
+      purchaseId: purchase.id,
+      productId,
+      quantity: 1,
+      costPrice,
+      markedPaid,
+    })
+    const refreshed = await tx.purchase.findUnique({
+      where: { id: purchase.id },
+      select: { totalAmount: true },
+    })
+    submissionValue = money(refreshed?.totalAmount)
   })
 
   await trail(
     user.id,
     "IMEIRecord",
-    { shop: shop.name, product: productName, identity: imei1, manual: true, newItem: createdProduct },
+    {
+      shop: shop.name,
+      product: productName,
+      identity: imei1,
+      manual: true,
+      newItem: createdProduct,
+      invoiceNumber: purchase.invoiceNumber,
+      submissionValue,
+    },
     shop.id
   )
   revalidateStockViews()
-  return { success: true, added: 1, phones: 1, products: createdProduct ? 1 : 0 }
+  return {
+    success: true,
+    added: 1,
+    phones: 1,
+    products: createdProduct ? 1 : 0,
+    invoiceNumber: purchase.invoiceNumber,
+    purchaseId: purchase.id,
+    submissionValue,
+    paid: markedPaid,
+  }
 }
 
 /** What the upload screen shows about how far the shop has got. */
 export async function getUploadProgress() {
   const user = await requireUser()
   if (!(await can(user.role, "view.uploads"))) return null
-  const [items, withStock, phones, customers, branches, brands, categories, products] = await Promise.all([
-    prisma.product.count({ where: { isActive: true } }),
-    prisma.inventory.count({ where: { quantity: { gt: 0 } } }),
-    prisma.imeiRecord.count({ where: { status: "IN_STOCK" } }),
-    prisma.customer.count(),
-    prisma.branch.findMany({ where: { isActive: true }, select: { id: true, name: true, code: true }, orderBy: { name: "asc" } }),
-    prisma.brand.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    prisma.category.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    prisma.product.findMany({
-      where: { isActive: true },
-      select: {
-        id: true,
-        name: true,
-        sku: true,
-        tracking: true,
-        brand: { select: { name: true } },
-      },
-      orderBy: { name: "asc" },
-    }),
-  ])
-  return { items, withStock, phones, customers, branches, brands, categories, products }
+  const [items, withStock, phones, customers, branches, brands, categories, products, suppliers, openBill] =
+    await Promise.all([
+      prisma.product.count({ where: { isActive: true } }),
+      prisma.inventory.count({ where: { quantity: { gt: 0 } } }),
+      prisma.imeiRecord.count({ where: { status: "IN_STOCK" } }),
+      prisma.customer.count(),
+      prisma.branch.findMany({
+        where: { isActive: true },
+        select: { id: true, name: true, code: true },
+        orderBy: { name: "asc" },
+      }),
+      prisma.brand.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+      prisma.category.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+      prisma.product.findMany({
+        where: { isActive: true },
+        select: {
+          id: true,
+          name: true,
+          sku: true,
+          tracking: true,
+          costPrice: true,
+          brand: { select: { name: true } },
+        },
+        orderBy: { name: "asc" },
+      }),
+      prisma.supplier.findMany({
+        where: { isActive: true, kind: "SUPPLIER" },
+        select: { id: true, name: true, city: true, country: true },
+        orderBy: { name: "asc" },
+      }),
+      prisma.purchase.findFirst({
+        where: { userId: user.id, source: UPLOAD_STOCK_SOURCE, sessionOpen: true },
+        select: {
+          id: true,
+          invoiceNumber: true,
+          totalAmount: true,
+          paidAmount: true,
+          paymentMethod: true,
+          branchId: true,
+          supplierId: true,
+          branch: { select: { id: true, name: true, code: true } },
+          supplier: { select: { id: true, name: true } },
+          _count: { select: { items: true, imeiRecords: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+    ])
+
+  const openUploadBill = openBill
+    ? {
+        id: openBill.id,
+        invoiceNumber: openBill.invoiceNumber,
+        branchId: openBill.branchId,
+        supplierId: openBill.supplierId,
+        shopName: openBill.branch.name,
+        shopCode: openBill.branch.code,
+        supplierName: openBill.supplier.name,
+        submissionValue: money(openBill.totalAmount),
+        paid: isMarkedPaidOnUpload(openBill.paymentMethod),
+        owed: Math.max(0, money(openBill.totalAmount) - money(openBill.paidAmount)),
+        lineCount: openBill._count.items,
+        unitCount: openBill._count.imeiRecords,
+      }
+    : null
+
+  return {
+    items,
+    withStock,
+    phones,
+    customers,
+    branches,
+    brands,
+    categories,
+    products: products.map((row) => ({
+      ...row,
+      costPrice: money(row.costPrice),
+    })),
+    suppliers,
+    openUploadBill,
+  }
 }

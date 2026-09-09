@@ -3,14 +3,14 @@ import { importProducts } from "@/app/actions/catalog"
 import { getUploadProgress, importCustomers, importImeis, importStock } from "@/app/actions/uploads"
 import { ManualStockForm } from "./manual-stock-form"
 import { OpeningStockCard } from "./opening-stock-card"
+import { UploadBillSession } from "./upload-bill-session"
 import { UploadCard } from "./upload-card"
 
 export const dynamic = "force-dynamic"
 
 /**
- * Two clear ways to put stock on the shelf:
- * add one unit by hand, or load many from the Abu Twins opening stock Excel.
- * Older step-by-step sheets stay under Advanced for later top-ups.
+ * Upload stock: open a supplier bill, add units by hand, or load many from Excel.
+ * Every load creates a PO that Finance and auditors can follow.
  */
 export default async function UploadsPage() {
   const progress = await getUploadProgress()
@@ -24,32 +24,41 @@ export default async function UploadsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Upload stock"
-        description="Put what is on the shelf into the system. Add one phone or cord at a time, or load a full shop count from the Abu Twins opening stock Excel."
+        description="Put what is on the shelf into the system. Each load gets a supplier, a unique PO number, a submission value, and paid or not paid, so accounts can trace it."
+      />
+
+      <UploadBillSession
+        shops={progress.branches}
+        suppliers={progress.suppliers}
+        openBill={progress.openUploadBill}
       />
 
       <ManualStockForm
-        shops={progress.branches}
         brands={progress.brands}
         categories={progress.categories}
         products={progress.products}
+        openBill={progress.openUploadBill}
       />
 
-      <OpeningStockCard shops={progress.branches} />
+      <OpeningStockCard shops={progress.branches} suppliers={progress.suppliers} />
 
       <div className="surface-card p-5">
         <h2 className="font-semibold">Which way should I use?</h2>
         <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
           <li>
-            <span className="font-medium text-foreground">One or a few units today:</span> use Add one item to the shelf at the top. Scan or type each IMEI or serial, or say how many cords you have.
+            <span className="font-medium text-foreground">One or a few units today:</span> start an upload bill with the
+            supplier and paid or not paid, then add each IMEI, serial, or piece count under that same PO.
           </li>
           <li>
-            <span className="font-medium text-foreground">Opening count or a full shop load:</span> fill the opening stock Excel one shop at a time and upload it in the card above.
+            <span className="font-medium text-foreground">Opening count or a full shop load:</span> fill the opening stock
+            Excel one shop at a time, pick the supplier and payment status, and upload. That creates its own PO.
+          </li>
+          <li>
+            Unpaid bills show on Goods from supplier and on Finance as still owed. Paid bills stay settled as the value
+            grows.
           </li>
           <li>
             Sending the same phone twice is safe. A phone already on the system is left exactly as it is.
-          </li>
-          <li>
-            Every Excel upload is checked from top to bottom before anything is saved. If one line is wrong, nothing is loaded and you are told which lines to fix.
           </li>
         </ul>
       </div>
@@ -59,8 +68,8 @@ export default async function UploadsPage() {
           Advanced: older step-by-step sheet uploads
         </summary>
         <p className="mt-3 text-sm text-muted-foreground">
-          Use these only when the item list is already on the system and you are topping up from a simple CSV or Excel file.
-          For day-one stock, prefer Add one item or the opening stock Excel above.
+          Use these only when the item list is already on the system and you are topping up from a simple CSV or Excel
+          file. Prefer Add one item or the opening stock Excel above for day-one stock with a supplier bill.
         </p>
 
         <div className="mt-4 space-y-4">

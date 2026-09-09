@@ -50,8 +50,21 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
     <div className="space-y-6">
       <PageHeader
         title={purchase.invoiceNumber}
-        description={`${purchase.supplier.name}${origin ? ` from ${origin}` : ""} → ${purchase.branch.name} · ${formatDate(purchase.createdAt)}`}
+        description={`${purchase.supplier.name}${origin ? ` from ${origin}` : ""} → ${purchase.branch.name} · ${formatDate(purchase.createdAt)}${purchase.source === "UPLOAD_STOCK" ? " · Loaded on Upload stock" : ""}`}
       />
+      {purchase.source === "UPLOAD_STOCK" ? (
+        <div className="surface-card space-y-2 border-primary/30 p-5 text-sm">
+          <p className="font-semibold">Loaded on Upload stock</p>
+          <p>
+            This bill was created when stock was put on the shelf from Upload stock. Units are already In shop.
+            Submission value is the cost of what was loaded.{" "}
+            {money(purchase.paidAmount) >= money(purchase.totalAmount) - 0.005
+              ? "The bill is marked paid."
+              : "Not paid yet — it shows on Finance as still owed until accounts record a payment."}
+          </p>
+          {purchase.notes ? <p className="text-muted-foreground">{purchase.notes}</p> : null}
+        </div>
+      ) : null}
       <WorkflowSteps
         current={step}
         steps={["Expected from supplier", "Booked as Coming", "Checked in this shop", "Pay the supplier"]}

@@ -5,17 +5,25 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Loader2, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { importOpeningStock, type UploadResult } from "@/app/actions/uploads"
+import { formatCurrency } from "@/lib/utils"
 
 type Shop = { id: string; name: string; code: string }
+type Supplier = { id: string; name: string; city: string | null; country: string | null }
 
 /**
- * The sheet Abu Twins already fills: one Excel file per shop, with PHONES,
- * ACCESSORIES, SCREEN, and LAPTOPS. One upload creates the item names, books
- * phones and serials In shop, and sets piece counts for that shop.
+ * One Excel file per shop. Creates a Goods from supplier bill with supplier,
+ * submission value, and paid or not paid, then books stock In shop.
  */
-export function OpeningStockCard({ shops }: { shops: Shop[] }) {
+export function OpeningStockCard({
+  shops,
+  suppliers,
+}: {
+  shops: Shop[]
+  suppliers: Supplier[]
+}) {
   const router = useRouter()
   const formRef = useRef<HTMLFormElement>(null)
   const [busy, setBusy] = useState(false)
@@ -31,9 +39,9 @@ export function OpeningStockCard({ shops }: { shops: Shop[] }) {
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Use the Excel file your shops already know: one file for one shop, with tabs for PHONES, ACCESSORIES, SCREEN, and LAPTOPS.
-        The system reads PRODUCT NAME, BRAND, CATEGORY, QTY/IMEI/SERIAL NO, CONDITION, SPECIFICATION, UNIT COST PRICE, and MIN.SELLING PRICE.
-        Pick the shop first. One upload adds the item names, puts phones and laptops In shop, and sets how many cords or screens are on the shelf.
+        Use the Excel file your shops already know: one file for one shop, with tabs for PHONES, ACCESSORIES, SCREEN, and
+        LAPTOPS. Pick the shop and the supplier, say if the bill is paid, then upload. One file creates a unique PO
+        number, books phones and laptops In shop, sets piece counts, and records the submission value from unit cost.
       </p>
 
       <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
@@ -64,12 +72,15 @@ export function OpeningStockCard({ shops }: { shops: Shop[] }) {
             return
           }
           const parts = [
+            result.invoiceNumber ? `Bill ${result.invoiceNumber}` : null,
             result.products ? `${result.products} new item${result.products === 1 ? "" : "s"}` : null,
             result.phones ? `${result.phones} phone${result.phones === 1 ? "" : "s"} In shop` : null,
             result.pieces ? `${result.pieces} piece line${result.pieces === 1 ? "" : "s"}` : null,
+            result.submissionValue != null ? `value ${formatCurrency(result.submissionValue)}` : null,
+            result.paid ? "marked paid" : "not paid yet",
           ].filter(Boolean)
           const skipped = result.skipped ? ` ${result.skipped} already on the system.` : ""
-          toast.success(`${parts.join(", ") || "Nothing new to add"}.${skipped}`)
+          toast.success(`${parts.join(". ") || "Nothing new to add"}.${skipped}`)
           formRef.current?.reset()
           router.refresh()
         }}
@@ -81,6 +92,35 @@ export function OpeningStockCard({ shops }: { shops: Shop[] }) {
             </option>
           ))}
         </Select>
+        <Select
+          name="supplierId"
+          required
+          disabled={busy || suppliers.length === 0}
+          emptyLabel="No suppliers on the books yet. Add one on Suppliers first."
+        >
+          {suppliers.map((supplier) => (
+            <option key={supplier.id} value={supplier.id}>
+              {supplier.name}
+              {supplier.city || supplier.country
+                ? ` · ${[supplier.city, supplier.country].filter(Boolean).join(", ")}`
+                : ""}
+            </option>
+          ))}
+        </Select>
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium">Has this bill been paid?</legend>
+          <div className="flex flex-wrap gap-4 text-sm">
+            <label className="flex items-center gap-2">
+              <input type="radio" name="paid" value="no" defaultChecked disabled={busy} />
+              Not paid yet
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="radio" name="paid" value="yes" disabled={busy} />
+              Paid already
+            </label>
+          </div>
+        </fieldset>
+        <Input name="notes" placeholder="Optional note or supplier waybill number" disabled={busy} />
         <div className="flex flex-wrap items-center gap-2">
           <input
             type="file"
@@ -90,7 +130,7 @@ export function OpeningStockCard({ shops }: { shops: Shop[] }) {
             disabled={busy}
             className="min-h-11 max-w-full flex-1 rounded-xl border-2 border-dashed border-primary/40 bg-card px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-primary-foreground disabled:opacity-60"
           />
-          <Button type="submit" disabled={busy || shops.length === 0} aria-busy={busy}>
+          <Button type="submit" disabled={busy || shops.length === 0 || suppliers.length === 0} aria-busy={busy}>
             {busy ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden />

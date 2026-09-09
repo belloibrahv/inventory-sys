@@ -472,6 +472,10 @@ model Purchase {
   paidAmount    Decimal        @default(0)
   paymentMethod String?
   notes         String?
+  /// UPLOAD_STOCK when the bill was born on Upload stock (manual session or Excel).
+  source        String?
+  /// True while the stock uploader is still adding units to this bill by hand.
+  sessionOpen   Boolean        @default(false)
   originCountry String?
   originCity    String?
   expectedDate  DateTime?
@@ -487,6 +491,8 @@ model Purchase {
   @@index([supplierId])
   @@index([branchId])
   @@index([status])
+  @@index([source])
+  @@index([sessionOpen])
 }
 
 model PurchaseItem {

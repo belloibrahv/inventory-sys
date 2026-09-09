@@ -99,7 +99,7 @@ const DEFAULTS: Record<UserRole, string[]> = {
     "action.intake", "action.incoming", "action.transfer"
   ),
   STOCK_UPLOADER: V(
-    "view.dashboard", "view.uploads", "view.products", "view.imei", "view.inventory", "view.notifications",
+    "view.dashboard", "view.uploads", "view.products", "view.imei", "view.inventory", "view.purchases", "view.notifications",
     "action.upload", "action.catalog", "action.all_branches"
   ),
   CASHIER: V(
