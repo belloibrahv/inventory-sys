@@ -29,7 +29,7 @@ export function ReturnForm({ sold }: { sold: Sold[] }) {
 
   return (
     <ActionForm action={createReturn} className="space-y-3">
-      <Select name="imei1" value={imei1} onChange={(event) => setImei1(event.target.value)} required>
+      <Select name="imei1" value={imei1} onChange={(event) => setImei1(event.target.value)} required emptyLabel="No sold phone from this shop yet. A return needs a phone this shop sold.">
         {sold.map((row) => (
           <option key={row.imei1} value={row.imei1}>
             {row.imei1} · {row.product.name} · {row.customer?.name ?? "Walk-in"}

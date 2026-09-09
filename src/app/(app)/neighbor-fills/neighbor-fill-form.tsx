@@ -69,7 +69,7 @@ export function NeighborFillForm({
         placeholder="Neighboring shop phone"
         key={`phone-${supplierId}`}
       />
-      <Select name="customerId" required>
+      <Select name="customerId" required emptyLabel="No customer on this shop's books yet. Add one on Customers first.">
         <option value="">Named customer who wants this item</option>
         {shopCustomers.map((row) => (
           <option key={row.id} value={row.id}>{row.name} · {row.phone}</option>

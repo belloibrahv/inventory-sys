@@ -34,7 +34,7 @@ export function PurchaseForm({
 
   return (
     <ActionForm action={createPurchase} submit="Save expected goods" className="space-y-3">
-      <Select name="supplierId" value={supplierId} onChange={(event) => setSupplierId(event.target.value)} required>
+      <Select name="supplierId" value={supplierId} onChange={(event) => setSupplierId(event.target.value)} required emptyLabel="No supplier on the list yet. Add one on Suppliers first.">
         {suppliers.map((row) => (
           <option key={row.id} value={row.id}>
             {row.name}
@@ -47,7 +47,7 @@ export function PurchaseForm({
           <option key={branch.id} value={branch.id}>{branch.name}</option>
         ))}
       </Select>
-      <Select name="productId" required>
+      <Select name="productId" required emptyLabel="No items on the list yet. Add them on Phones and items first.">
         {products.map((product) => (
           <option key={product.id} value={product.id}>{product.name}</option>
         ))}

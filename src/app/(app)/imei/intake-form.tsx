@@ -30,7 +30,7 @@ export function ImeiIntakeForm({
       {imei1 ? <p className="font-mono text-xs">{imei1}</p> : null}
       <Input name="imei2" placeholder="IMEI 2" />
       <Input name="serialNumber" placeholder="Serial" />
-      <Select name="productId" required>
+      <Select name="productId" required emptyLabel="No items on the list yet. Add them on Phones and items first.">
         {products.map((product) => (
           <option key={product.id} value={product.id}>{product.name}</option>
         ))}
