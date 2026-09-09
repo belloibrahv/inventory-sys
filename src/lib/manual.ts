@@ -89,6 +89,32 @@ const PAGES: Array<
     lookup: ["home", "do these next", "imei check", "match", "gap"],
   },
   {
+    id: "uploads",
+    href: "/uploads",
+    title: "Upload stock",
+    needAction: "action.upload",
+    what: "Loading the shop system from an Excel or CSV sheet, in four steps: the item list, pieces on the shelf, phones by IMEI, then customers. The later steps stay shut until the item list is in.",
+    doThis: [
+      "Work top to bottom. Step 1 must be done before the rest open.",
+      "Put the column names in the first row of the sheet. The screen lists the names each step wants.",
+      "Name the shop in full or by its short code: IWO, BOD, or CHL.",
+      "Upload the item list, then the shelf counts, then the phones sheet, then customers.",
+      "If a sheet is refused, fix the lines it names and send the whole sheet again.",
+    ],
+    watch: [
+      "Nothing is saved until the whole sheet has been read. One bad line means nothing is loaded, so a shop is never half filled.",
+      "Sending the same sheet twice is safe. A phone or customer already on the system is left exactly as it is.",
+      "Booking phones in also raises the shelf count, so Shop stock and Phone IMEIs agree from the start.",
+      "The count at the top of each step shows how far the shop has got.",
+    ],
+    cannot: [
+      "You cannot book in a phone for an item that is not on the item list. Load the item list first.",
+      "A phone with no IMEI or serial does not go on the phones sheet. Put it on the shelf-count sheet.",
+      "This does not sell anything and does not touch money.",
+    ],
+    lookup: ["upload", "excel", "csv", "sheet", "bulk", "import", "load stock", "intake", "container"],
+  },
+  {
     id: "products",
     href: "/products",
     title: "Phones & items",
@@ -103,7 +129,7 @@ const PAGES: Array<
     ],
     watch: [
       "One list keeps names and prices the same in every shop.",
-      "A person without Add items and change prices can read the list but cannot add or reprice.",
+      "Only Super Admin and the Stock uploader add items or change prices. A shop manager reads the list but cannot change it. Ask whoever holds the uploader login for a new item.",
       "This is not a carton sale. You still sell by the unit. Bulk here means many prices in one save.",
     ],
     cannot: ["This page does not sell a phone. Use Sell now."],
