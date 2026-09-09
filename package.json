@@ -15,6 +15,7 @@
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:seed-users": "tsx prisma/seed-users.ts",
+    "db:seed-demo": "tsx prisma/seed-demo-ibadan.ts",
     "check:concurrency": "tsx scripts/check-concurrency.ts",
     "check:day-closes": "tsx scripts/check-day-closes.ts",
     "check:branches": "tsx scripts/check-branch-isolation.ts",
