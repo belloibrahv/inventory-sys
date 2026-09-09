@@ -66,6 +66,10 @@ function rowsFromSheet(text: string) {
   })
 }
 
+function cellsAsStrings(row: Record<string, string | number>) {
+  return Object.fromEntries(Object.entries(row).map(([key, value]) => [String(key), String(value ?? "").trim()]))
+}
+
 export async function readTableFile(file: File) {
   const name = file.name.toLowerCase()
   if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
@@ -73,9 +77,24 @@ export async function readTableFile(file: File) {
     const workbook = XLSX.read(Buffer.from(await file.arrayBuffer()), { type: "buffer" })
     const sheet = workbook.Sheets[workbook.SheetNames[0]]
     if (!sheet) return []
-    return XLSX.utils.sheet_to_json<Record<string, string | number>>(sheet, { defval: "" }).map((row) =>
-      Object.fromEntries(Object.entries(row).map(([key, value]) => [String(key), String(value ?? "").trim()]))
-    )
+    return XLSX.utils.sheet_to_json<Record<string, string | number>>(sheet, { defval: "" }).map(cellsAsStrings)
   }
   return rowsFromSheet(await file.text())
+}
+
+/** Every tab in an Excel file, as raw grid rows (title rows and blanks included). */
+export async function readWorkbookGrids(file: File): Promise<Array<{ sheet: string; grid: string[][] }>> {
+  const name = file.name.toLowerCase()
+  if (!(name.endsWith(".xlsx") || name.endsWith(".xls"))) {
+    return [{ sheet: "Sheet1", grid: parseCsv(await file.text()) }]
+  }
+  const XLSX = await import("xlsx")
+  const workbook = XLSX.read(Buffer.from(await file.arrayBuffer()), { type: "buffer" })
+  return workbook.SheetNames.map((sheetName) => {
+    const sheet = workbook.Sheets[sheetName]
+    const grid = (XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: "", raw: false }) as string[][]).map(
+      (line) => line.map((cell) => String(cell ?? "").trim())
+    )
+    return { sheet: sheetName, grid }
+  })
 }

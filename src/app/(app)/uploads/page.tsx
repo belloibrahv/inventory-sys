@@ -1,52 +1,56 @@
 import { PageHeader } from "@/components/shared"
 import { importProducts } from "@/app/actions/catalog"
 import { getUploadProgress, importCustomers, importImeis, importStock } from "@/app/actions/uploads"
+import { OpeningStockCard } from "./opening-stock-card"
 import { UploadCard } from "./upload-card"
 
 export const dynamic = "force-dynamic"
 
 /**
- * Loading the shop system from sheets, in the order the work has to happen.
+ * Loading the shop system from sheets.
  *
- * The order is not a suggestion. A phone cannot be booked in until the system
- * knows what that phone is, and a shelf cannot be counted for an item that does
- * not exist yet. Later steps stay shut until the item list is in.
+ * Prefer the Abu Twins opening stock workbook first. The four older steps stay
+ * for top-ups after the item list already exists.
  */
 export default async function UploadsPage() {
   const progress = await getUploadProgress()
   if (!progress) return null
 
   const noItemsYet = progress.items === 0
-  const lockedWhy = "Load the item list in step 1 first. Nothing can be counted or booked in until the shop system knows what each item is."
+  const lockedWhy = "Load the item list in step 1 first, or use the opening stock sheet above. Nothing can be counted or booked in until the shop system knows what each item is."
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Upload stock"
-        description="Load the shop system from an Excel or CSV sheet. Work down the steps in order."
+        description="Load what is on the shelf from Excel. Start with the Abu Twins opening stock sheet your shops already use."
       />
+
+      <OpeningStockCard shops={progress.branches} />
 
       <div className="surface-card p-5">
         <h2 className="font-semibold">Before you start</h2>
         <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-          <li>Work top to bottom. Step 1 must be done before the rest will open.</li>
-          <li>The first row of the sheet must be the column names. Spelling of the names is flexible: item code, sku, or code all work.</li>
+          <li>For day-one stock, fill the opening stock Excel one shop at a time and use the card above.</li>
+          <li>The older steps below are for later top-ups, when the item list is already on the system.</li>
           <li>Every sheet is checked from top to bottom before anything is saved. If one line is wrong, nothing is loaded and you are told which lines to fix.</li>
           <li>
-            Say which shop each line belongs to using the name or the short code:{" "}
+            For the older steps, say which shop each line belongs to using the name or the short code:{" "}
             <span className="font-medium text-foreground">
               {progress.branches.map((branch) => `${branch.code} (${branch.name.split(",")[0]})`).join(", ")}
             </span>
             .
           </li>
-          <li>Sending the same sheet twice is safe. A phone or customer already on the system is left exactly as it is.</li>
+          <li>Sending the same phone twice is safe. A phone already on the system is left exactly as it is.</li>
         </ul>
       </div>
+
+      <h2 className="text-base font-semibold tracking-tight">Older step-by-step sheets</h2>
 
       <UploadCard
         step={1}
         title="The item list"
-        what="Every model you sell, one row per model, not per box. This has to be first: nothing else can refer to an item the shop system has not been told about."
+        what="Every model you sell, one row per model, not per box. Only needed if you are not using the opening stock sheet above."
         columns={["item code", "name", "brand", "category", "tracking (IMEI / serial / none)", "condition", "cost", "minimum", "selling", "warranty days"]}
         action={importProducts}
         done={progress.items}

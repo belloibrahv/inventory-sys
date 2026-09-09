@@ -1,0 +1,32 @@
+Good afternoon,
+
+Thank you for sharing your opening stock Excel. We have updated the shop system so it follows that file, instead of asking you to retype everything into a new layout.
+
+What to do now
+
+1. Keep using your own workbook: ABU-TWINS OPENING STOCK TEMPLATE (BRANCH).xlsx
+2. Fill one file for one shop. Iwo Road, Bodija, and Challenge each need their own file.
+3. Use the tabs you already know:
+   - PHONES: one row per phone, with the IMEI in QTY/IMEI/SERIAL NO
+   - LAPTOPS: one row per laptop, with the serial in that same column
+   - ACCESSORIES and SCREEN: put how many pieces are on the shelf in that column
+4. Keep PRODUCT NAME, BRAND, CATEGORY, CONDITION, SPECIFICATION, UNIT COST PRICE, and MIN.SELLING PRICE filled as you already do.
+
+How we load it
+
+Sign in as the stock uploader (or Super Admin), open Upload stock, pick the shop, and upload that shop's Excel. The system will:
+- add the item names
+- book phones and laptops as In shop
+- set the piece counts for cords, screens, and similar goods
+
+If one line is wrong, nothing is half loaded. The screen names the tab and line to fix.
+
+Please do not invent an IMEI if the box is missing. Leave that unit off until you find the number.
+
+When each shop's file is ready, send it back to us (or upload it yourselves if you already have the login). Then you can start testing Sell now, Close the day, and the other workflows on real shelf stock.
+
+A copy of your template is also kept with us as Abu-Twins-Opening-Stock-Template.xlsx.
+
+Thank you.
+Techvaults Limited
+techvaults.com

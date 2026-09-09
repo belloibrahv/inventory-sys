@@ -2,6 +2,7 @@ import { titleFor } from "@/components/layout/titles"
 import { statusLabel } from "@/lib/status"
 
 const RECORD_KINDS: Record<string, string> = {
+  OpeningStock: "Opening stock",
   Purchase: "Supplier bill",
   PurchasePayment: "Supplier payment",
   IMEIRecord: "Phone IMEI",
