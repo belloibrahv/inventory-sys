@@ -9,7 +9,7 @@ import { recentWatDays, shiftWatDay, watBounds, watDayKey } from "@/lib/lagos-da
 import { money } from "@/lib/utils"
 
 async function resolveShop(user: { role: Parameters<typeof scopedBranchId>[0]; branchId: string | null }, requested?: string) {
-  const scoped = await scopedBranchId(user.role, user.branchId)
+  const scoped = await scopedBranchId(user.role, user.branchId, requested)
   let shopId = scoped || requested || user.branchId || ""
   if (!shopId) {
     const shop = await prisma.branch.findFirst({ where: { isActive: true }, orderBy: { isHq: "desc" } })
@@ -71,12 +71,16 @@ export async function getDayClosePreview(branchId?: string, businessDate?: strin
       saleCount: 0,
       alreadyClosed: false,
       branchId: "",
+      branchName: "",
       businessDate: watDayKey(),
       unclosed: [] as string[],
     }
   }
   const shopId = await resolveShop(user, branchId)
-  const unclosed = shopId ? await getUnclosedBusinessDays(shopId) : []
+  const [unclosed, shop] = await Promise.all([
+    shopId ? getUnclosedBusinessDays(shopId) : Promise.resolve([]),
+    shopId ? prisma.branch.findUnique({ where: { id: shopId }, select: { name: true } }) : Promise.resolve(null),
+  ])
   const day = businessDate && businessDate.length === 10 ? businessDate : unclosed[0] || watDayKey()
   const { start, end } = watBounds(day)
   const [sales, existing] = await Promise.all([
@@ -126,74 +130,81 @@ export async function getDayClosePreview(branchId?: string, businessDate?: strin
     saleCount: sales.length,
     alreadyClosed: Boolean(existing),
     branchId: shopId,
+    branchName: shop?.name ?? "",
     businessDate: day,
     unclosed,
   }
 }
 
 export async function closeDay(formData: FormData) {
-  const user = await requireUser()
-  if (!(await can(user.role, "action.finance")) && !(await can(user.role, "action.sell"))) {
-    return { error: "You cannot close the day." }
-  }
-  const businessDate = String(formData.get("businessDate") || watDayKey())
-  const preview = await getDayClosePreview(String(formData.get("branchId") || ""), businessDate)
-  if (!preview.branchId) return { error: "Choose a shop." }
-  if (preview.alreadyClosed) return { error: "This shop already closed that day." }
-  const countedCash = Number(formData.get("countedCash") || 0)
-  if (Number.isNaN(countedCash)) return { error: "Enter the cash you counted." }
+  try {
+    const user = await requireUser()
+    if (!(await can(user.role, "action.finance")) && !(await can(user.role, "action.sell"))) {
+      return { error: "You cannot close the day." }
+    }
+    const businessDate = String(formData.get("businessDate") || watDayKey())
+    const rawBranchId = String(formData.get("branchId") || "")
+    const preview = await getDayClosePreview(rawBranchId || undefined, businessDate)
+    if (!preview.branchId) return { error: "Choose a shop." }
+    if (preview.alreadyClosed) return { error: "This shop already closed that day." }
+    const countedCash = Number(formData.get("countedCash") || 0)
+    if (Number.isNaN(countedCash)) return { error: "Enter the cash you counted." }
 
-  // Re-check inside the posting. Two clicks on Close the day used to write two
-  // closes for the same date, which then confused the till lock and the books.
-  // The lasting fix is the unique index noted in scripts/check-day-closes.ts;
-  // this stops the double click that actually happens on the shop floor.
-  const closed = await prisma.$transaction(async (tx) => {
-    const existing = await tx.dayClose.findFirst({
-      where: { branchId: preview.branchId, businessDate },
-      select: { id: true },
+    // Re-check inside the posting. Two clicks on Close the day used to write two
+    // closes for the same date, which then confused the till lock and the books.
+    // The lasting fix is the unique index noted in scripts/check-day-closes.ts;
+    // this stops the double click that actually happens on the shop floor.
+    const closed = await prisma.$transaction(async (tx) => {
+      const existing = await tx.dayClose.findFirst({
+        where: { branchId: preview.branchId, businessDate },
+        select: { id: true },
+      })
+      if (existing) return null
+      return tx.dayClose.create({
+        data: {
+          branchId: preview.branchId,
+          userId: user.id,
+          closeDate: new Date(),
+          businessDate,
+          expectedCash: preview.expectedCash.toFixed(2),
+          countedCash: countedCash.toFixed(2),
+          variance: (countedCash - preview.expectedCash).toFixed(2),
+          transferTotal: preview.transferTotal.toFixed(2),
+          posTotal: preview.posTotal.toFixed(2),
+          creditTotal: preview.creditTotal.toFixed(2),
+          saleCount: preview.saleCount,
+          notes: String(formData.get("notes") || "") || null,
+        },
+      })
     })
-    if (existing) return null
-    return tx.dayClose.create({
+    if (!closed) return { error: "This shop already closed that day." }
+
+    await prisma.auditLog.create({
       data: {
-        branchId: preview.branchId,
         userId: user.id,
-        closeDate: new Date(),
-        businessDate,
-        expectedCash: preview.expectedCash.toFixed(2),
-        countedCash: countedCash.toFixed(2),
-        variance: (countedCash - preview.expectedCash).toFixed(2),
-        transferTotal: preview.transferTotal.toFixed(2),
-        posTotal: preview.posTotal.toFixed(2),
-        creditTotal: preview.creditTotal.toFixed(2),
-        saleCount: preview.saleCount,
-        notes: String(formData.get("notes") || "") || null,
+        action: "CREATE",
+        entityType: "DayClose",
+        entityId: `${preview.branchId}:${businessDate}`,
+        newValue: JSON.stringify({ businessDate, expectedCash: preview.expectedCash, countedCash }),
+        branchId: preview.branchId,
       },
     })
-  })
-  if (!closed) return { error: "This shop already closed that day." }
-
-  await prisma.auditLog.create({
-    data: {
-      userId: user.id,
-      action: "CREATE",
-      entityType: "DayClose",
-      entityId: `${preview.branchId}:${businessDate}`,
-      newValue: JSON.stringify({ businessDate, expectedCash: preview.expectedCash, countedCash }),
-      branchId: preview.branchId,
-    },
-  })
-  revalidatePath("/finance")
-  revalidatePath("/finance/close")
-  revalidatePath("/pos")
-  revalidatePath("/dashboard")
-  const leftover = await getUnclosedBusinessDays(preview.branchId)
-  return { success: true, redirectTo: leftover[0] ? `/finance/close?date=${leftover[0]}` : "/pos" }
+    revalidatePath("/finance")
+    revalidatePath("/finance/close")
+    revalidatePath("/pos")
+    revalidatePath("/dashboard")
+    const leftover = await getUnclosedBusinessDays(preview.branchId)
+    return { success: true, redirectTo: leftover[0] ? `/finance/close?date=${leftover[0]}` : "/pos" }
+  } catch (error) {
+    console.error("Failed to close day:", error)
+    return { error: error instanceof Error ? error.message : "Failed to close the day. Please try again." }
+  }
 }
 
-export async function getDayCloses() {
+export async function getDayCloses(requestedBranchId?: string) {
   const user = await requireUser()
   if (!(await can(user.role, "view.finance"))) return []
-  const branchId = await scopedBranchId(user.role, user.branchId)
+  const branchId = await scopedBranchId(user.role, user.branchId, requestedBranchId)
   const rows = await prisma.dayClose.findMany({
     where: branchId ? { branchId } : {},
     include: { branch: true, user: true },

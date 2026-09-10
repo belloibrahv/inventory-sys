@@ -90,7 +90,8 @@ export function ActionForm({
         let result
         try {
           result = await action(formData)
-        } catch {
+        } catch (err) {
+          console.error("ActionForm submission failed:", err)
           // A dropped connection used to leave the button spinning with no word
           // to the person standing at the counter.
           toast.error("That did not reach the shop system. Check your connection and try once more.")

@@ -3,6 +3,8 @@ import { closeDay, getDayClosePreview, getDayCloses } from "@/app/actions/day-cl
 import { ActionForm } from "@/components/action-form"
 import { PageHeader } from "@/components/shared"
 import { Input } from "@/components/ui/input"
+import { requireUser } from "@/lib/session"
+import { viewBranchFilter } from "@/lib/branch-scope"
 import { formatCurrency, formatDate } from "@/lib/utils"
 
 export default async function DayClosePage({
@@ -10,8 +12,13 @@ export default async function DayClosePage({
 }: {
   searchParams: Promise<{ date?: string }>
 }) {
+  const user = await requireUser()
+  const activeBranch = await viewBranchFilter(user)
   const { date } = await searchParams
-  const [preview, closes] = await Promise.all([getDayClosePreview(undefined, date), getDayCloses()])
+  const [preview, closes] = await Promise.all([
+    getDayClosePreview(activeBranch, date),
+    getDayCloses(activeBranch),
+  ])
 
   return (
     <div className="space-y-6">
@@ -24,7 +31,9 @@ export default async function DayClosePage({
       </p>
       {preview.unclosed.length ? (
         <div className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-950 dark:bg-rose-500/10 dark:text-rose-100">
-          <p className="font-medium">These days still need a till count</p>
+          <p className="font-medium">
+            These days still need a till count {preview.branchName ? `for ${preview.branchName}` : ""}
+          </p>
           <div className="mt-2 flex flex-wrap gap-2">
             {preview.unclosed.map((day) => (
               <Link
@@ -42,7 +51,9 @@ export default async function DayClosePage({
         <div className="surface-card p-5">
           <p className="text-sm text-muted-foreground">Cash expected</p>
           <p className="text-2xl font-semibold">{formatCurrency(preview.expectedCash)}</p>
-          <p className="text-xs text-muted-foreground">{preview.businessDate}</p>
+          <p className="text-xs text-muted-foreground">
+            {preview.branchName ? `${preview.branchName} · ` : ""}{preview.businessDate}
+          </p>
         </div>
         <div className="surface-card p-5">
           <p className="text-sm text-muted-foreground">Transfers</p>
@@ -59,11 +70,13 @@ export default async function DayClosePage({
       </div>
       {preview.alreadyClosed ? (
         <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">
-          This shop already closed {preview.businessDate}.
+          {preview.branchName || "This shop"} already closed {preview.businessDate}.
         </p>
       ) : (
         <div className="surface-card p-5">
-          <h3 className="mb-3 font-semibold">Count the cash for {preview.businessDate}</h3>
+          <h3 className="mb-3 font-semibold">
+            Count the cash {preview.branchName ? `for ${preview.branchName}` : ""} for {preview.businessDate}
+          </h3>
           <ActionForm action={closeDay} submit="Close this day" className="space-y-3">
             <input type="hidden" name="branchId" value={preview.branchId} />
             <input type="hidden" name="businessDate" value={preview.businessDate} />
