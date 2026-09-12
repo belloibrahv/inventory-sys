@@ -42,7 +42,7 @@ export async function getImeiRecords(search?: string, status?: string, life?: st
   const lifeBucket = IMEI_LIFE.find((row) => row.key === life)
   const range = whenBounds(when)
 
-  return prisma.imeiRecord.findMany({
+  const rows = await prisma.imeiRecord.findMany({
     where: {
       ...(branchId ? { branchId } : {}),
       ...(status
@@ -62,16 +62,37 @@ export async function getImeiRecords(search?: string, status?: string, life?: st
           }
         : {}),
     },
-    include: {
-      product: { include: { brand: true } },
-      branch: true,
-      supplier: true,
-      customer: true,
-      sale: true,
+    select: {
+      id: true,
+      imei1: true,
+      serialNumber: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+      product: { select: { name: true, warrantyDays: true } },
+      branch: { select: { code: true } },
+      customer: { select: { name: true } },
+      supplier: { select: { name: true } },
+      sale: { select: { saleDate: true } },
     },
     orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
     take: 500,
   })
+
+  // Hand only plain values to Client Components — no Prisma Decimal bags.
+  return rows.map((row) => ({
+    id: row.id,
+    imei1: row.imei1,
+    serialNumber: row.serialNumber,
+    status: row.status,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    product: { name: row.product.name, warrantyDays: row.product.warrantyDays },
+    branch: { code: row.branch.code },
+    customer: row.customer ? { name: row.customer.name } : null,
+    supplier: row.supplier ? { name: row.supplier.name } : null,
+    sale: row.sale ? { saleDate: row.sale.saleDate } : null,
+  }))
 }
 
 export async function intakeImei(formData: FormData) {
