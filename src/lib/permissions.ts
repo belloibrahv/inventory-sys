@@ -1,8 +1,9 @@
 import { cache } from "react"
 import { UserRole } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
+import { BOOKS_DESK_ROLES, isBooksDesk, isSuperAdmin } from "@/lib/roles"
 
-export { isSuperAdmin } from "@/lib/roles"
+export { isSuperAdmin, isBooksDesk, BOOKS_DESK_ROLES } from "@/lib/roles"
 
 export const VIEW_PERMS = [
   { key: "view.dashboard", label: "Home", href: "/dashboard" },
@@ -61,6 +62,47 @@ const ALL = ALL_PERM_KEYS
 
 const V = (...keys: string[]) => keys
 
+/**
+ * One key ring for the books desk.
+ *
+ * Records checker used to only check and approve. Accountant used to only
+ * post money. In this shop the same person (or two people on the same desk)
+ * needs both: see Who did what, Check the books, pay suppliers, record
+ * expenses, and collect money. So both jobs open the same pages and do the
+ * same money work.
+ */
+export const BOOKS_DESK_KEYS = V(
+  "view.dashboard",
+  "view.products",
+  "view.imei",
+  "view.inventory",
+  "view.incoming",
+  "view.sales",
+  "view.pos",
+  "view.purchases",
+  "view.customers",
+  "view.suppliers",
+  "view.transfers",
+  "view.neighbor-fills",
+  "view.returns",
+  "view.swaps",
+  "view.repairs",
+  "view.reconciliation",
+  "view.finance",
+  "view.expenses",
+  "view.profits",
+  "view.approvals",
+  "view.branches",
+  "view.reports",
+  "view.audit",
+  "view.notifications",
+  "action.sell",
+  "action.finance",
+  "action.approve",
+  "action.recon",
+  "action.all_branches"
+)
+
 const DEFAULTS: Record<UserRole, string[]> = {
   SUPER_ADMIN: ALL,
   // The CEO watches the business. Loading the item list and the stock is the
@@ -73,18 +115,8 @@ const DEFAULTS: Record<UserRole, string[]> = {
       key !== "view.uploads" &&
       key !== "action.upload"
   ),
-  AUDITOR: V(
-    "view.dashboard", "view.products", "view.imei", "view.inventory", "view.incoming", "view.sales", "view.purchases",
-    "view.customers", "view.suppliers", "view.transfers", "view.neighbor-fills", "view.returns", "view.swaps", "view.repairs",
-    "view.reconciliation", "view.finance", "view.expenses", "view.profits", "view.approvals", "view.branches",
-    "view.reports", "view.audit", "view.notifications",
-    "action.approve", "action.recon", "action.all_branches"
-  ),
-  ACCOUNTANT: V(
-    "view.dashboard", "view.sales", "view.customers", "view.suppliers", "view.purchases",
-    "view.neighbor-fills", "view.finance", "view.expenses", "view.profits", "view.reports", "view.notifications",
-    "action.sell", "action.finance", "action.all_branches"
-  ),
+  AUDITOR: BOOKS_DESK_KEYS,
+  ACCOUNTANT: BOOKS_DESK_KEYS,
   BRANCH_MANAGER: V(
     "view.dashboard", "view.products", "view.imei", "view.inventory", "view.incoming", "view.sales", "view.pos",
     "view.purchases", "view.customers", "view.suppliers", "view.transfers", "view.neighbor-fills", "view.returns",
@@ -166,7 +198,28 @@ const loadPermissionMap = cache(async () => {
 
 export async function getAllowedKeys(role: UserRole) {
   if (role === "SUPER_ADMIN") return new Set(ALL_PERM_KEYS)
-  const allowed = (await loadPermissionMap()).get(role)
+  const map = await loadPermissionMap()
+
+  // Books desk: records checker and accountant hold the same key ring.
+  // Whatever is ticked for either job is open to both, so one login can check
+  // the books and also post money without swapping accounts.
+  if (isBooksDesk(role)) {
+    const out = new Set<string>()
+    let anyConfigured = false
+    for (const deskRole of BOOKS_DESK_ROLES) {
+      const allowed = map.get(deskRole)
+      if (!allowed) {
+        for (const key of BOOKS_DESK_KEYS) out.add(key)
+        continue
+      }
+      anyConfigured = true
+      for (const key of allowed) out.add(key)
+    }
+    if (!anyConfigured) return new Set(BOOKS_DESK_KEYS)
+    return out
+  }
+
+  const allowed = map.get(role)
   // No rows at all means Who can see what has never been set up for this role,
   // so fall back to what it ships with rather than locking the person out.
   if (!allowed) return new Set(DEFAULTS[role] ?? [])

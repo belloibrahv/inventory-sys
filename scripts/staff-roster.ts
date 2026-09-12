@@ -5,9 +5,9 @@ export type Seat = { email: string; name: string; role: UserRole; branchCode?: s
 /**
  * One login per role per shop, plus the company-wide seats.
  *
- * A login carries exactly one role, so the person who is both auditor and
- * accountant needs one of each: the audit seat to see the books, the accounts
- * seat to record expenses and supplier payments.
+ * Records checker and accountant share one books desk, so either seat can open
+ * money pages and Who did what. We still keep both logins for Aro: one badge
+ * says records, one says accounts — same key ring underneath.
  */
 export const SEATS: Seat[] = [
   { email: "oyetundunr@abutwins.com", name: "Oyetunde Onireke", role: "SUPER_ADMIN" },

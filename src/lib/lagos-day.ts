@@ -48,3 +48,61 @@ export function formatLagosStamp(date = new Date()) {
     hour12: false,
   }).format(date)
 }
+
+/**
+ * Shop-facing date and time in Lagos.
+ *
+ * Staff need to know *when* something happened, not only that it happened.
+ * Today and yesterday are said plainly; older days keep the full stamp.
+ */
+export function formatShopWhen(date: Date | string | null | undefined) {
+  if (!date) return "—"
+  const value = new Date(date)
+  if (Number.isNaN(value.getTime())) return "—"
+
+  const today = watDayKey()
+  const day = watDayKey(value)
+  const clock = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Lagos",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(value)
+
+  if (day === today) return `Today, ${clock}`
+  if (day === shiftWatDay(today, -1)) return `Yesterday, ${clock}`
+
+  return formatLagosStamp(value)
+}
+
+/** Short date only (no clock), still Lagos. */
+export function formatShopDay(date: Date | string | null | undefined) {
+  if (!date) return "—"
+  const value = new Date(date)
+  if (Number.isNaN(value.getTime())) return "—"
+  const today = watDayKey()
+  const day = watDayKey(value)
+  if (day === today) return "Today"
+  if (day === shiftWatDay(today, -1)) return "Yesterday"
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Lagos",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(value)
+}
+
+/** Client list chips: Any day / Today / Last 7 days / Last 30 days. */
+export type WhenFilter = "all" | "today" | "week" | "month"
+
+export function matchesWhenFilter(date: Date | string | null | undefined, when: WhenFilter) {
+  if (when === "all") return true
+  if (!date) return false
+  const value = new Date(date)
+  if (Number.isNaN(value.getTime())) return false
+  const day = watDayKey(value)
+  if (when === "today") return day === watDayKey()
+  if (when === "week") return recentWatDays(7).includes(day)
+  if (when === "month") return recentWatDays(30).includes(day)
+  return true
+}

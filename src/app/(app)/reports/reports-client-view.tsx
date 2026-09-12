@@ -21,6 +21,7 @@ import {
   TonePill,
   Toolbar,
 } from "@/components/shared"
+import { TablePager, usePagedRows } from "@/components/table-pager"
 import type { ReportsPack } from "@/lib/reports-pack"
 
 type RawSale = {
@@ -80,6 +81,16 @@ export function ReportsClientView({
   const [drilldown, setDrilldown] = useState<Drilldown | null>(null)
   const paidSales = sales.filter((sale) => money(sale.paidAmount) > 0)
   const supplierOwed = pack.creditors.reduce((sum, row) => sum + row.owed, 0)
+  const scopeKey = selectedBranchId ?? "all"
+
+  const byShopPager = usePagedRows(pack.byShop, scopeKey)
+  const debtorsPager = usePagedRows(pack.debtors, scopeKey)
+  const creditorsPager = usePagedRows(pack.creditors, scopeKey)
+  const lowStockPager = usePagedRows(pack.lowStock, scopeKey)
+  const revenuePager = usePagedRows(sales, drilldown === "REVENUE" ? "REVENUE" : "idle")
+  const receivedPager = usePagedRows(paidSales, drilldown === "RECEIVED" ? "RECEIVED" : "idle")
+  const expensesPager = usePagedRows(expenses, drilldown === "EXPENSES" ? "EXPENSES" : "idle")
+  const stockPager = usePagedRows(inventory, drilldown === "STOCK" ? "STOCK" : "idle")
 
   return (
     <div className="space-y-5">
@@ -220,8 +231,21 @@ export function ReportsClientView({
               { label: "Money from sales", align: "right" },
               { label: "Money we collected", align: "right" },
             ]}
+            footer={
+              <TablePager
+                page={byShopPager.page}
+                pageCount={byShopPager.pageCount}
+                pageSize={byShopPager.pageSize}
+                total={byShopPager.total}
+                start={byShopPager.start}
+                end={byShopPager.end}
+                onPageChange={byShopPager.setPage}
+                onPageSizeChange={byShopPager.setPageSize}
+                noun="shops"
+              />
+            }
           >
-            {pack.byShop.map((row) => (
+            {byShopPager.pageRows.map((row) => (
               <tr key={row.name}>
                 <td className="font-medium">{row.name}</td>
                 <td className="text-right num">{row.tickets}</td>
@@ -244,8 +268,21 @@ export function ReportsClientView({
               </>
             }
             columns={[{ label: "Customer" }, { label: "Shop" }, { label: "Still owed", align: "right" }]}
+            footer={
+              <TablePager
+                page={debtorsPager.page}
+                pageCount={debtorsPager.pageCount}
+                pageSize={debtorsPager.pageSize}
+                total={debtorsPager.total}
+                start={debtorsPager.start}
+                end={debtorsPager.end}
+                onPageChange={debtorsPager.setPage}
+                onPageSizeChange={debtorsPager.setPageSize}
+                noun="customers"
+              />
+            }
           >
-            {pack.debtors.map((row) => (
+            {debtorsPager.pageRows.map((row) => (
               <tr key={row.id}>
                 <td>
                   <Link href={`/customers/${row.id}`} className="font-medium text-primary hover:underline">
@@ -275,8 +312,21 @@ export function ReportsClientView({
               </>
             }
             columns={[{ label: "Bill" }, { label: "Shop" }, { label: "Still owed", align: "right" }]}
+            footer={
+              <TablePager
+                page={creditorsPager.page}
+                pageCount={creditorsPager.pageCount}
+                pageSize={creditorsPager.pageSize}
+                total={creditorsPager.total}
+                start={creditorsPager.start}
+                end={creditorsPager.end}
+                onPageChange={creditorsPager.setPage}
+                onPageSizeChange={creditorsPager.setPageSize}
+                noun="bills"
+              />
+            }
           >
-            {pack.creditors.map((row) => (
+            {creditorsPager.pageRows.map((row) => (
               <tr key={row.id}>
                 <td>
                   <Link href={`/purchases/${row.id}`} className="font-medium text-primary hover:underline">
@@ -305,8 +355,21 @@ export function ReportsClientView({
               </>
             }
             columns={[{ label: "Item" }, { label: "Shop" }, { label: "Left", align: "right" }]}
+            footer={
+              <TablePager
+                page={lowStockPager.page}
+                pageCount={lowStockPager.pageCount}
+                pageSize={lowStockPager.pageSize}
+                total={lowStockPager.total}
+                start={lowStockPager.start}
+                end={lowStockPager.end}
+                onPageChange={lowStockPager.setPage}
+                onPageSizeChange={lowStockPager.setPageSize}
+                noun="stock lines"
+              />
+            }
           >
-            {pack.lowStock.map((row) => (
+            {lowStockPager.pageRows.map((row) => (
               <tr key={row.id}>
                 <td className="font-medium">{row.product}</td>
                 <td>
@@ -356,137 +419,189 @@ export function ReportsClientView({
         }
       >
         {drilldown === "REVENUE" ? (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Invoice</th>
-                <th>Customer</th>
-                <th>Shop</th>
-                <th>Date</th>
-                <th className="text-right">Invoice total</th>
-                <th className="text-right">Paid</th>
-                <th className="text-right">Still owed</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sales.map((sale) => (
-                <tr key={sale.id}>
-                  <td>
-                    <Link href={`/sales/${sale.id}`} className="font-medium text-primary hover:underline">
-                      {sale.invoiceNumber}
-                    </Link>
-                  </td>
-                  <td>{sale.customer?.name ?? "Walk-in"}</td>
-                  <td>
-                    <ShopTag>{sale.branch.code}</ShopTag>
-                  </td>
-                  <td className="text-muted-foreground">{formatDate(sale.saleDate)}</td>
-                  <td className="text-right num font-semibold">{formatCurrency(money(sale.totalAmount))}</td>
-                  <td className="text-right num text-success">{formatCurrency(money(sale.paidAmount))}</td>
-                  <td className="text-right num text-warning">
-                    {formatCurrency(money(sale.totalAmount) - money(sale.paidAmount))}
-                  </td>
+          <div>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Invoice</th>
+                  <th>Customer</th>
+                  <th>Shop</th>
+                  <th>Date</th>
+                  <th className="text-right">Invoice total</th>
+                  <th className="text-right">Paid</th>
+                  <th className="text-right">Still owed</th>
                 </tr>
-              ))}
-              {sales.length === 0 ? <TableEmpty colSpan={7}>No sale in this time.</TableEmpty> : null}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {revenuePager.pageRows.map((sale) => (
+                  <tr key={sale.id}>
+                    <td>
+                      <Link href={`/sales/${sale.id}`} className="font-medium text-primary hover:underline">
+                        {sale.invoiceNumber}
+                      </Link>
+                    </td>
+                    <td>{sale.customer?.name ?? "Walk-in"}</td>
+                    <td>
+                      <ShopTag>{sale.branch.code}</ShopTag>
+                    </td>
+                    <td className="text-muted-foreground">{formatDate(sale.saleDate)}</td>
+                    <td className="text-right num font-semibold">{formatCurrency(money(sale.totalAmount))}</td>
+                    <td className="text-right num text-success">{formatCurrency(money(sale.paidAmount))}</td>
+                    <td className="text-right num text-warning">
+                      {formatCurrency(money(sale.totalAmount) - money(sale.paidAmount))}
+                    </td>
+                  </tr>
+                ))}
+                {sales.length === 0 ? <TableEmpty colSpan={7}>No sale in this time.</TableEmpty> : null}
+              </tbody>
+            </table>
+            <TablePager
+              page={revenuePager.page}
+              pageCount={revenuePager.pageCount}
+              pageSize={revenuePager.pageSize}
+              total={revenuePager.total}
+              start={revenuePager.start}
+              end={revenuePager.end}
+              onPageChange={revenuePager.setPage}
+              onPageSizeChange={revenuePager.setPageSize}
+              noun="sales"
+            />
+          </div>
         ) : null}
 
         {drilldown === "RECEIVED" ? (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Invoice</th>
-                <th>Customer</th>
-                <th>Shop</th>
-                <th>Date</th>
-                <th className="text-right">Amount received</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paidSales.map((sale) => (
-                <tr key={sale.id}>
-                  <td>
-                    <Link href={`/sales/${sale.id}`} className="font-medium text-primary hover:underline">
-                      {sale.invoiceNumber}
-                    </Link>
-                  </td>
-                  <td>{sale.customer?.name ?? "Walk-in"}</td>
-                  <td>
-                    <ShopTag>{sale.branch.code}</ShopTag>
-                  </td>
-                  <td className="text-muted-foreground">{formatDate(sale.saleDate)}</td>
-                  <td className="text-right num font-semibold text-success">
-                    {formatCurrency(money(sale.paidAmount))}
-                  </td>
+          <div>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Invoice</th>
+                  <th>Customer</th>
+                  <th>Shop</th>
+                  <th>Date</th>
+                  <th className="text-right">Amount received</th>
                 </tr>
-              ))}
-              {paidSales.length === 0 ? <TableEmpty colSpan={5}>No money was collected in this time.</TableEmpty> : null}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {receivedPager.pageRows.map((sale) => (
+                  <tr key={sale.id}>
+                    <td>
+                      <Link href={`/sales/${sale.id}`} className="font-medium text-primary hover:underline">
+                        {sale.invoiceNumber}
+                      </Link>
+                    </td>
+                    <td>{sale.customer?.name ?? "Walk-in"}</td>
+                    <td>
+                      <ShopTag>{sale.branch.code}</ShopTag>
+                    </td>
+                    <td className="text-muted-foreground">{formatDate(sale.saleDate)}</td>
+                    <td className="text-right num font-semibold text-success">
+                      {formatCurrency(money(sale.paidAmount))}
+                    </td>
+                  </tr>
+                ))}
+                {paidSales.length === 0 ? <TableEmpty colSpan={5}>No money was collected in this time.</TableEmpty> : null}
+              </tbody>
+            </table>
+            <TablePager
+              page={receivedPager.page}
+              pageCount={receivedPager.pageCount}
+              pageSize={receivedPager.pageSize}
+              total={receivedPager.total}
+              start={receivedPager.start}
+              end={receivedPager.end}
+              onPageChange={receivedPager.setPage}
+              onPageSizeChange={receivedPager.setPageSize}
+              noun="payments"
+            />
+          </div>
         ) : null}
 
         {drilldown === "EXPENSES" ? (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Voucher</th>
-                <th>Category</th>
-                <th>What it was for</th>
-                <th>Shop</th>
-                <th>Date</th>
-                <th className="text-right">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {expenses.map((expense) => (
-                <tr key={expense.id}>
-                  <td className="font-medium">{expense.expenseNumber}</td>
-                  <td>{expense.category.replace(/_/g, " ").toLowerCase()}</td>
-                  <td>{expense.description}</td>
-                  <td>
-                    <ShopTag>{expense.branch.code}</ShopTag>
-                  </td>
-                  <td className="text-muted-foreground">{formatDate(expense.date)}</td>
-                  <td className="text-right num font-semibold text-danger">{formatCurrency(money(expense.amount))}</td>
+          <div>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Voucher</th>
+                  <th>Category</th>
+                  <th>What it was for</th>
+                  <th>Shop</th>
+                  <th>Date</th>
+                  <th className="text-right">Amount</th>
                 </tr>
-              ))}
-              {expenses.length === 0 ? <TableEmpty colSpan={6}>No bill was recorded in this time.</TableEmpty> : null}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {expensesPager.pageRows.map((expense) => (
+                  <tr key={expense.id}>
+                    <td className="font-medium">{expense.expenseNumber}</td>
+                    <td>{expense.category.replace(/_/g, " ").toLowerCase()}</td>
+                    <td>{expense.description}</td>
+                    <td>
+                      <ShopTag>{expense.branch.code}</ShopTag>
+                    </td>
+                    <td className="text-muted-foreground">{formatDate(expense.date)}</td>
+                    <td className="text-right num font-semibold text-danger">{formatCurrency(money(expense.amount))}</td>
+                  </tr>
+                ))}
+                {expenses.length === 0 ? <TableEmpty colSpan={6}>No bill was recorded in this time.</TableEmpty> : null}
+              </tbody>
+            </table>
+            <TablePager
+              page={expensesPager.page}
+              pageCount={expensesPager.pageCount}
+              pageSize={expensesPager.pageSize}
+              total={expensesPager.total}
+              start={expensesPager.start}
+              end={expensesPager.end}
+              onPageChange={expensesPager.setPage}
+              onPageSizeChange={expensesPager.setPageSize}
+              noun="bills"
+            />
+          </div>
         ) : null}
 
         {drilldown === "STOCK" ? (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Item</th>
-                <th>Shop</th>
-                <th className="text-right">Quantity</th>
-                <th className="text-right">Cost price</th>
-                <th className="text-right">Selling price</th>
-                <th className="text-right">Value at cost</th>
-              </tr>
-            </thead>
-            <tbody>
-              {inventory.map((row) => (
-                <tr key={row.id}>
-                  <td className="font-medium">{row.product.name}</td>
-                  <td>
-                    <ShopTag>{row.branch.code}</ShopTag>
-                  </td>
-                  <td className="text-right num">{row.quantity}</td>
-                  <td className="text-right num">{formatCurrency(money(row.product.costPrice))}</td>
-                  <td className="text-right num">{formatCurrency(money(row.product.sellingPrice))}</td>
-                  <td className="text-right num font-semibold">
-                    {formatCurrency(row.quantity * money(row.product.costPrice))}
-                  </td>
+          <div>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Shop</th>
+                  <th className="text-right">Quantity</th>
+                  <th className="text-right">Cost price</th>
+                  <th className="text-right">Selling price</th>
+                  <th className="text-right">Value at cost</th>
                 </tr>
-              ))}
-              {inventory.length === 0 ? <TableEmpty colSpan={6}>Nothing is on the shelf here.</TableEmpty> : null}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {stockPager.pageRows.map((row) => (
+                  <tr key={row.id}>
+                    <td className="font-medium">{row.product.name}</td>
+                    <td>
+                      <ShopTag>{row.branch.code}</ShopTag>
+                    </td>
+                    <td className="text-right num">{row.quantity}</td>
+                    <td className="text-right num">{formatCurrency(money(row.product.costPrice))}</td>
+                    <td className="text-right num">{formatCurrency(money(row.product.sellingPrice))}</td>
+                    <td className="text-right num font-semibold">
+                      {formatCurrency(row.quantity * money(row.product.costPrice))}
+                    </td>
+                  </tr>
+                ))}
+                {inventory.length === 0 ? <TableEmpty colSpan={6}>Nothing is on the shelf here.</TableEmpty> : null}
+              </tbody>
+            </table>
+            <TablePager
+              page={stockPager.page}
+              pageCount={stockPager.pageCount}
+              pageSize={stockPager.pageSize}
+              total={stockPager.total}
+              start={stockPager.start}
+              end={stockPager.end}
+              onPageChange={stockPager.setPage}
+              onPageSizeChange={stockPager.setPageSize}
+              noun="stock lines"
+            />
+          </div>
         ) : null}
       </DrilldownModal>
 

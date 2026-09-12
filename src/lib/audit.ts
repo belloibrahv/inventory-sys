@@ -67,7 +67,7 @@ export async function verifyAuditChain(limit = 400) {
 
 export async function alertWatchers(title: string, message: string, actionUrl = "/audit") {
   const watchers = await prisma.user.findMany({
-    where: { isActive: true, role: { in: ["SUPER_ADMIN", "CEO", "AUDITOR"] } },
+    where: { isActive: true, role: { in: ["SUPER_ADMIN", "CEO", "AUDITOR", "ACCOUNTANT"] } },
     select: { id: true },
   })
   if (!watchers.length) return

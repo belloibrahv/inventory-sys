@@ -1,71 +1,19 @@
-import Link from "next/link"
-import { completeReturn, getReturns, getSoldImeis } from "@/app/actions/ops"
-import { ActionForm } from "@/components/action-form"
-import { PageHeader, StatusBadge } from "@/components/shared"
-import { WorkflowSteps } from "@/components/workflow-steps"
-import { Input } from "@/components/ui/input"
-import { formatCurrency, money } from "@/lib/utils"
+import { getReturns, getSoldImeis } from "@/app/actions/ops"
+import { PageHeader } from "@/components/shared"
+import { money } from "@/lib/utils"
 import { ReturnForm } from "./return-form"
+import { ReturnsList } from "./returns-list"
 
 export default async function ReturnsPage() {
   const [rows, sold] = await Promise.all([getReturns(), getSoldImeis()])
   return (
     <div className="page-split">
       <div>
-        <PageHeader title="Returns" description="A buyer brings a phone back. The old bill stays as it was. After the boss says yes, you can refund, give credit, repair, replace, or send it to the supplier." />
-        <WorkflowSteps current={0} steps={["Enter IMEI", "Say why", "Boss approves", "Refund, replace, or send to supplier"]} />
-        <div className="space-y-3">
-          {rows.map((row) => (
-            <div key={row.id} className="surface-card p-5">
-              <div className="flex justify-between gap-3">
-                <div>
-                  <p className="font-semibold">{row.returnNumber}</p>
-                  <p className="text-sm text-muted-foreground">
-                    <Link href={`/customers/${row.customer.id}`} className="text-primary">{row.customer.name}</Link>
-                    {" · "}
-                    {row.imei ? (
-                      <Link href={`/imei/${row.imei.id}`} className="text-primary">{row.imei.imei1}</Link>
-                    ) : "No IMEI"}
-                    {row.invoice ? (
-                      <>
-                        {" · "}
-                        <Link href={`/sales/${row.invoice.id}`} className="text-primary">{row.invoice.invoiceNumber}</Link>
-                      </>
-                    ) : null}
-                  </p>
-                  <p className="mt-1 text-sm">{row.reason} → {row.outcome}{row.refundAmount ? ` · ${formatCurrency(money(row.refundAmount))}` : ""}</p>
-                </div>
-                <StatusBadge value={row.status} />
-              </div>
-              <p className="mt-2 text-xs text-muted-foreground">Fault class: {row.faultClass}</p>
-              {row.status === "PENDING" ? (
-                <p className="mt-3 text-xs text-warning">Waiting for the boss to say yes. Nobody can sell this IMEI until then.</p>
-              ) : null}
-              {row.status === "APPROVED" ? (
-                <div className="mt-4 border-t border-border pt-4">
-                  <ActionForm action={completeReturn} submit="Apply outcome" className="space-y-2">
-                    <input type="hidden" name="id" value={row.id} />
-                    {row.outcome === "REPLACEMENT" ? (
-                      <Input name="replacementImei" placeholder="In-stock replacement IMEI" />
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        This will {
-                          row.outcome === "REFUND"
-                            ? "give back cash from what they already paid"
-                            : row.outcome === "REPAIR"
-                              ? "open a repair job"
-                              : row.outcome === "SEND_TO_SUPPLIER"
-                                ? "send this phone back to the supplier. It will not stay in this shop"
-                                : "post a credit note"
-                        } without editing the original sale.
-                      </p>
-                    )}
-                  </ActionForm>
-                </div>
-              ) : null}
-            </div>
-          ))}
-        </div>
+        <PageHeader
+          title="Returns"
+          description="A buyer brings a phone back. The old bill stays as it was. After the boss says yes, you can refund, give credit, repair, replace, or send it to the supplier."
+        />
+        <ReturnsList rows={rows} />
       </div>
       <div className="surface-card p-5">
         <h3 className="mb-4 font-semibold">Log a return</h3>

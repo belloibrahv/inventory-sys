@@ -227,5 +227,3 @@ export async function getDayCloses(requestedBranchId?: string) {
     notes: row.notes,
   }))
 }
-
-export { shiftWatDay }

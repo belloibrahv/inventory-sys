@@ -200,6 +200,22 @@ async function main() {
         })
       },
     },
+    {
+      key: "perm.revision.books_desk_shared",
+      why: "Records checker and accountant share one books desk: both can check records and post money.",
+      apply: async () => {
+        const { BOOKS_DESK_KEYS } = await import("../src/lib/permissions")
+        for (const role of ["AUDITOR", "ACCOUNTANT"] as const) {
+          for (const permKey of BOOKS_DESK_KEYS) {
+            await prisma.rolePermission.upsert({
+              where: { role_permKey: { role, permKey } },
+              update: { allowed: true },
+              create: { role, permKey, allowed: true },
+            })
+          }
+        }
+      },
+    },
   ]
 
   for (const revision of REVISIONS) {

@@ -1,7 +1,7 @@
 import type { UserRole } from "@prisma/client"
 import { can } from "@/lib/permissions"
 
-export { isSuperAdmin, ROLE_LABELS } from "@/lib/roles"
+export { isSuperAdmin, isBooksDesk, booksDeskPartner, BOOKS_DESK_ROLES, ROLE_LABELS } from "@/lib/roles"
 
 export async function canSeeAllBranches(role: UserRole) {
   return can(role, "action.all_branches")

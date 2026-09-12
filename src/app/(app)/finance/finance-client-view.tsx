@@ -24,6 +24,7 @@ import {
   TableShell,
   Toolbar,
 } from "@/components/shared"
+import { TablePager, usePagedRows } from "@/components/table-pager"
 
 type LedgerEntry = {
   id: string
@@ -82,6 +83,9 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
   const cashDays = useMemo(() => groupByDay(data.cashAccount.entries), [data.cashAccount.entries])
   const bankDays = useMemo(() => groupByDay(data.bankAccount.entries), [data.bankAccount.entries])
   const days = ledger === "CASH" ? cashDays : ledger === "BANK" ? bankDays : []
+  const debtorsPager = usePagedRows(data.debtors, "debtors")
+  const creditorsPager = usePagedRows(data.creditors, "creditors")
+  const daysPager = usePagedRows(days, ledger ?? "none")
 
   return (
     <div className="space-y-5">
@@ -200,8 +204,21 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
             </>
           }
           columns={[{ label: "Customer" }, { label: "Shop" }, { label: "Still owed", align: "right" }]}
+          footer={
+            <TablePager
+              page={debtorsPager.page}
+              pageCount={debtorsPager.pageCount}
+              pageSize={debtorsPager.pageSize}
+              total={debtorsPager.total}
+              start={debtorsPager.start}
+              end={debtorsPager.end}
+              onPageChange={debtorsPager.setPage}
+              onPageSizeChange={debtorsPager.setPageSize}
+              noun="customers"
+            />
+          }
         >
-          {data.debtors.map((customer) => (
+          {debtorsPager.pageRows.map((customer) => (
             <tr key={customer.id}>
               <td>
                 <Link href={`/customers/${customer.id}`} className="font-medium text-primary hover:underline">
@@ -231,8 +248,21 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
             </>
           }
           columns={[{ label: "Supplier" }, { label: "Still owed", align: "right" }]}
+          footer={
+            <TablePager
+              page={creditorsPager.page}
+              pageCount={creditorsPager.pageCount}
+              pageSize={creditorsPager.pageSize}
+              total={creditorsPager.total}
+              start={creditorsPager.start}
+              end={creditorsPager.end}
+              onPageChange={creditorsPager.setPage}
+              onPageSizeChange={creditorsPager.setPageSize}
+              noun="suppliers"
+            />
+          }
         >
-          {data.creditors.map((row) => (
+          {creditorsPager.pageRows.map((row) => (
             <tr key={row.id}>
               <td>
                 <Link href={`/suppliers/${row.id}`} className="font-medium text-primary hover:underline">
@@ -266,7 +296,7 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
         }
       >
         <div className="divide-y divide-border">
-          {days.map((day) => (
+          {daysPager.pageRows.map((day) => (
             <section key={day.key}>
               <div className="flex flex-wrap items-center justify-between gap-3 bg-muted/40 px-5 py-2">
                 <p className="text-sm font-semibold">{day.label}</p>
@@ -324,6 +354,17 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
             </p>
           ) : null}
         </div>
+        <TablePager
+          page={daysPager.page}
+          pageCount={daysPager.pageCount}
+          pageSize={daysPager.pageSize}
+          total={daysPager.total}
+          start={daysPager.start}
+          end={daysPager.end}
+          onPageChange={daysPager.setPage}
+          onPageSizeChange={daysPager.setPageSize}
+          noun="days"
+        />
       </DrilldownModal>
     </div>
   )

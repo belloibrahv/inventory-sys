@@ -121,6 +121,7 @@ export default async function AuditPage({
             <p className="text-xs text-muted-foreground">Tap any row to see the device, the page, and what changed, in plain words.</p>
           </div>
           <AuditLogRows
+            resetKey={[filters.q, filters.action, filters.risk, filters.userId, filters.result, filters.from, filters.to, filters.views].join("|")}
             logs={data.logs.map((log) => ({
               ...log,
               when: log.when,

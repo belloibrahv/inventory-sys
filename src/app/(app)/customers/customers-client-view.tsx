@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { ShopTag, StatCard, StatGrid, TableEmpty, TableShell, TonePill, Toolbar } from "@/components/shared"
+import { TablePager, usePagedRows } from "@/components/table-pager"
 import { formatCurrency, money } from "@/lib/utils"
 
 type CustomerItem = {
@@ -65,6 +66,8 @@ export function CustomersClientView({
       return account.name.toLowerCase().includes(query) || account.phone.includes(query)
     })
   }, [accounts, tab, branchFilter, search])
+
+  const pager = usePagedRows(filtered, `${tab}|${branchFilter}|${search}`)
 
   const tabs: Array<{ key: Tab; label: string; count: number }> = [
     { key: "ALL", label: "Everyone", count: accounts.length },
@@ -155,8 +158,21 @@ export function CustomersClientView({
           { label: "Still owes", align: "right" },
           { label: "", align: "right" },
         ]}
+        footer={
+          <TablePager
+            page={pager.page}
+            pageCount={pager.pageCount}
+            pageSize={pager.pageSize}
+            total={pager.total}
+            start={pager.start}
+            end={pager.end}
+            onPageChange={pager.setPage}
+            onPageSizeChange={pager.setPageSize}
+            noun="customers"
+          />
+        }
       >
-        {filtered.map((customer) => (
+        {pager.pageRows.map((customer) => (
           <tr key={customer.id}>
             <td>
               <Link href={`/customers/${customer.id}`} className="font-medium text-primary hover:underline">

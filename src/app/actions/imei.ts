@@ -7,15 +7,50 @@ import { canReachBranch, viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
 import { scopedBranchId } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
+import { recentWatDays, watBounds } from "@/lib/lagos-day"
+import { IMEI_LIFE } from "@/lib/imei-life"
 
-export async function getImeiRecords(search?: string, status?: string) {
+function whenBounds(when?: string) {
+  if (!when || when === "all") return null
+  const days = when === "today" ? 1 : when === "week" ? 7 : when === "month" ? 30 : 0
+  if (!days) return null
+  const keys = recentWatDays(days)
+  const newest = watBounds(keys[0])
+  const oldest = watBounds(keys[keys.length - 1])
+  return { start: oldest.start, end: newest.end }
+}
+
+export async function getImeiStatusCounts() {
   const user = await requireUser()
   const branchId = await viewBranchFilter(user)
+  const rows = await prisma.imeiRecord.groupBy({
+    by: ["status"],
+    where: branchId ? { branchId } : {},
+    _count: { _all: true },
+  })
+  const byStatus = Object.fromEntries(rows.map((row) => [row.status, row._count._all])) as Record<string, number>
+  const total = rows.reduce((sum, row) => sum + row._count._all, 0)
+  const byLife = Object.fromEntries(
+    IMEI_LIFE.map((life) => [life.key, life.statuses.reduce((sum, status) => sum + (byStatus[status] ?? 0), 0)])
+  ) as Record<string, number>
+  return { total, byStatus, byLife }
+}
+
+export async function getImeiRecords(search?: string, status?: string, life?: string, when?: string) {
+  const user = await requireUser()
+  const branchId = await viewBranchFilter(user)
+  const lifeBucket = IMEI_LIFE.find((row) => row.key === life)
+  const range = whenBounds(when)
 
   return prisma.imeiRecord.findMany({
     where: {
       ...(branchId ? { branchId } : {}),
-      ...(status ? { status: status as IMEIStatus } : {}),
+      ...(status
+        ? { status: status as IMEIStatus }
+        : lifeBucket
+          ? { status: { in: [...lifeBucket.statuses] } }
+          : {}),
+      ...(range ? { updatedAt: { gte: range.start, lt: range.end } } : {}),
       ...(search
         ? {
             OR: [
@@ -34,8 +69,8 @@ export async function getImeiRecords(search?: string, status?: string) {
       customer: true,
       sale: true,
     },
-    orderBy: { createdAt: "desc" },
-    take: 200,
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    take: 500,
   })
 }
 

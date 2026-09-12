@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { updateSelectedPrices } from "@/app/actions/catalog"
 import { StatusBadge } from "@/components/shared"
+import { TablePager, usePagedRows } from "@/components/table-pager"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { formatCurrency } from "@/lib/utils"
@@ -59,6 +60,7 @@ export function ProductPriceList({
     })
   }, [products, query])
 
+  const pager = usePagedRows(visible, query)
   const selected = products.filter((product) => ticked[product.id])
 
   function setTick(id: string, next: boolean, currentPrice: number) {
@@ -71,13 +73,13 @@ export function ProductPriceList({
   function tickVisible(next: boolean) {
     setTicked((prev) => {
       const copy = { ...prev }
-      for (const product of visible) copy[product.id] = next
+      for (const product of pager.pageRows) copy[product.id] = next
       return copy
     })
     if (next) {
       setPrices((prev) => {
         const copy = { ...prev }
-        for (const product of visible) {
+        for (const product of pager.pageRows) {
           if (copy[product.id] == null || copy[product.id] === "") copy[product.id] = String(product.sellingPrice)
         }
         return copy
@@ -126,24 +128,32 @@ export function ProductPriceList({
   return (
     <div className="surface-card overflow-hidden">
       <div className="space-y-3 border-b border-border p-4">
-        <Input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Find item code, brand, or model"
-          aria-label="Find item code, brand, or model"
-        />
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Find item code, brand, or model"
+            aria-label="Find item code, brand, or model"
+            className="max-w-xl"
+          />
+          <p className="text-sm text-muted-foreground">
+            {visible.length === 1 ? "1 item" : `${visible.length} items`}
+            {query.trim() ? " match this search" : " on the list"}
+          </p>
+        </div>
         {canEdit ? (
           <p className="text-sm text-muted-foreground">
-            Tick any mix of phones and accessories. Type each new selling price. One save updates all of them. You still sell by the unit, not by carton.
+            Tick any mix of phones and accessories on this page. Type each new selling price. One save updates all of
+            them. You still sell by the unit, not by carton.
           </p>
         ) : null}
         {canEdit ? (
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" size="sm" onClick={() => tickVisible(true)}>
-              Tick all on this list
+              Tick all on this page
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={() => tickVisible(false)}>
-              Clear ticks
+              Clear ticks on this page
             </Button>
           </div>
         ) : null}
@@ -153,16 +163,16 @@ export function ProductPriceList({
           <thead className="text-left text-muted-foreground">
             <tr className="border-b border-border">
               {canEdit ? <th className="px-4 py-3">Tick</th> : null}
-              <th className="px-4 py-3">Product</th>
+              <th className="px-4 py-3">Item</th>
               <th className="px-4 py-3">Condition</th>
-              <th className="px-4 py-3">Cost / Min / Sell</th>
+              <th className="px-4 py-3">Cost / Lowest / Sell</th>
               {canEdit ? <th className="px-4 py-3">New selling price</th> : null}
               <th className="px-4 py-3">Warranty</th>
               <th className="px-4 py-3">Units</th>
             </tr>
           </thead>
           <tbody>
-            {visible.map((product) => {
+            {pager.pageRows.map((product) => {
               const chosen = Boolean(ticked[product.id])
               return (
                 <tr key={product.id} className="border-b border-border/70">
@@ -222,6 +232,17 @@ export function ProductPriceList({
           </tbody>
         </table>
       </div>
+      <TablePager
+        page={pager.page}
+        pageCount={pager.pageCount}
+        pageSize={pager.pageSize}
+        total={pager.total}
+        start={pager.start}
+        end={pager.end}
+        onPageChange={pager.setPage}
+        onPageSizeChange={pager.setPageSize}
+        noun="items"
+      />
       {canEdit ? (
         <div className="space-y-3 border-t border-border p-4">
           <p className="text-sm font-medium">

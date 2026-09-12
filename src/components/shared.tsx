@@ -187,11 +187,14 @@ export function TableShell({
   columns,
   children,
   caption,
+  footer,
   className,
 }: {
   columns: Column[]
   children: ReactNode
   caption?: ReactNode
+  /** Pager or summary strip under the rows. */
+  footer?: ReactNode
   className?: string
 }) {
   return (
@@ -222,6 +225,7 @@ export function TableShell({
           <tbody>{children}</tbody>
         </table>
       </div>
+      {footer ?? null}
     </div>
   )
 }

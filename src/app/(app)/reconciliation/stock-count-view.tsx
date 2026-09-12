@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { StatCard, StatGrid, TableEmpty, TableShell, TonePill, Toolbar } from "@/components/shared"
+import { TablePager, usePagedRows } from "@/components/table-pager"
 import { downloadTable } from "@/lib/download-table"
 import { formatCurrency, money } from "@/lib/utils"
 
@@ -38,6 +39,7 @@ export function StockCountView({
   const [counts, setCounts] = useState<Record<string, number>>({})
 
   const rows = useMemo(() => inventory.filter((row) => row.branchId === branchId), [inventory, branchId])
+  const pager = usePagedRows(rows, branchId)
   const selectedBranch = useMemo(() => branches.find((branch) => branch.id === branchId), [branches, branchId])
 
   /** What the system believes, until someone types over it. */
@@ -258,8 +260,21 @@ export function StockCountView({
             { label: "Difference", align: "center" },
             { label: "Extra or missing", align: "right" },
           ]}
+          footer={
+            <TablePager
+              page={pager.page}
+              pageCount={pager.pageCount}
+              pageSize={pager.pageSize}
+              total={pager.total}
+              start={pager.start}
+              end={pager.end}
+              onPageChange={pager.setPage}
+              onPageSizeChange={pager.setPageSize}
+              noun="stock lines"
+            />
+          }
         >
-          {rows.map((row) => {
+          {pager.pageRows.map((row) => {
             const expected = row.quantity
             const counted = countFor(row.productId, expected)
             const cost = money(row.product.costPrice)

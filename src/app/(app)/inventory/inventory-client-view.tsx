@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { ShopTag, StatCard, StatGrid, TableEmpty, TableShell, TonePill, Toolbar } from "@/components/shared"
+import { TablePager, usePagedRows } from "@/components/table-pager"
 import { downloadTable } from "@/lib/download-table"
 import { formatCurrency, money } from "@/lib/utils"
 import { lowStockLimit } from "@/lib/settings"
@@ -72,6 +73,8 @@ export function InventoryClientView({
       )
     })
   }, [rows, selectedBranch, conditionFilter, search])
+
+  const pager = usePagedRows(filtered, `${selectedBranch}|${conditionFilter}|${search}`)
 
   const imeiFor = useMemo(() => {
     const map = new Map<string, number>()
@@ -269,8 +272,21 @@ export function InventoryClientView({
           { label: "IMEIs", align: "center" },
           { label: "Value at cost", align: "right" },
         ]}
+        footer={
+          <TablePager
+            page={pager.page}
+            pageCount={pager.pageCount}
+            pageSize={pager.pageSize}
+            total={pager.total}
+            start={pager.start}
+            end={pager.end}
+            onPageChange={pager.setPage}
+            onPageSizeChange={pager.setPageSize}
+            noun="stock lines"
+          />
+        }
       >
-        {filtered.map((row) => {
+        {pager.pageRows.map((row) => {
           const cost = money(row.product.costPrice)
           const selling = money(row.product.sellingPrice)
           const margin = marginPct(cost, selling)

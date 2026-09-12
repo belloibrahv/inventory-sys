@@ -27,6 +27,7 @@
     "data:purge-demo": "tsx scripts/purge-demo-data.ts",
     "staff:owner": "tsx scripts/create-owner.ts",
     "staff:seed": "tsx scripts/create-staff.ts",
+    "staff:local": "tsx scripts/seed-local-logins.ts",
     "stock:opening": "tsx scripts/import-opening-stock.ts"
   },
   "prisma": {

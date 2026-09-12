@@ -568,7 +568,7 @@ export async function createReturn(formData: FormData) {
     },
   })
   const managers = await prisma.user.findMany({
-    where: { role: { in: ["CEO", "BRANCH_MANAGER", "AUDITOR"] }, isActive: true },
+    where: { role: { in: ["CEO", "BRANCH_MANAGER", "AUDITOR", "ACCOUNTANT"] }, isActive: true },
   })
   for (const manager of managers) {
     await notify(manager.id, "A return is waiting for you to say yes", `${record.returnNumber} for IMEI ${imei1}`, "/approvals", "APPROVAL_REQUEST")

@@ -34,11 +34,11 @@ const ROLE_JOB: Record<UserRole, { job: string; shops: string }> = {
     shops: "You see every shop.",
   },
   AUDITOR: {
-    job: "You check records, sign the books, and say yes or no to some requests. You do not sell.",
+    job: "You sit on the books desk with the accountant. You check records, sign the books, say yes or no to requests, and you can also post money, pay suppliers, and collect payments — same pages as the accountant.",
     shops: "You see every shop.",
   },
   ACCOUNTANT: {
-    job: "You watch money, invoices, expenses, and the books. You can collect and record pay-outs. You do not run the till all day.",
+    job: "You sit on the books desk with the records checker. You watch money, invoices, expenses, and the books, and you can also open Who did what and Check the books — same pages as the records checker.",
     shops: "You see every shop.",
   },
   BRANCH_MANAGER: {

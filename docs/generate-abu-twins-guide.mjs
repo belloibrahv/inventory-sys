@@ -212,8 +212,8 @@ const children = [
       ["Prepared by", "Product Team, Techvaults Limited"],
       ["Document type", "User guide and test plan"],
       ["Date", "9 September 2026"],
-      ["Version", "1.19"],
-      ["Status", "Updated: Upload stock creates a supplier bill with value and paid or not paid"],
+      ["Version", "1.20"],
+      ["Status", "Updated: List pages have tap filters and clear Lagos When times"],
     ].map(([k, v]) =>
       new TableRow({
         children: [
@@ -240,6 +240,7 @@ const children = [
   body("This release also answers the question of how the shops get loaded in the first place. Your team can now put the whole business into the system from an Excel sheet: the item list, what is on each shelf, and every phone by IMEI. Booking a container in by hand, one phone at a time, is where an evening goes. A sheet does it in one press."),
   body("Because that is powerful, it is also narrow. A new job called Stock uploader does only that work. It cannot sell, cannot see money, and cannot approve anything. Loading the item list is now limited to that job and to Super Admin, so three shops cannot end up with three different names for the same phone."),
   body("Every sale can now be handed over as a receipt: saved as a file to send to a customer, printed for a whole day at once, or printed the moment the sale is finished at the till."),
+  body("Long lists are easier to read now. On Sales, Goods from supplier, Expenses, Shop to shop, Needs approval, Returns, Swaps, Repairs, Goods on the way, and Phone IMEIs, you can tap a status chip or a stage to show only that cut. Time on each row is Lagos time, in plain words like Today, 14:30."),
   body("The system has grown steadily since we began. Section 16 lists what each release added, in order, if you want that history. You do not need to read it to use the system."),
   para("", { after: 160 }),
   para("Product Team", { bold: true, after: 40 }),
@@ -500,20 +501,22 @@ h1("5. Words we use"),
 
   ...feature({
     title: "10.3 Phone IMEIs",
-    what: "This page is the life of each unique phone or serial item. You can search the number. You can see if it is Coming, In shop, Sold, Returned, or in repair. You can also receive a phone that is already in your hands.",
-    why: "The unique number is how you prove a phone is yours, sold, or missing. Without it, two black iPhones look the same.",
+    what: "This page is the life of each unique phone or serial item. Tap a life stage (Received, In shop, Sold or moved, Returned or repaired) or an exact status chip to cut the list. Tap When it last changed for Any day, Today, Last 7 days, or Last 30 days. Each row shows Last change in Lagos time. You can search the number. You can also receive a phone that is already in your hands.",
+    why: "The unique number is how you prove a phone is yours, sold, or missing. Without it, two black iPhones look the same. Filters and clear times stop staff scrolling a long list when they only need today’s moves.",
     story: "A customer comes back with a Camon 30. The cashier types the IMEI in the top search. The record opens. It shows the invoice, the buyer, and the warranty days left. Nobody has to hunt a notebook.",
     steps: [
       "Click Phone IMEIs.",
+      "Tap In shop under the life stages, or tap an exact status chip.",
+      "Tap Today under When it last changed if you only want phones that moved today.",
       "Type an IMEI in the search box, or leave it empty and click Search.",
-      "Open one number.",
-      "Look at the status word: Coming, In shop, Sold, and so on.",
+      "Open one number. Read Last change and First booked in Lagos time.",
     ],
     expect: [
       "Coming phones are listed but are not for sale on Sell now.",
       "In shop phones can be sold.",
       "A sold phone shows the invoice number.",
       "The same IMEI cannot be received twice. The system says it is already on the system.",
+      "Tapping a stage or chip changes the list below. Showing now marks the active chip.",
     ],
   }),
 
@@ -539,7 +542,7 @@ h1("5. Words we use"),
 
   ...feature({
     title: "10.5 Goods on the way",
-    what: "This is the booking page for supplier cartons that have not reached Ibadan yet. Super Admin and Goods intake can upload phones (IMEIs), serial items, or a piece count for cords and chargers. A USB scanner works like a keyboard. The list stays Coming until someone says they have arrived. Super Admin can keep a list Hidden, or show it to staff who have this page. Shop to shop is a different page.",
+    what: "This is the booking page for supplier cartons that have not reached Ibadan yet. Tap All cartons, Still coming, In shop, or Cancelled to cut the list. Each carton shows when it was booked in Lagos time. Super Admin and Goods intake can upload phones (IMEIs), serial items, or a piece count for cords and chargers. A USB scanner works like a keyboard. The list stays Coming until someone says they have arrived. Super Admin can keep a list Hidden, or show it to staff who have this page. Shop to shop is a different page.",
     why: "Cartons leave China or Lagos before your shelf is ready. If you wait to type numbers until the rider arrives, the day is chaos. If you type them too early and mix them with shelf stock, cashiers sell phones that are still on the road.",
     story: "Friday. A carton of ten iPhones and twenty charger cords is on a bus to Iwo Road. Goods intake opens Goods on the way. They pick Iwo Road, Ibadan · HQ. They paste ten IMEIs for iPhone 15 Pro. They add another line, pick Type-C charger cord, and type 20. They save. Shop stock now shows Coming 10 and Coming 20. On Saturday the carton arrives. They click They have arrived — add to shop. In shop goes up. Sell now can now find those IMEIs.",
     steps: [
@@ -596,7 +599,7 @@ h1("5. Words we use"),
 
   ...feature({
     title: "10.7 Sales and the printed invoice",
-    what: "Sales is the list of every invoice. Open one invoice to collect remaining money, attach a buyer name, or print. The invoice itself cannot be edited. Items, IMEIs, and prices stay as they were on the day of the sale.",
+    what: "Sales is the list of every invoice. Tap Paid up, Part paid, or Unpaid to cut the list by money on the bill. Tap Today, Last 7 days, or Last 30 days under When it was sold. Each row has a When column in Lagos time. Open one invoice to collect remaining money, attach a buyer name, or print. The invoice itself cannot be edited. Items, IMEIs, and prices stay as they were on the day of the sale.",
     why: "If staff can change yesterday’s sale, the day’s cash never matches. The paper the buyer holds must match the system.",
     story: "A buyer paid half yesterday. Today they bring the rest. The cashier opens the invoice, types the rest, and posts the collection. The old lines do not change. A new payment line is added. The printed invoice still shows the same phones.",
     steps: [
@@ -653,7 +656,7 @@ h1("5. Words we use"),
 
   ...feature({
     title: "10.10 Goods from supplier",
-    what: "This page documents expected cartons from named suppliers in other countries and cities. It is also the trail if a product goes missing. You can see how many were supplied, how many were scanned, how many were sold on invoices (including today before close), and how many the system still says are In shop. Coming is not In shop until the boxes are checked. You can also send a failed unit, including a phone a customer returned to us, back to that supplier. This is not Shop to shop, and it is not Neighbor shop fill.",
+    what: "This page documents expected cartons from named suppliers in other countries and cities. Tap a bill status chip (Received, Part received, Waiting, and so on) to cut the list. Each bill shows when it was booked or received in Lagos time. It is also the trail if a product goes missing. You can see how many were supplied, how many were scanned, how many were sold on invoices (including today before close), and how many the system still says are In shop. Coming is not In shop until the boxes are checked. You can also send a failed unit, including a phone a customer returned to us, back to that supplier. This is not Shop to shop, and it is not Neighbor shop fill.",
     why: "If a phone leaves without a sale, the supplier bill is the first count. Expected minus recorded shows units that never got a number. Still in shop versus the shelf shows units that may have been sold off the books. Sold today helps you check before Close the day.",
     story: "A carton of twenty Tecno units is booked from Dubai to Iwo Road. Eighteen IMEIs are scanned. Two never appear. Later the shelf has sixteen In shop phones, but the bill still says eighteen In shop and two sold on invoices. The manager searches one missing IMEI, opens the bill, and sees it is still In shop on the system with no invoice. That is a missing product, not a typing job. They count stock before close.",
     steps: [
@@ -677,7 +680,7 @@ h1("5. Words we use"),
 
   ...feature({
     title: "10.11 Shop to shop",
-    what: "Use this when Iwo Road sends phones and accessories that already belong to Abu Twins to Challenge, or the other way. You do not tick phones on the screen. You upload a CSV with IMEI, serial, item code, name, quantity, color, and notes. The other Abu Twins shop must confirm the numbers that actually arrived. This is not a supplier carton and not a neighboring dealer.",
+    what: "Use this when Iwo Road sends phones and accessories that already belong to Abu Twins to Challenge, or the other way. Tap a stage (Waiting to leave, On the way, In that shop) to cut the list. Each send shows when it was booked, sent, or received in Lagos time. You do not tick phones on the screen. You upload a CSV with IMEI, serial, item code, name, quantity, color, and notes. The other Abu Twins shop must confirm the numbers that actually arrived. This is not a supplier carton and not a neighboring dealer.",
     why: "A rider can lose a phone. A long list is easier to check in Excel than on a till screen. If the other shop does not confirm, the system still knows the phones are on the way between our shops, not sold, and not on the old shelf.",
     story: "Iwo Road is sending two iPhones and twenty charger cords to Challenge. The manager downloads the In shop IMEI list, keeps the two iPhone lines, adds a cord line with item code and quantity 20, and uploads the CSV. Challenge opens Shop to shop, pastes the two IMEIs, and confirms. Those phones now show Challenge as the shop. Iwo Road no longer has them In shop.",
     steps: [
@@ -737,7 +740,7 @@ h1("5. Words we use"),
 
   ...feature({
     title: "10.14 Returns",
-    what: "A return starts from a sold IMEI. You say why it came back. A manager approves. Then you refund, give credit, send to repair, replace, or send the unit back to the supplier. The old invoice is not rewritten.",
+    what: "A return starts from a sold IMEI. You say why it came back. A manager approves. Then you refund, give credit, send to repair, replace, or send the unit back to the supplier. The old invoice is not rewritten. Tap Waiting, Approved, or Done to cut the list. Each card shows when it was asked, approved, or finished in Lagos time.",
     why: "If staff edit the old sale, the day’s cash lies. A return is a new story that points at the old invoice.",
     story: "A buyer returns a faulty Camon 30. The cashier enters the IMEI and the reason. The shop manager approves. The phone comes back to the shop or goes to repair. The original invoice still shows the sale.",
     steps: [
@@ -757,7 +760,7 @@ h1("5. Words we use"),
 
   ...feature({
     title: "10.15 Swaps",
-    what: "A swap is when a customer brings an old phone and takes another. You agree a trade value. A manager approves. You give the new phone, collect or pay the difference, and print an invoice.",
+    what: "A swap is when a customer brings an old phone and takes another. You agree a trade value. A manager approves. You give the new phone, collect or pay the difference, and print an invoice. Tap Waiting, Approved, or Done to cut the list. Each card shows when it started or finished in Lagos time.",
     why: "Swaps mix stock and money. If they stay in chat, the old phone disappears and the new phone is not paid for.",
     story: "A customer trades an iPhone 13 for an iPhone 15. The manager agrees the trade value. The customer pays the difference. The old phone is now shop stock. The new phone is sold on a new invoice.",
     steps: [
@@ -774,7 +777,7 @@ h1("5. Words we use"),
 
   ...feature({
     title: "10.16 Repairs",
-    what: "Repairs is the workshop book. Take the phone in, write the fault, wait for parts if needed, repair, then give it back or put it back in the shop.",
+    what: "Repairs is the workshop book. Take the phone in, write the fault, wait for parts if needed, repair, then give it back or put it back in the shop. Tap a stage (Take in, Find fault, Wait for parts, Repair, Give back) to cut the list. Each card shows when it was opened or finished in Lagos time.",
     why: "A phone in a drawer is not ‘in shop’ and is not ‘sold’. The workshop must have its own steps.",
     story: "A sold phone comes back with a charge fault. The engineer logs the IMEI, finds the fault, waits for a part, repairs it, and marks it delivered. The customer record stays on the job.",
     steps: [
@@ -887,7 +890,7 @@ h1("5. Words we use"),
 
   ...feature({
     title: "10.21 Expenses",
-    what: "Expenses is for fuel, rent, salary, and light bill. Staff ask. A manager says yes. Then money can leave.",
+    what: "Expenses is for fuel, rent, salary, and light bill. Staff ask. A manager says yes. Then money can leave. Tap All expenses, Waiting, or Approved to cut the list. Each row shows when it was asked and, if yes, when it was approved, in Lagos time.",
     why: "If anyone can tap cash for ‘fuel’ with no yes, the till will never match.",
     story: "The Challenge manager asks for fuel money. The request waits on Needs approval. The CEO says yes. Then the pay-out is recorded.",
     steps: [
@@ -904,7 +907,7 @@ h1("5. Words we use"),
 
   ...feature({
     title: "10.22 Needs approval",
-    what: "This is the yes-or-no desk. Swaps, refunds, expenses, and stock counts wait here.",
+    what: "This is the yes-or-no desk. Swaps, refunds, expenses, and stock counts wait here. Tap Waiting, Approved, or Rejected to cut the list. Each request shows when it was asked in Lagos time.",
     why: "One place is better than ten WhatsApp chats.",
     story: "The CEO opens Needs approval each morning. Three items wait. Two expenses are yes. One odd stock count is no until the manager recounts.",
     steps: [
@@ -999,7 +1002,7 @@ h1("5. Words we use"),
 
   ...feature({
     title: "10.27 Who did what",
-    what: "This is the diary of the system. It shows who did an important action, when, and what changed, in shop words. Nothing here is deleted. It also keeps line-down time, parked sales that posted, parked sales that sat too long, and parked sales that vanished from a device. Those last two are marked high risk. At the top it may show the books verdict. Click that banner to open Check the books.",
+    what: "This is the diary of the system. It shows who did an important action, when, and what changed, in shop words. The time uses Lagos words such as Today, 14:30. Nothing here is deleted. It also keeps line-down time, parked sales that posted, parked sales that sat too long, and parked sales that vanished from a device. Those last two are marked high risk. At the top it may show the books verdict. Click that banner to open Check the books.",
     why: "When two people disagree, the diary settles it. When cash sat on a phone with no invoice, the diary names the person and the device.",
     story: "A phone is missing. The records checker opens Who did what, finds the last shop-to-shop send, and sees who confirmed it at Challenge. The same morning an alert says a parked sale vanished. They filter high risk, open the parked sale line, and see who was signed in on that device when the queue disappeared.",
     steps: [
@@ -1538,6 +1541,7 @@ h1("5. Words we use"),
   body("Version 1.17 follows the opening stock Excel Abu Twins already uses. One file per shop, with PHONES, ACCESSORIES, SCREEN, and LAPTOPS. Staff pick the shop, upload that file, and the system adds the item names, books phones and laptops In shop, and sets piece counts. The older four-step sheets stay for later top-ups. The shop does not have to learn a new spreadsheet shape just to go live."),
   body("Version 1.18 adds Add one item to the shelf on Upload stock. Staff pick the shop, pick or add the item name, and scan or type each IMEI, serial, or piece count without opening a spreadsheet. The form clears after each save so the next unit is quick. The opening stock Excel stays for full shop loads. Older step-by-step sheet uploads move under Advanced so the page reads clearly for everyday work."),
   body("Version 1.19 ties every Upload stock load to a real Goods from supplier bill. Staff start a session with the supplier and paid or not paid, or pick those on the Excel upload. Each load gets a unique PO number and a submission value from cost. Unpaid bills feed Finance still owed. Phone IMEIs link back to the PO. The stock uploader can open Goods from supplier to read the bill, but still cannot post cash payments."),
+  body("Version 1.20 makes long lists easier to cut. Sales, Goods from supplier, Expenses, Shop to shop, Needs approval, Returns, Swaps, Repairs, Goods on the way, and Phone IMEIs have tap chips or stages with counts. Each list shows When in Lagos time, in plain words like Today, 14:30."),
 
   h1("17. Short close"),
   body("You now have one system for two Ibadan shops, ready for more shops in Nigeria. Goods can be booked before they arrive. Shelf stock and coming stock stay apart. Every sale prints an invoice. Each job sees only what Super Admin allows."),
