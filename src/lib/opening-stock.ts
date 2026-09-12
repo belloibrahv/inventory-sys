@@ -46,6 +46,8 @@ export type OpeningPlan = {
   units: OpeningUnitLine[]
   quantities: OpeningQtyLine[]
   problems: string[]
+  /** Rows left out in lenient mode, each saying why. Empty when strict. */
+  skipped: string[]
 }
 
 const CONDITIONS: Record<string, ProductCondition> = {
@@ -134,7 +136,19 @@ function money(raw: string) {
 function mapCondition(raw: string): ProductCondition | null {
   if (!raw) return "BRAND_NEW"
   const hit = CONDITIONS[keyName(raw)]
-  return hit ?? null
+  if (hit) return hit
+  // The sheet is filled in by hand, so the same condition arrives spelled a few
+  // ways: "BRAND NEW (N/A)" carries a note in brackets, "BRAN NEW" is a typo.
+  // Drop the bracketed note and try the shop's common misspellings before
+  // refusing the row and, with it, the whole workbook.
+  const withoutNote = raw.replace(/\([^)]*\)/g, " ")
+  const retry = CONDITIONS[keyName(withoutNote)]
+  if (retry) return retry
+  const words = keyName(withoutNote)
+  if (words.startsWith("bran_new") || words.startsWith("brand_new") || words.startsWith("bran_")) return "BRAND_NEW"
+  if (words.includes("uk")) return "UK_USED"
+  if (words.includes("open") && words.includes("box")) return "OPEN_BOX"
+  return null
 }
 
 function sheetHint(sheet: string): "phone" | "laptop" | "pieces" {
@@ -189,7 +203,16 @@ export function classifyOpeningIdentity(sheet: string, raw: string): OpeningIden
   }
 
   // Accessories / screens: small whole numbers are piece counts.
-  if (wholeNumber && asNumber >= 0) return { kind: "qty", value: asNumber }
+  //
+  // The ceiling matters. A tablet's 13-digit serial written on the accessories
+  // tab used to read as a stock quantity of seven trillion, which nobody would
+  // ever catch on a shelf count. A piece count in a phone shop is a handful to a
+  // few thousand; anything longer is a serial that landed on the wrong tab.
+  const PLAUSIBLE_PIECE_COUNT = 99_999
+  if (wholeNumber && asNumber >= 0 && asNumber <= PLAUSIBLE_PIECE_COUNT) {
+    return { kind: "qty", value: asNumber }
+  }
+  if (wholeNumber && asNumber > PLAUSIBLE_PIECE_COUNT) return { kind: "serial", value }
   if (value.length >= 4) return { kind: "serial", value }
   return { kind: "bad", reason: "put how many pieces, or a serial if this unit has one" }
 }
@@ -204,12 +227,32 @@ function productKey(draft: OpeningProductDraft) {
   ].join("|")
 }
 
-export function planOpeningStock(sheets: Array<{ sheet: string; grid: string[][] }>): OpeningPlan {
+export type OpeningOptions = {
+  /**
+   * Treat a blank cost or selling price as zero instead of rejecting the row.
+   *
+   * Off for the Upload stock screen, where refusing a priced-wrong carton is the
+   * right answer. On only for the one-off opening load, where a shop's existing
+   * accessories often have no cost written down and holding back the whole shelf
+   * would be worse than loading it with the price left to fill in.
+   */
+  allowMissingPrices?: boolean
+}
+
+export function planOpeningStock(
+  sheets: Array<{ sheet: string; grid: string[][] }>,
+  options: OpeningOptions = {}
+): OpeningPlan {
   const products = new Map<string, OpeningProductDraft>()
   const units: OpeningUnitLine[] = []
   const quantities: OpeningQtyLine[] = []
   const problems: string[] = []
+  const skipped: string[] = []
   const seenCodes = new Set<string>()
+  // In lenient mode a row we cannot read is set aside by name instead of the
+  // whole workbook being refused. Strict mode keeps refusing, which is right for
+  // a daily carton where a wrong number should stop the upload.
+  const setAside = options.allowMissingPrices ? skipped : problems
   const qtyByKey = new Map<string, OpeningQtyLine>()
 
   for (const { sheet, grid } of sheets) {
@@ -242,10 +285,9 @@ export function planOpeningStock(sheets: Array<{ sheet: string; grid: string[][]
         problems.push(`${label}: product name is missing.`)
         continue
       }
-      if (!brand) {
-        problems.push(`${label}: ${name} needs a brand.`)
-        continue
-      }
+      // An accessory often has no brand on the box. That is not an error; it is
+      // filed under a generic brand so the shop can still count and sell it.
+      const brandName = brand || "Unbranded"
 
       const condition = mapCondition(at(row, headers.condition))
       if (!condition) {
@@ -253,29 +295,35 @@ export function planOpeningStock(sheets: Array<{ sheet: string; grid: string[][]
         continue
       }
 
-      const costPrice = money(costRaw)
-      const minSell = money(minSellRaw)
-      if (!Number.isFinite(costPrice) || costPrice < 0) {
+      const rawCost = money(costRaw)
+      const rawMinSell = money(minSellRaw)
+      const costOk = Number.isFinite(rawCost) && rawCost >= 0
+      const sellOk = Number.isFinite(rawMinSell) && rawMinSell > 0
+
+      if (!costOk && !options.allowMissingPrices) {
         problems.push(`${label}: ${name} needs a unit cost price.`)
         continue
       }
-      if (!Number.isFinite(minSell) || minSell <= 0) {
+      if (!sellOk && !options.allowMissingPrices) {
         problems.push(`${label}: ${name} needs a minimum selling price above 0.`)
         continue
       }
 
+      const costPrice = costOk ? rawCost : 0
+      const minSell = sellOk ? rawMinSell : 0
+
       const identity = classifyOpeningIdentity(sheet, identityRaw)
       if (identity.kind === "bad") {
-        problems.push(`${label}: ${name}: ${identity.reason}.`)
+        setAside.push(`${label}: ${name}: ${identity.reason}.`)
         continue
       }
 
       const storage = at(row, headers.spec) || null
       const tracking: ProductTracking = identity.kind === "qty" ? "NONE" : identity.kind === "imei" ? "IMEI" : "SERIAL"
       const draft: OpeningProductDraft = {
-        sku: makeOpeningSku({ brand, name, storage: storage || "", condition }),
+        sku: makeOpeningSku({ brand: brandName, name, storage: storage || "", condition }),
         name,
-        brand,
+        brand: brandName,
         category: defaultCategory(sheet, at(row, headers.category)),
         tracking,
         condition,
@@ -317,7 +365,7 @@ export function planOpeningStock(sheets: Array<{ sheet: string; grid: string[][]
       }
 
       if (seenCodes.has(identity.value)) {
-        problems.push(`${label}: ${identity.value} is on this workbook twice.`)
+        setAside.push(`${label}: ${identity.value} is on this workbook twice, so it is counted once.`)
         continue
       }
       seenCodes.add(identity.value)
@@ -330,5 +378,6 @@ export function planOpeningStock(sheets: Array<{ sheet: string; grid: string[][]
     units,
     quantities,
     problems,
+    skipped,
   }
 }

@@ -75,8 +75,14 @@ const USERS: SeedUser[] = [
   { email: "bodija.engineer@abutwins.com", password: "engineer123", name: "Chidera Okafor", role: "ENGINEER", branchCode: "BOD" },
 ]
 
+const SEED_DEMO_USERS = process.env.SEED_DEMO_USERS === "true"
+
 async function main() {
-  console.log("Seeding Ibadan shops and role users...")
+  console.log(
+    SEED_DEMO_USERS
+      ? "Seeding Ibadan shops, settings and the demo role logins..."
+      : "Seeding Ibadan shops, settings and role permissions..."
+  )
 
   const branches = new Map<string, string>()
   for (const branch of BRANCHES) {
@@ -118,7 +124,17 @@ async function main() {
     })
   }
 
-  for (const user of USERS) {
+  // The demo logins (admin123, cashier123 and the rest) must never be created on
+  // a real shop's database. This script also sets up the branches, the company
+  // settings and the role permissions, and the deploy needs those on every boot,
+  // so only the user block is gated rather than the whole script.
+  //
+  // Set SEED_DEMO_USERS=true for a throwaway local or staging database.
+  if (!SEED_DEMO_USERS) {
+    console.log("Skipping demo logins. Set SEED_DEMO_USERS=true to create them on a throwaway database.")
+  }
+
+  for (const user of SEED_DEMO_USERS ? USERS : []) {
     const email = user.email.toLowerCase()
     const branchId = user.branchCode ? branches.get(user.branchCode) ?? null : null
     const existing = await prisma.user.findUnique({ where: { email } })
