@@ -27,20 +27,32 @@ export function UploadStockWizard({
   shops,
   suppliers,
   products,
+  defaultInvoiceNumber,
+  defaultUploadDate,
 }: {
   shops: Shop[]
   suppliers: Supplier[]
   brands: Brand[]
   categories: Category[]
   products: Product[]
+  /**
+   * Both of these are worked out on the server and handed down.
+   *
+   * They used to be worked out during render with Date.now(), Math.random() and
+   * the browser clock, so the server wrote one bill number into the HTML and the
+   * browser drew a different one a moment later, and React threw the whole tree
+   * away. The number only has to change per visit, not per render, so the server
+   * is the right place to make it.
+   */
+  defaultInvoiceNumber: string
+  defaultUploadDate: string
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
-  const defaultPo = generateDocNumber("PO")
-  
+
   // Header state
-  const [invoiceNumber, setInvoiceNumber] = useState(defaultPo)
-  const [uploadDate, setUploadDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [invoiceNumber, setInvoiceNumber] = useState(defaultInvoiceNumber)
+  const [uploadDate, setUploadDate] = useState(defaultUploadDate)
   const [branchId, setBranchId] = useState(shops[0]?.id || "")
   const [supplierMode, setSupplierMode] = useState<"existing" | "new">(suppliers.length ? "existing" : "new")
   const [supplierId, setSupplierId] = useState(suppliers[0]?.id || "")

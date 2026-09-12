@@ -95,12 +95,13 @@ const PAGES: Array<
     needAction: "action.upload",
     what: "Put stock on the shelf with a supplier trail. Start an upload bill with the supplier and paid or not paid, then add one phone or cord at a time, or load many from the Abu Twins opening stock Excel. Each load gets a unique PO number, a submission value from cost, and shows on Goods from supplier and Finance if unpaid.",
     doThis: [
-      "For one or a few units, start an upload bill: pick the shop, the supplier, and whether it is paid.",
+      "Upload stock is three screens. Pick the one you need from the tab strip at the top, or from the Upload stock fold in the menu.",
+      "SUPPLIER BILL, for one or a few units: pick the shop, the supplier, and whether it is paid.",
       "Add each IMEI, serial, or piece count under that same bill. The form clears for the next unit. Close the bill when the carton is finished.",
-      "For a full shop count, fill the opening stock Excel one shop at a time, pick the supplier and payment status, and upload.",
+      "OPENING STOCK SHEET, for a full shop count: fill the opening stock Excel one shop at a time, pick the supplier and payment status, and upload.",
       "PHONES: one row per phone with the IMEI. LAPTOPS: one row per laptop with the serial. ACCESSORIES and SCREEN: how many pieces.",
       "Open the PO on Goods from supplier to confirm the submission value and paid or not paid.",
-      "Use Advanced sheet uploads only when the item list is already on the system and you are topping up from CSV.",
+      "OLD EXCEL & CSV: use this only when the item list is already on the system and you are topping up from a plain sheet.",
     ],
     watch: [
       "Nothing from Excel is saved until the whole file has been read. One bad line means nothing is loaded.",
@@ -112,7 +113,7 @@ const PAGES: Array<
       "Do not invent an IMEI because the box is missing.",
       "This does not sell anything. Marking paid on upload does not write a cash or bank entry. Accounts still own the money trail when they pay later.",
     ],
-    lookup: ["upload", "excel", "opening stock", "phones", "accessories", "screen", "laptops", "imei", "bulk", "import", "manual", "one at a time", "serial", "add one", "supplier", "paid", "invoice", "PO", "submission value"],
+    lookup: ["upload", "excel", "opening stock", "sheets", "csv", "supplier bill", "phones", "accessories", "screen", "laptops", "imei", "bulk", "import", "manual", "one at a time", "serial", "add one", "supplier", "paid", "invoice", "PO", "submission value"],
   },
   {
     id: "products",
@@ -123,9 +124,9 @@ const PAGES: Array<
     doThis: [
       "Search by item code or model.",
       "If you can add items, set cost, lowest price, and selling price. Pick the tracking that matches the thing: phones use IMEI, some accessories use serial, cords use no number.",
-      "You can upload many items from Excel or CSV if that button is on your page. That adds names, not shelf stock.",
-      "To change many selling prices at once, tick any mix of phones and accessories, type each new selling price, then click Update selected prices.",
-      "Warranty days for one item can be changed on the same page.",
+      "Adding items has its own screens under Phones & items: Add one item for a single model, Add from a sheet for a long list. A sheet adds names, not shelf stock.",
+      "To change many selling prices at once, tick any mix of phones and accessories on the price list, type each new selling price, then click Update selected prices.",
+      "Warranty days live on their own screen, Phones & items then Warranty days.",
     ],
     watch: [
       "One list keeps names and prices the same in every shop.",
@@ -133,7 +134,7 @@ const PAGES: Array<
       "This is not a carton sale. You still sell by the unit. Bulk here means many prices in one save.",
     ],
     cannot: ["This page does not sell a phone. Use Sell now."],
-    lookup: ["product", "price", "sku", "item code", "upload", "bulk", "update selected prices"],
+    lookup: ["product", "price", "sku", "item code", "upload", "bulk", "warranty", "add one item", "update selected prices"],
   },
   {
     id: "imei",
@@ -144,7 +145,7 @@ const PAGES: Array<
     doThis: [
       "Type an IMEI or serial in the search, or leave it empty and search.",
       "Open a number to see the shop, the invoice, the buyer, and the warranty days left.",
-      "If you can receive goods, you can add a phone that is already in your hands.",
+      "If you can receive goods, use Stock intake to add a phone that is already in your hands. It sits under Phone numbers (IMEI) in the menu.",
     ],
     watch: [
       "Coming phones are not for sale on Sell now.",
@@ -571,13 +572,14 @@ const PAGES: Array<
     needAction: "action.settings",
     what: "Shop name, phone, address, and email that print on invoices, books, reports, and this manual. Also the low stock alert, default warranty days, and whether cashiers may sell below the lowest price. The main admin can download a shop backup.",
     doThis: [
-      "Read the invoice header values.",
+      "Settings is three screens. Shop details holds what prints on an invoice. Selling rules holds the lowest-price rule, the low stock warning, and warranty days. Backup is the download.",
+      "Read the invoice header values on Shop details.",
       "Change them only if the main admin and the CEO agree.",
-      "The main admin may download a shop backup and keep that file off this computer.",
+      "The main admin may download a shop backup on the Backup screen and keep that file off this computer.",
     ],
     watch: ["The next printed invoice and the next books PDF use these values. A backup does not include passwords."],
     cannot: ["CEO can read settings but cannot change them. CEO cannot download the shop backup."],
-    lookup: ["settings", "address", "phone", "lowest price", "backup"],
+    lookup: ["settings", "shop details", "selling rules", "address", "phone", "lowest price", "backup"],
   },
   {
     id: "account",

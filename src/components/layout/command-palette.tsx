@@ -6,7 +6,8 @@ import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { useUI } from "@/store/ui"
 import { globalSearch } from "@/app/actions/search"
-import { navGroups } from "@/components/layout/nav"
+import { navDestinations } from "@/components/layout/nav"
+import { pathIsAllowed } from "@/lib/access-path"
 
 type Result = {
   kind: string
@@ -55,8 +56,12 @@ export function CommandPalette({ allowedHrefs = [] }: { allowedHrefs?: string[] 
     router.push(href)
   }
 
-  const pages = navGroups.flatMap((group) => group.items).filter((item) =>
-    allowedHrefs.includes(item.href) && item.name.toLowerCase().includes(query.toLowerCase())
+  // Sections count as destinations too, so typing "opening" finds the opening
+  // stock sheet without knowing it lives under Upload stock.
+  const pages = navDestinations.filter(
+    (item) =>
+      pathIsAllowed(item.href, allowedHrefs) &&
+      `${item.parent ?? ""} ${item.name}`.toLowerCase().includes(query.toLowerCase())
   )
 
   return (
@@ -78,9 +83,10 @@ export function CommandPalette({ allowedHrefs = [] }: { allowedHrefs?: string[] 
                 <button
                   key={item.href}
                   onClick={() => go(item.href)}
-                  className="flex w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-muted"
+                  className="flex w-full flex-col rounded-xl px-3 py-2 text-left hover:bg-muted"
                 >
-                  {item.name}
+                  <span className="text-sm">{item.name}</span>
+                  {item.parent ? <span className="text-xs text-muted-foreground">in {item.parent}</span> : null}
                 </button>
               ))}
             </div>

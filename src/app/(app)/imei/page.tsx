@@ -1,11 +1,8 @@
 import { getImeiRecords, getImeiStatusCounts } from "@/app/actions/imei"
-import { getProducts } from "@/app/actions/catalog"
-import { getBranches, getSuppliers } from "@/app/actions/parties"
 import { PageHeader } from "@/components/shared"
 import { WorkflowSteps } from "@/components/workflow-steps"
 import { FilterChips } from "@/components/filter-chips"
 import { Button } from "@/components/ui/button"
-import { ImeiIntakeForm } from "@/app/(app)/imei/intake-form"
 import { ImeiTable } from "@/app/(app)/imei/imei-table"
 import { Input } from "@/components/ui/input"
 import { IMEI_LIFE } from "@/lib/imei-life"
@@ -26,12 +23,9 @@ export default async function ImeiPage({
   searchParams: Promise<{ q?: string; status?: string; life?: string; when?: string }>
 }) {
   const { q, status, life, when } = await searchParams
-  const [records, counts, branches, suppliers, products] = await Promise.all([
+  const [records, counts] = await Promise.all([
     getImeiRecords(q, status, life, when),
     getImeiStatusCounts(),
-    getBranches(),
-    getSuppliers(),
-    getProducts(),
   ])
 
   const activePath = buildHref({ q, status, life, when })
@@ -50,7 +44,7 @@ export default async function ImeiPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Phone numbers (IMEI)"
+        title="All phones"
         description="Every phone has a life: received, in shop, sold or moved, returned or repaired. Tap a stage to see only those phones. Time is Lagos time."
       />
 
@@ -103,29 +97,15 @@ export default async function ImeiPage({
         />
       </div>
 
-      <div className="page-split">
-        <div className="surface-card overflow-hidden">
-          <form className="grid gap-2 border-b border-border p-4 md:grid-cols-[1fr_auto]">
-            <Input name="q" defaultValue={q} placeholder="Search IMEI, serial, or item name" />
-            {status ? <input type="hidden" name="status" value={status} /> : null}
-            {life && !status ? <input type="hidden" name="life" value={life} /> : null}
-            {when ? <input type="hidden" name="when" value={when} /> : null}
-            <Button type="submit">Search</Button>
-          </form>
-          <ImeiTable records={records} resetKey={`${q ?? ""}|${status ?? ""}|${life ?? ""}|${when ?? ""}`} />
-        </div>
-        <div className="surface-card p-5">
-          <h3 className="mb-4 font-semibold">Stock intake</h3>
-          <p className="mb-4 text-sm text-muted-foreground">
-            Put a phone that is already in your hands onto the shelf. It will show under{" "}
-            <span className="font-medium text-foreground">In shop</span> with today&apos;s time.
-          </p>
-          <ImeiIntakeForm
-            products={products.map((product) => ({ id: product.id, name: product.name }))}
-            branches={branches.map((branch) => ({ id: branch.id, name: branch.name }))}
-            suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name }))}
-          />
-        </div>
+      <div className="surface-card overflow-hidden">
+        <form className="grid gap-2 border-b border-border p-4 md:grid-cols-[1fr_auto]">
+          <Input name="q" defaultValue={q} placeholder="Search IMEI, serial, or item name" />
+          {status ? <input type="hidden" name="status" value={status} /> : null}
+          {life && !status ? <input type="hidden" name="life" value={life} /> : null}
+          {when ? <input type="hidden" name="when" value={when} /> : null}
+          <Button type="submit">Search</Button>
+        </form>
+        <ImeiTable records={records} resetKey={`${q ?? ""}|${status ?? ""}|${life ?? ""}|${when ?? ""}`} />
       </div>
     </div>
   )

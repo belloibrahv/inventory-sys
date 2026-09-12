@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
 import { CommandPalette } from "@/components/layout/command-palette"
 import { AccessGate } from "@/components/layout/access-gate"
+import { SectionTabs } from "@/components/layout/section-tabs"
 import { pathIsAllowed } from "@/lib/access-path"
 import { OfflineBanner } from "@/components/offline-banner"
 import { ShopCalculator } from "@/components/shop-calculator"
@@ -57,6 +58,7 @@ export function AppShell({
           <div className="pt-4">
             <OfflineBanner />
           </div>
+          {allowed ? <SectionTabs allowedHrefs={allowedHrefs} /> : null}
           <main className="space-y-5 py-5 md:py-6">{allowed ? children : null}</main>
         </div>
       </div>

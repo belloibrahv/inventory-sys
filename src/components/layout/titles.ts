@@ -1,7 +1,14 @@
 export const pageTitles: Record<string, string> = {
   "/dashboard": "Home",
+  "/uploads": "Upload stock",
+  "/uploads/opening-stock": "Opening stock sheet",
+  "/uploads/sheets": "Old Excel & CSV sheets",
   "/products": "Phones & items",
+  "/products/new": "Add one item",
+  "/products/bulk": "Add from a sheet",
+  "/products/warranty": "Warranty days",
   "/imei": "Phone numbers (IMEI)",
+  "/imei/intake": "Stock intake",
   "/inventory": "Shop stock",
   "/incoming": "Goods on the way",
   "/sales": "Sales",
@@ -30,6 +37,8 @@ export const pageTitles: Record<string, string> = {
   "/audit/books": "Check the books",
   "/notifications": "Alerts",
   "/settings": "Settings",
+  "/settings/rules": "Selling rules",
+  "/settings/backup": "Backup",
 }
 
 export function titleFor(pathname: string) {

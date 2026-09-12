@@ -1,65 +1,33 @@
-import { getSettings, saveSetting } from "@/app/actions/finance"
-import { BackupButton } from "@/app/(app)/settings/backup-button"
-import { ActionForm } from "@/components/action-form"
+import { getSettings } from "@/app/actions/finance"
 import { PageHeader } from "@/components/shared"
-import { Input } from "@/components/ui/input"
-import { Select } from "@/components/ui/select"
-import { can, isSuperAdmin } from "@/lib/permissions"
+import { can } from "@/lib/permissions"
 import { requireUser } from "@/lib/session"
+import { SettingCards, isCompanySetting } from "./setting-cards"
 
-const labels: Record<string, string> = {
-  "company.name": "Shop name on invoices",
-  "company.product": "System name",
-  "company.phone": "Phone on invoices",
-  "company.address": "Address on invoices",
-  "company.email": "Email on invoices",
-  "company.currency": "Currency",
-  "sales.allow_below_minimum": "Can cashiers sell under the lowest price?",
-  "inventory.low_stock_threshold": "Warn me when an item drops to this many",
-  "sales.warranty_days": "Warranty days for a new item",
-}
-
+/**
+ * Settings, section one: the details that get printed.
+ *
+ * Company details, selling rules and the backup download used to be one long
+ * scroll. Changing the shop phone number and deciding whether cashiers may go
+ * under the lowest price are not the same kind of decision, and the second one
+ * should not be two screens down from the first by accident.
+ */
 export default async function SettingsPage() {
   const [me, settings] = await Promise.all([requireUser(), getSettings()])
   const canEdit = await can(me.role, "action.settings")
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Settings"
-        description="These settings change receipts, selling rules, and low stock alerts for every shop."
+        title="Shop details"
+        description="The name, phone, address and currency printed on every receipt and invoice, in every shop."
       />
-      <div className="grid gap-4 md:grid-cols-2">
-        {settings.map((setting) => (
-          <div key={setting.id} className="surface-card p-5">
-            <p className="text-sm font-medium">{labels[setting.key] ?? setting.key}</p>
-            <p className="mb-3 text-xs text-muted-foreground">{setting.description}</p>
-            {canEdit ? (
-            <ActionForm action={saveSetting} submit="Update" className="space-y-3">
-              <input type="hidden" name="key" value={setting.key} />
-              {setting.key === "sales.allow_below_minimum" ? (
-                <Select name="value" defaultValue={setting.value}>
-                  <option value="false">No. Only the main admin can sell under the lowest price</option>
-                  <option value="true">Yes. Cashiers can sell under the lowest price</option>
-                </Select>
-              ) : (
-                <Input name="value" defaultValue={setting.value} />
-              )}
-            </ActionForm>
-            ) : (
-              <p className="text-sm font-medium">{setting.value}</p>
-            )}
-          </div>
-        ))}
-      </div>
-      {isSuperAdmin(me.role) ? (
-        <div className="surface-card p-5">
-          <h3 className="mb-2 font-semibold">Shop backup</h3>
-          <p className="mb-3 text-sm text-muted-foreground">
-            Downloads a copy of shops, staff emails (not passwords), stock, IMEIs, sales, and purchases. Keep that file off this computer.
-          </p>
-          <BackupButton />
+      {!canEdit ? (
+        <div className="surface-card p-5 text-sm text-muted-foreground">
+          You can read these. Only staff allowed to change shop settings can edit them.
         </div>
       ) : null}
+      <SettingCards settings={settings.filter((row) => isCompanySetting(row.key))} canEdit={canEdit} />
     </div>
   )
 }
