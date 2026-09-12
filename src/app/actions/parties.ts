@@ -17,7 +17,11 @@ export async function getCustomers(search?: string) {
         ? { OR: [{ name: { contains: search } }, { phone: { contains: search } }] }
         : {}),
     },
-    include: { branch: true, _count: { select: { sales: true, returns: true } } },
+    include: {
+      branch: true,
+      sales: { select: { totalAmount: true, paidAmount: true } },
+      _count: { select: { sales: true, returns: true } },
+    },
     orderBy: { updatedAt: "desc" },
   })
 }

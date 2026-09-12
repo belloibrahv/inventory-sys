@@ -78,9 +78,19 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
           <p className="text-sm text-muted-foreground">If the shelf has fewer, count stock. Do not type a new number by hand.</p>
         </div>
       </div>
-      <div className="surface-card p-5">
-        <p className="text-sm text-muted-foreground">Still owed to suppliers</p>
-        <p className="text-2xl font-semibold">{formatCurrency(owed)}</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="surface-card p-5">
+          <p className="text-xs font-medium uppercase text-muted-foreground">Total Paid to Suppliers</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+            {formatCurrency(purchases.reduce((sum, row) => sum + money(row.paidAmount), 0))}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">Disbursements recorded on these bills</p>
+        </div>
+        <div className="surface-card p-5">
+          <p className="text-xs font-medium uppercase text-muted-foreground">Still Owed to Suppliers</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-amber-600 dark:text-amber-400">{formatCurrency(owed)}</p>
+          <p className="text-xs text-muted-foreground mt-1">Outstanding supplier payables</p>
+        </div>
       </div>
       <div className="page-split">
         <div className="space-y-3">
@@ -98,6 +108,10 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
               .join(", ")
             const comingLots = purchase.incomingLots.filter((lot) => lot.status === "COMING").length
             const { trace } = purchase
+            const totalVal = money(purchase.totalAmount)
+            const paidVal = money(purchase.paidAmount)
+            const owedVal = Math.max(0, totalVal - paidVal)
+
             return (
               <Link key={purchase.id} href={`/purchases/${purchase.id}`} className="surface-card block p-5 hover:bg-muted/40">
                 <div className="flex items-start justify-between gap-3">
@@ -138,11 +152,11 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
                   </div>
                   <StatusBadge value={purchase.status} />
                 </div>
-                <p className="mt-3 text-sm">
-                  Bill {formatCurrency(money(purchase.totalAmount))}
-                  {" · owed "}
-                  {formatCurrency(money(purchase.totalAmount) - money(purchase.paidAmount))}
-                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-4 text-sm pt-2 border-t border-border/60">
+                  <span>Bill Total: <strong className="font-mono">{formatCurrency(totalVal)}</strong></span>
+                  <span>Amount Paid: <strong className="font-mono text-emerald-600 dark:text-emerald-400">{formatCurrency(paidVal)}</strong></span>
+                  <span>Still Owed: <strong className="font-mono text-amber-600 dark:text-amber-400">{formatCurrency(owedVal)}</strong></span>
+                </div>
               </Link>
             )
           })}

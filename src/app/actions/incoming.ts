@@ -160,85 +160,158 @@ export async function createIncomingLot(formData: FormData) {
   return { success: true }
 }
 
-export async function markIncomingArrived(formData: FormData) {
+export type ReceiveItemAdjustment = {
+  itemId: string
+  receivedQuantity: number
+  confirmedIdentities?: string[]
+}
+
+export type PreviewAndReceivePayload = {
+  lotId: string
+  notes?: string
+  items: ReceiveItemAdjustment[]
+}
+
+/**
+ * Preview and edit incoming goods before confirming arrival into shop stock.
+ * Handles discrepancies (e.g., expected 4, received 2) and updates IMEIs accordingly.
+ */
+export async function previewAndReceiveIncoming(payload: PreviewAndReceivePayload) {
   const user = await requireUser()
   if (!(await canBookIncoming(user.role))) return { error: "You cannot mark goods as arrived." }
-  const id = String(formData.get("id") || "")
-  const lot = await prisma.incomingLot.findUnique({
-    where: { id },
-    include: { items: true },
-  })
-  if (!lot || lot.status !== "COMING") return { error: "This list is not waiting to arrive." }
 
-  await prisma.$transaction(async (tx) => {
-    for (const item of lot.items) {
-      if (item.identity === "NONE") {
-        await tx.inventory.upsert({
-          where: { productId_branchId: { productId: item.productId, branchId: lot.branchId } },
-          update: {
-            incomingQty: { decrement: item.quantity },
-            quantity: { increment: item.quantity },
-          },
-          create: { productId: item.productId, branchId: lot.branchId, quantity: item.quantity, incomingQty: 0 },
-        })
-        continue
-      }
-      await tx.imeiRecord.updateMany({
-        where: { branchId: lot.branchId, productId: item.productId, status: "INCOMING", notes: { contains: lot.lotNumber } },
-        data: {
-          status: "IN_STOCK",
-          notes: `Arrived from ${lot.lotNumber}`,
-          ...(lot.purchaseId ? { purchaseId: lot.purchaseId } : {}),
-        },
-      })
-      await tx.inventory.upsert({
-        where: { productId_branchId: { productId: item.productId, branchId: lot.branchId } },
-        update: {
-          incomingQty: { decrement: item.quantity },
-          quantity: { increment: item.quantity },
-        },
-        create: { productId: item.productId, branchId: lot.branchId, quantity: item.quantity, incomingQty: 0 },
-      })
-    }
-    await tx.incomingLot.update({
-      where: { id: lot.id },
-      data: { status: IncomingStatus.ARRIVED },
-    })
-    if (lot.purchaseId) {
-      const purchase = await tx.purchase.findUnique({
-        where: { id: lot.purchaseId },
-        include: { items: true },
-      })
-      if (purchase) {
-        for (const incoming of lot.items) {
-          const line =
-            purchase.items.find((item) => item.productId === incoming.productId) ?? purchase.items[0]
-          if (!line) continue
-          const receivedQty = Math.min(line.quantity, line.receivedQty + incoming.quantity)
-          await tx.purchaseItem.update({ where: { id: line.id }, data: { receivedQty } })
-          line.receivedQty = receivedQty
-        }
-        const done = purchase.items.every((item) => item.receivedQty >= item.quantity)
-        await tx.purchase.update({
-          where: { id: purchase.id },
-          data: {
-            status: done ? "RECEIVED" : "PARTIAL_RECEIVED",
-            receivedDate: done ? new Date() : purchase.receivedDate,
-          },
-        })
-      }
-    }
-    await tx.auditLog.create({
-      data: {
-        userId: user.id,
-        action: "UPDATE",
-        entityType: "IncomingLot",
-        entityId: lot.lotNumber,
-        newValue: JSON.stringify({ status: "ARRIVED" }),
-        branchId: lot.branchId,
-      },
-    })
+  const lot = await prisma.incomingLot.findUnique({
+    where: { id: payload.lotId },
+    include: { items: { include: { product: true } }, branch: true },
   })
+  if (!lot || lot.status !== "COMING") return { error: "This shipment is not in COMING status." }
+
+  const itemMap = new Map(payload.items.map((it) => [it.itemId, it]))
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      for (const item of lot.items) {
+        const adjustment = itemMap.get(item.id)
+        const receivedQty = adjustment ? Math.max(0, adjustment.receivedQuantity) : item.quantity
+        const confirmedIds = (adjustment?.confirmedIdentities || []).map((id) => id.trim()).filter(Boolean)
+
+        if (item.identity === "NONE") {
+          // Decrement all incoming, increment only actually received quantity
+          await tx.inventory.upsert({
+            where: { productId_branchId: { productId: item.productId, branchId: lot.branchId } },
+            update: {
+              incomingQty: { decrement: item.quantity },
+              quantity: { increment: receivedQty },
+            },
+            create: { productId: item.productId, branchId: lot.branchId, quantity: receivedQty, incomingQty: 0 },
+          })
+          await tx.incomingItem.update({
+            where: { id: item.id },
+            data: { quantity: receivedQty },
+          })
+        } else {
+          // For IMEI / Serial:
+          // Fetch existing incoming IMEIs for this lot item
+          const existingImeis = await tx.imeiRecord.findMany({
+            where: {
+              branchId: lot.branchId,
+              productId: item.productId,
+              status: "INCOMING",
+              notes: { contains: lot.lotNumber },
+            },
+          })
+
+          const confirmedSet = new Set(confirmedIds.length ? confirmedIds : existingImeis.map((r) => r.imei1))
+
+          // Move confirmed IMEIs to IN_STOCK
+          for (const imeiRec of existingImeis) {
+            if (confirmedSet.has(imeiRec.imei1) || (imeiRec.serialNumber && confirmedSet.has(imeiRec.serialNumber))) {
+              await tx.imeiRecord.update({
+                where: { id: imeiRec.id },
+                data: {
+                  status: "IN_STOCK",
+                  notes: `Arrived from ${lot.lotNumber}`,
+                  ...(lot.purchaseId ? { purchaseId: lot.purchaseId } : {}),
+                },
+              })
+            } else {
+              // Unconfirmed / missing units removed from incoming
+              await tx.imeiRecord.delete({
+                where: { id: imeiRec.id },
+              })
+            }
+          }
+
+          const actualReceived = confirmedIds.length > 0 ? confirmedIds.length : receivedQty
+
+          await tx.inventory.upsert({
+            where: { productId_branchId: { productId: item.productId, branchId: lot.branchId } },
+            update: {
+              incomingQty: { decrement: item.quantity },
+              quantity: { increment: actualReceived },
+            },
+            create: { productId: item.productId, branchId: lot.branchId, quantity: actualReceived, incomingQty: 0 },
+          })
+
+          await tx.incomingItem.update({
+            where: { id: item.id },
+            data: {
+              quantity: actualReceived,
+              identifiers: confirmedIds.length ? confirmedIds.join("\n") : item.identifiers,
+            },
+          })
+        }
+      }
+
+      await tx.incomingLot.update({
+        where: { id: lot.id },
+        data: {
+          status: IncomingStatus.ARRIVED,
+          notes: payload.notes ? `${lot.notes ? `${lot.notes} · ` : ""}${payload.notes}` : lot.notes,
+        },
+      })
+
+      // Update linked purchase if exists
+      if (lot.purchaseId) {
+        const purchase = await tx.purchase.findUnique({
+          where: { id: lot.purchaseId },
+          include: { items: true },
+        })
+        if (purchase) {
+          for (const incoming of lot.items) {
+            const adjustment = itemMap.get(incoming.id)
+            const actualQty = adjustment ? adjustment.receivedQuantity : incoming.quantity
+            const line = purchase.items.find((it) => it.productId === incoming.productId) ?? purchase.items[0]
+            if (!line) continue
+            const newReceived = Math.min(line.quantity, line.receivedQty + actualQty)
+            await tx.purchaseItem.update({ where: { id: line.id }, data: { receivedQty: newReceived } })
+            line.receivedQty = newReceived
+          }
+          const done = purchase.items.every((it) => it.receivedQty >= it.quantity)
+          await tx.purchase.update({
+            where: { id: purchase.id },
+            data: {
+              status: done ? "RECEIVED" : "PARTIAL_RECEIVED",
+              receivedDate: done ? new Date() : purchase.receivedDate,
+            },
+          })
+        }
+      }
+
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "UPDATE",
+          entityType: "IncomingLot",
+          entityId: lot.lotNumber,
+          newValue: JSON.stringify({ status: "ARRIVED", previewAdjusted: true }),
+          branchId: lot.branchId,
+        },
+      })
+    })
+  } catch (error) {
+    return { error: shopError(error, "Could not confirm arrival of these goods.") }
+  }
 
   revalidatePath("/incoming")
   revalidatePath("/inventory")
@@ -247,6 +320,7 @@ export async function markIncomingArrived(formData: FormData) {
   revalidatePath("/purchases")
   return { success: true }
 }
+
 
 export async function getOpenPurchases() {
   const user = await requireUser()

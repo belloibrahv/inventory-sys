@@ -13,35 +13,129 @@ import { generateDocNumber, money } from "@/lib/utils"
 export async function getFinance() {
   const user = await requireUser()
   if (!(await can(user.role, "view.finance")) && !(await can(user.role, "view.expenses"))) {
-    return { entries: [], expenses: [], debtors: [], creditors: [], inflow: 0, outflow: 0, net: 0 }
+    return {
+      revenue: 0,
+      expenditure: 0,
+      supplierPayments: 0,
+      netCashFlow: 0,
+      cashAccount: { balance: 0, entries: [] },
+      bankAccount: { balance: 0, entries: [] },
+      entries: [],
+      expenses: [],
+      debtors: [],
+      creditors: [],
+    }
   }
   const branchId = await viewBranchFilter(user)
   const where = branchId ? { branchId } : {}
-  const [entries, expenses, debtors, purchases] = await Promise.all([
-    prisma.financeEntry.findMany({
-      where,
-      include: { branch: true },
-      orderBy: { createdAt: "desc" },
-      take: 50,
+
+  const [sales, expenses, purchases, entries, debtors] = await Promise.all([
+    prisma.sale.findMany({
+      where: { ...where, status: "COMPLETED" },
+      include: { branch: true, customer: true },
+      orderBy: { saleDate: "desc" },
     }),
     prisma.expense.findMany({
       where,
       include: { branch: true, user: true },
       orderBy: { date: "desc" },
     }),
+    prisma.purchase.findMany({
+      where: { ...where, status: { not: "CANCELLED" } },
+      include: { supplier: true, branch: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.financeEntry.findMany({
+      where,
+      include: { branch: true },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
     prisma.customer.findMany({
       where: { ...(branchId ? { branchId } : {}), currentBalance: { gt: 0 } },
       include: { branch: true },
       orderBy: { currentBalance: "desc" },
     }),
-    prisma.purchase.findMany({
-      where: { ...(branchId ? { branchId } : {}), status: { not: "CANCELLED" } },
-      include: { supplier: true, branch: true },
-    }),
   ])
 
-  const inflow = entries.filter((row) => row.type === "INCOME").reduce((sum, row) => sum + money(row.amount), 0)
-  const outflow = entries.filter((row) => row.type === "EXPENSE").reduce((sum, row) => sum + money(row.amount), 0)
+  // 1. Core Accounting Totals
+  const revenue = sales.reduce((sum, s) => sum + money(s.paidAmount), 0)
+  const cashRevenue = sales.filter((s) => s.paymentMethod === "CASH").reduce((sum, s) => sum + money(s.paidAmount), 0)
+  const bankRevenue = sales.filter((s) => s.paymentMethod === "TRANSFER" || s.paymentMethod === "POS").reduce((sum, s) => sum + money(s.paidAmount), 0)
+
+  const expenditure = expenses.reduce((sum, e) => sum + money(e.amount), 0)
+  const supplierPayments = purchases.reduce((sum, p) => sum + money(p.paidAmount), 0)
+  const netCashFlow = revenue - expenditure - supplierPayments
+
+  // 2. Account Ledgers
+  const cashEntries: Array<{
+    id: string
+    date: Date
+    branch: string
+    type: "IN" | "OUT"
+    category: string
+    description: string
+    amount: number
+  }> = []
+
+  const bankEntries: Array<{
+    id: string
+    date: Date
+    branch: string
+    type: "IN" | "OUT"
+    category: string
+    description: string
+    amount: number
+  }> = []
+
+  for (const sale of sales) {
+    const isCash = sale.paymentMethod === "CASH"
+    const entry = {
+      id: sale.id,
+      date: sale.saleDate,
+      branch: sale.branch.name,
+      type: "IN" as const,
+      category: `Sales Revenue (${sale.paymentMethod})`,
+      description: `Sale ${sale.invoiceNumber} - ${sale.customer?.name || "Walk-in"}`,
+      amount: money(sale.paidAmount),
+    }
+    if (isCash) cashEntries.push(entry)
+    else bankEntries.push(entry)
+  }
+
+  for (const exp of expenses) {
+    cashEntries.push({
+      id: exp.id,
+      date: exp.date,
+      branch: exp.branch.name,
+      type: "OUT" as const,
+      category: `Expense: ${exp.category}`,
+      description: `${exp.expenseNumber} - ${exp.description}`,
+      amount: money(exp.amount),
+    })
+  }
+
+  for (const po of purchases) {
+    if (money(po.paidAmount) > 0) {
+      bankEntries.push({
+        id: po.id,
+        date: po.receivedDate || po.createdAt,
+        branch: po.branch.name,
+        type: "OUT" as const,
+        category: "Supplier Payment",
+        description: `PO ${po.invoiceNumber} payment to ${po.supplier.name}`,
+        amount: money(po.paidAmount),
+      })
+    }
+  }
+
+  // Sort ledgers by date desc
+  cashEntries.sort((a, b) => b.date.getTime() - a.date.getTime())
+  bankEntries.sort((a, b) => b.date.getTime() - a.date.getTime())
+
+  const cashBalance = cashRevenue - expenditure
+  const bankBalance = bankRevenue - supplierPayments
+
   const creditors = Object.values(
     purchases.reduce<Record<string, { id: string; name: string; owed: number }>>((acc, row) => {
       const due = money(row.totalAmount) - money(row.paidAmount)
@@ -52,7 +146,20 @@ export async function getFinance() {
     }, {})
   ).sort((a, b) => b.owed - a.owed)
 
-  return { entries, expenses, debtors, creditors, inflow, outflow, net: inflow - outflow }
+  return {
+    revenue,
+    expenditure,
+    supplierPayments,
+    netCashFlow,
+    cashRevenue,
+    bankRevenue,
+    cashAccount: { balance: cashBalance, entries: cashEntries },
+    bankAccount: { balance: bankBalance, entries: bankEntries },
+    entries,
+    expenses,
+    debtors,
+    creditors,
+  }
 }
 
 export async function createExpense(formData: FormData) {
@@ -433,12 +540,13 @@ export async function saveSetting(formData: FormData) {
   return { success: true }
 }
 
-export async function getReportData() {
+export async function getReportData(requestedBranchId?: string) {
   const user = await requireUser()
   if (!(await can(user.role, "view.reports"))) {
     return { sales: [], expenses: [], swaps: [], returns: [], inventory: [], debtors: [], creditors: [] }
   }
-  const branchId = await viewBranchFilter(user)
+  const scoped = await scopedBranchId(user.role, user.branchId, requestedBranchId)
+  const branchId = scoped || requestedBranchId || (await viewBranchFilter(user))
   const [sales, expenses, swaps, returns, inventory, debtors, purchases] = await Promise.all([
     prisma.sale.findMany({
       where: { status: "COMPLETED", ...(branchId ? { branchId } : {}) },
@@ -478,6 +586,7 @@ export async function getReportData() {
     .filter((row) => row.owed > 0)
   return { sales, expenses, swaps, returns, inventory, debtors, creditors }
 }
+
 
 export async function getProfitData() {
   const user = await requireUser()

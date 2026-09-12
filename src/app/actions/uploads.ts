@@ -39,7 +39,44 @@ export type UploadResult = {
   purchaseId?: string
   submissionValue?: number
   paid?: boolean
+  paidAmount?: number
+  balanceOwed?: number
 }
+
+export type BatchUploadItem = {
+  productMode: "existing" | "new"
+  productId?: string
+  newProduct?: {
+    name: string
+    brandId: string
+    categoryId: string
+    condition: ProductCondition
+    tracking: ProductTracking
+    storage?: string
+    costPrice: number
+    minimumPrice: number
+    sellingPrice: number
+  }
+  costPrice: number
+  quantity: number
+  tracking: ProductTracking
+  identities?: string[]
+}
+
+export type BatchUploadPayload = {
+  branchId: string
+  supplierId?: string
+  newSupplierName?: string
+  newSupplierPhone?: string
+  newSupplierCountry?: string
+  newSupplierCity?: string
+  invoiceNumber?: string
+  uploadDate?: string
+  amountPaid: number
+  notes?: string
+  items: BatchUploadItem[]
+}
+
 
 async function readSheet(formData: FormData): Promise<{ rows: Record<string, string>[]; name: string } | { error: string }> {
   const file = formData.get("file")
@@ -1048,3 +1085,336 @@ export async function getUploadProgress() {
     openUploadBill,
   }
 }
+
+/**
+ * Upload an entire batch of stock from the new Upload Stock Interface.
+ * Handles supplier selection/creation, multiple items, dynamic IMEIs/serials,
+ * initial amount paid calculation and balance tracking.
+ */
+export async function batchUploadStock(payload: BatchUploadPayload): Promise<UploadResult> {
+  const gate = await requireUploader()
+  if ("error" in gate) return { error: gate.error }
+  const { user } = gate
+
+  if (!payload.branchId) {
+    return { error: "Please select destination shop for this upload." }
+  }
+
+  const shop = await prisma.branch.findFirst({ where: { id: payload.branchId, isActive: true } })
+  if (!shop) return { error: "Selected shop does not exist or is inactive." }
+
+  if (!payload.items || payload.items.length === 0) {
+    return { error: "Please add at least one product item to upload." }
+  }
+
+  // 1. Resolve Supplier
+  let supplierId = payload.supplierId || ""
+  let supplierName = ""
+  if (!supplierId && payload.newSupplierName) {
+    const sName = payload.newSupplierName.trim()
+    const sPhone = (payload.newSupplierPhone || "").trim() || "N/A"
+    const newSupp = await prisma.supplier.create({
+      data: {
+        name: sName,
+        phone: sPhone,
+        country: payload.newSupplierCountry?.trim() || null,
+        city: payload.newSupplierCity?.trim() || null,
+        kind: "SUPPLIER",
+      },
+    })
+    supplierId = newSupp.id
+    supplierName = newSupp.name
+  } else if (supplierId) {
+    const supp = await prisma.supplier.findUnique({ where: { id: supplierId } })
+    if (!supp) return { error: "Selected supplier was not found." }
+    supplierName = supp.name
+  } else {
+    return { error: "Please pick a supplier or enter a new supplier name." }
+  }
+
+  // 2. Validate all items and identities (IMEIs)
+  const allIdentities: string[] = []
+  for (let i = 0; i < payload.items.length; i++) {
+    const item = payload.items[i]
+    if (item.quantity <= 0) {
+      return { error: `Item #${i + 1} must have a quantity of 1 or more.` }
+    }
+    if (item.costPrice < 0) {
+      return { error: `Item #${i + 1} cost price cannot be negative.` }
+    }
+    if (item.tracking === "IMEI" || item.tracking === "SERIAL") {
+      const ids = (item.identities || []).map((id) => cleanIdentity(id)).filter(Boolean)
+      if (ids.length !== item.quantity) {
+        return {
+          error: `Item #${i + 1} requires ${item.quantity} ${item.tracking === "IMEI" ? "IMEI(s)" : "serial number(s)"}, but received ${ids.length}.`,
+        }
+      }
+      for (const id of ids) {
+        if (item.tracking === "IMEI") {
+          const digits = id.replace(/\D/g, "")
+          if (digits.length < 14) {
+            return { error: `IMEI '${id}' is too short (must be at least 14 digits).` }
+          }
+          allIdentities.push(digits)
+        } else {
+          if (id.length < 3) {
+            return { error: `Serial '${id}' is too short.` }
+          }
+          allIdentities.push(id)
+        }
+      }
+    }
+  }
+
+  // Check for duplicate IMEIs in input batch
+  const uniqueSet = new Set(allIdentities)
+  if (uniqueSet.size < allIdentities.length) {
+    return { error: "Duplicate IMEIs or serials detected in your upload batch." }
+  }
+
+  // Check for existing IMEIs in database
+  if (allIdentities.length > 0) {
+    const existingInDb = await prisma.imeiRecord.findMany({
+      where: {
+        OR: [
+          { imei1: { in: allIdentities } },
+          { serialNumber: { in: allIdentities } },
+        ],
+      },
+      select: { imei1: true, serialNumber: true },
+    })
+    if (existingInDb.length > 0) {
+      const conflict = existingInDb[0].imei1 || existingInDb[0].serialNumber
+      return { error: `IMEI/Serial '${conflict}' is already registered in the system.` }
+    }
+  }
+
+  // 3. Process products (create new products if needed)
+  const resolvedItems: Array<{
+    productId: string
+    productName: string
+    quantity: number
+    costPrice: number
+    tracking: ProductTracking
+    identities: string[]
+    createdProduct: boolean
+  }> = []
+
+  const activeShops = await prisma.branch.findMany({ where: { isActive: true }, select: { id: true } })
+
+  for (const item of payload.items) {
+    let prodId = item.productId || ""
+    let prodName = ""
+    let isNewProd = false
+
+    if (item.productMode === "new" && item.newProduct) {
+      const np = item.newProduct
+      const name = cleanIdentity(np.name)
+      if (!name) return { error: "Product name is required for new product." }
+
+      const [brand, category] = await Promise.all([
+        prisma.brand.findUnique({ where: { id: np.brandId } }),
+        prisma.category.findUnique({ where: { id: np.categoryId } }),
+      ])
+      if (!brand || !category) return { error: "Please select valid brand and category for new product." }
+
+      const sku = makeOpeningSku({
+        brand: brand.name,
+        name,
+        storage: np.storage || "",
+        condition: np.condition,
+      })
+
+      const existingProd = await prisma.product.findFirst({
+        where: {
+          OR: [{ sku }, { name, brandId: np.brandId, condition: np.condition, tracking: np.tracking }],
+        },
+      })
+
+      if (existingProd) {
+        prodId = existingProd.id
+        prodName = existingProd.name
+      } else {
+        const created = await prisma.product.create({
+          data: {
+            sku,
+            name,
+            brandId: np.brandId,
+            categoryId: np.categoryId,
+            tracking: np.tracking,
+            condition: np.condition,
+            storage: np.storage || null,
+            costPrice: np.costPrice.toFixed(2),
+            minimumPrice: np.minimumPrice.toFixed(2),
+            sellingPrice: np.sellingPrice.toFixed(2),
+            warrantyDays: 365,
+            description: "Created during Stock Upload",
+          },
+        })
+        if (activeShops.length) {
+          await prisma.inventory.createMany({
+            data: activeShops.map((s) => ({ productId: created.id, branchId: s.id, quantity: 0 })),
+          })
+        }
+        prodId = created.id
+        prodName = created.name
+        isNewProd = true
+      }
+    } else {
+      if (!prodId) return { error: "Product is not specified." }
+      const prod = await prisma.product.findUnique({ where: { id: prodId } })
+      if (!prod) return { error: `Product ID ${prodId} not found.` }
+      prodName = prod.name
+    }
+
+    resolvedItems.push({
+      productId: prodId,
+      productName: prodName,
+      quantity: item.quantity,
+      costPrice: item.costPrice,
+      tracking: item.tracking,
+      identities: (item.identities || []).map((id) => cleanIdentity(id)).filter(Boolean),
+      createdProduct: isNewProd,
+    })
+  }
+
+  // 4. Calculate Financials
+  const invoiceNumber = payload.invoiceNumber || generateDocNumber("PO")
+  const totalAmount = resolvedItems.reduce((sum, item) => sum + item.quantity * item.costPrice, 0)
+  const amountPaid = Math.max(0, Number(payload.amountPaid) || 0)
+  const balanceOwed = Math.max(0, totalAmount - amountPaid)
+  const uploadDate = payload.uploadDate ? new Date(payload.uploadDate) : new Date()
+
+  let totalPhones = 0
+  let totalPieces = 0
+  let totalProductsAdded = resolvedItems.filter((i) => i.createdProduct).length
+
+  // 5. Atomic database transaction
+  const purchase = await prisma.$transaction(async (tx) => {
+    // Create Purchase (PO)
+    const po = await tx.purchase.create({
+      data: {
+        invoiceNumber,
+        supplierId,
+        branchId: shop.id,
+        userId: user.id,
+        status: "RECEIVED",
+        totalAmount: totalAmount.toFixed(2),
+        paidAmount: amountPaid.toFixed(2),
+        paymentMethod: amountPaid >= totalAmount ? "PAID_ON_UPLOAD" : amountPaid > 0 ? "PARTIAL_PAYMENT" : "UNPAID",
+        source: UPLOAD_STOCK_SOURCE,
+        sessionOpen: false,
+        receivedDate: uploadDate,
+        createdAt: uploadDate,
+        notes: [
+          `Uploaded on Stock Upload.`,
+          amountPaid >= totalAmount
+            ? "Invoice fully settled on upload."
+            : amountPaid > 0
+              ? `Partial payment of ₦${amountPaid.toLocaleString("en-NG")} on upload. Balance: ₦${balanceOwed.toLocaleString("en-NG")}.`
+              : `Unpaid invoice. Balance: ₦${balanceOwed.toLocaleString("en-NG")}.`,
+          payload.notes || null,
+        ]
+          .filter(Boolean)
+          .join(" "),
+      },
+    })
+
+    // Record Finance Entry if initial payment made
+    if (amountPaid > 0) {
+      await tx.financeEntry.create({
+        data: {
+          branchId: shop.id,
+          account: "SUPPLIER_PAYMENTS",
+          type: "EXPENSE",
+          amount: amountPaid.toFixed(2),
+          reference: invoiceNumber,
+          description: `Supplier payment on upload for ${invoiceNumber} (${supplierName})`,
+        },
+      })
+    }
+
+    // Process each item
+    for (const item of resolvedItems) {
+      // Purchase Item
+      await tx.purchaseItem.create({
+        data: {
+          purchaseId: po.id,
+          productId: item.productId,
+          quantity: item.quantity,
+          receivedQty: item.quantity,
+          costPrice: item.costPrice.toFixed(2),
+          totalAmount: (item.quantity * item.costPrice).toFixed(2),
+        },
+      })
+
+      // Increase Shop Inventory
+      await tx.inventory.upsert({
+        where: { productId_branchId: { productId: item.productId, branchId: shop.id } },
+        update: { quantity: { increment: item.quantity }, lastStockCheck: new Date() },
+        create: { productId: item.productId, branchId: shop.id, quantity: item.quantity, lastStockCheck: new Date() },
+      })
+
+      // If IMEI / SERIAL, insert individual records
+      if (item.tracking === "IMEI" || item.tracking === "SERIAL") {
+        totalPhones += item.identities.length
+        for (const id of item.identities) {
+          const isImei = item.tracking === "IMEI"
+          const imeiDigits = isImei ? id.replace(/\D/g, "") : null
+          await tx.imeiRecord.create({
+            data: {
+              imei1: imeiDigits || id,
+              serialNumber: !isImei ? id : null,
+              productId: item.productId,
+              branchId: shop.id,
+              supplierId,
+              purchaseId: po.id,
+              status: "IN_STOCK",
+              notes: `Uploaded via Stock Upload · ${invoiceNumber}`,
+            },
+          })
+        }
+      } else {
+        totalPieces += item.quantity
+      }
+    }
+
+    return po
+  })
+
+  // 6. Audit Trail
+  await trail(
+    user.id,
+    "Purchase",
+    {
+      invoiceNumber,
+      supplier: supplierName,
+      shop: shop.name,
+      totalAmount,
+      amountPaid,
+      balanceOwed,
+      itemsCount: resolvedItems.length,
+      phonesAdded: totalPhones,
+      piecesAdded: totalPieces,
+      action: "batch-stock-upload",
+    },
+    shop.id
+  )
+
+  revalidateStockViews()
+
+  return {
+    success: true,
+    invoiceNumber,
+    purchaseId: purchase.id,
+    submissionValue: totalAmount,
+    paidAmount,
+    balanceOwed,
+    paid: amountPaid >= totalAmount,
+    phones: totalPhones,
+    pieces: totalPieces,
+    products: totalProductsAdded,
+    added: totalPhones + totalPieces,
+  }
+}
+

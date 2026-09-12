@@ -1,16 +1,14 @@
 import { PageHeader } from "@/components/shared"
 import { importProducts } from "@/app/actions/catalog"
 import { getUploadProgress, importCustomers, importImeis, importStock } from "@/app/actions/uploads"
-import { ManualStockForm } from "./manual-stock-form"
+import { UploadStockWizard } from "./upload-stock-wizard"
 import { OpeningStockCard } from "./opening-stock-card"
-import { UploadBillSession } from "./upload-bill-session"
 import { UploadCard } from "./upload-card"
 
 export const dynamic = "force-dynamic"
 
 /**
- * Upload stock: open a supplier bill, add units by hand, or load many from Excel.
- * Every load creates a PO that Finance and auditors can follow.
+ * Upload stock: Supplier Bill Upload with dynamic IMEI fields, payment amount, and automatic balance tracking.
  */
 export default async function UploadsPage() {
   const progress = await getUploadProgress()
@@ -24,23 +22,19 @@ export default async function UploadsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Upload stock"
-        description="Put what is on the shelf into the system. Each load gets a supplier, a unique PO number, a submission value, and paid or not paid, so accounts can trace it."
+        description="Book incoming supplier cartons into the system. Enter supplier, items, scan auto-generated IMEI rows, and record payments with real-time balance calculations."
       />
 
-      <UploadBillSession
+      <UploadStockWizard
         shops={progress.branches}
         suppliers={progress.suppliers}
-        openBill={progress.openUploadBill}
-      />
-
-      <ManualStockForm
         brands={progress.brands}
         categories={progress.categories}
         products={progress.products}
-        openBill={progress.openUploadBill}
       />
 
       <OpeningStockCard shops={progress.branches} suppliers={progress.suppliers} />
+
 
       <div className="surface-card p-5">
         <h2 className="font-semibold">Which way should I use?</h2>

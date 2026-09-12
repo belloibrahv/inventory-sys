@@ -1,7 +1,8 @@
-import { getIncomingLots, getOpenPurchases, markIncomingArrived, setIncomingVisible } from "@/app/actions/incoming"
+import { getIncomingLots, getOpenPurchases, setIncomingVisible } from "@/app/actions/incoming"
 import { getProducts } from "@/app/actions/catalog"
 import { getBranches, getSuppliers } from "@/app/actions/parties"
 import { IncomingForm } from "@/app/(app)/incoming/incoming-form"
+import { PreviewIncomingModal } from "./preview-incoming-modal"
 import { ActionForm } from "@/components/action-form"
 import { PageHeader, StatusBadge } from "@/components/shared"
 import { Badge } from "@/components/ui/badge"
@@ -59,9 +60,7 @@ export default async function IncomingPage() {
               {lot.notes ? <p className="mt-2 text-xs text-muted-foreground">{lot.notes}</p> : null}
               <div className="mt-4 flex flex-wrap gap-2">
                 {canBook && lot.status === "COMING" ? (
-                  <ActionForm action={markIncomingArrived} submit="They have arrived. Add to shop" buttonClassName="" size="sm">
-                    <input type="hidden" name="id" value={lot.id} />
-                  </ActionForm>
+                  <PreviewIncomingModal lot={lot} />
                 ) : null}
                 {isSuperAdmin(me.role) && lot.status === "COMING" ? (
                   <ActionForm
