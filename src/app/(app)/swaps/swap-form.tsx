@@ -60,7 +60,7 @@ export function SwapForm({
         ))}
       </Select>
       {stock.length === 0 ? (
-        <p className="text-xs text-rose-600">No IMEIs in this shop for that phone.</p>
+        <p className="text-xs text-danger">No IMEIs in this shop for that phone.</p>
       ) : null}
     </ActionForm>
   )

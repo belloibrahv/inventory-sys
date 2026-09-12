@@ -74,7 +74,7 @@ export const navGroups = [
   {
     label: "Money",
     items: [
-      { name: "Money in & out", href: "/finance", icon: Wallet },
+      { name: "Revenue & expenditure", href: "/finance", icon: Wallet },
       { name: "Check the books", href: "/audit/books", icon: Scale },
       { name: "Profit", href: "/profits", icon: TrendingUp },
       { name: "Expenses", href: "/expenses", icon: Receipt },

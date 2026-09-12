@@ -18,6 +18,8 @@ export async function getFinance() {
       expenditure: 0,
       supplierPayments: 0,
       netCashFlow: 0,
+      cashRevenue: 0,
+      bankRevenue: 0,
       cashAccount: { balance: 0, entries: [] },
       bankAccount: { balance: 0, entries: [] },
       entries: [],
@@ -157,7 +159,12 @@ export async function getFinance() {
     bankAccount: { balance: bankBalance, entries: bankEntries },
     entries,
     expenses,
-    debtors,
+    debtors: debtors.map((row) => ({
+      id: row.id,
+      name: row.name,
+      currentBalance: money(row.currentBalance),
+      branch: { code: row.branch.code },
+    })),
     creditors,
   }
 }

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { requireUser } from "@/lib/session"
 import { viewBranchFilter } from "@/lib/branch-scope"
 import { formatCurrency, formatDate } from "@/lib/utils"
-import { Store, Building2, Calendar, CheckCircle2, AlertTriangle, ArrowLeft } from "lucide-react"
+import { Store, CheckCircle2, AlertTriangle, ArrowLeft } from "lucide-react"
 
 export default async function DayClosePage({
   searchParams,
@@ -71,14 +71,14 @@ export default async function DayClosePage({
 
       {/* Unclosed Days Warning Banner */}
       {preview.unclosed.length ? (
-        <div className="rounded-xl border border-rose-300 bg-rose-50 p-4 text-sm text-rose-950 dark:border-rose-900/50 dark:bg-rose-500/10 dark:text-rose-100">
-          <div className="flex items-center gap-2 font-bold text-rose-800 dark:text-rose-300">
+        <div className="rounded-xl border border-danger/30 bg-danger-soft p-4 text-sm text-danger">
+          <div className="flex items-center gap-2 font-bold text-danger">
             <AlertTriangle className="h-4 w-4" />
             <span>
               Unclosed Prior Trading Days {preview.branchName ? `for ${preview.branchName}` : ""}
             </span>
           </div>
-          <p className="mt-1 text-xs text-rose-700 dark:text-rose-300">
+          <p className="mt-1 text-xs text-danger">
             Cash registers must be closed sequentially. Select a day below to submit its till count:
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -88,8 +88,8 @@ export default async function DayClosePage({
                 href={`/finance/close?branchId=${preview.branchId}&date=${day}`}
                 className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
                   day === preview.businessDate
-                    ? "bg-rose-600 text-white shadow-sm"
-                    : "bg-white/80 border border-rose-200 text-rose-900 hover:bg-rose-100 dark:bg-black/30 dark:border-rose-800 dark:text-rose-200"
+                    ? "bg-danger text-white shadow-sm"
+                    : "bg-white/80 border border-danger/30 text-danger hover:bg-danger-soft dark:bg-black/30"
                 }`}
               >
                 📅 {day} {day === preview.businessDate ? " (Active)" : ""}
@@ -127,8 +127,8 @@ export default async function DayClosePage({
 
       {/* Till Count Form or Closed Notice */}
       {preview.alreadyClosed ? (
-        <div className="surface-card p-6 border-emerald-500/30 bg-emerald-500/5">
-          <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-bold">
+        <div className="surface-card p-6 border-success/30 bg-success-soft">
+          <div className="flex items-center gap-2 text-success font-bold">
             <CheckCircle2 className="h-5 w-5" />
             <span>Trading Day Reconciled & Closed</span>
           </div>
@@ -225,10 +225,10 @@ export default async function DayClosePage({
                     <span
                       className={`inline-block rounded-md px-2 py-0.5 text-xs font-bold ${
                         row.variance === 0
-                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                          ? "bg-success-soft text-success"
                           : row.variance < 0
-                          ? "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
-                          : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                          ? "bg-danger-soft text-danger"
+                          : "bg-warning-soft text-warning"
                       }`}
                     >
                       {row.variance > 0 ? `+${formatCurrency(row.variance)}` : formatCurrency(row.variance)}

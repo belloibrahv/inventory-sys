@@ -104,7 +104,7 @@ export default async function NeighborFillsPage() {
                     </ActionForm>
                   </div>
                 ) : row.status === "SETTLED" ? (
-                  <p className="mt-3 text-sm text-emerald-700">Neighbor paid. Profit {formatCurrency(row.profit)} stays with Abu Twins.</p>
+                  <p className="mt-3 text-sm text-success">Neighbor paid. Profit {formatCurrency(row.profit)} stays with Abu Twins.</p>
                 ) : null}
               </div>
             )

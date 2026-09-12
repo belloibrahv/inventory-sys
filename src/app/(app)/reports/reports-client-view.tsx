@@ -2,13 +2,25 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { DollarSign, TrendingUp, TrendingDown, Package, Users, AlertTriangle, ArrowRight, X, Building2, Store } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Banknote, Package, TrendingDown, TrendingUp } from "lucide-react"
 import { formatCurrency, formatDate, money } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { Select } from "@/components/ui/select"
 import { ReportsStatement } from "@/components/reports-statement"
 import { ReportsPdfButton } from "@/components/reports-pdf-button"
 import { PrintButton } from "@/components/print-button"
 import { ExportCsv } from "@/components/export-csv"
+import { DrilldownModal } from "@/components/drilldown-modal"
+import {
+  ShopTag,
+  StatCard,
+  StatGrid,
+  TableEmpty,
+  TableShell,
+  TonePill,
+  Toolbar,
+} from "@/components/shared"
 import type { ReportsPack } from "@/lib/reports-pack"
 
 type RawSale = {
@@ -38,10 +50,15 @@ type RawInventory = {
   branch: { name: string; code: string }
 }
 
-type BranchOption = {
-  id: string
-  name: string
-  code: string
+type BranchOption = { id: string; name: string; code: string }
+
+type Drilldown = "REVENUE" | "RECEIVED" | "EXPENSES" | "STOCK"
+
+const DRILLDOWN_TITLE: Record<Drilldown, string> = {
+  REVENUE: "Every invoice that makes up revenue posted",
+  RECEIVED: "Every payment received in this period",
+  EXPENSES: "Every expense voucher in this period",
+  STOCK: "Every stock line that makes up stock at cost",
 }
 
 export function ReportsClientView({
@@ -59,68 +76,57 @@ export function ReportsClientView({
   branches: BranchOption[]
   selectedBranchId?: string
 }) {
-  const [activeDrilldown, setActiveDrilldown] = useState<"REVENUE" | "COLLECTED" | "EXPENSES" | "STOCK" | null>(null)
+  const router = useRouter()
+  const [drilldown, setDrilldown] = useState<Drilldown | null>(null)
+  const paidSales = sales.filter((sale) => money(sale.paidAmount) > 0)
+  const supplierOwed = pack.creditors.reduce((sum, row) => sum + row.owed, 0)
 
   return (
-    <div className="space-y-6">
-      {/* Top Controls & Actions */}
-      <div className="reports-chrome print:hidden space-y-6">
-        {/* Branch Filter Tabs / Dropdown */}
-        {branches.length > 1 && (
-          <div className="surface-card p-4 flex flex-wrap items-center justify-between gap-3 border-primary/20 bg-muted/20">
-            <div className="flex items-center gap-2">
-              <Store className="h-4 w-4 text-primary" />
-              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Filter Reports by Shop:</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Link
-                href="/reports"
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
-                  !selectedBranchId
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "bg-background border border-border text-foreground hover:bg-muted"
-                }`}
+    <div className="space-y-5">
+      <div className="reports-chrome space-y-5 print:hidden">
+        {/*
+          The client asked not to have every branch summed into one figure with no
+          way back out: "there's a higher tendency we are using Paul to rob
+          Barnabas". One shop at a time is a first-class choice here, and All is
+          something you pick rather than something you are given.
+        */}
+        <Toolbar className="justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2 text-sm">
+              <span className="eyebrow">Reporting on</span>
+              <Select
+                value={selectedBranchId ?? ""}
+                onChange={(event) => {
+                  const next = event.target.value
+                  router.push(next ? `/reports?branchId=${next}` : "/reports")
+                }}
+                className="h-9 w-56"
               >
-                All Shops (Consolidated)
-              </Link>
-              {branches.map((b) => {
-                const isCurrent = selectedBranchId === b.id
-                return (
-                  <Link
-                    key={b.id}
-                    href={`/reports?branchId=${b.id}`}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
-                      isCurrent
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "bg-background border border-border text-foreground hover:bg-muted"
-                    }`}
-                  >
-                    {b.name} ({b.code})
-                  </Link>
-                )
-              })}
-            </div>
+                <option value="">All shops together</option>
+                {branches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name} ({branch.code})
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <TonePill tone={selectedBranchId ? "primary" : "neutral"}>{pack.scope}</TonePill>
           </div>
-        )}
 
-        {/* Action Buttons Toolbar */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline" size="sm">
-              <Link href="/audit/books">Check the Books</Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/audit/books">Check the books</Link>
             </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/finance">Finance & Cash Flow</Link>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/finance">Revenue &amp; expenditure</Link>
             </Button>
-          </div>
-          <div className="flex flex-wrap gap-2">
             <ReportsPdfButton data={pack} />
             <PrintButton label="Print / Save PDF" />
             <ExportCsv
               filename={`${pack.statementRef}.csv`}
-              label="Export Sales CSV"
+              label="Export sales CSV"
               rows={[
-                ["Invoice", "Customer", "Branch", "Total", "Paid", "Due", "Date"],
+                ["Invoice", "Customer", "Shop", "Total", "Paid", "Still owed", "Date"],
                 ...sales.map((sale) => [
                   sale.invoiceNumber,
                   sale.customer?.name ?? "Walk-in",
@@ -133,399 +139,357 @@ export function ReportsClientView({
               ]}
             />
           </div>
-        </div>
+        </Toolbar>
 
-        {/* Core KPI Cards with Clickable Drill-downs */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Executive Financial KPIs (Click to drill down)</h3>
-            <span className="text-[11px] text-primary">Interactive Ledger Cards</span>
-          </div>
+        {/* Every headline figure opens the rows that add up to it. */}
+        <StatGrid>
+          <StatCard
+            label="Revenue posted"
+            value={formatCurrency(pack.totals.revenue)}
+            hint={`${sales.length} invoice${sales.length === 1 ? "" : "s"} billed in this period`}
+            icon={<TrendingUp className="h-4 w-4" />}
+            tone="neutral"
+            onClick={() => setDrilldown("REVENUE")}
+          />
+          <StatCard
+            label="Payments received"
+            value={formatCurrency(pack.totals.collected)}
+            hint="Money actually taken in cash, transfer or POS"
+            icon={<Banknote className="h-4 w-4" />}
+            tone="success"
+            onClick={() => setDrilldown("RECEIVED")}
+          />
+          <StatCard
+            label="Operating expenses"
+            value={formatCurrency(pack.totals.expenses)}
+            hint={`${expenses.length} voucher${expenses.length === 1 ? "" : "s"} posted`}
+            icon={<TrendingDown className="h-4 w-4" />}
+            tone="danger"
+            onClick={() => setDrilldown("EXPENSES")}
+          />
+          <StatCard
+            label="Stock at cost"
+            value={formatCurrency(pack.totals.stock)}
+            hint={`${inventory.length} stock line${inventory.length === 1 ? "" : "s"} on the shelf`}
+            icon={<Package className="h-4 w-4" />}
+            tone="warning"
+            onClick={() => setDrilldown("STOCK")}
+          />
+        </StatGrid>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {/* Revenue Posted */}
-            <button
-              type="button"
-              onClick={() => setActiveDrilldown("REVENUE")}
-              className="surface-card p-5 text-left transition-all hover:border-primary/50 hover:shadow-md cursor-pointer group"
-            >
-              <div className="flex items-center justify-between text-muted-foreground">
-                <span className="text-xs font-semibold uppercase tracking-wider">Revenue Posted</span>
-                <TrendingUp className="h-4 w-4 text-primary group-hover:scale-110 transition-transform" />
-              </div>
-              <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">{formatCurrency(pack.totals.revenue)}</p>
-              <p className="text-[11px] text-primary mt-1 flex items-center gap-1 font-medium">
-                {sales.length} invoices billed · Click to inspect →
-              </p>
-            </button>
+        <StatGrid>
+          <StatCard
+            label="Customers still owe us"
+            value={formatCurrency(pack.totals.owing)}
+            hint={`${pack.debtors.length} customer${pack.debtors.length === 1 ? "" : "s"} with a balance`}
+            href="/customers"
+          />
+          <StatCard
+            label="We still owe suppliers"
+            value={formatCurrency(supplierOwed)}
+            hint={`${pack.creditors.length} unpaid supplier bill${pack.creditors.length === 1 ? "" : "s"}`}
+            href="/suppliers"
+          />
+          <StatCard
+            label="Swap balances"
+            value={formatCurrency(pack.totals.swaps)}
+            hint="Difference customers paid on phone trade-ins"
+            href="/swaps"
+          />
+          <StatCard
+            label="Returns filed"
+            value={String(pack.totals.returns)}
+            hint="Items customers brought back in this period"
+            href="/returns"
+          />
+        </StatGrid>
 
-            {/* Payments Received */}
-            <button
-              type="button"
-              onClick={() => setActiveDrilldown("COLLECTED")}
-              className="surface-card p-5 text-left transition-all hover:border-emerald-500/50 hover:shadow-md cursor-pointer group"
-            >
-              <div className="flex items-center justify-between text-muted-foreground">
-                <span className="text-xs font-semibold uppercase tracking-wider">Payments Received</span>
-                <DollarSign className="h-4 w-4 text-emerald-600 group-hover:scale-110 transition-transform" />
-              </div>
-              <p className="mt-2 text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
-                {formatCurrency(pack.totals.collected)}
-              </p>
-              <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1 font-medium">
-                Settled in cash/bank · Click to inspect →
-              </p>
-            </button>
-
-            {/* Operating Expenses */}
-            <button
-              type="button"
-              onClick={() => setActiveDrilldown("EXPENSES")}
-              className="surface-card p-5 text-left transition-all hover:border-rose-500/50 hover:shadow-md cursor-pointer group"
-            >
-              <div className="flex items-center justify-between text-muted-foreground">
-                <span className="text-xs font-semibold uppercase tracking-wider">Operating Expenses</span>
-                <TrendingDown className="h-4 w-4 text-rose-600 group-hover:scale-110 transition-transform" />
-              </div>
-              <p className="mt-2 text-2xl font-bold tabular-nums text-rose-600 dark:text-rose-400">
-                {formatCurrency(pack.totals.expenses)}
-              </p>
-              <p className="text-[11px] text-rose-600 dark:text-rose-400 mt-1 flex items-center gap-1 font-medium">
-                {expenses.length} approved expenses · Click to inspect →
-              </p>
-            </button>
-
-            {/* Stock at Cost */}
-            <button
-              type="button"
-              onClick={() => setActiveDrilldown("STOCK")}
-              className="surface-card p-5 text-left transition-all hover:border-amber-500/50 hover:shadow-md cursor-pointer group"
-            >
-              <div className="flex items-center justify-between text-muted-foreground">
-                <span className="text-xs font-semibold uppercase tracking-wider">Stock Valuation (Cost)</span>
-                <Package className="h-4 w-4 text-amber-600 group-hover:scale-110 transition-transform" />
-              </div>
-              <p className="mt-2 text-2xl font-bold tabular-nums text-amber-600 dark:text-amber-400">
-                {formatCurrency(pack.totals.stock)}
-              </p>
-              <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1 font-medium">
-                {inventory.length} product lines in stock · Click to inspect →
-              </p>
-            </button>
-          </div>
-        </div>
-
-        {/* Secondary Operational Metrics */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="surface-card p-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Customer Debt (Receivables)</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-amber-600 dark:text-amber-400">
-              {formatCurrency(pack.totals.owing)}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">{pack.debtors.length} customers with balance</p>
-          </div>
-          <div className="surface-card p-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Supplier Invoices Owed</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-rose-600 dark:text-rose-400">
-              {formatCurrency(pack.creditors.reduce((s, c) => s + c.owed, 0))}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">{pack.creditors.length} unpaid supplier bills</p>
-          </div>
-          <div className="surface-card p-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Swap Balances</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{formatCurrency(pack.totals.swaps)}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Customer phone trade-in diffs</p>
-          </div>
-          <div className="surface-card p-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Stock Returns Filed</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{pack.totals.returns}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Customer item return claims</p>
-          </div>
-        </div>
-
-        {/* Shop Comparison and Debtors */}
         <div className="grid gap-4 xl:grid-cols-2">
-          {/* Shop Books */}
-          <div className="surface-card overflow-hidden">
-            <div className="flex items-center justify-between border-b border-border px-5 py-4">
-              <h3 className="font-bold text-sm uppercase tracking-wider">Branch Performance</h3>
-              <span className="text-xs text-muted-foreground">{pack.byShop.length} Branches</span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
-                  <tr className="border-b border-border">
-                    <th className="px-5 py-3">Shop</th>
-                    <th className="px-3 py-3">Invoices</th>
-                    <th className="px-3 py-3">Revenue Posted</th>
-                    <th className="px-5 py-3">Collected</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/60">
-                  {pack.byShop.map((row) => (
-                    <tr key={row.name} className="hover:bg-muted/20">
-                      <td className="px-5 py-3 font-semibold">{row.name}</td>
-                      <td className="px-3 py-3">{row.tickets}</td>
-                      <td className="px-3 py-3 font-mono font-medium">{formatCurrency(row.revenue)}</td>
-                      <td className="px-5 py-3 font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                        {formatCurrency(row.collected)}
-                      </td>
-                    </tr>
-                  ))}
-                  {pack.byShop.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="px-5 py-6 text-center text-muted-foreground">
-                        No sales recorded for this scope.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <TableShell
+            caption={
+              <>
+                <h2 className="text-sm font-semibold tracking-tight">Shop by shop</h2>
+                <span className="text-xs text-muted-foreground">
+                  {pack.byShop.length} shop{pack.byShop.length === 1 ? "" : "s"} with sales
+                </span>
+              </>
+            }
+            columns={[
+              { label: "Shop" },
+              { label: "Invoices", align: "right" },
+              { label: "Revenue posted", align: "right" },
+              { label: "Payments received", align: "right" },
+            ]}
+          >
+            {pack.byShop.map((row) => (
+              <tr key={row.name}>
+                <td className="font-medium">{row.name}</td>
+                <td className="text-right num">{row.tickets}</td>
+                <td className="text-right num">{formatCurrency(row.revenue)}</td>
+                <td className="text-right num font-semibold text-success">{formatCurrency(row.collected)}</td>
+              </tr>
+            ))}
+            {pack.byShop.length === 0 ? (
+              <TableEmpty colSpan={4}>No sales recorded for this shop and period.</TableEmpty>
+            ) : null}
+          </TableShell>
 
-          {/* Customers Still Owe */}
-          <div className="surface-card overflow-hidden">
-            <div className="flex items-center justify-between border-b border-border px-5 py-4">
-              <h3 className="font-bold text-sm uppercase tracking-wider">Customer Receivables (Debtors)</h3>
-              <Button asChild variant="ghost" size="sm" className="text-xs">
-                <Link href="/customers">View All Customers</Link>
-              </Button>
-            </div>
-            <div className="space-y-2 p-5 text-sm max-h-[280px] overflow-y-auto">
-              {pack.debtors.map((row) => (
-                <div key={row.id} className="flex justify-between items-center py-1.5 border-b border-border/50">
-                  <Link href={`/customers/${row.id}`} className="text-primary hover:underline font-medium">
-                    {row.name} <span className="text-xs text-muted-foreground">({row.shop})</span>
+          <TableShell
+            caption={
+              <>
+                <h2 className="text-sm font-semibold tracking-tight">Customers who still owe</h2>
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/customers">All customers</Link>
+                </Button>
+              </>
+            }
+            columns={[{ label: "Customer" }, { label: "Shop" }, { label: "Still owed", align: "right" }]}
+          >
+            {pack.debtors.map((row) => (
+              <tr key={row.id}>
+                <td>
+                  <Link href={`/customers/${row.id}`} className="font-medium text-primary hover:underline">
+                    {row.name}
                   </Link>
-                  <span className="font-mono font-bold text-amber-600 dark:text-amber-400">
-                    {formatCurrency(row.amount)}
-                  </span>
-                </div>
-              ))}
-              {pack.debtors.length === 0 && <p className="text-muted-foreground text-xs py-4">No open customer balances.</p>}
-            </div>
-          </div>
+                </td>
+                <td>
+                  <ShopTag>{row.shop}</ShopTag>
+                </td>
+                <td className="text-right num font-semibold text-warning">{formatCurrency(row.amount)}</td>
+              </tr>
+            ))}
+            {pack.debtors.length === 0 ? (
+              <TableEmpty colSpan={3}>No customer owes anything right now.</TableEmpty>
+            ) : null}
+          </TableShell>
         </div>
 
-        {/* Creditors & Low Stock */}
         <div className="grid gap-4 xl:grid-cols-2">
-          {/* Supplier Creditors */}
-          <div className="surface-card overflow-hidden">
-            <div className="flex items-center justify-between border-b border-border px-5 py-4">
-              <h3 className="font-bold text-sm uppercase tracking-wider">Unpaid Supplier Invoices (Payables)</h3>
-              <Button asChild variant="ghost" size="sm" className="text-xs">
-                <Link href="/suppliers">View Suppliers</Link>
-              </Button>
-            </div>
-            <div className="space-y-2 p-5 text-sm max-h-[260px] overflow-y-auto">
-              {pack.creditors.map((row) => (
-                <div key={row.id} className="flex justify-between items-center py-1.5 border-b border-border/50">
-                  <Link href={`/purchases/${row.id}`} className="text-primary hover:underline font-medium">
-                    {row.invoice} · {row.supplier} <span className="text-xs text-muted-foreground">({row.shop})</span>
+          <TableShell
+            caption={
+              <>
+                <h2 className="text-sm font-semibold tracking-tight">Supplier bills still unpaid</h2>
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/suppliers">All suppliers</Link>
+                </Button>
+              </>
+            }
+            columns={[{ label: "Bill" }, { label: "Shop" }, { label: "Still owed", align: "right" }]}
+          >
+            {pack.creditors.map((row) => (
+              <tr key={row.id}>
+                <td>
+                  <Link href={`/purchases/${row.id}`} className="font-medium text-primary hover:underline">
+                    {row.invoice}
                   </Link>
-                  <span className="font-mono font-bold text-rose-600 dark:text-rose-400">
-                    {formatCurrency(row.owed)}
-                  </span>
-                </div>
-              ))}
-              {pack.creditors.length === 0 && <p className="text-muted-foreground text-xs py-4">No supplier balances owed.</p>}
-            </div>
-          </div>
+                  <p className="text-xs text-muted-foreground">{row.supplier}</p>
+                </td>
+                <td>
+                  <ShopTag>{row.shop}</ShopTag>
+                </td>
+                <td className="text-right num font-semibold text-danger">{formatCurrency(row.owed)}</td>
+              </tr>
+            ))}
+            {pack.creditors.length === 0 ? (
+              <TableEmpty colSpan={3}>Every supplier bill is settled.</TableEmpty>
+            ) : null}
+          </TableShell>
 
-          {/* Low Stock Alerts */}
-          <div className="surface-card overflow-hidden">
-            <div className="flex items-center justify-between border-b border-border px-5 py-4">
-              <h3 className="font-bold text-sm uppercase tracking-wider">Low Stock Warnings</h3>
-              <Button asChild variant="ghost" size="sm" className="text-xs">
-                <Link href="/inventory">View Inventory</Link>
-              </Button>
-            </div>
-            <div className="space-y-2 p-5 text-sm max-h-[260px] overflow-y-auto">
-              {pack.lowStock.map((row) => (
-                <div key={row.id} className="flex justify-between items-center py-1.5 border-b border-border/50">
-                  <span className="font-medium">
-                    {row.product} <span className="text-xs text-muted-foreground">({row.shop})</span>
-                  </span>
-                  <span className="rounded-md bg-rose-100 px-2 py-0.5 text-xs font-bold text-rose-800 dark:bg-rose-950 dark:text-rose-300">
-                    {row.quantity} left (Min: {row.min})
-                  </span>
-                </div>
-              ))}
-              {pack.lowStock.length === 0 && <p className="text-muted-foreground text-xs py-4">All stock levels are above minimum threshold.</p>}
-            </div>
-          </div>
+          <TableShell
+            caption={
+              <>
+                <h2 className="text-sm font-semibold tracking-tight">Running low</h2>
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/inventory">Shop stock</Link>
+                </Button>
+              </>
+            }
+            columns={[{ label: "Item" }, { label: "Shop" }, { label: "Left", align: "right" }]}
+          >
+            {pack.lowStock.map((row) => (
+              <tr key={row.id}>
+                <td className="font-medium">{row.product}</td>
+                <td>
+                  <ShopTag>{row.shop}</ShopTag>
+                </td>
+                <td className="text-right">
+                  <TonePill tone="danger">
+                    {row.quantity} left · min {row.min}
+                  </TonePill>
+                </td>
+              </tr>
+            ))}
+            {pack.lowStock.length === 0 ? (
+              <TableEmpty colSpan={3}>Every item is above its minimum.</TableEmpty>
+            ) : null}
+          </TableShell>
         </div>
       </div>
 
-      {/* Drill-down Modal */}
-      {activeDrilldown && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="surface-card max-h-[85vh] w-full max-w-4xl overflow-hidden p-0 shadow-2xl border-primary/30 flex flex-col animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-border px-6 py-4 bg-muted/30">
-              <div>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-primary">Itemized Audit Drilldown</span>
-                <h3 className="text-lg font-bold">
-                  {activeDrilldown === "REVENUE" && "All Completed Sales Invoices (Revenue Posted)"}
-                  {activeDrilldown === "COLLECTED" && "Payments Collected Breakdown"}
-                  {activeDrilldown === "EXPENSES" && "Operational Running Expenses Log"}
-                  {activeDrilldown === "STOCK" && "Physical Inventory Stock at Cost"}
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActiveDrilldown(null)}
-                className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+      <DrilldownModal
+        open={drilldown !== null}
+        onClose={() => setDrilldown(null)}
+        eyebrow={pack.scope}
+        title={drilldown ? DRILLDOWN_TITLE[drilldown] : ""}
+        summary={
+          drilldown === "REVENUE" ? (
+            <>
+              <span>{sales.length} invoices</span>
+              <span className="font-semibold text-foreground">{formatCurrency(pack.totals.revenue)}</span>
+            </>
+          ) : drilldown === "RECEIVED" ? (
+            <>
+              <span>{paidSales.length} invoices with money against them</span>
+              <span className="font-semibold text-foreground">{formatCurrency(pack.totals.collected)}</span>
+            </>
+          ) : drilldown === "EXPENSES" ? (
+            <>
+              <span>{expenses.length} vouchers</span>
+              <span className="font-semibold text-foreground">{formatCurrency(pack.totals.expenses)}</span>
+            </>
+          ) : (
+            <>
+              <span>{inventory.length} stock lines</span>
+              <span className="font-semibold text-foreground">{formatCurrency(pack.totals.stock)}</span>
+            </>
+          )
+        }
+      >
+        {drilldown === "REVENUE" ? (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Invoice</th>
+                <th>Customer</th>
+                <th>Shop</th>
+                <th>Date</th>
+                <th className="text-right">Invoice total</th>
+                <th className="text-right">Paid</th>
+                <th className="text-right">Still owed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sales.map((sale) => (
+                <tr key={sale.id}>
+                  <td>
+                    <Link href={`/sales/${sale.id}`} className="font-medium text-primary hover:underline">
+                      {sale.invoiceNumber}
+                    </Link>
+                  </td>
+                  <td>{sale.customer?.name ?? "Walk-in"}</td>
+                  <td>
+                    <ShopTag>{sale.branch.code}</ShopTag>
+                  </td>
+                  <td className="text-muted-foreground">{formatDate(sale.saleDate)}</td>
+                  <td className="text-right num font-semibold">{formatCurrency(money(sale.totalAmount))}</td>
+                  <td className="text-right num text-success">{formatCurrency(money(sale.paidAmount))}</td>
+                  <td className="text-right num text-warning">
+                    {formatCurrency(money(sale.totalAmount) - money(sale.paidAmount))}
+                  </td>
+                </tr>
+              ))}
+              {sales.length === 0 ? <TableEmpty colSpan={7}>No invoices in this period.</TableEmpty> : null}
+            </tbody>
+          </table>
+        ) : null}
 
-            <div className="overflow-y-auto p-6 flex-1">
-              {activeDrilldown === "REVENUE" && (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead className="bg-muted/40 text-left text-muted-foreground uppercase">
-                      <tr>
-                        <th className="p-2.5">Invoice</th>
-                        <th className="p-2.5">Customer</th>
-                        <th className="p-2.5">Branch</th>
-                        <th className="p-2.5">Date</th>
-                        <th className="p-2.5 text-right">Total Amount</th>
-                        <th className="p-2.5 text-right">Paid</th>
-                        <th className="p-2.5 text-right">Due</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {sales.map((sale) => (
-                        <tr key={sale.id} className="hover:bg-muted/20">
-                          <td className="p-2.5 font-semibold text-primary">{sale.invoiceNumber}</td>
-                          <td className="p-2.5">{sale.customer?.name ?? "Walk-in"}</td>
-                          <td className="p-2.5">{sale.branch.code}</td>
-                          <td className="p-2.5">{formatDate(sale.saleDate)}</td>
-                          <td className="p-2.5 text-right font-mono font-bold">{formatCurrency(money(sale.totalAmount))}</td>
-                          <td className="p-2.5 text-right font-mono text-emerald-600">{formatCurrency(money(sale.paidAmount))}</td>
-                          <td className="p-2.5 text-right font-mono text-rose-600">
-                            {formatCurrency(money(sale.totalAmount) - money(sale.paidAmount))}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+        {drilldown === "RECEIVED" ? (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Invoice</th>
+                <th>Customer</th>
+                <th>Shop</th>
+                <th>Date</th>
+                <th className="text-right">Amount received</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paidSales.map((sale) => (
+                <tr key={sale.id}>
+                  <td>
+                    <Link href={`/sales/${sale.id}`} className="font-medium text-primary hover:underline">
+                      {sale.invoiceNumber}
+                    </Link>
+                  </td>
+                  <td>{sale.customer?.name ?? "Walk-in"}</td>
+                  <td>
+                    <ShopTag>{sale.branch.code}</ShopTag>
+                  </td>
+                  <td className="text-muted-foreground">{formatDate(sale.saleDate)}</td>
+                  <td className="text-right num font-semibold text-success">
+                    {formatCurrency(money(sale.paidAmount))}
+                  </td>
+                </tr>
+              ))}
+              {paidSales.length === 0 ? <TableEmpty colSpan={5}>No money received in this period.</TableEmpty> : null}
+            </tbody>
+          </table>
+        ) : null}
 
-              {activeDrilldown === "COLLECTED" && (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead className="bg-muted/40 text-left text-muted-foreground uppercase">
-                      <tr>
-                        <th className="p-2.5">Invoice</th>
-                        <th className="p-2.5">Customer</th>
-                        <th className="p-2.5">Branch</th>
-                        <th className="p-2.5">Date</th>
-                        <th className="p-2.5 text-right">Amount Collected</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {sales
-                        .filter((s) => money(s.paidAmount) > 0)
-                        .map((sale) => (
-                          <tr key={sale.id} className="hover:bg-muted/20">
-                            <td className="p-2.5 font-semibold text-primary">{sale.invoiceNumber}</td>
-                            <td className="p-2.5">{sale.customer?.name ?? "Walk-in"}</td>
-                            <td className="p-2.5">{sale.branch.code}</td>
-                            <td className="p-2.5">{formatDate(sale.saleDate)}</td>
-                            <td className="p-2.5 text-right font-mono font-bold text-emerald-600">
-                              {formatCurrency(money(sale.paidAmount))}
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+        {drilldown === "EXPENSES" ? (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Voucher</th>
+                <th>Category</th>
+                <th>What it was for</th>
+                <th>Shop</th>
+                <th>Date</th>
+                <th className="text-right">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {expenses.map((expense) => (
+                <tr key={expense.id}>
+                  <td className="font-medium">{expense.expenseNumber}</td>
+                  <td>{expense.category.replace(/_/g, " ").toLowerCase()}</td>
+                  <td>{expense.description}</td>
+                  <td>
+                    <ShopTag>{expense.branch.code}</ShopTag>
+                  </td>
+                  <td className="text-muted-foreground">{formatDate(expense.date)}</td>
+                  <td className="text-right num font-semibold text-danger">{formatCurrency(money(expense.amount))}</td>
+                </tr>
+              ))}
+              {expenses.length === 0 ? <TableEmpty colSpan={6}>No expenses posted in this period.</TableEmpty> : null}
+            </tbody>
+          </table>
+        ) : null}
 
-              {activeDrilldown === "EXPENSES" && (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead className="bg-muted/40 text-left text-muted-foreground uppercase">
-                      <tr>
-                        <th className="p-2.5">Voucher #</th>
-                        <th className="p-2.5">Category</th>
-                        <th className="p-2.5">Description</th>
-                        <th className="p-2.5">Branch</th>
-                        <th className="p-2.5">Date</th>
-                        <th className="p-2.5 text-right">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {expenses.map((exp) => (
-                        <tr key={exp.id} className="hover:bg-muted/20">
-                          <td className="p-2.5 font-semibold text-primary">{exp.expenseNumber}</td>
-                          <td className="p-2.5 font-medium">{exp.category}</td>
-                          <td className="p-2.5">{exp.description}</td>
-                          <td className="p-2.5">{exp.branch.code}</td>
-                          <td className="p-2.5">{formatDate(exp.date)}</td>
-                          <td className="p-2.5 text-right font-mono font-bold text-rose-600">
-                            {formatCurrency(money(exp.amount))}
-                          </td>
-                        </tr>
-                      ))}
-                      {expenses.length === 0 && (
-                        <tr>
-                          <td colSpan={6} className="p-6 text-center text-muted-foreground">
-                            No approved expenses logged for this period.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+        {drilldown === "STOCK" ? (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Shop</th>
+                <th className="text-right">Quantity</th>
+                <th className="text-right">Cost price</th>
+                <th className="text-right">Selling price</th>
+                <th className="text-right">Value at cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              {inventory.map((row) => (
+                <tr key={row.id}>
+                  <td className="font-medium">{row.product.name}</td>
+                  <td>
+                    <ShopTag>{row.branch.code}</ShopTag>
+                  </td>
+                  <td className="text-right num">{row.quantity}</td>
+                  <td className="text-right num">{formatCurrency(money(row.product.costPrice))}</td>
+                  <td className="text-right num">{formatCurrency(money(row.product.sellingPrice))}</td>
+                  <td className="text-right num font-semibold">
+                    {formatCurrency(row.quantity * money(row.product.costPrice))}
+                  </td>
+                </tr>
+              ))}
+              {inventory.length === 0 ? <TableEmpty colSpan={6}>Nothing on the shelf here.</TableEmpty> : null}
+            </tbody>
+          </table>
+        ) : null}
+      </DrilldownModal>
 
-              {activeDrilldown === "STOCK" && (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead className="bg-muted/40 text-left text-muted-foreground uppercase">
-                      <tr>
-                        <th className="p-2.5">Product Name</th>
-                        <th className="p-2.5">Branch</th>
-                        <th className="p-2.5 text-right">Qty</th>
-                        <th className="p-2.5 text-right">Cost Price</th>
-                        <th className="p-2.5 text-right">Selling Price</th>
-                        <th className="p-2.5 text-right">Total Valuation (Cost)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {inventory.map((inv) => (
-                        <tr key={inv.id} className="hover:bg-muted/20">
-                          <td className="p-2.5 font-medium">{inv.product.name}</td>
-                          <td className="p-2.5">{inv.branch.code}</td>
-                          <td className="p-2.5 text-right font-semibold">{inv.quantity}</td>
-                          <td className="p-2.5 text-right font-mono">{formatCurrency(money(inv.product.costPrice))}</td>
-                          <td className="p-2.5 text-right font-mono">{formatCurrency(money(inv.product.sellingPrice))}</td>
-                          <td className="p-2.5 text-right font-mono font-bold text-amber-600">
-                            {formatCurrency(inv.quantity * money(inv.product.costPrice))}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            <div className="border-t border-border px-6 py-3 bg-muted/20 flex justify-end">
-              <Button variant="outline" size="sm" onClick={() => setActiveDrilldown(null)}>
-                Close Drilldown
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Comprehensive Formal Printed Statement */}
       <ReportsStatement data={pack} />
     </div>
   )

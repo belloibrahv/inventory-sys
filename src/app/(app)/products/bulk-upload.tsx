@@ -65,7 +65,7 @@ export function BulkProductUpload() {
           <p>Added: {result.created}</p>
           <p>Skipped (item code already exists): {result.skipped}</p>
           {result.errors.length ? (
-            <ul className="list-disc pl-5 text-amber-800">
+            <ul className="list-disc pl-5 text-warning">
               {result.errors.slice(0, 12).map((error) => (
                 <li key={error}>{error}</li>
               ))}

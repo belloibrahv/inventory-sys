@@ -2,12 +2,17 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { ChevronRight, PanelLeftClose } from "lucide-react"
+import { PanelLeftClose } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { BrandLockup } from "@/components/brand-mark"
 import { navGroups } from "@/components/layout/nav"
 import { useUI } from "@/store/ui"
 
+/**
+ * Thirty-odd destinations in six groups. The weight is carried by the group
+ * headings and by the one active item, not by making every label bold, which is
+ * what previously made the menu look like a wall.
+ */
 export function Sidebar({ allowedHrefs }: { allowedHrefs: string[] }) {
   const pathname = usePathname()
   const open = useUI((state) => state.sidebarOpen)
@@ -33,16 +38,16 @@ export function Sidebar({ allowedHrefs }: { allowedHrefs: string[] }) {
       ) : null}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-[272px] flex-col bg-sidebar text-sidebar-foreground",
+          "fixed inset-y-0 left-0 z-50 w-[264px] flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground",
           open ? "flex" : "hidden",
           desktopSidebar ? "lg:flex" : "lg:hidden"
         )}
       >
-        <div className="flex h-[4.5rem] items-center justify-between gap-2 px-4">
+        <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-sidebar-border px-4">
           <BrandLockup light compact />
           <button
             type="button"
-            className="hidden min-h-11 min-w-11 items-center justify-center rounded-xl text-white/70 hover:bg-sidebar-muted hover:text-white lg:inline-flex"
+            className="hidden h-9 w-9 items-center justify-center rounded-lg text-sidebar-foreground/60 transition-colors hover:bg-sidebar-muted hover:text-white lg:inline-flex"
             onClick={() => setDesktopSidebar(false)}
             aria-label="Hide menu"
             title="Hide menu"
@@ -50,13 +55,13 @@ export function Sidebar({ allowedHrefs }: { allowedHrefs: string[] }) {
             <PanelLeftClose className="h-4 w-4" />
           </button>
         </div>
-        <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-8 pt-2">
+        <nav className="flex-1 space-y-6 overflow-y-auto px-3 pb-10 pt-4">
           {groups.map((group) => (
             <div key={group.label}>
-              <p className="mb-2 px-3 text-[11px] font-medium uppercase tracking-[0.14em] text-white/35">
+              <p className="mb-1.5 px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/40">
                 {group.label}
               </p>
-              <div className="space-y-1">
+              <div className="space-y-0.5">
                 {group.items.map((item) => {
                   const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
                   const Icon = item.icon
@@ -65,16 +70,19 @@ export function Sidebar({ allowedHrefs }: { allowedHrefs: string[] }) {
                       key={item.href}
                       href={item.href}
                       onClick={() => setSidebar(false)}
+                      aria-current={active ? "page" : undefined}
                       className={cn(
-                        "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors",
+                        "relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] transition-colors",
                         active
-                          ? "bg-sidebar-active text-white shadow-[inset_3px_0_0_hsl(var(--brand))]"
-                          : "text-white hover:bg-sidebar-muted hover:text-white"
+                          ? "bg-sidebar-active font-semibold text-white"
+                          : "font-medium text-sidebar-foreground/75 hover:bg-sidebar-muted hover:text-white"
                       )}
                     >
-                      <Icon className="h-4 w-4 shrink-0" />
-                      <span className="flex-1">{item.name}</span>
-                      <ChevronRight className={cn("h-3.5 w-3.5 opacity-0", active && "opacity-50")} />
+                      {active ? (
+                        <span className="absolute inset-y-1.5 left-0 w-[3px] rounded-r-full bg-brand" />
+                      ) : null}
+                      <Icon className={cn("h-4 w-4 shrink-0", active ? "text-white" : "text-sidebar-foreground/55")} />
+                      <span className="truncate">{item.name}</span>
                     </Link>
                   )
                 })}

@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
-import { Search, UserCheck, AlertCircle, Users, DollarSign, ArrowRight } from "lucide-react"
+import { ArrowRight, Coins, Search, UserCheck, Users, Wallet } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
+import { ShopTag, StatCard, StatGrid, TableEmpty, TableShell, TonePill, Toolbar } from "@/components/shared"
 import { formatCurrency, money } from "@/lib/utils"
 
 type CustomerItem = {
@@ -21,6 +22,8 @@ type CustomerItem = {
   _count: { sales: number; returns: number }
 }
 
+type Tab = "ALL" | "OWING" | "CLEAR"
+
 export function CustomersClientView({
   customers,
   branches,
@@ -28,230 +31,165 @@ export function CustomersClientView({
   customers: CustomerItem[]
   branches: Array<{ id: string; name: string; code: string }>
 }) {
-  const [tab, setTab] = useState<"ALL" | "OWING" | "SETTLED">("ALL")
+  const [tab, setTab] = useState<Tab>("ALL")
   const [search, setSearch] = useState("")
   const [branchFilter, setBranchFilter] = useState("ALL")
 
-  const formattedCustomers = useMemo(() => {
-    return customers.map((c) => {
-      const totalPurchases = c.sales.reduce((sum, s) => sum + money(s.totalAmount), 0)
-      const totalPaid = c.sales.reduce((sum, s) => sum + money(s.paidAmount), 0)
-      const balanceOwed = money(c.currentBalance)
-      const isOwing = balanceOwed > 0
+  /*
+    What the client asked this page to answer, in his words: "I want to know
+    which of the customers is owing us and which one is not owing. I want to know
+    the total value of item this particular customer has purchased from us."
+  */
+  const accounts = useMemo(
+    () =>
+      customers.map((customer) => {
+        const purchased = customer.sales.reduce((sum, sale) => sum + money(sale.totalAmount), 0)
+        const paid = customer.sales.reduce((sum, sale) => sum + money(sale.paidAmount), 0)
+        const owed = money(customer.currentBalance)
+        return { ...customer, purchased, paid, owed, isOwing: owed > 0 }
+      }),
+    [customers]
+  )
 
-      return {
-        ...c,
-        totalPurchases,
-        totalPaid,
-        balanceOwed,
-        isOwing,
-      }
-    })
-  }, [customers])
+  const owingCount = accounts.filter((account) => account.isOwing).length
+  const lifetime = accounts.reduce((sum, account) => sum + account.purchased, 0)
+  const totalOwed = accounts.reduce((sum, account) => sum + account.owed, 0)
 
-  // KPIs
-  const totalCustomers = formattedCustomers.length
-  const totalLifetimePurchases = formattedCustomers.reduce((sum, c) => sum + c.totalPurchases, 0)
-  const totalDebtOwed = formattedCustomers.reduce((sum, c) => sum + c.balanceOwed, 0)
-  const owingCount = formattedCustomers.filter((c) => c.isOwing).length
-
-  // Filtered List
   const filtered = useMemo(() => {
-    return formattedCustomers.filter((c) => {
-      if (tab === "OWING" && !c.isOwing) return false
-      if (tab === "SETTLED" && c.isOwing) return false
-      if (branchFilter !== "ALL" && c.branch.id !== branchFilter) return false
-      if (search.trim()) {
-        const q = search.toLowerCase()
-        const matchName = c.name.toLowerCase().includes(q)
-        const matchPhone = c.phone.includes(q)
-        if (!matchName && !matchPhone) return false
-      }
-      return true
+    const query = search.trim().toLowerCase()
+    return accounts.filter((account) => {
+      if (tab === "OWING" && !account.isOwing) return false
+      if (tab === "CLEAR" && account.isOwing) return false
+      if (branchFilter !== "ALL" && account.branch.id !== branchFilter) return false
+      if (!query) return true
+      return account.name.toLowerCase().includes(query) || account.phone.includes(query)
     })
-  }, [formattedCustomers, tab, branchFilter, search])
+  }, [accounts, tab, branchFilter, search])
+
+  const tabs: Array<{ key: Tab; label: string; count: number }> = [
+    { key: "ALL", label: "Everyone", count: accounts.length },
+    { key: "OWING", label: "Still owing", count: owingCount },
+    { key: "CLEAR", label: "Paid up", count: accounts.length - owingCount },
+  ]
 
   return (
-    <div className="space-y-6">
-      {/* KPI Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="surface-card p-4">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase">Registered Customers</span>
-            <Users className="h-4 w-4 text-primary" />
-          </div>
-          <p className="mt-1 text-2xl font-bold">{totalCustomers}</p>
-          <p className="text-xs text-muted-foreground mt-1">Active customer accounts</p>
-        </div>
+    <div className="space-y-5">
+      <StatGrid>
+        <StatCard
+          label="Customers on the books"
+          value={String(accounts.length)}
+          hint="Anyone whose name has been entered on a sale"
+          icon={<Users className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Bought from us, all time"
+          value={formatCurrency(lifetime)}
+          hint="Total value of everything these customers have taken"
+          icon={<Coins className="h-4 w-4" />}
+          tone="primary"
+        />
+        <StatCard
+          label="Still owed to us"
+          value={formatCurrency(totalOwed)}
+          hint={`${owingCount} customer${owingCount === 1 ? "" : "s"} with an open balance`}
+          icon={<Wallet className="h-4 w-4" />}
+          tone={totalOwed > 0 ? "warning" : "neutral"}
+          onClick={() => setTab("OWING")}
+        />
+        <StatCard
+          label="Paid up in full"
+          value={String(accounts.length - owingCount)}
+          hint="Owe us nothing today"
+          icon={<UserCheck className="h-4 w-4" />}
+          tone="success"
+          onClick={() => setTab("CLEAR")}
+        />
+      </StatGrid>
 
-        <div className="surface-card p-4">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase">Total Lifetime Purchases</span>
-            <DollarSign className="h-4 w-4 text-primary" />
-          </div>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{formatCurrency(totalLifetimePurchases)}</p>
-          <p className="text-xs text-muted-foreground mt-1">Total sales value across all customers</p>
-        </div>
-
-        <div className="surface-card p-4">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase">Outstanding Debts Owed</span>
-            <AlertCircle className="h-4 w-4 text-amber-600" />
-          </div>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-amber-600 dark:text-amber-400">
-            {formatCurrency(totalDebtOwed)}
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">{owingCount} customer(s) currently owing</p>
-        </div>
-
-        <div className="surface-card p-4">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase">Debt-Free Customers</span>
-            <UserCheck className="h-4 w-4 text-emerald-600" />
-          </div>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
-            {totalCustomers - owingCount}
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">100% cleared balances</p>
-        </div>
-      </div>
-
-      {/* Filter Tabs & Search */}
-      <div className="surface-card p-4 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          {/* Tabs */}
-          <div className="flex rounded-xl bg-muted/50 p-1">
+      <Toolbar className="justify-between">
+        <div className="inline-flex rounded-lg bg-muted p-0.5">
+          {tabs.map((item) => (
             <button
+              key={item.key}
               type="button"
-              onClick={() => setTab("ALL")}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                tab === "ALL" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              onClick={() => setTab(item.key)}
+              className={`rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
+                tab === item.key
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              All Customers ({totalCustomers})
+              {item.label} <span className="num text-xs opacity-70">({item.count})</span>
             </button>
-            <button
-              type="button"
-              onClick={() => setTab("OWING")}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                tab === "OWING" ? "bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200 shadow-sm" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Owing Customers ({owingCount})
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab("SETTLED")}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                tab === "SETTLED" ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200 shadow-sm" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Settled / Clear ({totalCustomers - owingCount})
-            </button>
-          </div>
+          ))}
+        </div>
 
-          {/* Search & Branch */}
-          <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[280px] justify-end">
-            <div className="w-40">
-              <Select value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)}>
-                <option value="ALL">All branches</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-
-            <div className="relative flex-1 min-w-[200px] max-w-sm">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by customer name or phone..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
+        <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+          <Select value={branchFilter} onChange={(event) => setBranchFilter(event.target.value)} className="h-9 w-44">
+            <option value="ALL">All shops</option>
+            {branches.map((branch) => (
+              <option key={branch.id} value={branch.id}>
+                {branch.name}
+              </option>
+            ))}
+          </Select>
+          <div className="relative min-w-[200px] max-w-xs flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Find by name or phone"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="h-9 pl-9"
+            />
           </div>
         </div>
-      </div>
+      </Toolbar>
 
-      {/* Customers Table */}
-      <div className="surface-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-muted-foreground bg-muted/40 text-xs uppercase tracking-wider">
-              <tr className="border-b border-border">
-                <th className="px-4 py-3">Customer Profile</th>
-                <th className="px-3 py-3">Shop</th>
-                <th className="px-3 py-3 text-right">Total Purchases</th>
-                <th className="px-3 py-3 text-right">Total Paid</th>
-                <th className="px-4 py-3 text-right">Balance Owed</th>
-                <th className="px-3 py-3 text-center">Status</th>
-                <th className="px-4 py-3 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/60">
-              {filtered.map((customer) => (
-                <tr key={customer.id} className="hover:bg-muted/30 transition-colors">
-                  <td className="px-4 py-3">
-                    <Link href={`/customers/${customer.id}`} className="font-semibold text-primary hover:underline">
-                      {customer.name}
-                    </Link>
-                    <p className="text-xs text-muted-foreground font-mono">{customer.phone}</p>
-                  </td>
-
-                  <td className="px-3 py-3">
-                    <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-semibold">{customer.branch.code}</span>
-                  </td>
-
-                  <td className="px-3 py-3 text-right tabular-nums font-mono font-medium">
-                    {formatCurrency(customer.totalPurchases)}
-                  </td>
-
-                  <td className="px-3 py-3 text-right tabular-nums font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-                    {formatCurrency(customer.totalPaid)}
-                  </td>
-
-                  <td className="px-4 py-3 text-right tabular-nums font-mono font-bold">
-                    <span className={customer.isOwing ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}>
-                      {formatCurrency(customer.balanceOwed)}
-                    </span>
-                  </td>
-
-                  <td className="px-3 py-3 text-center">
-                    <span
-                      className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                        customer.isOwing
-                          ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
-                          : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
-                      }`}
-                    >
-                      {customer.isOwing ? "Owing" : "Clear"}
-                    </span>
-                  </td>
-
-                  <td className="px-4 py-3 text-right">
-                    <Button asChild size="sm" variant="ghost" className="h-8 text-xs font-medium">
-                      <Link href={`/customers/${customer.id}`}>
-                        Statement <ArrowRight className="ml-1 h-3 w-3" />
-                      </Link>
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
-                    No customers found matching the selected filters.
-                  </td>
-                </tr>
+      <TableShell
+        columns={[
+          { label: "Customer" },
+          { label: "Shop" },
+          { label: "Sales", align: "right" },
+          { label: "Bought, all time", align: "right" },
+          { label: "Paid us", align: "right" },
+          { label: "Still owes", align: "right" },
+          { label: "", align: "right" },
+        ]}
+      >
+        {filtered.map((customer) => (
+          <tr key={customer.id}>
+            <td>
+              <Link href={`/customers/${customer.id}`} className="font-medium text-primary hover:underline">
+                {customer.name}
+              </Link>
+              <p className="font-mono text-xs text-muted-foreground">{customer.phone}</p>
+            </td>
+            <td>
+              <ShopTag>{customer.branch.code}</ShopTag>
+            </td>
+            <td className="text-right num text-muted-foreground">{customer._count.sales}</td>
+            <td className="text-right num font-medium">{formatCurrency(customer.purchased)}</td>
+            <td className="text-right num text-success">{formatCurrency(customer.paid)}</td>
+            <td className="text-right">
+              {customer.isOwing ? (
+                <TonePill tone="warning">{formatCurrency(customer.owed)}</TonePill>
+              ) : (
+                <TonePill tone="success">Paid up</TonePill>
               )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            </td>
+            <td className="text-right">
+              <Button asChild variant="ghost" size="sm">
+                <Link href={`/customers/${customer.id}`}>
+                  Statement <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                </Link>
+              </Button>
+            </td>
+          </tr>
+        ))}
+        {filtered.length === 0 ? (
+          <TableEmpty colSpan={7}>No customer matches that tab, shop or search.</TableEmpty>
+        ) : null}
+      </TableShell>
     </div>
   )
 }

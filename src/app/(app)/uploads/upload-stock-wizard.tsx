@@ -215,197 +215,201 @@ export function UploadStockWizard({
     router.refresh()
   }
 
+  const unitCount = items.reduce((sum, item) => sum + (item.quantity || 0), 0)
+
   return (
-    <form onSubmit={handleSubmit} className="surface-card space-y-6 p-5 sm:p-6 border-primary/20">
-      <div>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-primary">Upload Stock & Goods Inward</p>
-            <h2 className="text-xl font-bold tracking-tight">Supplier Upload Bill</h2>
-          </div>
-          <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-2 text-right">
-            <span className="text-[11px] font-medium text-muted-foreground uppercase">Generated Invoice ID</span>
-            <p className="font-mono text-base font-bold text-primary">{invoiceNumber}</p>
-          </div>
+    <form onSubmit={handleSubmit} className="surface-card overflow-hidden">
+      {/*
+        The bill the client described: supplier at the top, the generated bill
+        number and the date beside it, the item lines with cost, quantity and an
+        IMEI box per unit, and the amount paid at the bottom working out what is
+        left. No paid / not-paid buttons anywhere.
+      */}
+      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-border bg-muted/40 px-5 py-4">
+        <div>
+          <p className="eyebrow">Supplier upload bill</p>
+          <h2 className="text-base font-semibold tracking-tight">Book a carton onto the system</h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Enter the supplier and the items. The IMEI boxes open to match the quantity you type.
+          </p>
         </div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Input supplier and upload details, list items with auto-generated IMEI scan rows, and record initial payments.
-        </p>
-      </div>
-
-      {/* 1. Supplier & Destination Shop */}
-      <div className="rounded-2xl border border-border/80 bg-muted/30 p-4 sm:p-5 space-y-4">
-        <h3 className="text-sm font-semibold flex items-center gap-2">
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">1</span>
-          Supplier & Destination Shop
-        </h3>
-
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Destination Shop</label>
-            <Select value={branchId} onChange={(e) => setBranchId(e.target.value)} required disabled={busy}>
-              {shops.map((shop) => (
-                <option key={shop.id} value={shop.id}>
-                  {shop.name} ({shop.code})
-                </option>
-              ))}
-            </Select>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Upload Date</label>
-            <Input
-              type="date"
-              value={uploadDate}
-              onChange={(e) => setUploadDate(e.target.value)}
-              required
-              disabled={busy}
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Supplier Mode</label>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant={supplierMode === "existing" ? "default" : "outline"}
-                onClick={() => setSupplierMode("existing")}
-                disabled={busy || suppliers.length === 0}
-                className="flex-1"
-              >
-                Existing
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={supplierMode === "new" ? "default" : "outline"}
-                onClick={() => setSupplierMode("new")}
-                disabled={busy}
-                className="flex-1"
-              >
-                + New Supplier
-              </Button>
-            </div>
-          </div>
+        <div className="rounded-lg border border-border bg-card px-4 py-2 text-right">
+          <p className="eyebrow">Bill number</p>
+          <p className="font-mono text-sm font-semibold text-primary">{invoiceNumber}</p>
         </div>
+      </header>
 
-        {supplierMode === "existing" ? (
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Select Supplier</label>
-            <Select
-              value={supplierId}
-              onChange={(e) => setSupplierId(e.target.value)}
-              required
-              disabled={busy || suppliers.length === 0}
-              emptyLabel="No suppliers in the system yet. Click + New Supplier."
-            >
-              {suppliers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} {s.city || s.country ? `· ${[s.city, s.country].filter(Boolean).join(", ")}` : ""}
-                </option>
-              ))}
-            </Select>
-          </div>
-        ) : (
-          <div className="grid gap-3 rounded-xl border border-dashed border-border bg-background p-3 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Supplier Name *</label>
-              <Input
-                placeholder="e.g. Shenzhen Tech Link / UK Direct"
-                value={newSupplierName}
-                onChange={(e) => setNewSupplierName(e.target.value)}
-                required
-                disabled={busy}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Phone Number</label>
-              <Input
-                placeholder="e.g. +234... or international"
-                value={newSupplierPhone}
-                onChange={(e) => setNewSupplierPhone(e.target.value)}
-                disabled={busy}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Country</label>
-              <Input
-                placeholder="e.g. China / UAE / UK / Nigeria"
-                value={newSupplierCountry}
-                onChange={(e) => setNewSupplierCountry(e.target.value)}
-                disabled={busy}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">City / Market</label>
-              <Input
-                placeholder="e.g. Shenzhen / Dubai / Lagos"
-                value={newSupplierCity}
-                onChange={(e) => setNewSupplierCity(e.target.value)}
-                disabled={busy}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* 2. List of Items to Upload */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold flex items-center gap-2">
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">2</span>
-            Items to Upload
+      <div className="space-y-6 p-5">
+        <section className="space-y-3">
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
+              1
+            </span>
+            Supplier, shop and date
           </h3>
-          <Button type="button" size="sm" variant="outline" onClick={addItemLine} disabled={busy}>
-            <PlusCircle className="mr-1 h-4 w-4" />
-            Add Another Item
-          </Button>
-        </div>
 
-        <div className="space-y-4">
-          {items.map((item, itemIdx) => {
-            return (
-              <div key={itemIdx} className="rounded-2xl border border-border bg-card p-4 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-lg bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">Item #{itemIdx + 1}</span>
-                    <span className="text-xs text-muted-foreground">
-                      Tracking: <strong className="text-foreground">{item.tracking}</strong>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="block text-sm">
+              <span className="eyebrow mb-1 block">Which shop it goes to</span>
+              <Select value={branchId} onChange={(e) => setBranchId(e.target.value)} required disabled={busy}>
+                {shops.map((shop) => (
+                  <option key={shop.id} value={shop.id}>
+                    {shop.name} ({shop.code})
+                  </option>
+                ))}
+              </Select>
+            </label>
+
+            <label className="block text-sm">
+              <span className="eyebrow mb-1 block">Date of this upload</span>
+              <Input type="date" value={uploadDate} onChange={(e) => setUploadDate(e.target.value)} required disabled={busy} />
+            </label>
+
+            <div className="text-sm">
+              <span className="eyebrow mb-1 block">Supplier</span>
+              <div className="inline-flex w-full rounded-lg bg-muted p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setSupplierMode("existing")}
+                  disabled={busy || suppliers.length === 0}
+                  className={`flex-1 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
+                    supplierMode === "existing" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+                  }`}
+                >
+                  Already on the books
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSupplierMode("new")}
+                  disabled={busy}
+                  className={`flex-1 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
+                    supplierMode === "new" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+                  }`}
+                >
+                  New supplier
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {supplierMode === "existing" ? (
+            <label className="block text-sm">
+              <span className="eyebrow mb-1 block">Which supplier</span>
+              <Select
+                value={supplierId}
+                onChange={(e) => setSupplierId(e.target.value)}
+                required
+                disabled={busy || suppliers.length === 0}
+                emptyLabel="No suppliers on the books yet. Choose New supplier."
+              >
+                {suppliers.map((supplier) => (
+                  <option key={supplier.id} value={supplier.id}>
+                    {supplier.name}
+                    {supplier.city || supplier.country
+                      ? ` · ${[supplier.city, supplier.country].filter(Boolean).join(", ")}`
+                      : ""}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          ) : (
+            <div className="grid gap-3 rounded-lg border border-dashed border-input p-3 sm:grid-cols-2">
+              <label className="block text-sm">
+                <span className="eyebrow mb-1 block">Supplier name</span>
+                <Input
+                  placeholder="e.g. Shenzhen Tech Link"
+                  value={newSupplierName}
+                  onChange={(e) => setNewSupplierName(e.target.value)}
+                  required
+                  disabled={busy}
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="eyebrow mb-1 block">Phone</span>
+                <Input value={newSupplierPhone} onChange={(e) => setNewSupplierPhone(e.target.value)} disabled={busy} />
+              </label>
+              <label className="block text-sm">
+                <span className="eyebrow mb-1 block">Country</span>
+                <Input
+                  placeholder="e.g. China, UAE, Nigeria"
+                  value={newSupplierCountry}
+                  onChange={(e) => setNewSupplierCountry(e.target.value)}
+                  disabled={busy}
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="eyebrow mb-1 block">City or market</span>
+                <Input
+                  placeholder="e.g. Shenzhen, Dubai, Lagos"
+                  value={newSupplierCity}
+                  onChange={(e) => setNewSupplierCity(e.target.value)}
+                  disabled={busy}
+                />
+              </label>
+            </div>
+          )}
+        </section>
+
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="flex items-center gap-2 text-sm font-semibold">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
+                2
+              </span>
+              What is on this bill
+            </h3>
+            <Button type="button" size="sm" variant="outline" onClick={addItemLine} disabled={busy}>
+              <PlusCircle className="mr-1.5 h-4 w-4" /> Add another item
+            </Button>
+          </div>
+
+          <div className="space-y-3">
+            {items.map((item, itemIdx) => (
+              <div key={itemIdx} className="space-y-3 rounded-lg border border-border p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-medium">
+                    Item {itemIdx + 1}
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      {item.tracking === "IMEI"
+                        ? "tracked by IMEI"
+                        : item.tracking === "SERIAL"
+                          ? "tracked by serial"
+                          : "counted in pieces"}
                     </span>
-                  </div>
-                  {items.length > 1 && (
+                  </p>
+                  {items.length > 1 ? (
                     <Button
                       type="button"
                       size="sm"
                       variant="ghost"
-                      className="h-7 text-xs text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                      className="text-danger hover:bg-danger-soft"
                       onClick={() => removeItemLine(itemIdx)}
                       disabled={busy}
                     >
-                      <Trash2 className="mr-1 h-3.5 w-3.5" /> Remove Line
+                      <Trash2 className="mr-1 h-3.5 w-3.5" /> Remove
                     </Button>
-                  )}
+                  ) : null}
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-12">
-                  <div className="sm:col-span-6">
-                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Product Name</label>
+                  <label className="block text-sm sm:col-span-6">
+                    <span className="eyebrow mb-1 block">Item</span>
                     <Select
                       value={item.productId}
                       onChange={(e) => handleProductSelect(itemIdx, e.target.value)}
                       disabled={busy}
+                      emptyLabel="No items on the list yet. Load the item list first."
                     >
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} · {p.brand.name} · {p.tracking} · cost {formatCurrency(p.costPrice)}
+                      {products.map((product) => (
+                        <option key={product.id} value={product.id}>
+                          {product.name} · {product.brand.name} · cost {formatCurrency(product.costPrice)}
                         </option>
                       ))}
                     </Select>
-                  </div>
+                  </label>
 
-                  <div className="sm:col-span-3">
-                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Unit Cost Price (₦)</label>
+                  <label className="block text-sm sm:col-span-3">
+                    <span className="eyebrow mb-1 block">Cost price each (₦)</span>
                     <Input
                       type="number"
                       min={0}
@@ -421,11 +425,12 @@ export function UploadStockWizard({
                       }}
                       required
                       disabled={busy}
+                      className="num"
                     />
-                  </div>
+                  </label>
 
-                  <div className="sm:col-span-3">
-                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Quantity to Upload</label>
+                  <label className="block text-sm sm:col-span-3">
+                    <span className="eyebrow mb-1 block">How many</span>
                     <Input
                       type="number"
                       min={1}
@@ -434,149 +439,141 @@ export function UploadStockWizard({
                       onChange={(e) => handleQuantityChange(itemIdx, Number(e.target.value))}
                       required
                       disabled={busy}
+                      className="num"
                     />
-                  </div>
+                  </label>
                 </div>
 
-                {/* Subtotal line */}
-                <div className="flex justify-between items-center text-xs text-muted-foreground bg-muted/20 px-3 py-1.5 rounded-lg">
-                  <span>Line Total: <strong>{formatCurrency((item.quantity || 0) * (item.costPrice || 0))}</strong></span>
-                  <span>{item.quantity} unit(s) @ {formatCurrency(item.costPrice || 0)} each</span>
-                </div>
+                <p className="flex flex-wrap justify-between gap-2 rounded-md bg-muted/60 px-3 py-1.5 text-xs text-muted-foreground">
+                  <span>
+                    {item.quantity} × {formatCurrency(item.costPrice || 0)}
+                  </span>
+                  <span>
+                    Line total{" "}
+                    <strong className="num text-foreground">
+                      {formatCurrency((item.quantity || 0) * (item.costPrice || 0))}
+                    </strong>
+                  </span>
+                </p>
 
-                {/* Dynamic IMEI / Serial Scanning Fields */}
-                {item.tracking !== "NONE" && (
-                  <div className="rounded-xl border border-primary/20 bg-primary/[0.02] p-3 space-y-2">
-                    <p className="text-xs font-semibold text-primary">
-                      Scan or enter {item.quantity} {item.tracking === "IMEI" ? "IMEI numbers" : "Serial numbers"} for this batch:
+                {/* One box per unit, opened by the quantity above. */}
+                {item.tracking !== "NONE" ? (
+                  <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+                    <p className="eyebrow">
+                      Scan or type the {item.quantity} {item.tracking === "IMEI" ? "IMEI numbers" : "serial numbers"}
                     </p>
                     <div className="grid gap-2 sm:grid-cols-2">
                       {Array.from({ length: item.quantity }).map((_, idIdx) => (
                         <div key={idIdx} className="flex items-center gap-2">
-                          <span className="shrink-0 font-mono text-[11px] text-muted-foreground w-6">#{idIdx + 1}</span>
+                          <span className="w-6 shrink-0 font-mono text-[11px] text-muted-foreground">{idIdx + 1}.</span>
                           <Input
-                            placeholder={`Type or scan ${item.tracking === "IMEI" ? "15-digit IMEI" : "serial"}`}
+                            placeholder={item.tracking === "IMEI" ? "15-digit IMEI" : "Serial number"}
                             value={item.identities?.[idIdx] || ""}
                             onChange={(e) => handleIdentityChange(itemIdx, idIdx, e.target.value)}
                             required
                             disabled={busy}
                             autoComplete="off"
-                            className="font-mono text-xs"
+                            className="h-9 font-mono text-xs"
                           />
                         </div>
                       ))}
                     </div>
                   </div>
-                )}
+                ) : null}
               </div>
-            )
-          })}
-        </div>
-      </div>
+            ))}
+          </div>
+        </section>
 
-      {/* 3. Payment Column & Financial Settlement */}
-      <div className="rounded-2xl border border-border/80 bg-muted/30 p-4 sm:p-5 space-y-4">
-        <h3 className="text-sm font-semibold flex items-center gap-2">
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">3</span>
-          Payment & Financial Settlement
-        </h3>
+        <section className="space-y-3">
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
+              3
+            </span>
+            Payment
+          </h3>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-xl bg-background p-4 border border-border">
-            <span className="text-xs font-medium text-muted-foreground uppercase">Total Upload Value</span>
-            <p className="text-2xl font-bold text-foreground tabular-nums mt-1">{formatCurrency(totalInvoiceValue)}</p>
-            <p className="text-xs text-muted-foreground mt-1">Calculated from {items.length} line(s)</p>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-lg border border-border p-4">
+              <p className="eyebrow">Total value of this bill</p>
+              <p className="mt-1 text-2xl font-semibold num">{formatCurrency(totalInvoiceValue)}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                From {items.length} line{items.length === 1 ? "" : "s"}, {unitCount} unit{unitCount === 1 ? "" : "s"}
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-border p-4">
+              <label className="block">
+                <span className="eyebrow mb-1 block">Amount paid now (₦)</span>
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={amountPaid || ""}
+                  onChange={(e) => setAmountPaid(Math.max(0, Number(e.target.value) || 0))}
+                  placeholder="0.00"
+                  disabled={busy}
+                  className="text-lg font-semibold num"
+                />
+              </label>
+              <div className="mt-2 flex gap-3 text-xs">
+                <button type="button" onClick={() => setAmountPaid(totalInvoiceValue)} className="font-medium text-primary hover:underline">
+                  Paid in full
+                </button>
+                <button type="button" onClick={() => setAmountPaid(0)} className="font-medium text-muted-foreground hover:underline">
+                  Nothing paid yet
+                </button>
+              </div>
+            </div>
+
+            <div className={`rounded-lg border p-4 ${isFullyPaid ? "border-success/30 bg-success-soft" : "border-border"}`}>
+              <p className="eyebrow">Still to be paid</p>
+              <p className={`mt-1 text-2xl font-semibold num ${balanceOwed > 0 ? "text-warning" : "text-success"}`}>
+                {formatCurrency(balanceOwed)}
+              </p>
+              <p className="mt-1 text-xs">
+                {isFullyPaid ? (
+                  <span className="inline-flex items-center gap-1 font-medium text-success">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> This bill is fully cleared
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">
+                    {amountPaid > 0 ? "Part paid." : "Nothing paid."} The balance stays owed on Goods from supplier.
+                  </span>
+                )}
+              </p>
+            </div>
           </div>
 
-          <div className="rounded-xl bg-background p-4 border border-border">
-            <label className="block text-xs font-medium text-muted-foreground uppercase mb-1">
-              Amount Paid Now (₦)
-            </label>
+          <label className="block text-sm">
+            <span className="eyebrow mb-1 block">Note or carton reference</span>
             <Input
-              type="number"
-              min={0}
-              max={totalInvoiceValue * 2}
-              step="0.01"
-              value={amountPaid || ""}
-              onChange={(e) => {
-                setAmountPaid(Math.max(0, Number(e.target.value) || 0))
-              }}
-              placeholder="0.00"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="e.g. carton 4 from the Dubai cargo, waybill 88392"
               disabled={busy}
-              className="text-lg font-bold tabular-nums min-h-11"
             />
-            <div className="flex gap-2 mt-2">
-              <button
-                type="button"
-                onClick={() => setAmountPaid(totalInvoiceValue)}
-                className="text-[11px] font-medium text-primary hover:underline"
-              >
-                Set Full (₦{totalInvoiceValue.toLocaleString("en-NG")})
-              </button>
-              <span className="text-muted-foreground text-[11px]">·</span>
-              <button
-                type="button"
-                onClick={() => setAmountPaid(0)}
-                className="text-[11px] font-medium text-muted-foreground hover:underline"
-              >
-                Set Zero (Unpaid)
-              </button>
-            </div>
-          </div>
-
-          <div className={`rounded-xl p-4 border ${isFullyPaid ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-950 dark:text-emerald-200" : "bg-background border-border"}`}>
-            <span className="text-xs font-medium text-muted-foreground uppercase">Remaining Balance</span>
-            <p className={`text-2xl font-bold tabular-nums mt-1 ${balanceOwed > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>
-              {formatCurrency(balanceOwed)}
-            </p>
-            <div className="mt-1">
-              {isFullyPaid ? (
-                <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                  <CheckCircle2 className="h-3.5 w-3.5" /> Invoice Fully Cleared
-                </span>
-              ) : (
-                <span className="text-xs text-muted-foreground">
-                  {amountPaid > 0 ? "Partially paid · balance stays owed" : "Unpaid invoice · balance stays owed"}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-xs font-medium text-muted-foreground">Optional Upload Notes / Carton Reference</label>
-          <Input
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="e.g. Carton #4 from Dubai cargo, waybill #88392"
-            disabled={busy}
-          />
-        </div>
+          </label>
+        </section>
       </div>
 
-      {/* 4. Action Buttons */}
-      <div className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-border">
-        <div className="text-sm">
-          <span className="text-muted-foreground">Ready to book: </span>
-          <strong className="text-foreground">{items.reduce((s, i) => s + (i.quantity || 0), 0)} unit(s)</strong>
-          <span className="text-muted-foreground"> totaling </span>
-          <strong className="text-primary">{formatCurrency(totalInvoiceValue)}</strong>
-        </div>
-
-        <Button type="submit" size="lg" disabled={busy || totalInvoiceValue <= 0} className="min-w-48 font-semibold">
+      <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-muted/40 px-5 py-3.5">
+        <p className="text-sm text-muted-foreground">
+          Ready to book <strong className="text-foreground">{unitCount}</strong> unit{unitCount === 1 ? "" : "s"} worth{" "}
+          <strong className="text-foreground num">{formatCurrency(totalInvoiceValue)}</strong>
+        </p>
+        <Button type="submit" size="lg" disabled={busy || totalInvoiceValue <= 0}>
           {busy ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Uploading stock...
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Uploading…
             </>
           ) : (
             <>
-              <PackagePlus className="mr-2 h-4 w-4" />
-              Upload Stock to Shop
+              <PackagePlus className="mr-2 h-4 w-4" /> Upload this stock
             </>
           )}
         </Button>
-      </div>
+      </footer>
     </form>
   )
 }

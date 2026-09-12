@@ -36,7 +36,7 @@ export default async function SwapsPage() {
                 </p>
               ) : null}
               {swap.status === "PENDING" ? (
-                <p className="mt-3 text-xs text-amber-700">Waiting on CEO / manager approval. Collecting now is only for approvers.</p>
+                <p className="mt-3 text-xs text-warning">Waiting on CEO / manager approval. Collecting now is only for approvers.</p>
               ) : null}
               {swap.status === "APPROVED" || swap.status === "PENDING" ? (
                 <div className="mt-4 border-t border-border pt-4">

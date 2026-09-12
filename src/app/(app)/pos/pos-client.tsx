@@ -321,12 +321,12 @@ export function PosClient({
   return (
     <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
       {usingDeviceList || lineDown ? (
-        <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-950 xl:col-span-2 dark:bg-amber-500/10 dark:text-amber-100">
+        <div className="rounded-xl bg-warning-soft px-4 py-3 text-sm text-warning xl:col-span-2">
           Selling from the last In shop list saved on this phone. Only names already on this phone. Coming phones are not here. The invoice is born when the line returns.
         </div>
       ) : null}
       {sellLock?.locked ? (
-        <div className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-950 xl:col-span-2 dark:bg-rose-500/10 dark:text-rose-100">
+        <div className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger xl:col-span-2">
           <p>{sellLock.message}</p>
           <a href={sellLock.href} className="mt-2 inline-block font-medium text-primary">
             Count the till for {sellLock.dates[0]}
@@ -399,7 +399,7 @@ export function PosClient({
                   <td className="px-4 py-3">
                     <p className="font-medium">{line.name}{line.quantity > 1 ? ` × ${line.quantity}` : ""}</p>
                     {line.unitPrice < line.minPrice ? (
-                      <p className="text-xs text-rose-600">
+                      <p className="text-xs text-danger">
                         Below lowest price {formatCurrency(line.minPrice)}
                         {canOverrideFloor ? " · Super Admin can still sell this" : " · you cannot complete this sale"}
                       </p>
@@ -525,7 +525,7 @@ export function PosClient({
           Wholesale / dealer sale
         </label>
         <Input placeholder="Notes" value={notes} onChange={(event) => setNotes(event.target.value)} />
-        <div className="rounded-2xl bg-muted p-4">
+        <div className="rounded-lg bg-muted p-4">
           <p className="text-sm text-muted-foreground">Total</p>
           <p className="text-3xl font-semibold">{formatCurrency(total)}</p>
           <p className="text-xs text-muted-foreground">

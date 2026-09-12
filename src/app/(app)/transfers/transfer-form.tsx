@@ -116,7 +116,7 @@ export function TransferForm({
       </p>
       <Button type="submit" disabled={busy}>{busy ? "Sending this list" : "Send this list"}</Button>
       {errors.length ? (
-        <ul className="list-disc pl-5 text-sm text-amber-800">
+        <ul className="list-disc pl-5 text-sm text-warning">
           {errors.slice(0, 12).map((error) => (
             <li key={error}>{error}</li>
           ))}

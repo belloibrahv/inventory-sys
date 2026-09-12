@@ -40,7 +40,7 @@ export default async function SalesPage() {
                   ) : (
                     <span>
                       Walk-in
-                      <span className="block text-xs text-amber-700">Needs a named buyer for returns</span>
+                      <span className="block text-xs text-warning">Needs a named buyer for returns</span>
                     </span>
                   )}
                 </td>

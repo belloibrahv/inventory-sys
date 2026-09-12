@@ -51,12 +51,14 @@ export function AppShell({
       <AccessGate allowedHrefs={allowedHrefs} fallback={allowedHrefs[0] || "/login"} />
       <PasswordGate mustChange={Boolean(user.mustChangePassword)} />
       <Sidebar allowedHrefs={allowedHrefs} />
-      <div className={cn("transition-[padding] duration-200", desktopSidebar ? "lg:pl-[272px]" : "lg:pl-0")}>
+      <div className={cn("transition-[padding] duration-200", desktopSidebar ? "lg:pl-[264px]" : "lg:pl-0")}>
         <Header title={title} unread={unread} user={user} shops={shops} />
-        <div className="px-4 pt-4 md:px-8">
-          <OfflineBanner />
+        <div className="mx-auto w-full max-w-[1600px] px-4 md:px-6">
+          <div className="pt-4">
+            <OfflineBanner />
+          </div>
+          <main className="space-y-5 py-5 md:py-6">{allowed ? children : null}</main>
         </div>
-        <main className="px-4 py-6 md:px-8 md:py-8">{allowed ? children : null}</main>
       </div>
       <CommandPalette allowedHrefs={allowedHrefs} />
       <ShopCalculator />

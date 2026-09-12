@@ -39,7 +39,7 @@ export default async function ReturnsPage() {
               </div>
               <p className="mt-2 text-xs text-muted-foreground">Fault class: {row.faultClass}</p>
               {row.status === "PENDING" ? (
-                <p className="mt-3 text-xs text-amber-700">Waiting on approval. The IMEI is locked and cannot be sold.</p>
+                <p className="mt-3 text-xs text-warning">Waiting on approval. The IMEI is locked and cannot be sold.</p>
               ) : null}
               {row.status === "APPROVED" ? (
                 <div className="mt-4 border-t border-border pt-4">

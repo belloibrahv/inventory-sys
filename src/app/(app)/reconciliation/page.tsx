@@ -1,17 +1,16 @@
-import { getInStockImeiCounts, getInventory } from "@/app/actions/imei"
+import { getInventory } from "@/app/actions/imei"
 import { getReconciliations } from "@/app/actions/finance"
 import { getBranches } from "@/app/actions/parties"
 import { getPosLookups } from "@/app/actions/sales"
-import { PageHeader, StatusBadge } from "@/components/shared"
+import { EmptyState, PageHeader, StatusBadge } from "@/components/shared"
 import { formatCurrency, formatDate, money } from "@/lib/utils"
 import { StockCountView } from "./stock-count-view"
 
 export default async function ReconciliationPage() {
-  const [rows, inventory, branches, vault, lookups] = await Promise.all([
+  const [rows, inventory, branches, lookups] = await Promise.all([
     getReconciliations(),
     getInventory(),
     getBranches(),
-    getInStockImeiCounts(),
     getPosLookups(),
   ])
 
@@ -39,79 +38,81 @@ export default async function ReconciliationPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Stock count & reconciliation"
-        description="Perform comprehensive physical stock audit. Input counted quantities, view unit costs, track gain/loss margins, and download paper sheets for manager approval."
+        title="Stock count"
+        description="Count the shelf against what the system believes. Type what you physically counted and the gaining or losing margin is worked out per item, at cost. Download or print the sheet for whoever has to approve it."
       />
 
       {/* Stock count form and table */}
-      <StockCountView
-        branches={activeBranches}
-        inventory={formattedInventory}
-        vault={vault}
-        defaultBranchId={lookups.branchId}
-      />
+      <StockCountView branches={activeBranches} inventory={formattedInventory} defaultBranchId={lookups.branchId} />
 
       {/* Past Stock Count Reports */}
       <div className="space-y-4 print:hidden">
-        <h3 className="text-lg font-bold">Past Stock Count Audits & Reconciliations</h3>
+        <h2 className="text-sm font-semibold tracking-tight">Counts already filed</h2>
         <div className="grid gap-4 md:grid-cols-2">
           {rows.map((row) => {
-            const expVal = money(row.totalExpected)
-            const cntVal = money(row.totalCounted)
-            const varVal = money(row.variance)
+            const expected = money(row.totalExpected)
+            const counted = money(row.totalCounted)
+            const variance = money(row.variance)
+            const offLines = row.items.filter((item) => item.variance !== 0)
 
             return (
-              <div key={row.id} className="surface-card p-5 space-y-3">
-                <div className="flex items-center justify-between border-b border-border pb-2">
+              <div key={row.id} className="surface-card space-y-3 p-5">
+                <div className="flex items-start justify-between gap-3 border-b border-border pb-3">
                   <div>
-                    <p className="font-semibold">{row.branch.name}</p>
-                    <p className="text-xs text-muted-foreground">{formatDate(row.createdAt)} · Audited by {row.user.name}</p>
+                    <p className="font-medium">{row.branch.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDate(row.createdAt)} · counted by {row.user.name}
+                    </p>
                   </div>
                   <StatusBadge value={row.status} />
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 text-xs">
+                <div className="grid grid-cols-3 gap-2 text-sm">
                   <div>
-                    <span className="text-muted-foreground block uppercase">Expected</span>
-                    <strong className="font-mono">{formatCurrency(expVal)}</strong>
+                    <p className="eyebrow">System said</p>
+                    <p className="num font-medium">{formatCurrency(expected)}</p>
                   </div>
                   <div>
-                    <span className="text-muted-foreground block uppercase">Counted</span>
-                    <strong className="font-mono">{formatCurrency(cntVal)}</strong>
+                    <p className="eyebrow">They counted</p>
+                    <p className="num font-medium">{formatCurrency(counted)}</p>
                   </div>
                   <div>
-                    <span className="text-muted-foreground block uppercase">Net Variance</span>
-                    <strong className={`font-mono ${varVal > 0 ? "text-emerald-600 dark:text-emerald-400" : varVal < 0 ? "text-rose-600 dark:text-rose-400" : ""}`}>
-                      {varVal > 0 ? `+${formatCurrency(varVal)}` : formatCurrency(varVal)}
-                    </strong>
+                    <p className="eyebrow">Gain or loss</p>
+                    <p className={`num font-semibold ${variance > 0 ? "text-success" : variance < 0 ? "text-danger" : ""}`}>
+                      {variance > 0 ? `+${formatCurrency(variance)}` : formatCurrency(variance)}
+                    </p>
                   </div>
                 </div>
 
-                {row.notes && <p className="text-xs bg-muted/40 p-2 rounded-lg text-muted-foreground">{row.notes}</p>}
+                {row.notes ? (
+                  <p className="rounded-md bg-muted/60 p-2 text-xs text-muted-foreground">{row.notes}</p>
+                ) : null}
 
-                {/* Discrepancy lines */}
                 <div className="space-y-1 text-xs">
-                  {row.items.filter((item) => item.variance !== 0).map((item) => (
-                    <div key={item.id} className="flex justify-between py-1 border-b border-border/40">
-                      <span>{item.product.name}</span>
-                      <span className="font-mono font-medium">
+                  {offLines.map((item) => (
+                    <div key={item.id} className="flex justify-between gap-3 border-b border-border/50 py-1">
+                      <span className="min-w-0 truncate">{item.product.name}</span>
+                      <span className="num shrink-0 font-medium">
                         {item.expectedQty} → {item.countedQty} ({item.variance > 0 ? `+${item.variance}` : item.variance})
                       </span>
                     </div>
                   ))}
-                  {row.items.every((item) => item.variance === 0) && (
-                    <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">✓ 100% matched system count</p>
-                  )}
+                  {offLines.length === 0 ? (
+                    <p className="font-medium text-success">Every line matched the system.</p>
+                  ) : null}
                 </div>
               </div>
             )
           })}
 
-          {rows.length === 0 && (
-            <div className="surface-card p-6 text-sm text-muted-foreground col-span-2 text-center">
-              No stock counts have been filed yet.
+          {rows.length === 0 ? (
+            <div className="md:col-span-2">
+              <EmptyState
+                title="No stock count has been filed yet"
+                hint="Count a shop above and send it for approval. Filed counts, and what they gained or lost, appear here."
+              />
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

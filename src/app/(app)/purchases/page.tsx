@@ -5,7 +5,7 @@ import { getPurchases, getSupplierReturnCandidates, sendUnitsToSupplier } from "
 import { getBranches, getSuppliers } from "@/app/actions/parties"
 import { ActionForm } from "@/components/action-form"
 import { PurchaseForm } from "@/app/(app)/purchases/purchase-form"
-import { PageHeader, StatusBadge } from "@/components/shared"
+import { EmptyState, PageHeader, SectionCard, StatCard, StatGrid, StatusBadge } from "@/components/shared"
 import { ScanList } from "@/components/scan-field"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,76 +30,76 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
   const soldToday = purchases.reduce((sum, row) => sum + row.trace.soldToday, 0)
   const inShop = purchases.reduce((sum, row) => sum + row.trace.inShop, 0)
   const shortVsBill = purchases.reduce((sum, row) => sum + row.trace.shortVsBill, 0)
-  const owed = purchases.reduce((sum, row) => sum + money(row.totalAmount) - money(row.paidAmount), 0)
+  const billed = purchases.reduce((sum, row) => sum + money(row.totalAmount), 0)
+  const paid = purchases.reduce((sum, row) => sum + money(row.paidAmount), 0)
+  const owed = Math.max(0, billed - paid)
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Goods from supplier"
-        description="This is the carton record. Expected is what the supplier sent. Recorded is what was scanned onto the system. Sold on the system is every unit from those cartons that already has an invoice. If the shelf is short of Still in shop, a unit may have left without a sale. Shop to shop and Neighbor shop fill are different pages."
+        description="The carton record, and the money against it. Expected is what the supplier sent; recorded is what was actually scanned in. If the shelf is short of Still in shop, a unit may have left without a sale."
       />
+
       <form className="grid gap-2 md:grid-cols-[1fr_auto]">
-        <Input
-          name="q"
-          defaultValue={q}
-          placeholder="Find IMEI, supplier bill, supplier name, or product"
-        />
-        <Button type="submit">Search supplier goods</Button>
+        <Input name="q" defaultValue={q} placeholder="Find an IMEI, a bill number, a supplier, or a product" />
+        <Button type="submit">Search</Button>
       </form>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">Expected on these bills</p>
-          <p className="text-2xl font-semibold">{expected}</p>
-          <p className="text-sm text-muted-foreground">Units the supplier was supposed to send.</p>
-        </div>
-        <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">Recorded on the system</p>
-          <p className="text-2xl font-semibold">{recorded}</p>
-          <p className="text-sm text-muted-foreground">IMEIs or pieces actually booked from these bills.</p>
-        </div>
-        <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">Never scanned versus the bill</p>
-          <p className="text-2xl font-semibold">{shortVsBill}</p>
-          <p className="text-sm text-muted-foreground">Expected minus recorded. These numbers never entered the shop record.</p>
-        </div>
-        <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">Sold on the system</p>
-          <p className="text-2xl font-semibold">{sold}</p>
-          <p className="text-sm text-muted-foreground">From these cartons and already on an invoice.</p>
-        </div>
-        <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">Sold today (Lagos day)</p>
-          <p className="text-2xl font-semibold">{soldToday}</p>
-          <p className="text-sm text-muted-foreground">Check this before Close the day.</p>
-        </div>
-        <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">Still in shop on the system</p>
-          <p className="text-2xl font-semibold">{inShop}</p>
-          <p className="text-sm text-muted-foreground">If the shelf has fewer, count stock. Do not type a new number by hand.</p>
-        </div>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="surface-card p-5">
-          <p className="text-xs font-medium uppercase text-muted-foreground">Total Paid to Suppliers</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
-            {formatCurrency(purchases.reduce((sum, row) => sum + money(row.paidAmount), 0))}
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">Disbursements recorded on these bills</p>
-        </div>
-        <div className="surface-card p-5">
-          <p className="text-xs font-medium uppercase text-muted-foreground">Still Owed to Suppliers</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-amber-600 dark:text-amber-400">{formatCurrency(owed)}</p>
-          <p className="text-xs text-muted-foreground mt-1">Outstanding supplier payables</p>
-        </div>
-      </div>
+
+      {/* The money first: what these bills came to, what we paid, what is left. */}
+      <StatGrid>
+        <StatCard
+          label="Value of these bills"
+          value={formatCurrency(billed)}
+          hint={`${purchases.length} supplier bill${purchases.length === 1 ? "" : "s"}`}
+        />
+        <StatCard
+          label="We have paid"
+          value={formatCurrency(paid)}
+          hint="Money already sent out against these bills"
+          tone="success"
+        />
+        <StatCard
+          label="Still owed"
+          value={formatCurrency(owed)}
+          hint="Shows on Revenue & expenditure until it is settled"
+          tone={owed > 0 ? "warning" : "neutral"}
+        />
+        <StatCard
+          label="Never scanned in"
+          value={String(shortVsBill)}
+          hint="Units the supplier billed us for that never entered the shop record"
+          tone={shortVsBill > 0 ? "danger" : "success"}
+        />
+      </StatGrid>
+
+      <StatGrid>
+        <StatCard label="Expected on these bills" value={String(expected)} hint="Units the supplier was meant to send" />
+        <StatCard label="Recorded on the system" value={String(recorded)} hint="IMEIs or pieces actually booked in" />
+        <StatCard
+          label="Sold from these cartons"
+          value={String(sold)}
+          hint={soldToday ? `${soldToday} of them sold today (Lagos day)` : "Already on an invoice"}
+        />
+        <StatCard
+          label="Still in shop"
+          value={String(inShop)}
+          hint="If the shelf has fewer, count the stock. Never type a new number by hand."
+          href="/reconciliation"
+        />
+      </StatGrid>
+
       <div className="page-split">
         <div className="space-y-3">
           {purchases.length === 0 ? (
-            <div className="surface-card p-5 text-sm text-muted-foreground">
-              {q?.trim()
-                ? "No supplier bill matches that search. Try an IMEI, a bill number, a supplier name, or a product name."
-                : "No expected supplier goods yet. Add a shipment from China, Dubai, Lagos, or any named supplier on the right."}
-            </div>
+            <EmptyState
+              title={q?.trim() ? "No supplier bill matches that search" : "No supplier goods booked yet"}
+              hint={
+                q?.trim()
+                  ? "Try an IMEI, a bill number, a supplier name, or a product name."
+                  : "Book a shipment from China, Dubai, Lagos or any named supplier using the form on the right."
+              }
+            />
           ) : null}
           {purchases.map((purchase) => {
             const item = purchase.items[0]
@@ -139,7 +139,7 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
                       {trace.inShop}
                     </p>
                     {trace.shortVsBill > 0 ? (
-                      <p className="mt-1 text-sm text-amber-800">
+                      <p className="mt-1 text-sm text-warning">
                         {trace.shortVsBill} unit{trace.shortVsBill === 1 ? "" : "s"} on this bill never scanned onto the system.
                       </p>
                     ) : null}
@@ -147,23 +147,33 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
                       <p className="mt-1 text-sm text-muted-foreground">Due {formatDate(purchase.expectedDate)}</p>
                     ) : null}
                     {comingLots ? (
-                      <p className="mt-1 text-sm text-amber-700">{comingLots} carton list booked as Coming. Not for sale yet.</p>
+                      <p className="mt-1 text-sm text-warning">{comingLots} carton list booked as Coming. Not for sale yet.</p>
                     ) : null}
                   </div>
                   <StatusBadge value={purchase.status} />
                 </div>
-                <div className="mt-3 flex flex-wrap items-center gap-4 text-sm pt-2 border-t border-border/60">
-                  <span>Bill Total: <strong className="font-mono">{formatCurrency(totalVal)}</strong></span>
-                  <span>Amount Paid: <strong className="font-mono text-emerald-600 dark:text-emerald-400">{formatCurrency(paidVal)}</strong></span>
-                  <span>Still Owed: <strong className="font-mono text-amber-600 dark:text-amber-400">{formatCurrency(owedVal)}</strong></span>
+                <div className="mt-3 grid gap-3 border-t border-border pt-3 text-sm sm:grid-cols-3">
+                  <span>
+                    <span className="eyebrow block">Bill value</span>
+                    <strong className="num">{formatCurrency(totalVal)}</strong>
+                  </span>
+                  <span>
+                    <span className="eyebrow block">We have paid</span>
+                    <strong className="num text-success">{formatCurrency(paidVal)}</strong>
+                  </span>
+                  <span>
+                    <span className="eyebrow block">Still owed</span>
+                    <strong className={`num ${owedVal > 0 ? "text-warning" : "text-success"}`}>
+                      {formatCurrency(owedVal)}
+                    </strong>
+                  </span>
                 </div>
               </Link>
             )
           })}
         </div>
         <div className="space-y-4">
-          <div className="surface-card p-5">
-            <h3 className="mb-2 font-semibold">Book expected goods</h3>
+          <SectionCard title="Book expected goods">
             <p className="mb-4 text-sm text-muted-foreground">
               This is a supplier carton, not a send from Iwo Road to Challenge. After you save, open the bill to book IMEIs as Coming, then confirm arrival when the boxes are on the counter. That bill is the trail if a unit later goes missing.
             </p>
@@ -178,9 +188,8 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
               products={products.map((row) => ({ id: row.id, name: row.name }))}
               defaultBranchId={me.branchId}
             />
-          </div>
-          <div className="surface-card p-5">
-            <h3 className="mb-2 font-semibold">Send back to supplier</h3>
+          </SectionCard>
+          <SectionCard title="Send back to supplier">
             <p className="mb-4 text-sm text-muted-foreground">
               Use this when a unit does not work, including a phone a customer returned to us. It leaves this shop and goes back to the supplier. It is not a shop-to-shop send.
             </p>
@@ -205,7 +214,7 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
               </Select>
               <ScanList name="imeis" required />
             </ActionForm>
-          </div>
+          </SectionCard>
         </div>
       </div>
     </div>

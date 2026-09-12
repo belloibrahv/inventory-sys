@@ -29,13 +29,13 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
 
         <div className="surface-card p-4">
           <p className="text-xs font-medium uppercase text-muted-foreground">Total Paid to Date</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{formatCurrency(totalPaid)}</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-success">{formatCurrency(totalPaid)}</p>
           <p className="text-xs text-muted-foreground mt-1">Total settled to this vendor</p>
         </div>
 
         <div className="surface-card p-4">
           <p className="text-xs font-medium uppercase text-muted-foreground">Outstanding Balance</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-amber-600 dark:text-amber-400">{formatCurrency(totalOwed)}</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-warning">{formatCurrency(totalOwed)}</p>
           <p className="text-xs text-muted-foreground mt-1">{totalOwed === 0 ? "Account fully settled" : "Balance currently owed"}</p>
         </div>
 
@@ -85,7 +85,7 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
                       {formatCurrency(poVal)}
                     </td>
 
-                    <td className="px-3 py-3 text-right tabular-nums font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                    <td className="px-3 py-3 text-right tabular-nums font-mono font-semibold text-success">
                       {formatCurrency(poPaid)}
                     </td>
 

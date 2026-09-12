@@ -42,7 +42,7 @@ export function ReturnForm({ sold }: { sold: Sold[] }) {
           {warranty ? ` · ${warranty.label}` : ""}
         </p>
       ) : (
-        <p className="text-xs text-rose-600">No sold IMEIs on this book.</p>
+        <p className="text-xs text-danger">No sold IMEIs on this book.</p>
       )}
       <Select name="reason" defaultValue="FAULTY">
         {["FAULTY", "WARRANTY", "CUSTOMER_DISSATISFACTION", "DAMAGED", "WRONG_PRODUCT", "SUPPLIER_RETURN"].map((item) => (

@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Check, Eye, Loader2, PackageCheck, AlertCircle, X } from "lucide-react"
+import { AlertCircle, Eye, Loader2, PackageCheck } from "lucide-react"
 import { toast } from "sonner"
 import { previewAndReceiveIncoming, type ReceiveItemAdjustment } from "@/app/actions/incoming"
 import { Button } from "@/components/ui/button"
@@ -115,88 +115,103 @@ export function PreviewIncomingModal({ lot }: { lot: IncomingLot }) {
 
   return (
     <>
-      <Button size="sm" variant="default" onClick={() => setOpen(true)} className="font-medium">
-        <Eye className="mr-1.5 h-3.5 w-3.5" /> Preview & Receive Stock
+      <Button size="sm" onClick={() => setOpen(true)}>
+        <Eye className="mr-1.5 h-4 w-4" /> Preview and receive
       </Button>
 
+      {/*
+        The client would not confirm an arrival blind: "seeing this interface
+        alone, it simply means that everything that we've typed before is what we
+        want to reflect ... sometimes we might be expecting four items and, on
+        receiving the item, it might just be two." So the list opens for checking
+        and correcting first, and only what is ticked goes into the shop.
+      */}
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="surface-card max-h-[90vh] w-full max-w-2xl overflow-y-auto p-5 sm:p-6 shadow-2xl border-primary/20 space-y-5 animate-in fade-in zoom-in-95">
-            <div className="flex items-start justify-between border-b border-border/80 pb-3">
-              <div>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-primary">Pre-Arrival Verification</span>
-                <h3 className="text-lg font-bold">{lot.lotNumber}</h3>
-                <p className="text-xs text-muted-foreground">
-                  Destination: <strong className="text-foreground">{lot.branch.name}</strong>
-                  {lot.supplier ? ` · Supplier: ${lot.supplier.name}` : ""}
-                  {lot.purchase ? ` · Order: ${lot.purchase.invoiceNumber}` : ""}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
-                <X className="h-5 w-5" />
-              </button>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <button type="button" aria-label="Close" className="absolute inset-0 cursor-default" onClick={() => setOpen(false)} />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Check what arrived on ${lot.lotNumber}`}
+            className="surface-card relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-b-none shadow-xl sm:rounded-lg"
+          >
+            <div className="border-b border-border px-5 py-3.5">
+              <p className="eyebrow">Check before it goes into the shop</p>
+              <h2 className="text-base font-semibold tracking-tight">{lot.lotNumber}</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Going to <strong className="text-foreground">{lot.branch.name}</strong>
+                {lot.supplier ? ` · ${lot.supplier.name}` : ""}
+                {lot.purchase ? ` · order ${lot.purchase.invoiceNumber}` : ""}
+              </p>
             </div>
 
-            <p className="text-xs text-muted-foreground">
-              Review what was uploaded vs what physically arrived at the shop counter. Adjust quantities or uncheck missing IMEIs before confirming.
-            </p>
-
-            {hasDiscrepancy && (
-              <div className="flex items-center gap-2 rounded-xl bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
-                <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+            {hasDiscrepancy ? (
+              <div className="flex items-center gap-2 border-b border-warning/30 bg-warning-soft px-5 py-2.5 text-xs text-warning">
+                <AlertCircle className="h-4 w-4 shrink-0" />
                 <span>
-                  Expected <strong>{totalExpected} units</strong>, but currently receiving <strong>{totalReceiving} units</strong> ({totalExpected - totalReceiving} difference).
+                  The list says <strong>{totalExpected}</strong> unit{totalExpected === 1 ? "" : "s"}, you are receiving{" "}
+                  <strong>{totalReceiving}</strong>. That is a difference of{" "}
+                  <strong>{Math.abs(totalExpected - totalReceiving)}</strong>.
                 </span>
               </div>
-            )}
+            ) : null}
 
-            {/* Items review */}
-            <div className="space-y-4">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+              <p className="text-sm text-muted-foreground">
+                Change any quantity that is wrong, and untick any IMEI that is not physically in the box. Only what is
+                left here is added to {lot.branch.name}.
+              </p>
+
               {lot.items.map((item) => {
                 const adj = adjustments[item.id] || { qty: item.quantity, identities: [] }
-                const originalIds = item.identifiers ? item.identifiers.split(/[\r\n,]+/).map((s) => s.trim()).filter(Boolean) : []
+                const originalIds = item.identifiers
+                  ? item.identifiers.split(/[\r\n,]+/).map((value) => value.trim()).filter(Boolean)
+                  : []
 
                 return (
-                  <div key={item.id} className="rounded-xl border border-border bg-card p-4 space-y-3">
+                  <div key={item.id} className="space-y-3 rounded-lg border border-border p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="font-semibold text-sm">{item.product.name}</p>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">{item.product.name}</p>
                         <p className="text-xs text-muted-foreground">
-                          {item.product.brand?.name || "Device"} · {item.identity === "IMEI" ? "Tracked by IMEI" : item.identity === "SERIAL" ? "Tracked by Serial" : "Piece count"}
+                          {item.product.brand?.name ?? "Item"} ·{" "}
+                          {item.identity === "IMEI"
+                            ? "tracked by IMEI"
+                            : item.identity === "SERIAL"
+                              ? "tracked by serial"
+                              : "counted in pieces"}{" "}
+                          · list says {item.quantity}
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">Actual Received Qty:</span>
+                      <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                        How many actually came
                         <Input
                           type="number"
                           min={0}
                           max={item.quantity * 2}
                           value={adj.qty}
-                          onChange={(e) => handleQtyChange(item.id, Number(e.target.value))}
-                          className="w-20 font-bold text-center"
+                          onChange={(event) => handleQtyChange(item.id, Number(event.target.value))}
+                          className="h-9 w-20 text-center font-semibold num"
                           disabled={busy || item.identity !== "NONE"}
                         />
-                      </div>
+                      </label>
                     </div>
 
-                    {/* IMEI Checklist */}
-                    {item.identity !== "NONE" && originalIds.length > 0 && (
-                      <div className="space-y-2 rounded-lg bg-muted/40 p-3">
-                        <p className="text-[11px] font-semibold text-muted-foreground uppercase">
-                          Verify physical IMEIs on hand (uncheck if missing/defective):
-                        </p>
+                    {item.identity !== "NONE" && originalIds.length > 0 ? (
+                      <div className="space-y-2 rounded-md bg-muted/50 p-3">
+                        <p className="eyebrow">Tick the ones physically in the box</p>
                         <div className="grid gap-1.5 sm:grid-cols-2">
                           {originalIds.map((imei) => {
                             const isChecked = adj.identities.includes(imei)
                             return (
                               <label
                                 key={imei}
-                                className={`flex items-center gap-2 rounded-lg border p-2 text-xs font-mono cursor-pointer transition-colors ${isChecked ? "border-primary/40 bg-primary/5 text-foreground" : "border-border/60 bg-muted/20 text-muted-foreground line-through opacity-60"}`}
+                                className={`flex cursor-pointer items-center gap-2 rounded-md border p-2 font-mono text-xs transition-colors ${
+                                  isChecked
+                                    ? "border-primary/40 bg-primary-soft text-foreground"
+                                    : "border-border bg-card text-muted-foreground line-through"
+                                }`}
                               >
                                 <input
                                   type="checkbox"
@@ -205,45 +220,45 @@ export function PreviewIncomingModal({ lot }: { lot: IncomingLot }) {
                                   disabled={busy}
                                   className="rounded border-border"
                                 />
-                                <span>{imei}</span>
+                                <span className="truncate">{imei}</span>
                               </label>
                             )
                           })}
                         </div>
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 )
               })}
+
+              <label className="block text-sm">
+                <span className="eyebrow mb-1 block">Note about anything that did not match</span>
+                <Input
+                  placeholder="e.g. two units short in the carton, waybill adjusted"
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
+                  disabled={busy}
+                />
+              </label>
             </div>
 
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Verification / Discrepancy Note (Optional)</label>
-              <Input
-                placeholder="e.g. 2 units missing from supplier carton, waybill adjusted"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                disabled={busy}
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3">
               <span className="text-xs text-muted-foreground">
-                Receiving total: <strong className="text-foreground">{totalReceiving} units</strong> into {lot.branch.name}
+                Adding <strong className="text-foreground">{totalReceiving}</strong> unit
+                {totalReceiving === 1 ? "" : "s"} to {lot.branch.name}
               </span>
-
               <div className="flex gap-2">
                 <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={busy}>
                   Cancel
                 </Button>
-                <Button type="button" onClick={handleConfirm} disabled={busy} className="font-semibold">
+                <Button type="button" onClick={handleConfirm} disabled={busy}>
                   {busy ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Confirming...
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Confirming…
                     </>
                   ) : (
                     <>
-                      <PackageCheck className="mr-2 h-4 w-4" /> Confirm & Add to Shop
+                      <PackageCheck className="mr-2 h-4 w-4" /> Confirm and add to the shop
                     </>
                   )}
                 </Button>

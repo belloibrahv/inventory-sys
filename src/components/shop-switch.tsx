@@ -20,9 +20,12 @@ export function ShopSwitch({
   const [pending, startTransition] = useTransition()
 
   return (
-    <label className="hidden items-center gap-2 sm:inline-flex" title="Which shop you are looking at">
+    <label
+      className="hidden items-center gap-1.5 rounded-lg border border-input bg-card pl-2.5 sm:inline-flex"
+      title="Which shop you are looking at"
+    >
       <span className="sr-only">Which shop you are looking at</span>
-      <Store className="h-4 w-4 text-primary" aria-hidden />
+      <Store className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
       <select
         value={active}
         disabled={pending}
@@ -32,7 +35,7 @@ export function ShopSwitch({
             await setViewShop(next)
           })
         }}
-        className="min-h-11 rounded-xl border-2 border-primary/40 bg-card px-3 text-sm font-semibold text-foreground shadow-sm disabled:opacity-60"
+        className="h-9 rounded-lg border-0 bg-transparent pl-0 pr-2 text-[13px] font-medium text-foreground focus-visible:outline-none disabled:opacity-60"
       >
         <option value="ALL">All shops together</option>
         {branches.map((branch) => (

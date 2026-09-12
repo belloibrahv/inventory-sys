@@ -139,7 +139,11 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
     return { error: "A neighboring shop is not a supplier carton. Use Neighbor shop fill for that." }
   }
 
-  const paid = String(formData.get("paid") || "") === "yes"
+  // The client asked for the paid / not-paid buttons to go: "we only type in
+  // whatever amount we have paid, if at all we have made any payment for that
+  // particular uploaded invoice." The bill total is only known once the sheet has
+  // been read, so the amount is taken here and the balance worked out below.
+  const amountPaid = Math.max(0, Number(formData.get("amountPaid") || 0))
   const note = String(formData.get("notes") || "").trim()
 
   let sheets: Array<{ sheet: string; grid: string[][] }>
@@ -251,18 +255,13 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
       status: "RECEIVED",
       totalAmount: "0.00",
       paidAmount: "0.00",
-      paymentMethod: paid ? MARKED_PAID_ON_UPLOAD : null,
+      paymentMethod: null,
       source: UPLOAD_STOCK_SOURCE,
       sessionOpen: false,
       receivedDate: new Date(),
       originCountry: supplier.country,
       originCity: supplier.city,
-      notes: [
-        "Loaded from opening stock Excel on Upload stock.",
-        paid ? "Marked paid when stock was uploaded." : "Not paid yet.",
-        note || null,
-        `File: ${file.name}`,
-      ]
+      notes: ["Loaded from opening stock Excel on Upload stock.", note || null, `File: ${file.name}`]
         .filter(Boolean)
         .join(" "),
     },
@@ -350,7 +349,7 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
         productId,
         quantity,
         costPrice: costByProductId.get(productId) ?? 0,
-        markedPaid: paid,
+        markedPaid: false,
       })
     }
     for (const [productId, quantity] of pieceCounts) {
@@ -359,7 +358,7 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
         productId,
         quantity,
         costPrice: costByProductId.get(productId) ?? 0,
-        markedPaid: paid,
+        markedPaid: false,
       })
     }
   })
@@ -396,6 +395,46 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
     select: { totalAmount: true, paidAmount: true },
   })
 
+  // Never record more paid than the bill is worth. An over-typed figure would
+  // show as a negative balance on Goods from supplier and on Finance.
+  const billTotal = money(refreshed?.totalAmount)
+  const settled = Math.min(amountPaid, billTotal)
+  const balanceOwed = Math.max(0, billTotal - settled)
+  const fullyPaid = billTotal > 0 && settled >= billTotal - 0.005
+
+  await prisma.purchase.update({
+    where: { id: purchase.id },
+    data: {
+      paidAmount: settled.toFixed(2),
+      paymentMethod: fullyPaid ? MARKED_PAID_ON_UPLOAD : settled > 0 ? "PARTIAL_PAYMENT" : "UNPAID",
+      notes: [
+        "Loaded from opening stock Excel on Upload stock.",
+        fullyPaid
+          ? "Bill fully cleared on upload."
+          : settled > 0
+            ? `Paid ${settled.toFixed(2)} on upload. Still owed ${balanceOwed.toFixed(2)}.`
+            : `Nothing paid on upload. Still owed ${balanceOwed.toFixed(2)}.`,
+        note || null,
+        `File: ${file.name}`,
+      ]
+        .filter(Boolean)
+        .join(" "),
+    },
+  })
+
+  if (settled > 0) {
+    await prisma.financeEntry.create({
+      data: {
+        branchId: shop.id,
+        account: "SUPPLIER_PAYMENTS",
+        type: "EXPENSE",
+        amount: settled.toFixed(2),
+        reference: invoiceNumber,
+        description: `Paid to ${supplier.name} on opening stock upload ${invoiceNumber}`,
+      },
+    })
+  }
+
   await trail(
     user.id,
     "OpeningStock",
@@ -408,8 +447,9 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
       phonesAdded,
       phonesAlready: unitPayload.length - phonesAdded,
       pieceLines,
-      submissionValue: money(refreshed?.totalAmount),
-      paid,
+      submissionValue: billTotal,
+      amountPaid: settled,
+      balanceOwed,
     },
     shop.id
   )
@@ -428,8 +468,10 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
     skipped: unitPayload.length - phonesAdded,
     invoiceNumber,
     purchaseId: purchase.id,
-    submissionValue: money(refreshed?.totalAmount),
-    paid,
+    submissionValue: billTotal,
+    paidAmount: settled,
+    balanceOwed,
+    paid: fullyPaid,
   }
 }
 
@@ -609,395 +651,6 @@ function revalidateStockViews() {
   revalidatePath("/purchases")
   revalidatePath("/finance")
   revalidatePath("/suppliers")
-}
-
-/**
- * Open a Goods from supplier bill for a manual Upload stock session.
- * Later adds share this PO until the session is closed or a new bill is started.
- */
-export async function startUploadPurchase(formData: FormData): Promise<UploadResult> {
-  const gate = await requireUploader()
-  if ("error" in gate) return { error: gate.error }
-  const { user } = gate
-
-  const branchId = String(formData.get("branchId") || "")
-  const shop = await prisma.branch.findFirst({ where: { id: branchId, isActive: true } })
-  if (!shop) return { error: "Pick the shop this bill belongs to: Iwo Road, Bodija, or Challenge." }
-
-  const supplierId = String(formData.get("supplierId") || "")
-  const supplier = await prisma.supplier.findFirst({ where: { id: supplierId, isActive: true } })
-  if (!supplier) return { error: "Pick the supplier these goods were bought from." }
-  if (supplier.kind === "NEIGHBOR") {
-    return { error: "A neighboring shop is not a supplier carton. Use Neighbor shop fill for that." }
-  }
-
-  const paid = String(formData.get("paid") || "") === "yes"
-  const note = String(formData.get("notes") || "").trim()
-  const invoiceNumber = generateDocNumber("PO")
-
-  await prisma.purchase.updateMany({
-    where: { userId: user.id, source: UPLOAD_STOCK_SOURCE, sessionOpen: true },
-    data: { sessionOpen: false },
-  })
-
-  const purchase = await prisma.purchase.create({
-    data: {
-      invoiceNumber,
-      supplierId: supplier.id,
-      branchId: shop.id,
-      userId: user.id,
-      status: "RECEIVED",
-      totalAmount: "0.00",
-      paidAmount: "0.00",
-      paymentMethod: paid ? MARKED_PAID_ON_UPLOAD : null,
-      source: UPLOAD_STOCK_SOURCE,
-      sessionOpen: true,
-      receivedDate: new Date(),
-      originCountry: supplier.country,
-      originCity: supplier.city,
-      notes: [
-        "Upload stock session. Units added by hand.",
-        paid ? "Marked paid when stock was uploaded." : "Not paid yet.",
-        note || null,
-      ]
-        .filter(Boolean)
-        .join(" "),
-    },
-  })
-
-  await trail(
-    user.id,
-    "Purchase",
-    {
-      invoiceNumber,
-      supplier: supplier.name,
-      shop: shop.name,
-      paid,
-      source: UPLOAD_STOCK_SOURCE,
-      action: "start-session",
-    },
-    shop.id
-  )
-
-  revalidateStockViews()
-  return {
-    success: true,
-    invoiceNumber,
-    purchaseId: purchase.id,
-    submissionValue: 0,
-    paid,
-  }
-}
-
-/** Stop adding units to the current upload bill. The PO stays on Goods from supplier. */
-export async function closeUploadPurchase(formData: FormData): Promise<UploadResult> {
-  const gate = await requireUploader()
-  if ("error" in gate) return { error: gate.error }
-  const { user } = gate
-
-  const purchaseId = String(formData.get("purchaseId") || "")
-  const purchase = await prisma.purchase.findFirst({
-    where: {
-      id: purchaseId,
-      userId: user.id,
-      source: UPLOAD_STOCK_SOURCE,
-      sessionOpen: true,
-    },
-  })
-  if (!purchase) return { error: "That upload bill is not open." }
-
-  await prisma.purchase.update({
-    where: { id: purchase.id },
-    data: { sessionOpen: false },
-  })
-
-  await trail(
-    user.id,
-    "Purchase",
-    {
-      invoiceNumber: purchase.invoiceNumber,
-      action: "close-session",
-      submissionValue: money(purchase.totalAmount),
-    },
-    purchase.branchId
-  )
-
-  revalidateStockViews()
-  return {
-    success: true,
-    invoiceNumber: purchase.invoiceNumber,
-    purchaseId: purchase.id,
-    submissionValue: money(purchase.totalAmount),
-    paid: isMarkedPaidOnUpload(purchase.paymentMethod) || money(purchase.paidAmount) >= money(purchase.totalAmount) - 0.005,
-  }
-}
-
-/**
- * Add one phone, one serial item, or a piece count by hand on Upload stock.
- * Must belong to an open upload bill so supplier, value, and payment stay on one PO.
- */
-export async function addStockManually(formData: FormData): Promise<UploadResult> {
-  const gate = await requireUploader()
-  if ("error" in gate) return { error: gate.error }
-  const { user } = gate
-
-  const purchaseId = String(formData.get("purchaseId") || "")
-  const purchase = await prisma.purchase.findFirst({
-    where: {
-      id: purchaseId,
-      source: UPLOAD_STOCK_SOURCE,
-      sessionOpen: true,
-    },
-    include: { supplier: true, branch: true },
-  })
-  if (!purchase) {
-    return { error: "Start an upload bill first. Pick the supplier and whether it is paid, then add units." }
-  }
-
-  const shop = purchase.branch
-  const markedPaid = isMarkedPaidOnUpload(purchase.paymentMethod)
-
-  const productMode = String(formData.get("productMode") || "existing")
-  let productId = String(formData.get("productId") || "")
-  let tracking: ProductTracking
-  let productName = ""
-  let costPrice = 0
-  let createdProduct = false
-
-  if (productMode === "new") {
-    if (!(await can(user.role, "action.catalog"))) {
-      return { error: "You cannot add a new item name. Pick one from the list or ask Super Admin." }
-    }
-
-    const name = cleanIdentity(String(formData.get("name") || ""))
-    const brandId = String(formData.get("brandId") || "")
-    const categoryId = String(formData.get("categoryId") || "")
-    tracking = String(formData.get("tracking") || "IMEI") as ProductTracking
-    const condition = (String(formData.get("condition") || "BRAND_NEW") as ProductCondition) || "BRAND_NEW"
-    const storage = cleanIdentity(String(formData.get("storage") || "")) || null
-    costPrice = Number(formData.get("costPrice") || 0)
-    const minimumPrice = Number(formData.get("minimumPrice") || 0)
-    const sellingPrice = Number(formData.get("sellingPrice") || 0)
-
-    if (!name) return { error: "Type the item name, for example iPhone 17 Pro Max." }
-    if (!brandId || !categoryId) return { error: "Pick a brand and a category." }
-    if (!Number.isFinite(costPrice) || !Number.isFinite(minimumPrice) || !Number.isFinite(sellingPrice)) {
-      return { error: "Enter cost, lowest price, and selling price as numbers." }
-    }
-    if (costPrice < 0 || minimumPrice < 0 || sellingPrice < 0) {
-      return { error: "Prices cannot be below zero." }
-    }
-
-    const [brand, category] = await Promise.all([
-      prisma.brand.findUnique({ where: { id: brandId } }),
-      prisma.category.findUnique({ where: { id: categoryId } }),
-    ])
-    if (!brand || !category) return { error: "Pick a brand and a category from the list." }
-
-    const sku = makeOpeningSku({
-      brand: brand.name,
-      name,
-      storage: storage || "",
-      condition,
-    })
-
-    const existing =
-      (await prisma.product.findUnique({ where: { sku } })) ||
-      (await prisma.product.findFirst({
-        where: { name, brandId, condition, tracking, storage },
-      }))
-
-    if (existing) {
-      productId = existing.id
-      tracking = existing.tracking
-      productName = existing.name
-      costPrice = money(existing.costPrice)
-    } else {
-      const activeShops = await prisma.branch.findMany({ where: { isActive: true }, select: { id: true } })
-      const product = await prisma.product.create({
-        data: {
-          sku,
-          name,
-          brandId,
-          categoryId,
-          tracking,
-          condition,
-          storage,
-          costPrice: costPrice.toFixed(2),
-          minimumPrice: minimumPrice.toFixed(2),
-          sellingPrice: sellingPrice.toFixed(2),
-          warrantyDays: 365,
-          description: "Added on Upload stock",
-        },
-      })
-      if (activeShops.length) {
-        await prisma.inventory.createMany({
-          data: activeShops.map((row) => ({ productId: product.id, branchId: row.id, quantity: 0 })),
-        })
-      }
-      productId = product.id
-      productName = product.name
-      createdProduct = true
-    }
-  } else {
-    if (!productId) return { error: "Pick the item from the list." }
-    const product = await prisma.product.findFirst({ where: { id: productId, isActive: true } })
-    if (!product) return { error: "That item is not on the list. Add the name first or pick another." }
-    tracking = product.tracking
-    productName = product.name
-    costPrice = money(product.costPrice)
-  }
-
-  if (tracking === "NONE") {
-    const quantity = Number(formData.get("quantity") || 1)
-    if (!Number.isInteger(quantity) || quantity < 1) {
-      return { error: "Enter how many pieces you are putting on the shelf. Use a whole number of 1 or more." }
-    }
-
-    let submissionValue = 0
-    await prisma.$transaction(async (tx) => {
-      await tx.inventory.upsert({
-        where: { productId_branchId: { productId, branchId: shop.id } },
-        update: { quantity: { increment: quantity }, lastStockCheck: new Date() },
-        create: { productId, branchId: shop.id, quantity },
-      })
-      await attachPurchaseLine(tx, {
-        purchaseId: purchase.id,
-        productId,
-        quantity,
-        costPrice,
-        markedPaid,
-      })
-      const refreshed = await tx.purchase.findUnique({
-        where: { id: purchase.id },
-        select: { totalAmount: true },
-      })
-      submissionValue = money(refreshed?.totalAmount)
-    })
-
-    await trail(
-      user.id,
-      "Inventory",
-      {
-        shop: shop.name,
-        product: productName,
-        pieces: quantity,
-        manual: true,
-        newItem: createdProduct,
-        invoiceNumber: purchase.invoiceNumber,
-        submissionValue,
-      },
-      shop.id
-    )
-    revalidateStockViews()
-    return {
-      success: true,
-      added: quantity,
-      pieces: quantity,
-      products: createdProduct ? 1 : 0,
-      invoiceNumber: purchase.invoiceNumber,
-      purchaseId: purchase.id,
-      submissionValue,
-      paid: markedPaid,
-    }
-  }
-
-  const identity = cleanIdentity(String(formData.get("identity") || ""))
-  if (!identity) {
-    return {
-      error:
-        tracking === "IMEI"
-          ? "Scan or type the IMEI from the box."
-          : "Scan or type the serial number from the box.",
-    }
-  }
-
-  let imei1 = identity
-  let serialNumber: string | null = null
-
-  if (tracking === "IMEI") {
-    const digits = identity.replace(/\D/g, "")
-    if (digits.length < 14) {
-      return { error: "That IMEI is too short. Copy all the digits from the box or scan again." }
-    }
-    imei1 = digits
-  } else {
-    if (identity.length < 4) return { error: "That serial is too short." }
-    serialNumber = identity
-  }
-
-  const duplicate = await prisma.imeiRecord.findFirst({
-    where: {
-      OR: [{ imei1 }, ...(serialNumber ? [{ serialNumber }] : [])],
-    },
-    select: { imei1: true, serialNumber: true, status: true },
-  })
-  if (duplicate) {
-    return {
-      error: duplicate.imei1 === imei1
-        ? "This IMEI is already on the system."
-        : "This serial is already on the system.",
-    }
-  }
-
-  let submissionValue = 0
-  await prisma.$transaction(async (tx) => {
-    await tx.imeiRecord.create({
-      data: {
-        imei1,
-        serialNumber,
-        productId,
-        branchId: shop.id,
-        supplierId: purchase.supplierId,
-        purchaseId: purchase.id,
-        status: "IN_STOCK",
-        notes: `Added on Upload stock · ${purchase.invoiceNumber}`,
-      },
-    })
-    await tx.inventory.upsert({
-      where: { productId_branchId: { productId, branchId: shop.id } },
-      update: { quantity: { increment: 1 } },
-      create: { productId, branchId: shop.id, quantity: 1 },
-    })
-    await attachPurchaseLine(tx, {
-      purchaseId: purchase.id,
-      productId,
-      quantity: 1,
-      costPrice,
-      markedPaid,
-    })
-    const refreshed = await tx.purchase.findUnique({
-      where: { id: purchase.id },
-      select: { totalAmount: true },
-    })
-    submissionValue = money(refreshed?.totalAmount)
-  })
-
-  await trail(
-    user.id,
-    "IMEIRecord",
-    {
-      shop: shop.name,
-      product: productName,
-      identity: imei1,
-      manual: true,
-      newItem: createdProduct,
-      invoiceNumber: purchase.invoiceNumber,
-      submissionValue,
-    },
-    shop.id
-  )
-  revalidateStockViews()
-  return {
-    success: true,
-    added: 1,
-    phones: 1,
-    products: createdProduct ? 1 : 0,
-    invoiceNumber: purchase.invoiceNumber,
-    purchaseId: purchase.id,
-    submissionValue,
-    paid: markedPaid,
-  }
 }
 
 /** What the upload screen shows about how far the shop has got. */
@@ -1408,7 +1061,7 @@ export async function batchUploadStock(payload: BatchUploadPayload): Promise<Upl
     invoiceNumber,
     purchaseId: purchase.id,
     submissionValue: totalAmount,
-    paidAmount,
+    paidAmount: amountPaid,
     balanceOwed,
     paid: amountPaid >= totalAmount,
     phones: totalPhones,

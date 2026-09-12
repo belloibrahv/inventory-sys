@@ -32,7 +32,7 @@ export default async function AuditPage({
         }
       />
 
-      <div className={`rounded-xl px-4 py-3 text-sm ${data.integrity.ok ? "bg-emerald-50 text-emerald-900 dark:bg-emerald-500/10 dark:text-emerald-100" : "bg-rose-50 text-rose-900"}`}>
+      <div className={`rounded-xl px-4 py-3 text-sm ${data.integrity.ok ? "bg-success-soft text-success" : "bg-danger-soft text-danger"}`}>
         {data.integrity.ok
           ? `Trail is sound. ${data.integrity.checked} sealed rows checked. Nobody can quietly rewrite a past action.`
           : "A sealed row no longer matches. Treat this as a break-in on the trail and keep a backup."}
@@ -40,7 +40,7 @@ export default async function AuditPage({
       {books ? (
         <a
           href="/audit/books"
-          className={`block rounded-xl px-4 py-3 text-sm ${books.openCount ? "bg-amber-50 text-amber-950 dark:bg-amber-500/10 dark:text-amber-100" : "surface-card"}`}
+          className={`block rounded-xl px-4 py-3 text-sm ${books.openCount ? "bg-warning-soft text-warning" : "surface-card"}`}
         >
           <p className="font-medium">Owner and records checker</p>
           <p className="mt-1">{books.verdict}</p>
@@ -148,7 +148,7 @@ export default async function AuditPage({
 
 function WatchCard({ href, label, value, hot }: { href: string; label: string; value: number; hot?: boolean }) {
   return (
-    <a href={href} className={`surface-card p-4 ${hot ? "border-rose-300" : ""}`}>
+    <a href={href} className={`surface-card p-4 ${hot ? "border-danger/30" : ""}`}>
       <p className="text-2xl font-semibold">{value}</p>
       <p className="text-xs text-muted-foreground">{label}</p>
     </a>

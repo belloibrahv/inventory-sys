@@ -151,7 +151,7 @@ export function ScanList({
           {items.map((item) => (
             <li key={item} className="flex items-center justify-between rounded-lg bg-muted px-3 py-2 font-mono text-xs">
               <span>{item}</span>
-              <button type="button" className="text-rose-700" onClick={() => setItems((current) => current.filter((row) => row !== item))}>
+              <button type="button" className="text-danger" onClick={() => setItems((current) => current.filter((row) => row !== item))}>
                 Remove
               </button>
             </li>

@@ -148,7 +148,7 @@ export function ShopCalculator() {
         {open ? <X className="h-5 w-5" /> : <Calculator className="h-5 w-5" />}
       </button>
       {open ? (
-        <div className="fixed bottom-20 right-5 z-50 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-border bg-card p-4 shadow-xl">
+        <div className="fixed bottom-20 right-5 z-50 w-[min(22rem,calc(100vw-2rem))] rounded-lg border border-border bg-card p-4 shadow-xl">
           <p className="text-xs text-muted-foreground">Shop calculator · stays on this device</p>
           <p className="mt-2 break-all text-right text-3xl font-semibold tabular-nums">{display}</p>
           <p className="min-h-5 text-right text-xs text-muted-foreground">

@@ -9,8 +9,8 @@ export function WorkflowSteps({ steps, current }: { steps: string[]; current: nu
           <li
             key={step}
             className={cn(
-              "rounded-2xl border px-3 py-2 text-xs font-medium",
-              state === "done" && "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-500/10 dark:text-emerald-200",
+              "rounded-lg border px-3 py-2 text-xs font-medium",
+              state === "done" && "border-success/30 bg-success-soft text-success",
               state === "active" && "border-primary/30 bg-primary/10 text-primary",
               state === "todo" && "border-border text-muted-foreground"
             )}

@@ -22,7 +22,7 @@ export default async function UploadsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Upload stock"
-        description="Book incoming supplier cartons into the system. Enter supplier, items, scan auto-generated IMEI rows, and record payments with real-time balance calculations."
+        description="Book a supplier carton onto the system. Enter the supplier and the items, scan the IMEI rows the bill opens for you, then type what you have paid. The balance is worked out as you go."
       />
 
       <UploadStockWizard
@@ -37,28 +37,27 @@ export default async function UploadsPage() {
 
 
       <div className="surface-card p-5">
-        <h2 className="font-semibold">Which way should I use?</h2>
+        <h2 className="text-sm font-semibold">Which way should I use?</h2>
         <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
           <li>
-            <span className="font-medium text-foreground">One or a few units today:</span> start an upload bill with the
-            supplier and paid or not paid, then add each IMEI, serial, or piece count under that same PO.
+            <span className="font-medium text-foreground">One carton, or a few units today:</span> use the upload bill at
+            the top. Enter the supplier, list the items with their cost and quantity, scan the IMEI rows it opens for
+            you, then type whatever you have paid.
           </li>
           <li>
-            <span className="font-medium text-foreground">Opening count or a full shop load:</span> fill the opening stock
-            Excel one shop at a time, pick the supplier and payment status, and upload. That creates its own PO.
+            <span className="font-medium text-foreground">Opening count or a whole container:</span> fill the opening
+            stock Excel one shop at a time and upload it. That creates its own bill number.
           </li>
           <li>
-            Unpaid bills show on Goods from supplier and on Finance as still owed. Paid bills stay settled as the value
-            grows.
+            Either way, type the amount paid rather than ticking a box. Whatever is left over shows on Goods from
+            supplier and on Revenue &amp; expenditure as still owed until it is settled.
           </li>
-          <li>
-            Sending the same phone twice is safe. A phone already on the system is left exactly as it is.
-          </li>
+          <li>Sending the same phone twice is safe. A phone already on the system is left exactly as it is.</li>
         </ul>
       </div>
 
       <details className="surface-card group p-5">
-        <summary className="cursor-pointer list-none font-semibold tracking-tight marker:content-none [&::-webkit-details-marker]:hidden">
+        <summary className="cursor-pointer list-none text-sm font-semibold tracking-tight marker:content-none [&::-webkit-details-marker]:hidden">
           Advanced: older step-by-step sheet uploads
         </summary>
         <p className="mt-3 text-sm text-muted-foreground">

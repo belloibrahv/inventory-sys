@@ -2,66 +2,110 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * One palette, one radius, one shadow scale.
+ *
+ * Every status colour lives here as a token pair (`--success` / `--success-soft`)
+ * so screens stop hand-rolling `text-emerald-600 dark:text-emerald-400` next to
+ * `bg-emerald-100 dark:bg-emerald-950/40`. That hand-rolling is what made the old
+ * screens read as noisy: the same idea wore a slightly different colour on every
+ * page. Use `text-success`, `bg-success-soft`, `text-danger` and so on.
+ */
 :root {
-  --background: 220 28% 98%;
-  --foreground: 232 36% 12%;
+  --background: 220 24% 97%;
+  --foreground: 224 33% 14%;
   --card: 0 0% 100%;
-  --card-foreground: 232 36% 12%;
+  --card-foreground: 224 33% 14%;
   --popover: 0 0% 100%;
-  --popover-foreground: 232 36% 12%;
-  --primary: 232 100% 40%;
+  --popover-foreground: 224 33% 14%;
+  --primary: 232 84% 42%;
   --primary-foreground: 0 0% 100%;
-  --brand: 123 78% 42%;
+  --primary-soft: 232 90% 96%;
+  --brand: 123 62% 38%;
   --brand-foreground: 0 0% 100%;
-  --secondary: 232 28% 95%;
-  --secondary-foreground: 232 30% 20%;
-  --muted: 220 20% 95%;
-  --muted-foreground: 228 10% 40%;
-  --accent: 232 28% 95%;
-  --accent-foreground: 232 36% 12%;
-  --destructive: 0 72% 51%;
+  --secondary: 224 24% 95%;
+  --secondary-foreground: 224 28% 24%;
+  --muted: 220 20% 96%;
+  --muted-foreground: 222 12% 46%;
+  --accent: 224 24% 95%;
+  --accent-foreground: 224 33% 14%;
+  --destructive: 352 68% 48%;
   --destructive-foreground: 0 0% 100%;
-  --border: 226 18% 90%;
-  --input: 226 18% 90%;
-  --ring: 232 100% 40%;
-  --radius: 1rem;
-  --sidebar: 232 100% 18%;
-  --sidebar-foreground: 210 40% 96%;
-  --sidebar-muted: 232 80% 24%;
-  --sidebar-active: 232 100% 32%;
-  --chart-1: 232 100% 40%;
-  --chart-2: 123 78% 42%;
-  --chart-3: 232 80% 62%;
-  --chart-4: 38 92% 55%;
-  --chart-5: 210 80% 56%;
+
+  --success: 152 58% 32%;
+  --success-foreground: 0 0% 100%;
+  --success-soft: 152 52% 94%;
+  --warning: 33 84% 38%;
+  --warning-foreground: 0 0% 100%;
+  --warning-soft: 40 92% 93%;
+  --danger: 352 68% 46%;
+  --danger-foreground: 0 0% 100%;
+  --danger-soft: 352 86% 96%;
+  --info: 212 78% 42%;
+  --info-foreground: 0 0% 100%;
+  --info-soft: 212 90% 95%;
+
+  --border: 224 20% 90%;
+  --input: 224 20% 88%;
+  --ring: 232 84% 52%;
+  --radius: 0.75rem;
+
+  --sidebar: 232 42% 14%;
+  --sidebar-foreground: 220 24% 88%;
+  --sidebar-muted: 232 32% 20%;
+  --sidebar-active: 232 62% 28%;
+  --sidebar-border: 232 28% 22%;
+
+  --chart-1: 232 84% 52%;
+  --chart-2: 152 58% 40%;
+  --chart-3: 262 70% 60%;
+  --chart-4: 33 88% 52%;
+  --chart-5: 196 76% 45%;
 }
 
 .dark {
-  --background: 228 20% 7%;
-  --foreground: 220 16% 94%;
-  --card: 228 18% 10%;
-  --card-foreground: 220 16% 94%;
-  --popover: 228 18% 10%;
-  --popover-foreground: 220 16% 94%;
-  --primary: 232 100% 68%;
-  --primary-foreground: 232 40% 10%;
-  --brand: 123 70% 52%;
+  --background: 226 26% 8%;
+  --foreground: 220 18% 93%;
+  --card: 226 22% 11%;
+  --card-foreground: 220 18% 93%;
+  --popover: 226 22% 12%;
+  --popover-foreground: 220 18% 93%;
+  --primary: 232 92% 70%;
+  --primary-foreground: 230 44% 10%;
+  --primary-soft: 232 60% 18%;
+  --brand: 123 56% 52%;
   --brand-foreground: 140 40% 8%;
-  --secondary: 228 14% 16%;
-  --secondary-foreground: 220 16% 92%;
-  --muted: 228 14% 16%;
-  --muted-foreground: 220 10% 64%;
-  --accent: 228 14% 16%;
-  --accent-foreground: 220 16% 94%;
-  --destructive: 0 62% 45%;
+  --secondary: 226 16% 17%;
+  --secondary-foreground: 220 18% 92%;
+  --muted: 226 16% 16%;
+  --muted-foreground: 220 10% 62%;
+  --accent: 226 16% 17%;
+  --accent-foreground: 220 18% 93%;
+  --destructive: 352 62% 52%;
   --destructive-foreground: 0 0% 100%;
-  --border: 228 12% 18%;
-  --input: 228 12% 18%;
-  --ring: 232 100% 68%;
-  --sidebar: 232 50% 8%;
-  --sidebar-foreground: 210 30% 90%;
-  --sidebar-muted: 232 40% 13%;
-  --sidebar-active: 232 70% 22%;
+
+  --success: 152 52% 54%;
+  --success-foreground: 150 40% 8%;
+  --success-soft: 152 44% 16%;
+  --warning: 40 88% 60%;
+  --warning-foreground: 36 50% 10%;
+  --warning-soft: 36 50% 18%;
+  --danger: 352 74% 64%;
+  --danger-foreground: 350 44% 10%;
+  --danger-soft: 352 42% 19%;
+  --info: 208 84% 64%;
+  --info-foreground: 212 44% 10%;
+  --info-soft: 210 48% 19%;
+
+  --border: 226 14% 19%;
+  --input: 226 14% 22%;
+  --ring: 232 92% 70%;
+
+  --sidebar: 230 30% 9%;
+  --sidebar-foreground: 220 18% 86%;
+  --sidebar-muted: 230 22% 15%;
+  --sidebar-active: 232 48% 22%;
+  --sidebar-border: 230 20% 17%;
 }
 
 * {
@@ -88,16 +132,59 @@ body {
   }
 }
 
-.page-split {
-  @apply grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,28rem)] xl:items-start;
-}
+@layer components {
+  /* The one card. Flat border, one soft shadow, no competing treatments. */
+  .surface-card {
+    @apply rounded-xl border border-border bg-card shadow-[0_1px_2px_rgb(15_23_42_/_0.04),0_1px_3px_rgb(15_23_42_/_0.03)];
+  }
 
-.surface-card {
-  @apply rounded-2xl border border-border/80 bg-card shadow-[0_8px_30px_rgb(15,23,42,0.04)];
-}
+  .dark .surface-card {
+    @apply shadow-[0_1px_2px_rgb(0_0_0_/_0.35)];
+  }
 
-.dark .surface-card {
-  box-shadow: 0 8px 30px rgb(0 0 0 / 0.25);
+  /* A card the whole of which is a link or button. */
+  .surface-card-interactive {
+    @apply surface-card text-left transition-[border-color,box-shadow,background-color] hover:border-primary/40 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+  }
+
+  /* Small capital label above a value or section. One size, one spacing. */
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground;
+  }
+
+  /* Table shell: header band, row rhythm, and hover, set once. */
+  .data-table {
+    @apply w-full text-sm;
+  }
+
+  .data-table thead tr {
+    @apply border-b border-border bg-muted/40;
+  }
+
+  .data-table th {
+    @apply px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground;
+  }
+
+  .data-table tbody tr {
+    @apply border-b border-border/60 last:border-0;
+  }
+
+  .data-table td {
+    @apply px-4 py-3 align-middle;
+  }
+
+  .data-table tbody tr:hover {
+    @apply bg-muted/40;
+  }
+
+  /* Money and counts line up on the decimal, always. */
+  .num {
+    @apply tabular-nums;
+  }
+
+  .page-split {
+    @apply grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,25rem)] xl:items-start;
+  }
 }
 
 ::-webkit-scrollbar {
@@ -106,7 +193,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground) / 0.28);
+  background: hsl(var(--muted-foreground) / 0.25);
   border-radius: 999px;
 }
 

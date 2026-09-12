@@ -62,7 +62,7 @@ export function UploadCard({
       </p>
 
       {locked ? (
-        <p className="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-500/15 dark:text-amber-200">
+        <p className="mt-4 rounded-xl bg-warning-soft px-3 py-2 text-sm text-warning">
           {lockedWhy}
         </p>
       ) : (
@@ -117,13 +117,13 @@ export function UploadCard({
       )}
 
       {problems.length ? (
-        <div className="mt-4 rounded-xl bg-rose-50 p-3 dark:bg-rose-500/10">
-          <p className="text-sm font-semibold text-rose-800 dark:text-rose-200">
+        <div className="mt-4 rounded-xl bg-danger-soft p-3">
+          <p className="text-sm font-semibold text-danger">
             Fix these lines in the sheet, then upload it again. Nothing was loaded.
           </p>
           <ul className="mt-2 space-y-1">
             {problems.map((problem) => (
-              <li key={problem} className="text-xs text-rose-700 dark:text-rose-300">
+              <li key={problem} className="text-xs text-danger">
                 {problem}
               </li>
             ))}

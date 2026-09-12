@@ -53,15 +53,38 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
         description={`${purchase.supplier.name}${origin ? ` from ${origin}` : ""} → ${purchase.branch.name} · ${formatDate(purchase.createdAt)}${purchase.source === "UPLOAD_STOCK" ? " · Loaded on Upload stock" : ""}`}
       />
       {purchase.source === "UPLOAD_STOCK" ? (
-        <div className="surface-card space-y-2 border-primary/30 p-5 text-sm">
+        <div className="surface-card space-y-3 p-5 text-sm">
           <p className="font-semibold">Loaded on Upload stock</p>
           <p>
-            This bill was created when stock was put on the shelf from Upload stock. Units are already In shop.
-            Submission value is the cost of what was loaded.{" "}
-            {money(purchase.paidAmount) >= money(purchase.totalAmount) - 0.005
-              ? "The bill is marked paid."
-              : "Not paid yet — it shows on Finance as still owed until accounts record a payment."}
+            This bill was created when the stock was put on the shelf from Upload stock, so the units are already In
+            shop. The bill value is the cost of what was loaded.
           </p>
+          {/* The money, spelled out, rather than a paid / not paid label. */}
+          <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-3">
+            <div>
+              <p className="eyebrow">Bill value</p>
+              <p className="num text-lg font-semibold">{formatCurrency(money(purchase.totalAmount))}</p>
+            </div>
+            <div>
+              <p className="eyebrow">Paid so far</p>
+              <p className="num text-lg font-semibold text-success">{formatCurrency(money(purchase.paidAmount))}</p>
+            </div>
+            <div>
+              <p className="eyebrow">Still owed</p>
+              <p
+                className={`num text-lg font-semibold ${
+                  money(purchase.totalAmount) - money(purchase.paidAmount) > 0.005 ? "text-warning" : "text-success"
+                }`}
+              >
+                {formatCurrency(Math.max(0, money(purchase.totalAmount) - money(purchase.paidAmount)))}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {money(purchase.paidAmount) >= money(purchase.totalAmount) - 0.005
+                  ? "This bill is fully cleared."
+                  : "Shows on Revenue & expenditure as still owed until a payment is recorded."}
+              </p>
+            </div>
+          </div>
           {purchase.notes ? <p className="text-muted-foreground">{purchase.notes}</p> : null}
         </div>
       ) : null}
@@ -75,7 +98,7 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
           Sold on the system already has an invoice. Still in shop is what the system still believes is on the shelf.
         </p>
         {trace.shortVsBill > 0 ? (
-          <p className="text-amber-800">
+          <p className="text-warning">
             {trace.shortVsBill} unit{trace.shortVsBill === 1 ? "" : "s"} on this bill were never scanned. They may still be in a carton, or they arrived and left without a number on this system.
           </p>
         ) : null}
@@ -164,7 +187,7 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
           </div>
         </div>
       ) : (
-        <div className="surface-card p-5 text-sm text-emerald-700">
+        <div className="surface-card p-5 text-sm text-success">
           Goods received into {purchase.branch.name}. These units can now be sold, sent Shop to shop, or later sent back to this supplier if they fail.
         </div>
       )}

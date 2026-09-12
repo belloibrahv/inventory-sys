@@ -1,6 +1,6 @@
 import { getDashboardData } from "@/app/actions/dashboard"
 import { DevicePie, SalesPurchaseChart } from "@/components/dashboard-charts"
-import { KpiCard, StatusBadge } from "@/components/shared"
+import { KpiCard, SectionCard, StatCard, StatGrid, StatusBadge } from "@/components/shared"
 import { Badge } from "@/components/ui/badge"
 import { getAppSettings, lowStockLimit } from "@/lib/settings"
 import { formatCurrency, formatDate, money } from "@/lib/utils"
@@ -12,77 +12,90 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       {data.tasks.length ? (
-        <div className="surface-card p-5">
-          <h3 className="mb-3 font-semibold">Do these next</h3>
+        <SectionCard title="Do these next" description="Open work waiting on you in the shops you can see.">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {data.tasks.map((task) => (
-              <a key={task.href + task.label} href={task.href} className="rounded-xl border border-border px-4 py-3 hover:bg-muted">
-                <p className="text-2xl font-semibold">{task.count}</p>
+              <a
+                key={task.href + task.label}
+                href={task.href}
+                className="rounded-lg border border-border px-4 py-3 transition-colors hover:border-primary/40 hover:bg-muted/40"
+              >
+                <p className="text-2xl font-semibold num">{task.count}</p>
                 <p className="text-sm text-muted-foreground">{task.label}</p>
               </a>
             ))}
           </div>
-        </div>
+        </SectionCard>
       ) : (
         <p className="text-sm text-muted-foreground">No open shop tasks for you right now.</p>
       )}
-      <p className="text-sm">
-        <a href="/audit/books" className="text-primary">Check the books</a>
-        {" for money, phones, and a working paper the owner or records checker can print."}
-      </p>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <StatGrid>
         <KpiCard
           label="Total sales"
           value={formatCurrency(data.kpis.totalSales)}
           trend={data.kpis.salesTrend}
-          tone="blue"
           icon={<Receipt className="h-5 w-5" />}
         />
         <KpiCard
           label="Total expenses"
           value={formatCurrency(data.kpis.totalExpense)}
           trend={data.kpis.expenseTrend}
-          tone="blue"
           icon={<CreditCard className="h-5 w-5" />}
         />
         <KpiCard
-          label="Money sent out"
+          label="Payments made out"
           value={formatCurrency(data.kpis.paymentSent)}
           trend={data.kpis.paymentSentTrend}
-          tone="blue"
           icon={<Banknote className="h-5 w-5" />}
         />
         <KpiCard
-          label="Money collected"
+          label="Payments received"
           value={formatCurrency(data.kpis.paymentReceived)}
           trend={data.kpis.paymentReceivedTrend}
-          tone="green"
           icon={<Wallet className="h-5 w-5" />}
         />
-      </div>
+      </StatGrid>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <a href="/approvals" className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">Waiting for approval</p>
-          <p className="text-2xl font-semibold">{data.exceptions.pendingApprovals}</p>
-        </a>
-        <a href="/sales" className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">Walk-in sales with no name</p>
-          <p className="text-2xl font-semibold">{data.exceptions.walkIns}</p>
-          <p className="text-xs text-muted-foreground">Add the buyer before any return</p>
-        </a>
-        <a href="/finance" className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">We still owe suppliers</p>
-          <p className="text-2xl font-semibold">{formatCurrency(data.exceptions.creditorOwed)}</p>
-        </a>
-        <a href="#imei-check" className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">Stock count vs IMEI mismatch</p>
-          <p className="text-2xl font-semibold">{data.exceptions.imeiGaps}</p>
-          <p className="text-xs text-muted-foreground">
-            {data.exceptions.imeiGaps === 0 ? "Shop list and IMEI match" : "Open the IMEI check below"}
-          </p>
-        </a>
-      </div>
+      <StatGrid>
+        <StatCard
+          label="Waiting for approval"
+          value={String(data.exceptions.pendingApprovals)}
+          hint="Somebody has to decide on these before they can go through"
+          href="/approvals"
+          tone={data.exceptions.pendingApprovals > 0 ? "warning" : "neutral"}
+        />
+        <StatCard
+          label="Walk-in sales with no name"
+          value={String(data.exceptions.walkIns)}
+          hint="A return cannot start until the buyer is named"
+          href="/sales"
+          tone={data.exceptions.walkIns > 0 ? "warning" : "neutral"}
+        />
+        <StatCard
+          label="We still owe suppliers"
+          value={formatCurrency(data.exceptions.creditorOwed)}
+          hint="Open supplier balances across the shops you can see"
+          href="/suppliers"
+        />
+        <StatCard
+          label="Shelf count vs IMEI list"
+          value={String(data.exceptions.imeiGaps)}
+          hint={
+            data.exceptions.imeiGaps === 0
+              ? "Shop list and IMEI list agree"
+              : "Item lines that disagree. Open the check below."
+          }
+          href="#imei-check"
+          tone={data.exceptions.imeiGaps > 0 ? "danger" : "success"}
+        />
+      </StatGrid>
+
+      <p className="text-sm text-muted-foreground">
+        <a href="/audit/books" className="font-medium text-primary hover:underline">
+          Check the books
+        </a>{" "}
+        for money, phones, and a working paper the owner or records checker can print.
+      </p>
 
       <div id="imei-check" className="surface-card overflow-hidden">
         <div className="flex items-center justify-between px-6 py-5">
@@ -197,7 +210,7 @@ export default async function DashboardPage() {
             </div>
             <p className="text-sm text-muted-foreground">Stock value</p>
             <p className="text-3xl font-semibold">{formatCurrency(data.kpis.stockValue)}</p>
-            <p className="mt-1 text-xs text-emerald-600">Customers still owing {formatCurrency(data.kpis.outstanding)}</p>
+            <p className="mt-1 text-xs text-success">Customers still owing {formatCurrency(data.kpis.outstanding)}</p>
             <div className="mt-4 space-y-3">
               {data.stock.map((row) => (
                 <div key={row.id} className="flex items-center justify-between text-sm">

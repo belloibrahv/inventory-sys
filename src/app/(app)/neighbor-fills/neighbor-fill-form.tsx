@@ -76,7 +76,7 @@ export function NeighborFillForm({
         ))}
       </Select>
       {!shopCustomers.length ? (
-        <p className="text-sm text-rose-600">Add the customer first. Do not invent a buyer on this page.</p>
+        <p className="text-sm text-danger">Add the customer first. Do not invent a buyer on this page.</p>
       ) : null}
       <Select
         name="productId"

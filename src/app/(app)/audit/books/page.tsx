@@ -3,7 +3,7 @@ import { getBooksCheck, type BooksRange } from "@/app/actions/books-check"
 import { BooksPdfButton } from "@/components/books-pdf-button"
 import { BooksStatement } from "@/components/books-statement"
 import { ExportCsv } from "@/components/export-csv"
-import { PageHeader } from "@/components/shared"
+import { PageHeader, StatCard, StatGrid } from "@/components/shared"
 import { PrintButton } from "@/components/print-button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
@@ -90,7 +90,7 @@ export default async function BooksCheckPage({
             <span className="mb-1 block text-muted-foreground">Compare with</span>
             <Input name="compare" type="date" defaultValue={compare && /^\d{4}-\d{2}-\d{2}$/.test(compare) ? compare : ""} />
           </label>
-          <button type="submit" className="min-h-12 rounded-xl bg-primary px-4 text-sm text-primary-foreground">
+          <button type="submit" className="h-10 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">
             Recalculate
           </button>
         </form>
@@ -130,28 +130,34 @@ export default async function BooksCheckPage({
           </Link>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-4">
-          <div className="surface-card p-4">
-            <p className="text-xs text-muted-foreground">This period collected</p>
-            <p className="text-xl font-semibold">{formatCurrency(data.collected)}</p>
-            <p className="text-xs text-muted-foreground">Compared {formatCurrency(data.compare.priorCollected)} · {data.compare.collected.value}</p>
-          </div>
-          <div className="surface-card p-4">
-            <p className="text-xs text-muted-foreground">This period posted</p>
-            <p className="text-xl font-semibold">{formatCurrency(data.revenue)}</p>
-            <p className="text-xs text-muted-foreground">Compared {formatCurrency(data.compare.priorRevenue)} · {data.compare.revenue.value}</p>
-          </div>
-          <div className="surface-card p-4">
-            <p className="text-xs text-muted-foreground">Sales</p>
-            <p className="text-xl font-semibold">{data.salesCount}</p>
-            <p className="text-xs text-muted-foreground">Compared {data.compare.priorCount} · {data.compare.count.value}</p>
-          </div>
-          <div className="surface-card p-4">
-            <p className="text-xs text-muted-foreground">Things to clear</p>
-            <p className="text-xl font-semibold">{data.openCount}</p>
-            <p className="text-xs text-muted-foreground">{data.comparePicked ? "Picked comparison" : "Automatic previous period"}</p>
-          </div>
-        </div>
+        <StatGrid>
+          <StatCard
+            label="Payments received"
+            value={formatCurrency(data.collected)}
+            hint={`Against ${formatCurrency(data.compare.priorCollected)} · ${data.compare.collected.value}`}
+            tone="success"
+          />
+          <StatCard
+            label="Revenue posted"
+            value={formatCurrency(data.revenue)}
+            hint={`Against ${formatCurrency(data.compare.priorRevenue)} · ${data.compare.revenue.value}`}
+          />
+          <StatCard
+            label="Sales"
+            value={String(data.salesCount)}
+            hint={`Against ${data.compare.priorCount} · ${data.compare.count.value}`}
+          />
+          <StatCard
+            label="Things still to clear"
+            value={String(data.openCount)}
+            hint={
+              data.openCount
+                ? "Each one is listed below and links to where it is fixed"
+                : "Nothing is waiting on a person"
+            }
+            tone={data.openCount ? "danger" : "success"}
+          />
+        </StatGrid>
       </div>
 
       <BooksStatement data={data} />

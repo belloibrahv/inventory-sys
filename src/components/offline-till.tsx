@@ -66,7 +66,7 @@ export function OfflineTill() {
       </header>
 
       <main className={`mx-auto space-y-5 px-6 py-8 ${snapshot ? "max-w-6xl" : "max-w-xl"}`}>
-        <div className="rounded-2xl bg-white p-5 shadow-sm">
+        <div className="rounded-lg bg-white p-5 shadow-sm">
           <h1 className="text-xl font-semibold">This device cannot reach the shop server</h1>
           <p className="mt-2 text-sm text-slate-700">
             {online
@@ -96,7 +96,7 @@ export function OfflineTill() {
           {message ? <p className="mt-3 text-sm text-slate-700">{message}</p> : null}
         </div>
 
-        <div className="rounded-2xl bg-white p-5 shadow-sm">
+        <div className="rounded-lg bg-white p-5 shadow-sm">
           <h2 className="text-sm font-semibold">Parked sales on this device</h2>
           {queue.length === 0 ? (
             <p className="mt-2 text-sm text-slate-600">No parked sale is waiting here.</p>
@@ -115,7 +115,7 @@ export function OfflineTill() {
         </div>
 
         {snapshot ? (
-          <div className="rounded-2xl bg-white p-5 shadow-sm">
+          <div className="rounded-lg bg-white p-5 shadow-sm">
             <h2 className="mb-4 text-sm font-semibold">Sell from the list on this phone</h2>
             <PosClient
               products={snapshot.products}

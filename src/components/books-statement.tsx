@@ -3,7 +3,7 @@ import type { BooksCheck } from "@/app/actions/books-check"
 import { booksCompareRows, booksMoneyLines, booksPeriodLabel, booksRangeTitle } from "@/lib/books-pack"
 import { formatLagosStamp, formatWatLong } from "@/lib/lagos-day"
 import { formatCurrency, formatDateTime } from "@/lib/utils"
-import { ArrowRight, AlertCircle, CheckCircle2, ShieldCheck, FileText } from "lucide-react"
+import { ArrowRight, AlertCircle, CheckCircle2, ShieldCheck } from "lucide-react"
 
 function moneyOrCount(value: number, isMoney: boolean) {
   return isMoney ? formatCurrency(value) : String(value)
@@ -20,6 +20,7 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
   const compared = booksPeriodLabel(data.range, data.priorFrom, data.priorTo)
   const compareRows = booksCompareRows(data)
   const moneyLines = booksMoneyLines(data)
+  const openPapers = data.papers.filter((row) => !row.ok)
 
   return (
     <section className="books-statement mx-auto w-full max-w-[210mm] overflow-hidden bg-white text-slate-900 shadow-[0_18px_50px_rgba(0,27,206,0.12)]">
@@ -62,14 +63,49 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
         </div>
       </header>
 
-      <div className={`flex items-start justify-between gap-4 border-b px-6 py-4 ${data.openCount ? "border-rose-200 bg-rose-50" : "border-emerald-200 bg-emerald-50"}`}>
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Accountant verdict</p>
-          <p className="mt-1 text-sm font-medium text-slate-900">{data.verdict}</p>
+      {/*
+        The client, reading the verdict as an auditor, could not act on it: "it has
+        been stated clearly, but there's no way we can maneuver and do all this ...
+        all these angle that is showing that there is a need for rectification
+        should be clickable and take us to where the problem is so that we can
+        resolve it at a go." So each open item is named here and goes straight to
+        the screen where it is fixed.
+      */}
+      <div className={`border-b px-6 py-4 ${data.openCount ? "border-rose-200 bg-rose-50" : "border-emerald-200 bg-emerald-50"}`}>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Accountant verdict</p>
+            <p className="mt-1 text-sm font-medium text-slate-900">{data.verdict}</p>
+          </div>
+          <p className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${data.openCount ? "bg-rose-600 text-white" : "bg-[#18C020] text-white"}`}>
+            {data.openCount ? `${data.openCount} to clear` : "Clean"}
+          </p>
         </div>
-        <p className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${data.openCount ? "bg-rose-600 text-white" : "bg-[#18C020] text-white"}`}>
-          {data.openCount ? `${data.openCount} to clear` : "Clean"}
-        </p>
+        {openPapers.length ? (
+          <div className="mt-3 flex flex-wrap gap-2 print:hidden">
+            {openPapers.map((row) =>
+              row.href ? (
+                <Link
+                  key={row.label}
+                  href={row.href}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-rose-300 bg-white px-3 py-1 text-[11px] font-semibold text-rose-800 transition-colors hover:bg-rose-100"
+                >
+                  <AlertCircle className="h-3 w-3" />
+                  Go and fix: {row.label}
+                  <ArrowRight className="h-3 w-3" />
+                </Link>
+              ) : (
+                <span
+                  key={row.label}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-rose-300 bg-white px-3 py-1 text-[11px] font-semibold text-rose-800"
+                >
+                  <AlertCircle className="h-3 w-3" />
+                  {row.label}
+                </span>
+              )
+            )}
+          </div>
+        ) : null}
       </div>
 
       <div className="grid grid-cols-4 divide-x divide-slate-200 border-b border-slate-200">
@@ -344,7 +380,7 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
         <div className="flex items-start gap-3">
           <ShieldCheck className="h-5 w-5 text-primary shrink-0 mt-0.5" />
           <div className="text-xs text-slate-600 space-y-1">
-            <p className="font-bold text-slate-900">Audit Certification & Management Attestation</p>
+            <p className="font-bold text-slate-900">Audit certification and management attestation</p>
             <p>
               I hereby certify that I have examined the bank statement receipts, physical till registers, serial/IMEI inventory listings, and vendor expense vouchers for this statement period. The figures presented above accurately reflect the financial and operational position of the organization.
             </p>

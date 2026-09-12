@@ -52,7 +52,7 @@ export default async function TransfersPage() {
                   </ActionForm>
                 </div>
               ) : (
-                <p className="mt-2 text-xs text-emerald-700">Live at {transfer.toBranch.name}.</p>
+                <p className="mt-2 text-xs text-success">Live at {transfer.toBranch.name}.</p>
               )}
             </div>
           ))}

@@ -4,7 +4,7 @@ import { getBranches, getSuppliers } from "@/app/actions/parties"
 import { IncomingForm } from "@/app/(app)/incoming/incoming-form"
 import { PreviewIncomingModal } from "./preview-incoming-modal"
 import { ActionForm } from "@/components/action-form"
-import { PageHeader, StatusBadge } from "@/components/shared"
+import { EmptyState, PageHeader, SectionCard, StatusBadge } from "@/components/shared"
 import { Badge } from "@/components/ui/badge"
 import { can, isSuperAdmin } from "@/lib/permissions"
 import { requireUser } from "@/lib/session"
@@ -26,16 +26,19 @@ export default async function IncomingPage() {
       <div>
         <PageHeader
           title="Goods on the way"
-          description="Book the IMEIs or piece count on a supplier carton before it reaches Ibadan. They stay Coming until someone confirms the boxes are in the shop. This is not Shop to shop, and it is not a neighbor shop fill."
+          description="Cartons booked before they reach Ibadan. They stay Coming until someone opens the list, checks what actually turned up, and confirms. Nothing is added to a shop until then."
         />
-        <div className="space-y-3">
+        <div className="mt-5 space-y-3">
           {lots.length === 0 ? (
-            <div className="surface-card p-5 text-sm text-muted-foreground">No goods on the way that you can see.</div>
+            <EmptyState
+              title="Nothing on the way that you can see"
+              hint="Book a carton on the right and its IMEIs or piece counts will wait here until the boxes land."
+            />
           ) : null}
           {lots.map((lot) => (
             <div key={lot.id} className="surface-card p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
+                <div className="min-w-0">
                   <p className="font-semibold">{lot.lotNumber}</p>
                   <p className="text-sm text-muted-foreground">
                     Going to {lot.branch.name}
@@ -44,16 +47,19 @@ export default async function IncomingPage() {
                     {lot.expectedDate ? ` · due ${lot.expectedDate.toLocaleDateString("en-NG")}` : ""}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex shrink-0 items-center gap-2">
                   <Badge variant={lot.visible ? "info" : "muted"}>{lot.visible ? "Shown to staff" : "Hidden"}</Badge>
                   <StatusBadge value={lot.status} />
                 </div>
               </div>
-              <ul className="mt-3 space-y-1 text-sm">
+              <ul className="mt-3 space-y-1 border-t border-border pt-3 text-sm">
                 {lot.items.map((item) => (
-                  <li key={item.id}>
-                    {item.product.name} × {item.quantity}
-                    {item.identity === "IMEI" ? " · IMEIs" : item.identity === "SERIAL" ? " · serials" : " · no number"}
+                  <li key={item.id} className="flex items-center justify-between gap-3">
+                    <span className="min-w-0 truncate">{item.product.name}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {item.quantity} ·{" "}
+                      {item.identity === "IMEI" ? "by IMEI" : item.identity === "SERIAL" ? "by serial" : "piece count"}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -79,10 +85,13 @@ export default async function IncomingPage() {
           ))}
         </div>
       </div>
-      <div className="surface-card p-5">
-        <h3 className="mb-2 font-semibold">Book before arrival</h3>
+      <SectionCard
+        title="Book a carton before it arrives"
+        description="Stock in the shops does not go up until arrival is confirmed."
+      >
         <p className="mb-4 text-sm text-muted-foreground">
-          Super Admin or Goods intake can scan IMEIs, serials, or enter a simple piece count. Tie the list to a supplier order when you can. Stock in the shops does not go up until arrival is confirmed.
+          Super Admin or Goods intake can scan IMEIs, scan serials, or enter a simple piece count. Tie the list to a
+          supplier order where you can, so the carton has a trail if a unit later goes missing.
         </p>
         {canBook ? (
           <IncomingForm
@@ -98,7 +107,7 @@ export default async function IncomingPage() {
             You can see lists Super Admin has shown. Ask Super Admin to let you book goods, or to show a hidden list.
           </p>
         )}
-      </div>
+      </SectionCard>
     </div>
   )
 }

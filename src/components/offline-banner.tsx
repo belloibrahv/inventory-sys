@@ -93,7 +93,7 @@ export function OfflineBanner() {
   if (!offline && queue.length === 0 && eventCount === 0) return null
 
   return (
-    <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-500/10 dark:text-amber-100">
+    <div className="rounded-xl bg-warning-soft px-4 py-3 text-sm text-warning">
       {offline ? (
         <p>
           This device is offline. You can still finish a sale on Sell now. Refresh is safe. Parked sales stay on this phone until the line returns, then they post to the shop and Who did what.

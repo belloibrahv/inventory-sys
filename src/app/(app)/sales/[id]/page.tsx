@@ -75,7 +75,7 @@ export default async function SaleDetailPage({
           </>
         }
       />
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 print:hidden dark:border-amber-900 dark:bg-amber-500/10 dark:text-amber-100">
+      <div className="rounded-lg border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-warning print:hidden">
         This sale cannot be changed. Staff cannot edit items, IMEIs, or prices. Collect any remaining money below.
       </div>
       <div className="grid gap-4 md:grid-cols-3 print:hidden">
@@ -96,7 +96,7 @@ export default async function SaleDetailPage({
           <p className="mt-2 text-sm text-muted-foreground">{statusLabel(sale.paymentMethod)}{sale.isWholesale ? " · wholesale" : ""}</p>
         </div>
         <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">Collected</p>
+          <p className="text-sm text-muted-foreground">Amount paid</p>
           <p className="text-2xl font-semibold">{formatCurrency(money(sale.paidAmount))}</p>
           <p className="text-sm text-muted-foreground">
             of {formatCurrency(money(sale.totalAmount))}

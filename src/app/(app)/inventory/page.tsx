@@ -14,7 +14,6 @@ export default async function InventoryPage() {
     getBranches(),
   ])
 
-  const serialized = new Set(serializedIds)
   const activeBranches = branches.filter((b) => b.isActive).map((b) => ({ id: b.id, name: b.name, code: b.code }))
 
   const formattedRows = rows.map((row) => ({
