@@ -208,66 +208,66 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
   const papers = [
     {
       ok: integrity.ok,
-      label: "Who did what trail",
-      detail: integrity.ok ? `${integrity.checked} sealed rows checked. Nobody rewrote a past action.` : "A sealed row no longer matches. Keep a backup and treat this as a break-in.",
+      label: "The trail of who did what",
+      detail: integrity.ok ? `We checked ${integrity.checked} locked rows. Nobody changed a past action.` : "A locked row has changed. Keep a backup and treat it like somebody broke in.",
       href: "/audit",
     },
     {
       ok: unclosed.length === 0,
-      label: "Till counted",
-      detail: unclosed.length ? `${unclosed.length} older day(s) with sales are still open. Sell now stays locked.` : "Every older day with sales has a till count.",
+      label: "Till counted every day",
+      detail: unclosed.length ? `${unclosed.length} old day(s) with sales are still not closed. Sell now stays locked until you close them.` : "Every old day with sales has been counted.",
       href: "/finance/close",
     },
     {
       ok: span !== "day" || now.count === 0 || Boolean(closeForDay),
-      label: "This period close",
+      label: "This day is closed",
       detail:
         span !== "day"
-          ? `${closes.length} close(s) in this period.`
+          ? `${closes.length} day(s) were closed in this time.`
           : closeForDay
-            ? `Counted ${money(closeForDay.countedCash).toFixed(0)} against expected ${expectedCash.toFixed(0)}.`
+            ? `We counted ${money(closeForDay.countedCash).toFixed(0)}. It should have been ${expectedCash.toFixed(0)}.`
             : now.count
-              ? "This day has sales and is not closed."
-              : "No sales this day, so no close is required.",
+              ? "This day has sales but nobody has closed it."
+              : "No sale happened this day, so there is nothing to close.",
       href: `/finance/close?date=${day}`,
     },
     {
       ok: closeVariances.length === 0,
-      label: "Till matches cash sales",
-      detail: closeVariances.length ? `${closeVariances.length} close(s) have a shortfall or leftover.` : "Closed days match expected cash, or there is no close yet.",
+      label: "Till money matches cash sales",
+      detail: closeVariances.length ? `On ${closeVariances.length} day(s) the money was short or plenty.` : "The days we closed have the right cash, or no day has been closed yet.",
       href: "/finance/close",
     },
     {
       ok: imeiGaps.length === 0,
-      label: "Phones match IMEI list",
-      detail: imeiGaps.length ? `${imeiGaps.length} product line(s) do not match.` : "Shop quantity and IMEI count match for every phone and laptop.",
+      label: "Phones match the IMEI list",
+      detail: imeiGaps.length ? `${imeiGaps.length} item(s) do not agree.` : "The shop count and the IMEI count agree for every phone and laptop.",
       href: "/dashboard#imei-check",
     },
     {
       ok: parked.sitting === 0 && parked.vanished === 0,
-      label: "Parked sales",
+      label: "Waiting sales",
       detail:
         parked.sitting || parked.vanished
-          ? `${parked.sitting} sitting too long. ${parked.vanished} vanished from a device.`
-          : "No parked sale is sitting or missing.",
+          ? `${parked.sitting} has been waiting too long. ${parked.vanished} disappeared from a phone.`
+          : "No waiting sale is waiting too long or missing.",
       href: parked.vanished ? "/audit?risk=HIGH" : "/pos",
     },
     {
       ok: walkIns === 0,
-      label: "Buyers named",
-      detail: walkIns ? `${walkIns} sale(s) in this period have no customer name. A return cannot start until a name is added.` : "Every sale in this period has a buyer name, or there were no walk-ins.",
+      label: "Every sale has a buyer name",
+      detail: walkIns ? `${walkIns} sale(s) have no buyer name. Nobody can bring those things back until you add a name.` : "Every sale has a buyer name.",
       href: "/sales",
     },
     {
       ok: failedLogins === 0,
-      label: "Sign-ins",
-      detail: failedLogins ? `${failedLogins} failed sign-in(s) in this period.` : "No failed sign-ins in this period.",
+      label: "People signing in",
+      detail: failedLogins ? `${failedLogins} person(s) tried to sign in and failed.` : "Nobody failed to sign in.",
       href: "/audit?result=failed&action=LOGIN",
     },
     {
       ok: highRisk === 0,
-      label: "High-risk actions",
-      detail: highRisk ? `${highRisk} high-risk row(s) in Who did what.` : "No high-risk actions in this period.",
+      label: "Risky actions",
+      detail: highRisk ? `${highRisk} risky action(s) are on Who did what. Go and look at them.` : "Nobody did anything risky.",
       href: "/audit?risk=HIGH",
     },
   ]
@@ -311,8 +311,8 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
     papers,
     openCount: openPapers.length,
     verdict: openPapers.length
-      ? `${openPapers.length} item${openPapers.length === 1 ? "" : "s"} need a person before you can say the books are clean.`
-      : "The books look clean for this shop and period. Money, phones, and the trail agree.",
+      ? `${openPapers.length} thing${openPapers.length === 1 ? "" : "s"} must be fixed before you can say the books are clean.`
+      : "The books are clean for this shop. The money, the phones, and the trail all agree.",
     compare: {
       revenue: change(now.revenue, then.revenue),
       collected: change(now.collected, then.collected),

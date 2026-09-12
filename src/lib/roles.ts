@@ -1,16 +1,16 @@
 import type { UserRole } from "@prisma/client"
 
 export const ROLE_LABELS: Record<UserRole, string> = {
-  SUPER_ADMIN: "Super Admin",
-  CEO: "CEO",
+  SUPER_ADMIN: "Main admin",
+  CEO: "CEO / owner",
   AUDITOR: "Records checker",
   ACCOUNTANT: "Accountant",
   BRANCH_MANAGER: "Shop manager",
-  VAULT_MANAGER: "Goods intake",
-  STOCK_UPLOADER: "Stock uploader",
+  VAULT_MANAGER: "Receive goods",
+  STOCK_UPLOADER: "Person who loads stock",
   CASHIER: "Cashier",
   SALES_EXECUTIVE: "Sales person",
-  ENGINEER: "Repair engineer",
+  ENGINEER: "Repair person",
 }
 
 export function isSuperAdmin(role: UserRole) {

@@ -14,7 +14,7 @@ export default async function TransfersPage() {
       <div>
         <PageHeader
           title="Shop to shop"
-          description="Move phones and accessories that already belong to Abu Twins from one of our shops to another, such as Iwo Road to Challenge. Upload a CSV of the IMEIs and accessory lines. The receiving shop must confirm what arrived. This is not goods from a supplier, and it is not buying from a neighboring dealer."
+          description="Move phones and goods from one of our shops to another, like Iwo Road to Challenge. The shop that gets them must confirm what landed."
         />
         <WorkflowSteps current={0} steps={["Upload the CSV", "On the way to our other shop", "That shop confirms", "Now in that shop"]} />
         <div className="space-y-3">
@@ -47,7 +47,7 @@ export default async function TransfersPage() {
                     {transfer.imeis.length ? (
                       <ScanList name="imeis" />
                     ) : (
-                      <p className="text-sm text-muted-foreground">No unique numbers on this send. Confirm the accessory quantity only.</p>
+                      <p className="text-sm text-muted-foreground">Nothing on this send has a unique number. Just confirm how many accessories arrived.</p>
                     )}
                   </ActionForm>
                 </div>
@@ -59,7 +59,7 @@ export default async function TransfersPage() {
         </div>
       </div>
       <div className="surface-card p-5">
-        <h3 className="mb-2 font-semibold">Send a CSV between our shops</h3>
+        <h3 className="mb-2 font-semibold">Send goods to another of our shops</h3>
         <p className="mb-4 text-sm text-muted-foreground">
           Do not pick phones one by one on this screen. Put the IMEIs and accessory counts in the file, then send the list.
         </p>

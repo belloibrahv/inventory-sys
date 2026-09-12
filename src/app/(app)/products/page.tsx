@@ -44,14 +44,14 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
     <div className="space-y-6">
       <PageHeader
         title="Phones & items"
-        description="Add phones, accessories, and selling prices. Lowest price is the floor staff cannot go below. Tick several items to change many selling prices in one save. Sales stay by the unit."
+        description="Add phones, accessories, and sell prices. The lowest price is the line staff must not go under."
       />
       <div className="page-split">
         <ProductPriceList products={rows} canEdit={canEdit} initialQuery={q} />
         <div className="space-y-4">
           {!canEdit ? (
             <div className="surface-card p-5 text-sm text-muted-foreground">
-              You can see the list. Super Admin must allow you to add items or change prices.
+              You can see the list. The main admin must allow you to add items or change prices.
             </div>
           ) : null}
           {canEdit ? (
@@ -77,7 +77,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
               <Select name="tracking" defaultValue="IMEI">
                 <option value="IMEI">Phone, IMEI</option>
                 <option value="SERIAL">Accessory with serial</option>
-                <option value="NONE">No number (cords, chargers)</option>
+                <option value="NONE">No number. Use this for cords and chargers</option>
               </Select>
               <Select name="condition" defaultValue="BRAND_NEW">
                 {conditions.map((item) => (
@@ -86,21 +86,21 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
               </Select>
               <div className="grid grid-cols-3 gap-2">
                 <Input name="color" placeholder="Color" />
-                <Input name="storage" placeholder="Storage" />
-                <Input name="ram" placeholder="RAM" />
+                <Input name="storage" placeholder="Storage size (GB)" />
+                <Input name="ram" placeholder="Memory (RAM)" />
               </div>
               <div className="grid grid-cols-3 gap-2">
-                <Input name="costPrice" type="number" placeholder="Cost" required />
-                <Input name="minimumPrice" type="number" placeholder="Minimum" required />
-                <Input name="sellingPrice" type="number" placeholder="Selling" required />
+                <Input name="costPrice" type="number" placeholder="Cost price" required />
+                <Input name="minimumPrice" type="number" placeholder="Lowest price" required />
+                <Input name="sellingPrice" type="number" placeholder="Sell price" required />
               </div>
-              <Input name="warrantyDays" type="number" defaultValue={365} placeholder="Warranty days" />
-              <Textarea name="description" placeholder="Description" />
+              <Input name="warrantyDays" type="number" defaultValue={365} placeholder="How many days warranty" />
+              <Textarea name="description" placeholder="Short note about this item" />
             </ActionForm>
           </div>
           <div className="surface-card p-5">
-            <h3 className="mb-4 font-semibold">Warranty days</h3>
-            <ActionForm action={updateProductWarranty} submit="Update warranty" className="space-y-3">
+            <h3 className="mb-4 font-semibold">How many days warranty</h3>
+            <ActionForm action={updateProductWarranty} submit="Save warranty days" className="space-y-3">
               <Select name="id" required>
                 {products.map((product) => (
                   <option key={product.id} value={product.id}>{product.name} · {product.warrantyDays} days</option>

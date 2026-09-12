@@ -51,7 +51,7 @@ export default async function BranchesPage() {
   return (
     <div className="page-split">
       <div>
-        <PageHeader title="Shops" description="Iwo Road is HQ. Challenge is the second Ibadan shop. Super Admin can open more shops anywhere in Nigeria when Abu Twins expands." />
+        <PageHeader title="Shops" description="Iwo Road is HQ. Challenge is the second Ibadan shop. The main admin can open more shops when Abu Twins grows." />
         <div className="grid gap-3 md:grid-cols-2">
           {open.map((branch) => (
             <ShopCard key={branch.id} branch={branch} canToggle={admin} />
@@ -59,8 +59,8 @@ export default async function BranchesPage() {
         </div>
         {admin && closed.length ? (
           <div className="mt-8">
-            <h3 className="mb-2 text-sm font-semibold text-muted-foreground">Closed. Not used in Ibadan now</h3>
-            <p className="mb-3 text-sm text-muted-foreground">Old Lagos, Abuja, and Port Harcourt records stay here so past sales are not lost. They do not appear on intake or POS.</p>
+            <h3 className="mb-2 text-sm font-semibold text-muted-foreground">Closed. Not in use in Ibadan now</h3>
+            <p className="mb-3 text-sm text-muted-foreground">The old Lagos, Abuja, and Port Harcourt records stay here so past sales are not lost. They do not show when you receive goods or sell.</p>
             <div className="grid gap-3 md:grid-cols-2">
               {closed.map((branch) => (
                 <ShopCard key={branch.id} branch={branch} canToggle />
@@ -83,7 +83,7 @@ export default async function BranchesPage() {
       </div>
       ) : (
         <div className="surface-card p-5 text-sm text-muted-foreground">
-          Only Super Admin can open or close a shop.
+          Only the main admin can open or close a shop.
         </div>
       )}
     </div>

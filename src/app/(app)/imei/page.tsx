@@ -22,7 +22,7 @@ export default async function ImeiPage({ searchParams }: { searchParams: Promise
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Phone IMEIs" description="Phones and serial items. Coming units are not for sale until they arrive in the shop." />
+      <PageHeader title="Phone numbers (IMEI)" description="Phones with a phone number (IMEI). Goods still Coming cannot be sold until they reach the shop." />
       <WorkflowSteps current={1} steps={["Receive phone", "In shop", "Sell or move", "Return or repair"]} />
       <div className="page-split">
         <div className="surface-card overflow-hidden">

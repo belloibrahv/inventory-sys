@@ -101,7 +101,7 @@ export function ProductPriceList({
       changes.push({ id: product.id, sellingPrice })
     }
     if (changes.length > 200) {
-      toast.error("Update up to 200 items at a time.")
+      toast.error("You can change up to 200 items at a time.")
       return
     }
 
@@ -230,8 +230,8 @@ export function ProductPriceList({
           <Input
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            placeholder="Why these prices changed"
-            aria-label="Why these prices changed"
+            placeholder="Why you are changing these prices"
+            aria-label="Why you are changing these prices"
           />
           <Button type="button" onClick={onSave} disabled={busy}>
             {busy ? "Saving selected prices" : "Update selected prices"}

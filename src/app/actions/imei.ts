@@ -41,18 +41,18 @@ export async function getImeiRecords(search?: string, status?: string) {
 
 export async function intakeImei(formData: FormData) {
   const user = await requireUser()
-  if (!(await can(user.role, "action.intake"))) return { error: "You cannot receive IMEIs." }
+  if (!(await can(user.role, "action.intake"))) return { error: "You are not allowed to receive phones. Ask the main admin." }
   const imei1 = String(formData.get("imei1") ?? "").trim()
   const productId = String(formData.get("productId") ?? "")
   const branchId = String(formData.get("branchId") ?? user.branchId ?? "")
 
-  if (!imei1 || imei1.length < 14) return { error: "Enter a valid IMEI 1." }
-  if (!productId || !branchId) return { error: "Product and branch are required." }
+  if (!imei1 || imei1.length < 14) return { error: "Type the full IMEI. It must be at least 14 digits." }
+  if (!productId || !branchId) return { error: "Pick the item and the shop." }
 
   const duplicate = await prisma.imeiRecord.findFirst({
     where: { OR: [{ imei1 }, { imei2: imei1 }] },
   })
-  if (duplicate) return { error: "This IMEI is already in the shop." }
+  if (duplicate) return { error: "That IMEI is already in the shop." }
 
   await prisma.imeiRecord.create({
     data: {
@@ -96,7 +96,7 @@ export async function intakeImei(formData: FormData) {
 export async function updateImeiCondition(formData: FormData) {
   const user = await requireUser()
   if (!(await can(user.role, "action.intake")) && !(await can(user.role, "action.repair"))) {
-    return { error: "You cannot update phone condition." }
+    return { error: "You are not allowed to change the condition of a phone. Ask the main admin." }
   }
   const id = String(formData.get("id") || "")
   const batteryRaw = String(formData.get("batteryHealth") || "")

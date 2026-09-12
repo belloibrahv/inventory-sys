@@ -29,7 +29,7 @@ export function ReceiptBatchButton() {
         return
       }
       if (!result.receipts.length) {
-        toast.message("No sales in those days, so there is nothing to print.")
+        toast.message("There was no sale on those days, so there is nothing to print.")
         return
       }
       const mark = await loadMark()
@@ -41,7 +41,7 @@ export function ReceiptBatchButton() {
       doc.save(`Receipts-${from}-to-${to}.pdf`)
       toast.success(`${result.receipts.length} receipt(s) saved.`)
     } catch {
-      toast.error("The receipts could not be prepared. Try a shorter stretch of days.")
+      toast.error("We could not get the receipts ready. Try fewer days.")
     } finally {
       setBusy(false)
     }
@@ -49,7 +49,7 @@ export function ReceiptBatchButton() {
 
   return (
     <div className="surface-card p-5 print:hidden">
-      <h3 className="font-semibold">Print a stretch of receipts</h3>
+      <h3 className="font-semibold">Print receipts for many days</h3>
       <p className="mt-1 text-sm text-muted-foreground">
         Every finished sale between two days, one receipt to a page. This only reprints what the
         sales already say. It changes nothing.

@@ -26,7 +26,7 @@ export function ReceiptPdfButton({ data, label = "Download receipt" }: { data: R
           drawReceipt(doc, data, mark)
           doc.save(receiptFileName(data.invoiceNumber))
         } catch {
-          toast.error("The receipt could not be prepared. Try the print button instead.")
+          toast.error("We could not get the receipt ready. Use the print button instead.")
         } finally {
           setBusy(false)
         }

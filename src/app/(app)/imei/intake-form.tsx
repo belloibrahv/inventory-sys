@@ -30,7 +30,7 @@ export function ImeiIntakeForm({
       {imei1 ? <p className="font-mono text-xs">{imei1}</p> : null}
       <Input name="imei2" placeholder="IMEI 2" />
       <Input name="serialNumber" placeholder="Serial" />
-      <Select name="productId" required emptyLabel="No items on the list yet. Add them on Phones and items first.">
+      <Select name="productId" required emptyLabel="No item is on the list yet. Add them on Phones and items first.">
         {products.map((product) => (
           <option key={product.id} value={product.id}>{product.name}</option>
         ))}
@@ -47,14 +47,14 @@ export function ImeiIntakeForm({
         ))}
       </Select>
       <Select name="cosmeticGrade" defaultValue="">
-        <option value="">Cosmetic grade</option>
-        <option value="A">A. Like new</option>
-        <option value="B">B. Light marks</option>
-        <option value="C">C. Visible wear</option>
-        <option value="D">D. Heavy wear / crack</option>
+        <option value="">How the phone looks</option>
+        <option value="A">A. Looks like new</option>
+        <option value="B">B. Small marks</option>
+        <option value="C">C. You can see it has been used</option>
+        <option value="D">D. Badly used or cracked</option>
       </Select>
-      <Input name="batteryHealth" type="number" min={1} max={100} placeholder="Battery health %" />
-      <Input name="conditionNotes" placeholder="Condition notes" />
+      <Input name="batteryHealth" type="number" min={1} max={100} placeholder="Battery health, in %" />
+      <Input name="conditionNotes" placeholder="Anything else about its condition" />
       <PhotoField />
       <Input name="notes" placeholder="Notes" />
     </ActionForm>

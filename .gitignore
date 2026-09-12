@@ -15,3 +15,6 @@ ab-twina.jpg
 brand-logo.jpg
 public/sw.js
 public/swe-worker*
+# Live first passwords. Regenerate with: node docs/generate-staff-logins.mjs
+docs/staff-logins.secrets.json
+docs/Abu-Twins-Staff-Logins.docx

@@ -20,7 +20,7 @@ export default async function AccessPage() {
     <div className="space-y-6">
       <PageHeader
         title="Who can see what"
-        description="Only Super Admin can tick what each role sees and does. Reversing money and locking staff stays with Super Admin."
+        description="Only the main admin can tick what each job can see and do. Only the main admin can undo money or lock a staff login."
       />
       <div className="space-y-6">
         {editableRoles.map((role) => (
@@ -29,7 +29,7 @@ export default async function AccessPage() {
             <ActionForm action={saveRoleAccess} submit={`Save ${ROLE_LABELS[role]}`} className="space-y-4">
               <input type="hidden" name="role" value={role} />
               <div>
-                <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Pages they can open</p>
+                <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Pages this job can open</p>
                 <div className="grid gap-2 md:grid-cols-3">
                   {VIEW_PERMS.filter((row) => row.key !== "view.access").map((row) => (
                     <label key={row.key} className="flex items-center gap-2 text-sm">
@@ -40,7 +40,7 @@ export default async function AccessPage() {
                 </div>
               </div>
               <div>
-                <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Work they can do</p>
+                <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Work this job can do</p>
                 <div className="grid gap-2 md:grid-cols-3">
                   {ACTION_PERMS.map((row) => (
                     <label key={row.key} className="flex items-center gap-2 text-sm">

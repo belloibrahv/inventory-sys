@@ -12,7 +12,7 @@ export default async function ProfitsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Profit"
-        description="Profit is sell price minus cost. Neighbor fill profit is what we kept after returning money to the neighboring shop. Expenses are approved bills. Nothing here is invented."
+        description="Profit is sell price minus cost. Buy from next door profit is what we kept after we paid the other shop. Expenses are bills someone said yes to."
       />
       <div className="grid gap-4 md:grid-cols-4">
         <div className="surface-card p-5">
@@ -20,7 +20,7 @@ export default async function ProfitsPage() {
           <p className="text-2xl font-semibold">{formatCurrency(shopProfit)}</p>
         </div>
         <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">Neighbor fill profit</p>
+          <p className="text-sm text-muted-foreground">Buy from next door profit</p>
           <p className="text-2xl font-semibold">{formatCurrency(neighborProfit)}</p>
         </div>
         <div className="surface-card p-5">
@@ -40,7 +40,7 @@ export default async function ProfitsPage() {
               <tr className="border-b border-border">
                 <th className="px-5 py-3">Shop</th>
                 <th className="px-3 py-3">Sales profit</th>
-                <th className="px-3 py-3">Neighbor profit</th>
+                <th className="px-3 py-3">Next door profit</th>
                 <th className="px-3 py-3">Expenses</th>
                 <th className="px-5 py-3">Net</th>
               </tr>
@@ -91,15 +91,15 @@ export default async function ProfitsPage() {
           )}
         </div>
         <div className="surface-card overflow-hidden">
-          <h3 className="border-b border-border px-5 py-4 font-semibold">Neighbor fill profit</h3>
+          <h3 className="border-b border-border px-5 py-4 font-semibold">Buy from next door profit</h3>
           {data.neighborLines.length === 0 ? (
-            <p className="px-5 py-4 text-sm text-muted-foreground">No sold neighbor fills yet.</p>
+            <p className="px-5 py-4 text-sm text-muted-foreground">No sold buys from next door yet.</p>
           ) : (
             <table className="w-full text-sm">
               <thead className="text-left text-muted-foreground">
                 <tr className="border-b border-border">
                   <th className="px-5 py-3">Fill</th>
-                  <th className="px-3 py-3">Neighbor</th>
+                  <th className="px-3 py-3">Next door shop</th>
                   <th className="px-3 py-3">Kept</th>
                   <th className="px-5 py-3">Status</th>
                 </tr>

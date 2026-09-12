@@ -106,32 +106,32 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
 
       <StatGrid>
         <StatCard
-          label="Revenue"
+          label="Money in from sales"
           value={formatCurrency(data.revenue)}
-          hint={`Money in from sales. Cash ${formatCurrency(data.cashRevenue)} · Bank ${formatCurrency(data.bankRevenue)}`}
+          hint={`Cash ${formatCurrency(data.cashRevenue)} · Bank ${formatCurrency(data.bankRevenue)}`}
           icon={<TrendingUp className="h-4 w-4" />}
           tone="success"
         />
         <StatCard
-          label="Expenditure"
+          label="Money spent to run the shop"
           value={formatCurrency(data.expenditure)}
-          hint="Money out on rent, fuel, transport, salaries and other running costs"
+          hint="Rent, fuel, transport, salary, light bill and the rest"
           icon={<TrendingDown className="h-4 w-4" />}
           tone="danger"
           href="/expenses"
         />
         <StatCard
-          label="Payments to suppliers"
+          label="Money paid to suppliers"
           value={formatCurrency(data.supplierPayments)}
-          hint="Money out to suppliers against stock bills"
+          hint="What we sent to suppliers for goods they gave us"
           icon={<Banknote className="h-4 w-4" />}
           tone="warning"
           href="/suppliers"
         />
         <StatCard
-          label={data.netCashFlow >= 0 ? "Net surplus" : "Net deficit"}
+          label={data.netCashFlow >= 0 ? "Money left over" : "Money short"}
           value={formatCurrency(data.netCashFlow)}
-          hint="Revenue less expenditure less supplier payments"
+          hint="Money in from sales, minus what we spent and what we paid suppliers"
           icon={<Scale className="h-4 w-4" />}
           tone={data.netCashFlow >= 0 ? "success" : "danger"}
         />
@@ -152,13 +152,13 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
               </span>
               <div className="text-left">
                 <p className="text-sm font-semibold">Cash (the till)</p>
-                <p className="text-xs text-muted-foreground">Notes taken in and paid out at the counter</p>
+                <p className="text-xs text-muted-foreground">Notes collected and paid out at the counter</p>
               </div>
             </div>
             <span className="eyebrow">{cashDays.length} day{cashDays.length === 1 ? "" : "s"}</span>
           </div>
           <div className="mt-4 flex items-end justify-between border-t border-border pt-3">
-            <span className="text-xs text-muted-foreground">Balance on the books</span>
+            <span className="text-xs text-muted-foreground">What the books say is left</span>
             <span className="text-2xl font-semibold num">{formatCurrency(data.cashAccount.balance)}</span>
           </div>
           <p className="mt-1 text-right text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
@@ -174,13 +174,13 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
               </span>
               <div className="text-left">
                 <p className="text-sm font-semibold">Bank (POS and transfers)</p>
-                <p className="text-xs text-muted-foreground">Money that moved through the account, not the till</p>
+                <p className="text-xs text-muted-foreground">Money that passed through the bank, not the till</p>
               </div>
             </div>
             <span className="eyebrow">{bankDays.length} day{bankDays.length === 1 ? "" : "s"}</span>
           </div>
           <div className="mt-4 flex items-end justify-between border-t border-border pt-3">
-            <span className="text-xs text-muted-foreground">Balance on the books</span>
+            <span className="text-xs text-muted-foreground">What the books say is left</span>
             <span className="text-2xl font-semibold num">{formatCurrency(data.bankAccount.balance)}</span>
           </div>
           <p className="mt-1 text-right text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">

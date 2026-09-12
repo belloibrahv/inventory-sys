@@ -16,7 +16,7 @@ function compress(file: File) {
       const ctx = canvas.getContext("2d")
       if (!ctx) {
         URL.revokeObjectURL(url)
-        reject(new Error("Could not read photo"))
+        reject(new Error("We could not open that photo"))
         return
       }
       ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
@@ -25,7 +25,7 @@ function compress(file: File) {
     }
     image.onerror = () => {
       URL.revokeObjectURL(url)
-      reject(new Error("Could not read photo"))
+      reject(new Error("We could not open that photo"))
     }
     image.src = url
   })
@@ -43,10 +43,10 @@ export function PhotoField({
   return (
     <div className="space-y-2">
       <input type="hidden" name={name} value={data} />
-      {data ? <img src={data} alt="Phone condition" className="h-36 w-full rounded-xl object-cover" /> : null}
+      {data ? <img src={data} alt="How the phone looks" className="h-36 w-full rounded-xl object-cover" /> : null}
       <div className="flex flex-wrap gap-2">
         <label className="inline-flex min-h-12 cursor-pointer items-center rounded-xl border border-border px-4 text-sm">
-          {data ? "Replace photo" : "Take or upload photo"}
+          {data ? "Replace photo" : "Snap or upload a photo"}
           <input
             type="file"
             accept="image/*"
@@ -58,7 +58,7 @@ export function PhotoField({
               try {
                 setData(await compress(file))
               } catch {
-                toast.error("Could not use that photo. Try again.")
+                toast.error("We could not use that photo. Try again.")
               }
             }}
           />

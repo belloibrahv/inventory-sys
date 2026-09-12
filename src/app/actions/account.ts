@@ -24,10 +24,10 @@ export async function changePassword(formData: FormData) {
   const current = String(formData.get("currentPassword") || "")
   const next = String(formData.get("newPassword") || "")
   const confirm = String(formData.get("confirmPassword") || "")
-  if (next.length < 8) return { error: "Use at least 8 characters for the new password." }
+  if (next.length < 8) return { error: "Your new password must be at least 8 letters or numbers." }
   if (next !== confirm) return { error: "The new passwords do not match." }
   const row = await prisma.user.findUnique({ where: { id: user.id } })
-  if (!row) return { error: "Account not found." }
+  if (!row) return { error: "We could not find your login." }
   const valid = await bcrypt.compare(current, row.password)
   if (!valid) return { error: "Current password is not correct." }
   await prisma.user.update({
@@ -50,7 +50,7 @@ export async function changePassword(formData: FormData) {
 
 export async function exportShopBackup() {
   const user = await requireUser()
-  if (!isSuperAdmin(user.role)) return { error: "Only Super Admin can download a shop backup." }
+  if (!isSuperAdmin(user.role)) return { error: "Only the main admin can download a shop backup." }
   const [branches, users, products, inventory, imeis, sales, purchases, incoming, transfers] = await Promise.all([
     prisma.branch.findMany(),
     prisma.user.findMany({

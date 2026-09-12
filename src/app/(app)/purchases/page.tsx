@@ -38,7 +38,7 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
     <div className="space-y-6">
       <PageHeader
         title="Goods from supplier"
-        description="The carton record, and the money against it. Expected is what the supplier sent; recorded is what was actually scanned in. If the shelf is short of Still in shop, a unit may have left without a sale."
+        description="Each supplier bill and the money on it. If the shelf has fewer phones than the system says, something may have left without a sale."
       />
 
       <form className="grid gap-2 md:grid-cols-[1fr_auto]">
@@ -56,35 +56,35 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
         <StatCard
           label="We have paid"
           value={formatCurrency(paid)}
-          hint="Money already sent out against these bills"
+          hint="Money we have already sent for these bills"
           tone="success"
         />
         <StatCard
           label="Still owed"
           value={formatCurrency(owed)}
-          hint="Shows on Revenue & expenditure until it is settled"
+          hint="It shows on Money in & out until we pay it"
           tone={owed > 0 ? "warning" : "neutral"}
         />
         <StatCard
           label="Never scanned in"
           value={String(shortVsBill)}
-          hint="Units the supplier billed us for that never entered the shop record"
+          hint="Units the supplier charged us for that never entered the shop record"
           tone={shortVsBill > 0 ? "danger" : "success"}
         />
       </StatGrid>
 
       <StatGrid>
-        <StatCard label="Expected on these bills" value={String(expected)} hint="Units the supplier was meant to send" />
-        <StatCard label="Recorded on the system" value={String(recorded)} hint="IMEIs or pieces actually booked in" />
+        <StatCard label="On these bills" value={String(expected)} hint="Units the supplier put on the bill" />
+        <StatCard label="Scanned into the shop" value={String(recorded)} hint="Phone numbers (IMEIs) or pieces booked in" />
         <StatCard
           label="Sold from these cartons"
           value={String(sold)}
           hint={soldToday ? `${soldToday} of them sold today (Lagos day)` : "Already on an invoice"}
         />
         <StatCard
-          label="Still in shop"
+          label="Still on our shelf"
           value={String(inShop)}
-          hint="If the shelf has fewer, count the stock. Never type a new number by hand."
+          hint="If the shelf has less, count the stock. Never type a new number by hand."
           href="/reconciliation"
         />
       </StatGrid>
@@ -96,8 +96,8 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
               title={q?.trim() ? "No supplier bill matches that search" : "No supplier goods booked yet"}
               hint={
                 q?.trim()
-                  ? "Try an IMEI, a bill number, a supplier name, or a product name."
-                  : "Book a shipment from China, Dubai, Lagos or any named supplier using the form on the right."
+                  ? "Try an IMEI, a bill number, a supplier name, or an item name."
+                  : "Use the form on the right to book goods from China, Dubai, Lagos, or any supplier you have named."
               }
             />
           ) : null}
@@ -128,19 +128,19 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
                     </p>
                     <p className="mt-1 text-sm">
                       {item?.product.name}
-                      {" · expected "}
+                      {" · on bill "}
                       {trace.expected}
-                      {" · recorded "}
+                      {" · scanned in "}
                       {trace.recorded}
                       {" · sold "}
                       {trace.sold}
                       {trace.soldToday ? ` · sold today ${trace.soldToday}` : ""}
-                      {" · still in shop "}
+                      {" · still on shelf "}
                       {trace.inShop}
                     </p>
                     {trace.shortVsBill > 0 ? (
                       <p className="mt-1 text-sm text-warning">
-                        {trace.shortVsBill} unit{trace.shortVsBill === 1 ? "" : "s"} on this bill never scanned onto the system.
+                        {trace.shortVsBill} unit{trace.shortVsBill === 1 ? "" : "s"} on this bill were never put into the shop.
                       </p>
                     ) : null}
                     {purchase.expectedDate ? (
@@ -203,11 +203,11 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
                 ))}
               </ul>
             ) : (
-              <p className="mb-4 text-sm text-muted-foreground">No faulty or customer-returned IMEIs waiting to go back.</p>
+              <p className="mb-4 text-sm text-muted-foreground">No faulty phone and no returned phone is waiting to go back.</p>
             )}
             <ActionForm action={sendUnitsToSupplier} submit="Send these IMEIs back to the supplier" className="space-y-3">
               <Select name="supplierId" defaultValue="">
-                <option value="">Use the supplier already on each IMEI</option>
+                <option value="">Use the supplier already saved on each IMEI</option>
                 {houses.map((row) => (
                   <option key={row.id} value={row.id}>{row.name}</option>
                 ))}

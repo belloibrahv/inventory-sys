@@ -70,7 +70,7 @@ export function IncomingForm({
             }
           }}
         >
-          <option value="">Not tied to a supplier order</option>
+          <option value="">Not tied to any supplier bill</option>
           {purchases.map((purchase) => (
             <option key={purchase.id} value={purchase.id}>
               {purchase.invoiceNumber}
@@ -104,7 +104,7 @@ export function IncomingForm({
           <p className="text-xs text-muted-foreground">
             {row.identity === "IMEI" && "Phone. IMEI required"}
             {row.identity === "SERIAL" && "Accessory with serial"}
-            {row.identity === "NONE" && "No IMEI or serial. Use this for charger cords and the like"}
+            {row.identity === "NONE" && "No IMEI and no serial. Use this for charger cords and the like"}
           </p>
         </div>
       ))}
@@ -115,7 +115,7 @@ export function IncomingForm({
       >
         Add another item
       </button>
-      <Textarea name="notes" placeholder="Notes: carton marks, waybill, rider" />
+      <Textarea name="notes" placeholder="Note: carton marks, waybill, rider" />
     </ActionForm>
   )
 }

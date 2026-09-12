@@ -124,7 +124,7 @@ export async function getFinance() {
         date: po.receivedDate || po.createdAt,
         branch: po.branch.name,
         type: "OUT" as const,
-        category: "Supplier Payment",
+        category: "Money paid to a supplier",
         description: `PO ${po.invoiceNumber} payment to ${po.supplier.name}`,
         amount: money(po.paidAmount),
       })
@@ -172,11 +172,11 @@ export async function getFinance() {
 export async function createExpense(formData: FormData) {
   const user = await requireUser()
   if (!(await canManageFinance(user.role))) {
-    return { error: "You cannot post expenses." }
+    return { error: "You are not allowed to record an expense. Ask the main admin." }
   }
   const amount = Number(formData.get("amount") || 0)
   const branchId = String(formData.get("branchId") || user.branchId || "")
-  if (amount <= 0 || !branchId) return { error: "Amount and branch are required." }
+  if (amount <= 0 || !branchId) return { error: "Type the amount and pick the shop." }
 
   const expense = await prisma.expense.create({
     data: {
@@ -216,10 +216,10 @@ export async function getApprovals() {
 export async function decideApproval(id: string, status: "APPROVED" | "REJECTED") {
   const user = await requireUser()
   if (!(await canApprove(user.role))) {
-    return { error: "You cannot decide approvals." }
+    return { error: "You are not allowed to say yes or no to this. Ask your manager." }
   }
   const approval = await prisma.approval.findUnique({ where: { id } })
-  if (!approval || approval.status !== "PENDING") return { error: "Approval is no longer pending." }
+  if (!approval || approval.status !== "PENDING") return { error: "Somebody has already decided on this one." }
 
   await prisma.approval.update({
     where: { id },
@@ -361,9 +361,9 @@ export async function getReconciliations() {
 
 export async function startReconciliation(formData: FormData) {
   const user = await requireUser()
-  if (!(await can(user.role, "action.recon"))) return { error: "You cannot submit a stock count." }
+  if (!(await can(user.role, "action.recon"))) return { error: "You are not allowed to send a stock count. Ask the main admin." }
   const branchId = String(formData.get("branchId") || user.branchId || "")
-  if (!branchId) return { error: "Select a branch." }
+  if (!branchId) return { error: "Pick a shop." }
   const scoped = await scopedBranchId(user.role, user.branchId)
   if (scoped && branchId !== scoped) return { error: "You can only count your own branch." }
   const stock = await prisma.inventory.findMany({
@@ -470,7 +470,7 @@ export async function getStaff() {
 
 export async function createStaff(formData: FormData) {
   const user = await requireUser()
-  if (!(await canManageStaff(user.role))) return { error: "You cannot add staff." }
+  if (!(await canManageStaff(user.role))) return { error: "You are not allowed to add staff. Ask the main admin." }
 
   const name = String(formData.get("name") || "").trim()
   const email = String(formData.get("email") || "").trim().toLowerCase()
@@ -479,13 +479,13 @@ export async function createStaff(formData: FormData) {
   const branchId = String(formData.get("branchId") || "") || null
 
   if (role === "SUPER_ADMIN" && !isSuperAdmin(user.role)) {
-    return { error: "Only Super Admin can create another Super Admin." }
+    return { error: "Only the main admin can create another main admin." }
   }
   if (!name || !email || password.length < 6) {
-    return { error: "Name, email, and a password of at least 6 characters are required." }
+    return { error: "Type the name, the email, and a password of at least 6 letters or numbers." }
   }
   const exists = await prisma.user.findUnique({ where: { email } })
-  if (exists) return { error: "That email is already on staff." }
+  if (exists) return { error: "Somebody on staff already uses that email." }
 
   // A shop manager may only add people to their own shop. The shop came from
   // the form, so without this a manager could attach a login to another shop.
@@ -528,7 +528,7 @@ export async function getSettings() {
     create: {
       key: "sales.warranty_days",
       value: "365",
-      description: "Default warranty days when a product has no override",
+      description: "Warranty days to use when an item has none of its own",
     },
   })
   return prisma.setting.findMany({ orderBy: { key: "asc" } })
@@ -536,7 +536,7 @@ export async function getSettings() {
 
 export async function saveSetting(formData: FormData) {
   const user = await requireUser()
-  if (!(await can(user.role, "action.settings"))) return { error: "Only Super Admin can change settings unless granted." }
+  if (!(await can(user.role, "action.settings"))) return { error: "Only the main admin can change settings, unless the main admin gives you that right." }
   const key = String(formData.get("key"))
   const value = String(formData.get("value"))
   await prisma.setting.update({ where: { key }, data: { value } })

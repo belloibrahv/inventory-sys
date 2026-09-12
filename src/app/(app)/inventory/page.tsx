@@ -45,7 +45,7 @@ export default async function InventoryPage() {
     <div className="space-y-6">
       <PageHeader
         title="Shop stock"
-        description="Live stock inventory across shops. View cost prices, selling prices, profit margins, and export reports to CSV or Excel."
+        description="What is on the shelf in each shop right now. See cost, sell price, and profit. You can download the list."
       />
 
       <InventoryClientView

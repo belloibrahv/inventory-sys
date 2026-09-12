@@ -125,7 +125,7 @@ export async function checkoutSale(input: {
   items: Array<{ productId: string; imeiId?: string; quantity: number; unitPrice: number }>
 }) {
   const user = await requireUser()
-  if (!(await canSell(user.role))) return { error: "You cannot complete sales." }
+  if (!(await canSell(user.role))) return { error: "You are not allowed to sell. Ask the main admin." }
   if (!input.items.length) return { error: "Add at least one item." }
   if (!input.queuedAt || !input.offlineId) {
     const lock = await getSellLock(input.branchId)
@@ -165,7 +165,7 @@ export async function checkoutSale(input: {
 
   for (const item of input.items) {
     const product = productById.get(item.productId)
-    if (!product) return { error: "A product in the cart is missing." }
+    if (!product) return { error: "One of the items in the cart is missing." }
     if (!Number.isFinite(item.quantity) || item.quantity < 1) {
       return { error: `Enter how many ${product.name} the customer is buying.` }
     }
@@ -173,7 +173,7 @@ export async function checkoutSale(input: {
       return { error: `Enter a valid price for ${product.name}.` }
     }
     if (item.unitPrice < money(product.minimumPrice) && !canOverrideFloor) {
-      return { error: `${product.name} is below the lowest allowed price. Raise it, or ask Super Admin.` }
+      return { error: `${product.name} is below the lowest allowed price. Raise it, or ask the main admin.` }
     }
     if (item.imeiId) {
       const imei = imeiById.get(item.imeiId)
@@ -206,12 +206,12 @@ export async function checkoutSale(input: {
   const due = subtotal - paid
 
   if (due > 0 && !input.customerId) {
-    return { error: "Credit or part-payment needs a named customer. Walk-in must pay in full." }
+    return { error: "A credit sale or part payment needs a buyer name. A walk-in must pay everything now." }
   }
 
   if (input.customerId && due > 0) {
     const customer = await prisma.customer.findUnique({ where: { id: input.customerId } })
-    if (!customer) return { error: "Customer not found." }
+    if (!customer) return { error: "We could not find that customer." }
     const nextDebt = money(customer.currentBalance) + due
     if (money(customer.creditLimit) > 0 && nextDebt > money(customer.creditLimit) && !canOverrideCredit) {
       return { error: `${customer.name} would exceed the credit limit of ₦${money(customer.creditLimit).toLocaleString("en-NG")}.` }
@@ -313,7 +313,7 @@ export async function checkoutSale(input: {
           !canOverrideCredit
         ) {
           throw new ConflictError(
-            `${customer.name} went over their credit limit while this sale was being typed. They now owe ₦${nextBalance.toLocaleString("en-NG")}. Collect first, or ask Super Admin.`
+            `${customer.name} went over their credit limit while this sale was being typed. They now owe ₦${nextBalance.toLocaleString("en-NG")}. Collect first, or ask the main admin.`
           )
         }
         await tx.ledgerEntry.create({
@@ -323,7 +323,7 @@ export async function checkoutSale(input: {
             amount: subtotal.toFixed(2),
             balance: (nextBalance + paid).toFixed(2),
             reference: invoiceNumber,
-            description: "Retail/wholesale sale",
+            description: "Sale in the shop",
           },
         })
         if (paid > 0) {
@@ -334,7 +334,7 @@ export async function checkoutSale(input: {
               amount: (-paid).toFixed(2),
               balance: nextBalance.toFixed(2),
               reference: invoiceNumber,
-              description: "Payment on invoice",
+              description: "Money paid on an invoice",
             },
           })
         }
@@ -348,7 +348,7 @@ export async function checkoutSale(input: {
             type: "INCOME",
             amount: paid.toFixed(2),
             reference: invoiceNumber,
-            description: "Sale collection",
+            description: "Money collected on a sale",
           },
         })
       }
@@ -437,8 +437,8 @@ async function fanOutSaleAlerts(input: {
         input.lowStockAlerts.map((alert) => ({
           userId: person.id,
           type: "LOW_STOCK" as const,
-          title: "Low stock",
-          message: `${alert.name} is at ${alert.quantity} on this branch (alert at ${alert.limit})`,
+          title: "An item is running low",
+          message: `Only ${alert.quantity} ${alert.name} left in this shop. We warn you at ${alert.limit}.`,
           actionUrl: "/inventory",
         }))
       )
@@ -464,8 +464,8 @@ async function fanOutSaleAlerts(input: {
           data: watchers.map((person) => ({
             userId: person.id,
             type: "DUE_PAYMENT" as const,
-            title: "Invoice still due",
-            message: `${customer?.name ?? "Customer"} owes ₦${input.due.toLocaleString("en-NG")} on ${input.invoiceNumber}`,
+            title: "This invoice is not fully paid",
+            message: `${customer?.name ?? "The customer"} still owes ₦${input.due.toLocaleString("en-NG")} on ${input.invoiceNumber}`,
             actionUrl: `/sales/${input.saleId}`,
           })),
         })
@@ -482,7 +482,7 @@ export async function collectPayment(formData: FormData) {
   const customerId = String(formData.get("customerId"))
   const amount = Number(formData.get("amount") || 0)
   const method = String(formData.get("method") || "TRANSFER") as PaymentMethod
-  if (!customerId || amount <= 0) return { error: "Enter a valid payment." }
+  if (!customerId || amount <= 0) return { error: "Type how much was paid." }
 
   const payRef = generateDocNumber("PAY")
 
@@ -495,9 +495,9 @@ export async function collectPayment(formData: FormData) {
         where: { id: customerId },
         select: { id: true, name: true, branchId: true, currentBalance: true },
       })
-      if (!customer) throw new ConflictError("Customer not found.")
+      if (!customer) throw new ConflictError("We could not find that customer.")
       const owing = money(customer.currentBalance)
-      if (owing <= 0) throw new ConflictError("This customer has no outstanding balance.")
+      if (owing <= 0) throw new ConflictError("This customer does not owe us anything.")
 
       const collected = Math.min(amount, owing)
       const after = await shiftCustomerBalance(tx, customerId, -collected)
@@ -515,7 +515,7 @@ export async function collectPayment(formData: FormData) {
           amount: (-collected).toFixed(2),
           balance: next.toFixed(2),
           reference: payRef,
-          description: "Ledger collection. Invoice lines were not rewritten",
+          description: "Money collected on the customer account. Nothing on the invoice was changed",
         },
       })
       await tx.financeEntry.create({
@@ -525,7 +525,7 @@ export async function collectPayment(formData: FormData) {
           type: "INCOME",
           amount: collected.toFixed(2),
           reference: payRef,
-          description: `Debt collection · ${customer.name}`,
+          description: `Money collected from ${customer.name}`,
         },
       })
 
@@ -549,7 +549,7 @@ export async function collectPayment(formData: FormData) {
             amount: apply.toFixed(2),
             method,
             reference: payRef,
-            notes: "Applied from customer ledger. Line items untouched.",
+            notes: "Taken from what the customer paid on their account. The invoice was not changed.",
           },
         })
         remaining -= apply
@@ -581,7 +581,7 @@ export async function collectPayment(formData: FormData) {
 export async function collectInvoicePayment(formData: FormData) {
   const user = await requireUser()
   if (!(await canSell(user.role)) && !(await canManageFinance(user.role))) {
-    return { error: "You cannot collect on invoices." }
+    return { error: "You are not allowed to collect money on a sale. Ask the main admin." }
   }
   const saleId = String(formData.get("saleId") || "")
   const amount = Number(formData.get("amount") || 0)
@@ -592,9 +592,9 @@ export async function collectInvoicePayment(formData: FormData) {
     where: { id: saleId },
     select: { id: true, status: true, branchId: true, customerId: true, invoiceNumber: true, totalAmount: true, paidAmount: true },
   })
-  if (!sale) return { error: "Invoice not found." }
-  if (sale.status !== "COMPLETED") return { error: "Only completed invoices can receive collection." }
-  if (money(sale.totalAmount) - money(sale.paidAmount) <= 0) return { error: "This invoice is already settled." }
+  if (!sale) return { error: "We could not find that sale." }
+  if (sale.status !== "COMPLETED") return { error: "You can only collect money on a sale that is finished." }
+  if (money(sale.totalAmount) - money(sale.paidAmount) <= 0) return { error: "This sale is already fully paid." }
 
   const posted = await settle(() =>
     prisma.$transaction(async (tx) => {
@@ -605,7 +605,7 @@ export async function collectInvoicePayment(formData: FormData) {
         where: { id: saleId },
         select: { totalAmount: true, paidAmount: true },
       })
-      if (!fresh) throw new ConflictError("Invoice not found.")
+      if (!fresh) throw new ConflictError("We could not find that sale.")
       const due = money(fresh.totalAmount) - money(fresh.paidAmount)
       if (due <= 0) {
         throw new ConflictError(`${sale.invoiceNumber} was settled while you were typing. Nothing is owed on it now.`)
@@ -621,7 +621,7 @@ export async function collectInvoicePayment(formData: FormData) {
           saleId: sale.id,
           amount: collected.toFixed(2),
           method,
-          notes: "Collection on frozen invoice. Items and IMEIs were not edited",
+          notes: "Money collected on a finished invoice. The items and IMEIs were not changed",
         },
       })
       if (sale.customerId) {
@@ -634,7 +634,7 @@ export async function collectInvoicePayment(formData: FormData) {
             amount: (-collected).toFixed(2),
             balance: next.toFixed(2),
             reference: sale.invoiceNumber,
-            description: `Collection on ${sale.invoiceNumber}`,
+            description: `Money collected on ${sale.invoiceNumber}`,
           },
         })
       }
@@ -645,7 +645,7 @@ export async function collectInvoicePayment(formData: FormData) {
           type: "INCOME",
           amount: collected.toFixed(2),
           reference: sale.invoiceNumber,
-          description: `Invoice collection ${sale.invoiceNumber}`,
+          description: `Money collected on ${sale.invoiceNumber}`,
         },
       })
       await tx.auditLog.create({
@@ -674,7 +674,7 @@ export async function collectInvoicePayment(formData: FormData) {
 export async function attachSaleCustomer(formData: FormData) {
   const user = await requireUser()
   if (!(await canSell(user.role)) && !(await canManageFinance(user.role))) {
-    return { error: "You cannot add a customer name to this sale." }
+    return { error: "You are not allowed to put a buyer name on this sale. Ask the main admin." }
   }
 
   const saleId = String(formData.get("saleId") || "")
@@ -686,8 +686,8 @@ export async function attachSaleCustomer(formData: FormData) {
     where: { id: saleId },
     include: { items: true, imeis: true },
   })
-  if (!sale) return { error: "Invoice not found." }
-  if (sale.customerId) return { error: "This sale already has a customer name. Items stay as they are." }
+  if (!sale) return { error: "We could not find that sale." }
+  if (sale.customerId) return { error: "This sale already has a buyer name. The items stay as they are." }
 
   const scoped = await scopedBranchId(user.role, user.branchId)
   if (scoped && sale.branchId !== scoped) return { error: "You can only add a customer name on sales from your own shop." }
@@ -751,7 +751,7 @@ export async function attachSaleCustomer(formData: FormData) {
             amount: due.toFixed(2),
             balance: money(after.currentBalance).toFixed(2),
             reference: sale.invoiceNumber,
-            description: `Named buyer attached to unpaid ${sale.invoiceNumber}`,
+            description: `A buyer name was put on the unpaid sale ${sale.invoiceNumber}`,
           },
         })
       }
@@ -788,13 +788,13 @@ export async function attachSaleCustomer(formData: FormData) {
  */
 export async function getReceiptsForRange(from: string, to: string) {
   const user = await requireUser()
-  if (!(await can(user.role, "view.sales"))) return { error: "You cannot see sales." as const }
+  if (!(await can(user.role, "view.sales"))) return { error: "You are not allowed to see sales. Ask the main admin." as const }
 
   const branchId = await viewBranchFilter(user)
   const start = new Date(`${from}T00:00:00`)
   const end = new Date(`${to}T23:59:59.999`)
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    return { error: "Pick a first day and a last day." as const }
+    return { error: "Pick the first day and the last day." as const }
   }
   if (start > end) return { error: "The first day must come before the last day." as const }
 

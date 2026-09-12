@@ -23,7 +23,7 @@ export default async function BooksCheckPage({
   const { shop, date, range, compare } = await searchParams
   const data = await getBooksCheck(shop, date, asRange(range), compare)
   if (!data) {
-    return <p className="text-sm text-muted-foreground">You cannot open Check the books.</p>
+    return <p className="text-sm text-muted-foreground">You are not allowed to open Check the books.</p>
   }
 
   const period = booksPeriodLabel(data.range, data.from, data.to)
@@ -44,7 +44,7 @@ export default async function BooksCheckPage({
       <div className="books-chrome space-y-6 print:hidden">
         <PageHeader
           title="Check the books"
-          description="Bank-style statement for the owner, accountant, and records checker. Open any previous day, compare it with another period, then print or download."
+          description="One money paper for the owner, the accountant, and the records checker. Open any past day, compare days, then print or download."
           actions={
             <div className="flex flex-wrap gap-2">
               <BooksPdfButton data={data} />
@@ -75,32 +75,32 @@ export default async function BooksCheckPage({
             </Select>
           </label>
           <label className="text-sm">
-            <span className="mb-1 block text-muted-foreground">Period</span>
+            <span className="mb-1 block text-muted-foreground">How many days</span>
             <Select name="range" defaultValue={data.range}>
-              <option value="day">One day</option>
+              <option value="day">Just one day</option>
               <option value="week">Last 7 days</option>
-              <option value="month">This month to date</option>
+              <option value="month">This month so far</option>
             </Select>
           </label>
           <label className="text-sm">
-            <span className="mb-1 block text-muted-foreground">End date (Lagos)</span>
+            <span className="mb-1 block text-muted-foreground">Last day (Lagos time)</span>
             <Input name="date" type="date" defaultValue={data.businessDate} required />
           </label>
           <label className="text-sm">
-            <span className="mb-1 block text-muted-foreground">Compare with</span>
+            <span className="mb-1 block text-muted-foreground">Put it beside</span>
             <Input name="compare" type="date" defaultValue={compare && /^\d{4}-\d{2}-\d{2}$/.test(compare) ? compare : ""} />
           </label>
           <button type="submit" className="h-10 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-            Recalculate
+            Show me
           </button>
         </form>
         <p className="text-xs text-muted-foreground">
-          Leave Compare with empty to use the previous {data.range === "day" ? "day" : data.range === "week" ? "7 days" : "month"}.
-          Now showing {period} against {compared}.
+          Leave "Put it beside" empty and it will use the last {data.range === "day" ? "day" : data.range === "week" ? "7 days" : "month"}.
+          You are looking at {period} beside {compared}.
         </p>
 
         <div>
-          <p className="mb-2 text-sm font-medium">Open a previous day</p>
+          <p className="mb-2 text-sm font-medium">Open a day that has passed</p>
           <div className="flex flex-wrap gap-2">
             {data.recentDays.map((row) => {
               const active = data.range === "day" && data.businessDate === row.day
@@ -132,28 +132,28 @@ export default async function BooksCheckPage({
 
         <StatGrid>
           <StatCard
-            label="Payments received"
+            label="Money we collected"
             value={formatCurrency(data.collected)}
-            hint={`Against ${formatCurrency(data.compare.priorCollected)} · ${data.compare.collected.value}`}
+            hint={`Last time it was ${formatCurrency(data.compare.priorCollected)} · ${data.compare.collected.value}`}
             tone="success"
           />
           <StatCard
-            label="Revenue posted"
+            label="Money from sales"
             value={formatCurrency(data.revenue)}
-            hint={`Against ${formatCurrency(data.compare.priorRevenue)} · ${data.compare.revenue.value}`}
+            hint={`Last time it was ${formatCurrency(data.compare.priorRevenue)} · ${data.compare.revenue.value}`}
           />
           <StatCard
-            label="Sales"
+            label="How many sales"
             value={String(data.salesCount)}
-            hint={`Against ${data.compare.priorCount} · ${data.compare.count.value}`}
+            hint={`Last time it was ${data.compare.priorCount} · ${data.compare.count.value}`}
           />
           <StatCard
-            label="Things still to clear"
+            label="Things you still have to fix"
             value={String(data.openCount)}
             hint={
               data.openCount
-                ? "Each one is listed below and links to where it is fixed"
-                : "Nothing is waiting on a person"
+                ? "Each one is listed below. Tap it to go and fix it"
+                : "Nothing is waiting for anybody"
             }
             tone={data.openCount ? "danger" : "success"}
           />

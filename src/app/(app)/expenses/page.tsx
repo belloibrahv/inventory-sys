@@ -19,7 +19,7 @@ export default async function ExpensesPage() {
   return (
     <div className="page-split">
       <div>
-        <PageHeader title="Expenses" description="Fuel, rent, salary, light bill. Money does not leave the shop until a manager says yes." />
+        <PageHeader title="Expenses" description="Fuel, rent, salary, light bill. Money does not leave until a manager says yes." />
         <WorkflowSteps current={0} steps={["Ask", "Manager says yes", "Pay out"]} />
         <div className="surface-card overflow-hidden">
           <table className="w-full text-sm">
@@ -50,7 +50,7 @@ export default async function ExpensesPage() {
         </div>
       </div>
       <div className="surface-card p-5">
-        <h3 className="mb-4 font-semibold">Request expense</h3>
+        <h3 className="mb-4 font-semibold">Ask for money</h3>
         <p className="mb-4 text-sm text-muted-foreground">Money does not leave the shop until a manager says yes.</p>
         {canPost ? (
         <ActionForm action={createExpense} className="space-y-3">
@@ -75,7 +75,7 @@ export default async function ExpensesPage() {
           <Input name="description" placeholder="Description" required />
         </ActionForm>
         ) : (
-          <p className="text-sm text-muted-foreground">You can see expenses. Super Admin must allow you to request one.</p>
+          <p className="text-sm text-muted-foreground">You can see expenses, but The main admin must allow you before you can ask for one.</p>
         )}
       </div>
     </div>

@@ -12,7 +12,7 @@ export default async function SalesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Sales"
-        description="Every sale stays as it was. To collect the rest of the money, open the invoice. Do not edit the old sale."
+        description="Every sale stays as it was. Open the bill to collect the rest of the money. Never change an old sale."
         actions={<Button asChild><Link href="/pos">Sell now</Link></Button>}
       />
       <div className="surface-card overflow-hidden">
@@ -40,7 +40,7 @@ export default async function SalesPage() {
                   ) : (
                     <span>
                       Walk-in
-                      <span className="block text-xs text-warning">Needs a named buyer for returns</span>
+                      <span className="block text-xs text-warning">This one needs a buyer name before anybody can return it</span>
                     </span>
                   )}
                 </td>

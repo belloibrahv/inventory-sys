@@ -27,16 +27,16 @@ export default function ErrorPage({
       <div className="mx-auto mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
         <AlertTriangle className="h-6 w-6" aria-hidden />
       </div>
-      <h1 className="text-xl font-semibold tracking-tight">This screen did not open</h1>
+      <h1 className="text-xl font-semibold tracking-tight">This page did not open</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Nothing you were working on was lost. Try the screen again, and if it keeps
-        failing, tell whoever looks after the system and give them the reference below.
+        Nothing you were doing was lost. Try the page again. If it still does not open,
+        tell the person who looks after the system and give them the number below.
       </p>
       {error.digest ? (
-        <p className="mt-3 font-mono text-xs text-muted-foreground">Reference {error.digest}</p>
+        <p className="mt-3 font-mono text-xs text-muted-foreground">Number {error.digest}</p>
       ) : null}
       <div className="mt-6 flex flex-wrap justify-center gap-2">
-        <Button onClick={() => retry()}>Try this screen again</Button>
+        <Button onClick={() => retry()}>Try this page again</Button>
         <Button variant="outline" asChild>
           <Link href="/dashboard">Go to Home</Link>
         </Button>

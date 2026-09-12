@@ -14,8 +14,8 @@ type Imei = { id: string; imei1: string; serialNumber?: string | null; productId
 
 const SAMPLE: string[][] = [
   ["imei", "serial", "item_code", "name", "quantity", "color", "notes"],
-  ["353456789012345", "", "IP16-128-BLK", "iPhone 16 128GB", "1", "Black", "Leaving Iwo Road for Challenge"],
-  ["", "", "CORD-TYPEC", "Type-C charger cord", "20", "Black", "Box of cords. No unique number."],
+  ["353456789012345", "", "IP16-128-BLK", "iPhone 16 128GB", "1", "Black", "Leaving Iwo Road, going to Challenge"],
+  ["", "", "CORD-TYPEC", "Type-C charger cord", "20", "Black", "A box of cords. It has no unique number."],
 ]
 
 export function TransferForm({
@@ -91,18 +91,18 @@ export function TransferForm({
         ))}
       </Select>
       <p className="text-sm text-muted-foreground">
-        Download a sample, or download the In shop IMEIs at {fromShop?.name ?? "this shop"}. Keep the phones you are sending. Add accessory lines with item code and quantity. Then upload that file.
+        Download a sample, or download the In shop phone numbers (IMEIs) at {fromShop?.name ?? "this shop"}. Keep the phones you are sending. Add accessory lines with item code and quantity. Then upload that file.
       </p>
       <div className="flex flex-wrap gap-2">
-        <ExportCsv filename="abu-twins-shop-to-shop-sample.csv" rows={SAMPLE} label="Download sample file" />
+        <ExportCsv filename="abu-twins-shop-to-shop-sample.csv" rows={SAMPLE} label="Download an example file" />
         <ExportCsv
           filename={`shop-to-shop-${(fromShop?.code || "shop").toLowerCase()}-imeis.csv`}
           rows={shopImeiRows}
-          label="Download IMEIs in this sending shop"
+          label="Download the phone numbers (IMEIs) in the shop you are sending from"
         />
       </div>
       {shopImeis.length === 0 ? (
-        <p className="text-sm text-muted-foreground">This sending shop has no In shop IMEIs to put on a list. You can still send accessories by item code and quantity.</p>
+        <p className="text-sm text-muted-foreground">The shop you are sending from has no phone in stock to put on a list. You can still send accessories by item code and quantity.</p>
       ) : null}
       <input
         name="file"

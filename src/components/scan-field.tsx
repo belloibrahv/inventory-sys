@@ -28,11 +28,11 @@ export function ScanField({
     const code = cleanCode(raw)
     if (!code) return
     if (kind === "IMEI" && code.length < 14) {
-      toast.error("That IMEI is too short. Scan the box again or type all digits.")
+      toast.error("That IMEI is too short. Scan the box again, or type every digit.")
       return
     }
     if (kind === "SERIAL" && code.length < 4) {
-      toast.error("That serial is too short.")
+      toast.error("That serial number is too short.")
       return
     }
     onScan(code)
@@ -42,7 +42,7 @@ export function ScanField({
   async function startCamera() {
     const Detector = (window as Window & { BarcodeDetector?: new (opts: { formats: string[] }) => { detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue: string }>> } }).BarcodeDetector
     if (!Detector) {
-      toast.error("This phone cannot open the camera scanner. Plug in a USB scanner or type the number.")
+      toast.error("This phone cannot open the camera scanner. Use a USB scanner, or type the number by hand.")
       return
     }
     try {
@@ -75,7 +75,7 @@ export function ScanField({
       }
       timerRef.current = window.setTimeout(tick, 300)
     } catch {
-      toast.error("Camera was blocked. Allow camera, or use a USB scanner.")
+      toast.error("The camera was blocked. Allow the camera, or use a USB scanner.")
     }
   }
 
@@ -135,7 +135,7 @@ export function ScanList({
   function add(code: string) {
     setItems((current) => {
       if (current.includes(code)) {
-        toast.error("That number is already on this list.")
+        toast.error("That number is already on the list.")
         return current
       }
       return [...current, code]
@@ -158,7 +158,7 @@ export function ScanList({
           ))}
         </ul>
       ) : (
-        <p className="text-xs text-muted-foreground">No numbers yet. Scan the first box.</p>
+        <p className="text-xs text-muted-foreground">No number yet. Scan the first box.</p>
       )}
     </div>
   )

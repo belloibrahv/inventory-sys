@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 export default function Loading() {
   return (
     <div className="space-y-6" aria-busy role="status">
-      <span className="sr-only">Loading this screen</span>
+      <span className="sr-only">Opening this page</span>
 
       <div className="space-y-2">
         <Skeleton className="h-8 w-56" />

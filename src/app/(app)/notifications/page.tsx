@@ -16,10 +16,10 @@ export default async function NotificationsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Alerts"
-        description="Low stock, things waiting for approval, money due, goods moving between shops, and returns."
+        description="Short messages: items running low, work waiting for a yes, money that is due, goods moving between shops, and returns."
         actions={
           <form action={markAllRead}>
-            <Button>Mark all read</Button>
+            <Button>I have read all of them</Button>
           </form>
         }
       />

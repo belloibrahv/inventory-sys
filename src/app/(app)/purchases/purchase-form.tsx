@@ -29,12 +29,12 @@ export function PurchaseForm({
   )
 
   if (!suppliers.length) {
-    return <p className="text-sm text-muted-foreground">Add a supplier first. Neighbor shops do not belong on this list.</p>
+    return <p className="text-sm text-muted-foreground">Add a supplier first. A neighboring shop does not belong on this list.</p>
   }
 
   return (
     <ActionForm action={createPurchase} submit="Save expected goods" className="space-y-3">
-      <Select name="supplierId" value={supplierId} onChange={(event) => setSupplierId(event.target.value)} required emptyLabel="No supplier on the list yet. Add one on Suppliers first.">
+      <Select name="supplierId" value={supplierId} onChange={(event) => setSupplierId(event.target.value)} required emptyLabel="No supplier is on the list yet. Add one on Suppliers first.">
         {suppliers.map((row) => (
           <option key={row.id} value={row.id}>
             {row.name}
@@ -47,7 +47,7 @@ export function PurchaseForm({
           <option key={branch.id} value={branch.id}>{branch.name}</option>
         ))}
       </Select>
-      <Select name="productId" required emptyLabel="No items on the list yet. Add them on Phones and items first.">
+      <Select name="productId" required emptyLabel="No item is on the list yet. Add them on Phones and items first.">
         {products.map((product) => (
           <option key={product.id} value={product.id}>{product.name}</option>
         ))}
@@ -55,9 +55,9 @@ export function PurchaseForm({
       <Input name="originCountry" defaultValue={supplier?.country ?? ""} placeholder="Country the goods are coming from" key={`country-${supplierId}`} />
       <Input name="originCity" defaultValue={supplier?.city ?? ""} placeholder="City or market, such as Dubai or Computer Village" key={`city-${supplierId}`} />
       <Input name="expectedDate" type="date" />
-      <Input name="quantity" type="number" min={1} placeholder="How many units are expected" required />
-      <Input name="costPrice" type="number" min={0} placeholder="Cost each unit from this supplier" required />
-      <Textarea name="notes" placeholder="Waybill, carton mark, or what the supplier said" />
+      <Input name="quantity" type="number" min={1} placeholder="How many units you are expecting" required />
+      <Input name="costPrice" type="number" min={0} placeholder="What one unit costs from this supplier" required />
+      <Textarea name="notes" placeholder="Waybill, carton mark, or anything the supplier told you" />
     </ActionForm>
   )
 }

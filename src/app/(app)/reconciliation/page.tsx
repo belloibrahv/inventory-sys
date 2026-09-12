@@ -39,7 +39,7 @@ export default async function ReconciliationPage() {
     <div className="space-y-8">
       <PageHeader
         title="Stock count"
-        description="Count the shelf against what the system believes. Type what you physically counted and the gaining or losing margin is worked out per item, at cost. Download or print the sheet for whoever has to approve it."
+        description="Count what is really on the shelf. Match it to what the system says. Print or download the sheet for the person who will say yes."
       />
 
       {/* Stock count form and table */}
@@ -47,7 +47,7 @@ export default async function ReconciliationPage() {
 
       {/* Past Stock Count Reports */}
       <div className="space-y-4 print:hidden">
-        <h2 className="text-sm font-semibold tracking-tight">Counts already filed</h2>
+        <h2 className="text-sm font-semibold tracking-tight">Counts already sent</h2>
         <div className="grid gap-4 md:grid-cols-2">
           {rows.map((row) => {
             const expected = money(row.totalExpected)
@@ -77,7 +77,7 @@ export default async function ReconciliationPage() {
                     <p className="num font-medium">{formatCurrency(counted)}</p>
                   </div>
                   <div>
-                    <p className="eyebrow">Gain or loss</p>
+                    <p className="eyebrow">Extra or missing</p>
                     <p className={`num font-semibold ${variance > 0 ? "text-success" : variance < 0 ? "text-danger" : ""}`}>
                       {variance > 0 ? `+${formatCurrency(variance)}` : formatCurrency(variance)}
                     </p>
@@ -98,7 +98,7 @@ export default async function ReconciliationPage() {
                     </div>
                   ))}
                   {offLines.length === 0 ? (
-                    <p className="font-medium text-success">Every line matched the system.</p>
+                    <p className="font-medium text-success">Every item agreed with the system.</p>
                   ) : null}
                 </div>
               </div>
@@ -108,8 +108,8 @@ export default async function ReconciliationPage() {
           {rows.length === 0 ? (
             <div className="md:col-span-2">
               <EmptyState
-                title="No stock count has been filed yet"
-                hint="Count a shop above and send it for approval. Filed counts, and what they gained or lost, appear here."
+                title="Nobody has counted stock yet"
+                hint="Count a shop above and send it for approval. Counts you have sent, and what was extra or missing, will show here."
               />
             </div>
           ) : null}

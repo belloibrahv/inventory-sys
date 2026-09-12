@@ -80,8 +80,8 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {money(purchase.paidAmount) >= money(purchase.totalAmount) - 0.005
-                  ? "This bill is fully cleared."
-                  : "Shows on Revenue & expenditure as still owed until a payment is recorded."}
+                  ? "This bill is fully paid."
+                  : "This shows on Money in & out as money we owe until somebody records a payment."}
               </p>
             </div>
           </div>
@@ -90,12 +90,12 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
       ) : null}
       <WorkflowSteps
         current={step}
-        steps={["Expected from supplier", "Booked as Coming", "Checked in this shop", "Pay the supplier"]}
+        steps={["On the supplier bill", "Booked as Coming", "Checked in this shop", "Pay the supplier"]}
       />
       <div className="surface-card space-y-2 p-5 text-sm">
         <p>
-          This bill is the trail for missing products. Expected is what the supplier sent. Recorded is what was scanned here.
-          Sold on the system already has an invoice. Still in shop is what the system still believes is on the shelf.
+          This bill helps you find missing goods. On the supplier bill is what they sent. Scanned into the shop is what we booked here.
+          Sold already has an invoice. Still on our shelf is what we still think is here.
         </p>
         {trace.shortVsBill > 0 ? (
           <p className="text-warning">
@@ -104,12 +104,12 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
         ) : null}
         {trace.inShop > 0 ? (
           <p>
-            Count the shelf against Still in shop ({trace.inShop}). If the shelf is short, those units may have been sold without recording. Do not type a new shop number by hand. Use Stock count.
+            Count the shelf against Still on our shelf ({trace.inShop}). If the shelf is short, those units may have been sold without a sale. Do not type a new shop number by hand. Use Stock count.
           </p>
         ) : null}
         {trace.tracking === "NONE" ? (
           <p className="text-muted-foreground">
-            This item has no unique number. Sold on the system is every completed till sale of this item in this shop since the bill date, which can mix more than one carton.
+            This item has no unique number. Sold is every finished till sale of this item in this shop since the bill date. That can mix more than one carton.
           </p>
         ) : null}
       </div>
@@ -120,14 +120,14 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
           <p className="mt-3 text-sm">Value {formatCurrency(money(purchase.totalAmount))}</p>
         </div>
         <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">Expected from supplier</p>
+          <p className="text-sm text-muted-foreground">On the supplier bill</p>
           <p className="text-2xl font-semibold">{trace.expected}</p>
           <p className="text-sm text-muted-foreground">{item?.product.name}</p>
           {origin ? <p className="mt-2 text-sm text-muted-foreground">{origin}</p> : null}
           {purchase.expectedDate ? <p className="text-sm text-muted-foreground">Due {formatDate(purchase.expectedDate)}</p> : null}
         </div>
         <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">Recorded on the system</p>
+          <p className="text-sm text-muted-foreground">Scanned into the shop</p>
           <p className="text-2xl font-semibold">{trace.recorded}</p>
           <p className="text-sm text-muted-foreground">Never scanned {trace.shortVsBill}</p>
         </div>
@@ -139,15 +139,15 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
         <div className="surface-card p-5">
           <p className="text-sm text-muted-foreground">Coming</p>
           <p className="text-2xl font-semibold">{trace.coming}</p>
-          <p className="text-sm text-muted-foreground">Booked, not yet In shop.</p>
+          <p className="text-sm text-muted-foreground">Booked, but not yet in the shop.</p>
         </div>
         <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">Still in shop</p>
+          <p className="text-sm text-muted-foreground">Still on our shelf</p>
           <p className="text-2xl font-semibold">{trace.inShop}</p>
-          <p className="text-sm text-muted-foreground">What the system says is on the shelf.</p>
+          <p className="text-sm text-muted-foreground">What we still think is on the shelf.</p>
         </div>
         <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">Sold on the system</p>
+          <p className="text-sm text-muted-foreground">Sold</p>
           <p className="text-2xl font-semibold">{trace.sold}</p>
           <p className="text-sm text-muted-foreground">Sold today (Lagos day) {trace.soldToday}</p>
         </div>
@@ -270,7 +270,7 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
       {isSuperAdmin(me.role) && money(purchase.paidAmount) > 0 ? (
         <div className="surface-card p-5">
           <h3 className="mb-2 font-semibold">Undo last supplier payment</h3>
-          <p className="mb-3 text-sm text-muted-foreground">Super Admin only. Stock and IMEIs stay as received.</p>
+          <p className="mb-3 text-sm text-muted-foreground">Main admin only. The stock and the phone numbers (IMEIs) do not change.</p>
           <ActionForm action={reverseSupplierPayment} submit="Reverse last payment" variant="outline">
             <input type="hidden" name="id" value={purchase.id} />
           </ActionForm>

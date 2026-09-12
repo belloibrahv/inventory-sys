@@ -48,10 +48,10 @@ export async function createCustomer(formData: FormData) {
   const phone = String(formData.get("phone") ?? "").trim()
   const name = String(formData.get("name") ?? "").trim()
   const branchId = String(formData.get("branchId") ?? user.branchId ?? "")
-  if (!name || !phone || !branchId) return { error: "Name, phone and branch are required." }
+  if (!name || !phone || !branchId) return { error: "Type the name and phone, and pick the shop." }
 
   const exists = await prisma.customer.findUnique({ where: { phone } })
-  if (exists) return { error: "A customer with this phone already exists." }
+  if (exists) return { error: "A customer with this phone number is already on the system." }
 
   const customer = await prisma.customer.create({
     data: {
@@ -132,10 +132,10 @@ export async function getBranches() {
 
 export async function createBranch(formData: FormData) {
   const user = await requireUser()
-  if (!isSuperAdmin(user.role)) return { error: "Only Super Admin can create branches." }
+  if (!isSuperAdmin(user.role)) return { error: "Only the main admin can open a new shop." }
   const code = String(formData.get("code") ?? "").trim().toUpperCase()
   const name = String(formData.get("name") ?? "").trim()
-  if (!code || !name) return { error: "Name and code are required." }
+  if (!code || !name) return { error: "Type the name and the short code." }
   await prisma.branch.create({
     data: {
       name,
@@ -151,9 +151,9 @@ export async function createBranch(formData: FormData) {
 
 export async function toggleBranch(id: string) {
   const user = await requireUser()
-  if (!isSuperAdmin(user.role)) return { error: "Only Super Admin can deactivate or restore branches." }
+  if (!isSuperAdmin(user.role)) return { error: "Only the main admin can close a shop or open it again." }
   const branch = await prisma.branch.findUnique({ where: { id } })
-  if (!branch) return { error: "Branch not found." }
+  if (!branch) return { error: "We could not find that shop." }
   await prisma.branch.update({ where: { id }, data: { isActive: !branch.isActive } })
   revalidatePath("/branches")
   return { success: true }

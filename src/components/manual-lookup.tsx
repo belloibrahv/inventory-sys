@@ -17,11 +17,11 @@ export function ManualLookup({ data }: { data: RoleManual }) {
   return (
     <div className="manual-lookup print:hidden">
       <label className="block text-sm">
-        <span className="mb-1 block text-muted-foreground">Look up a page, button, or word</span>
+        <span className="mb-1 block text-muted-foreground">Find a page, a button, or a word</span>
         <Input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Examples: parked sale, IMEI, close the day, return"
+          placeholder="Try: waiting sale, IMEI, close the day, return"
         />
       </label>
       {needle ? (

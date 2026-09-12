@@ -78,13 +78,13 @@ export function CustomersClientView({
         <StatCard
           label="Customers on the books"
           value={String(accounts.length)}
-          hint="Anyone whose name has been entered on a sale"
+          hint="Anybody whose name has ever been put on a sale"
           icon={<Users className="h-4 w-4" />}
         />
         <StatCard
           label="Bought from us, all time"
           value={formatCurrency(lifetime)}
-          hint="Total value of everything these customers have taken"
+          hint="What everything they collected is worth"
           icon={<Coins className="h-4 w-4" />}
           tone="primary"
         />
@@ -99,7 +99,7 @@ export function CustomersClientView({
         <StatCard
           label="Paid up in full"
           value={String(accounts.length - owingCount)}
-          hint="Owe us nothing today"
+          hint="They owe us nothing today"
           icon={<UserCheck className="h-4 w-4" />}
           tone="success"
           onClick={() => setTab("CLEAR")}
@@ -187,7 +187,7 @@ export function CustomersClientView({
           </tr>
         ))}
         {filtered.length === 0 ? (
-          <TableEmpty colSpan={7}>No customer matches that tab, shop or search.</TableEmpty>
+          <TableEmpty colSpan={7}>No customer matches that tab, that shop, or what you typed.</TableEmpty>
         ) : null}
       </TableShell>
     </div>

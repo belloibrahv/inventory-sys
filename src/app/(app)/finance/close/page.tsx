@@ -30,14 +30,14 @@ export default async function DayClosePage({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <PageHeader
-          title="Daily Till Count & Day Close"
-          description="Count and reconcile the physical till cash against recorded cash sales for the business day. Transfer and POS payments remain securely logged under the bank record."
+          title="Close the day"
+          description="Count the cash in the till. Match it to cash sales on the system. Transfer and POS money stay on the bank side."
         />
         <Link
           href="/finance"
           className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="h-4 w-4" /> Back to Finance
+          <ArrowLeft className="h-4 w-4" /> Back to Money in & out
         </Link>
       </div>
 
@@ -46,7 +46,7 @@ export default async function DayClosePage({
         <div className="surface-card p-4 flex flex-wrap items-center justify-between gap-3 border-primary/20 bg-muted/20">
           <div className="flex items-center gap-2">
             <Store className="h-4 w-4 text-primary" />
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Select Shop for Day Close:</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Which shop are you closing?</span>
           </div>
           <div className="flex flex-wrap gap-2">
             {branches.map((b) => {
@@ -75,11 +75,11 @@ export default async function DayClosePage({
           <div className="flex items-center gap-2 font-bold text-danger">
             <AlertTriangle className="h-4 w-4" />
             <span>
-              Unclosed Prior Trading Days {preview.branchName ? `for ${preview.branchName}` : ""}
+              Old days not closed yet {preview.branchName ? `for ${preview.branchName}` : ""}
             </span>
           </div>
           <p className="mt-1 text-xs text-danger">
-            Cash registers must be closed sequentially. Select a day below to submit its till count:
+            Close the days one after the other, oldest first. Pick a day below and count that day's till:
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {preview.unclosed.map((day) => (
@@ -92,7 +92,7 @@ export default async function DayClosePage({
                     : "bg-white/80 border border-danger/30 text-danger hover:bg-danger-soft dark:bg-black/30"
                 }`}
               >
-                📅 {day} {day === preview.businessDate ? " (Active)" : ""}
+                📅 {day} {day === preview.businessDate ? " (you are here)" : ""}
               </Link>
             ))}
           </div>
@@ -102,26 +102,26 @@ export default async function DayClosePage({
       {/* Overview Metric Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="surface-card p-5 border-l-4 border-l-emerald-500">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Expected Cash in Till</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">What the till should have</p>
           <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">{formatCurrency(preview.expectedCash)}</p>
           <p className="text-xs text-muted-foreground mt-1">
             {preview.branchName ? `${preview.branchName} · ` : ""}{preview.businessDate}
           </p>
         </div>
         <div className="surface-card p-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Bank Transfers</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Money sent to the bank</p>
           <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">{formatCurrency(preview.transferTotal)}</p>
-          <p className="text-xs text-muted-foreground mt-1">Verified direct bank transfers</p>
+          <p className="text-xs text-muted-foreground mt-1">Customers who paid straight into the bank</p>
         </div>
         <div className="surface-card p-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">POS Terminal Sales</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">POS machine</p>
           <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">{formatCurrency(preview.posTotal)}</p>
-          <p className="text-xs text-muted-foreground mt-1">Card terminal settlements</p>
+          <p className="text-xs text-muted-foreground mt-1">Customers who paid with a card</p>
         </div>
         <div className="surface-card p-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Invoices Billed</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sales on that day</p>
           <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">{preview.saleCount}</p>
-          <p className="text-xs text-muted-foreground mt-1">Completed sale tickets for day</p>
+          <p className="text-xs text-muted-foreground mt-1">How many sales were finished on that day</p>
         </div>
       </div>
 
@@ -130,10 +130,10 @@ export default async function DayClosePage({
         <div className="surface-card p-6 border-success/30 bg-success-soft">
           <div className="flex items-center gap-2 text-success font-bold">
             <CheckCircle2 className="h-5 w-5" />
-            <span>Trading Day Reconciled & Closed</span>
+            <span>This day is counted and closed</span>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            {preview.branchName || "This shop"} has already successfully closed the till for business date <strong>{preview.businessDate}</strong>.
+            {preview.branchName || "This shop"} has already counted the till and closed <strong>{preview.businessDate}</strong>.
           </p>
         </div>
       ) : (
@@ -141,23 +141,23 @@ export default async function DayClosePage({
           <div className="flex items-center justify-between mb-4 border-b border-border pb-3">
             <div>
               <h3 className="font-bold text-base">
-                Physical Cash Count — {preview.branchName || "Shop"} ({preview.businessDate})
+                Count the money in the till — {preview.branchName || "Shop"} ({preview.businessDate})
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Count the physical notes in the cash drawer and input the total counted cash amount below.
+                Count the notes inside the drawer, then type the total you counted below.
               </p>
             </div>
             <div className="rounded-lg bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
-              Expected: {formatCurrency(preview.expectedCash)}
+              Should be: {formatCurrency(preview.expectedCash)}
             </div>
           </div>
 
-          <ActionForm action={closeDay} submit="Reconcile & Close Day" className="space-y-4">
+          <ActionForm action={closeDay} submit="Count is correct, close the day" className="space-y-4">
             <input type="hidden" name="branchId" value={preview.branchId} />
             <input type="hidden" name="businessDate" value={preview.businessDate} />
             <div>
               <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
-                Physical Cash Counted (₦) *
+                Money you counted in the till (₦) *
               </label>
               <Input
                 name="countedCash"
@@ -166,16 +166,16 @@ export default async function DayClosePage({
                 defaultValue={preview.expectedCash}
                 required
                 className="min-h-12 text-lg font-mono font-bold"
-                placeholder="Enter physical cash in drawer"
+                placeholder="Type the money you counted"
               />
             </div>
             <div>
               <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
-                Discrepancy Explanation or Closing Notes (Optional)
+                Note (you can leave this empty)
               </label>
               <Input
                 name="notes"
-                placeholder="Explain any shortfall, overage, petty cash payout, or closing remark"
+                placeholder="If the money is short or plenty, say why. Example: ₦2,000 used to buy fuel."
               />
             </div>
           </ActionForm>
@@ -186,32 +186,32 @@ export default async function DayClosePage({
       <div className="surface-card overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div>
-            <h3 className="font-bold text-base">Historical Day Close Audits</h3>
-            <p className="text-xs text-muted-foreground">Log of past cash counts and variance records</p>
+            <h3 className="font-bold text-base">Days you have closed before</h3>
+            <p className="text-xs text-muted-foreground">Every till count kept, with what was short or plenty</p>
           </div>
           <a
             className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-primary hover:bg-muted"
             href={`data:text/csv;charset=utf-8,${encodeURIComponent(
-              ["Business Day,Closed At,Shop,Expected Cash,Counted Cash,Variance,Transfer,POS,Sales Count,Notes", ...closes.map((row) =>
+              ["Shop day,Closed at,Shop,Should be,You counted,Short or plenty,Transfer,POS,How many sales,Note", ...closes.map((row) =>
                 [row.businessDate, formatDate(row.closeDate), row.branch, row.expectedCash, row.countedCash, row.variance, row.transferTotal, row.posTotal, row.saleCount, `"${row.notes || ""}"`].join(",")
               )].join("\n")
             )}`}
             download="day-close-audits.csv"
           >
-            Export Audits CSV
+            Download as CSV
           </a>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-left text-muted-foreground bg-muted/40 text-xs uppercase tracking-wider">
               <tr className="border-b border-border">
-                <th className="px-5 py-3">Business Day</th>
+                <th className="px-5 py-3">Shop day</th>
                 <th className="px-4 py-3">Shop</th>
-                <th className="px-4 py-3">Expected Cash</th>
-                <th className="px-4 py-3">Counted Cash</th>
-                <th className="px-4 py-3">Variance</th>
-                <th className="px-4 py-3">Transfers & POS</th>
-                <th className="px-5 py-3">Closed By</th>
+                <th className="px-4 py-3">Should be</th>
+                <th className="px-4 py-3">You counted</th>
+                <th className="px-4 py-3">Short or plenty</th>
+                <th className="px-4 py-3">Transfer & POS</th>
+                <th className="px-5 py-3">Who closed it</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
@@ -242,7 +242,7 @@ export default async function DayClosePage({
               ))}
               {closes.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-8 text-center text-muted-foreground">No day closes recorded yet.</td>
+                  <td colSpan={7} className="px-5 py-8 text-center text-muted-foreground">No day has been closed yet.</td>
                 </tr>
               ) : null}
             </tbody>

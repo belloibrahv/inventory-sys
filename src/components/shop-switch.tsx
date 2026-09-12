@@ -22,9 +22,9 @@ export function ShopSwitch({
   return (
     <label
       className="hidden items-center gap-1.5 rounded-lg border border-input bg-card pl-2.5 sm:inline-flex"
-      title="Which shop you are looking at"
+      title="Which shop are you looking at?"
     >
-      <span className="sr-only">Which shop you are looking at</span>
+      <span className="sr-only">Which shop are you looking at?</span>
       <Store className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
       <select
         value={active}

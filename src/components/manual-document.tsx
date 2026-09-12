@@ -40,7 +40,7 @@ export function ManualDocument({
           <div>
             <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">This book is for</p>
             <p className="font-semibold">{data.roleLabel}</p>
-            <p className="text-white/70">Prepared for {preparedBy}</p>
+            <p className="text-white/70">Made for {preparedBy}</p>
           </div>
           <div>
             <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">Pages in this book</p>
@@ -48,13 +48,13 @@ export function ManualDocument({
           </div>
           <div>
             <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">Work this job can do</p>
-            <p className="font-semibold">{data.actions.length ? data.actions.length + " actions" : "Read only"}</p>
+            <p className="font-semibold">{data.actions.length ? data.actions.length + " actions" : "You can only look"}</p>
           </div>
         </div>
       </header>
 
       <div className="border-b border-slate-200 px-6 py-5">
-        <h2 className="text-sm font-semibold">What this job is</h2>
+        <h2 className="text-sm font-semibold">What your job is</h2>
         <p className="mt-2 text-sm text-slate-700">{data.job}</p>
         <p className="mt-2 text-sm text-slate-700">{data.shops}</p>
         {data.actions.length ? (
@@ -63,12 +63,12 @@ export function ManualDocument({
           </p>
         ) : null}
         <p className="mt-3 text-[11px] text-slate-500">
-          If a page is not in this book, your job cannot open it. That is not a broken computer. Ask Super Admin.
+          If a page is not in this book, your job cannot open it. The computer is not spoilt. Ask the main admin.
         </p>
       </div>
 
       <div className="border-b border-slate-200 px-6 py-4 print:break-inside-avoid">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Contents</p>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">What is inside</p>
         <ol className="mt-2 columns-1 gap-x-8 text-[12px] sm:columns-2">
           {data.sections.map((section, index) => (
             <li key={section.id} className="break-inside-avoid py-0.5">
@@ -107,13 +107,13 @@ export function ManualDocument({
                 </ol>
               </div>
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Watch for</p>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Be careful of</p>
                 <ul className="mt-2 list-disc space-y-1.5 pl-4 text-[13px] text-slate-700">
                   {section.watch.map((line) => (
                     <li key={line}>{line}</li>
                   ))}
                 </ul>
-                <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">This page will not</p>
+                <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">What this page cannot do</p>
                 <ul className="mt-2 list-disc space-y-1.5 pl-4 text-[13px] text-slate-700">
                   {section.cannot.map((line) => (
                     <li key={line}>{line}</li>
@@ -127,7 +127,7 @@ export function ManualDocument({
 
       <footer className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-6 py-3 text-[10px] text-slate-500">
         <p>{company.phone} · {company.email}</p>
-        <p>Software by Techvaults Limited · This book matches the pages {data.roleLabel} can open.</p>
+        <p>Software by Techvaults Limited · This book only covers the pages {data.roleLabel} can open.</p>
       </footer>
     </section>
   )

@@ -14,7 +14,7 @@ function apply(left: number, op: Op, right: number) {
 }
 
 function show(value: number) {
-  if (!Number.isFinite(value)) return "Cannot divide by 0"
+  if (!Number.isFinite(value)) return "You cannot divide by 0"
   const text = value.toFixed(6).replace(/\.?0+$/, "")
   return text === "-0" ? "0" : text
 }
@@ -49,7 +49,7 @@ export function ShopCalculator() {
 
   function pressDigit(digit: string) {
     setDisplay((current) => {
-      if (fresh || current === "0" || current === "Cannot divide by 0") return digit
+      if (fresh || current === "0" || current === "You cannot divide by 0") return digit
       if (current.replace("-", "").replace(".", "").length >= 12) return current
       return current + digit
     })
@@ -58,7 +58,7 @@ export function ShopCalculator() {
 
   function pressDot() {
     setDisplay((current) => {
-      if (fresh || current === "Cannot divide by 0") return "0."
+      if (fresh || current === "You cannot divide by 0") return "0."
       if (current.includes(".")) return current
       return `${current}.`
     })
@@ -149,7 +149,7 @@ export function ShopCalculator() {
       </button>
       {open ? (
         <div className="fixed bottom-20 right-5 z-50 w-[min(22rem,calc(100vw-2rem))] rounded-lg border border-border bg-card p-4 shadow-xl">
-          <p className="text-xs text-muted-foreground">Shop calculator · stays on this device</p>
+          <p className="text-xs text-muted-foreground">Shop calculator · it stays on this phone only</p>
           <p className="mt-2 break-all text-right text-3xl font-semibold tabular-nums">{display}</p>
           <p className="min-h-5 text-right text-xs text-muted-foreground">
             {Number.isFinite(naira) ? formatCurrency(naira) : ""}

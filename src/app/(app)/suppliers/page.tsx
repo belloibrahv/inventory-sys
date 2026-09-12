@@ -27,7 +27,7 @@ export default async function SuppliersPage() {
     <div className="space-y-6">
       <PageHeader
         title="Suppliers"
-        description="One line per supplier: what we have bought from them, what we have already paid, and what is still owed. Open a supplier for the bill-by-bill statement."
+        description="What we bought from each supplier, what we paid, and what we still owe. Open a supplier to see bill by bill."
       />
 
       <StatGrid>
@@ -54,7 +54,7 @@ export default async function SuppliersPage() {
         <StatCard
           label="We still owe"
           value={formatCurrency(totalOwed)}
-          hint="Outstanding supplier balances"
+          hint="Money we have not paid them yet"
           icon={<Wallet className="h-4 w-4" />}
           tone={totalOwed > 0 ? "warning" : "neutral"}
         />

@@ -63,7 +63,7 @@ export async function scopeRecord<T extends { branchId: string | null }>(
  * The message shown when someone tries to act on another shop's record. Kept in
  * one place so every screen says the same thing.
  */
-export const OTHER_SHOP = "That record belongs to another shop."
+export const OTHER_SHOP = "That record belongs to a different shop."
 
 /** Name of the cookie holding the shop head office is currently looking at. */
 export const VIEW_SHOP_COOKIE = "abutwins.view_shop"

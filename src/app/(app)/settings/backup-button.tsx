@@ -13,7 +13,7 @@ export function BackupButton() {
       onClick={async () => {
         const result = await exportShopBackup()
         if (result.error || !result.backup) {
-          toast.error(result.error ?? "Backup failed.")
+          toast.error(result.error ?? "The backup did not work.")
           return
         }
         const blob = new Blob([JSON.stringify(result.backup, null, 2)], { type: "application/json" })
@@ -23,7 +23,7 @@ export function BackupButton() {
         link.download = `abutwins-backup-${new Date().toISOString().slice(0, 10)}.json`
         link.click()
         URL.revokeObjectURL(url)
-        toast.success("Backup downloaded. Keep it off this computer.")
+        toast.success("Backup downloaded. Keep it somewhere else, not on this computer.")
       }}
     >
       Download shop backup

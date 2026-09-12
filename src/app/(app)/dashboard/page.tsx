@@ -12,7 +12,7 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       {data.tasks.length ? (
-        <SectionCard title="Do these next" description="Open work waiting on you in the shops you can see.">
+        <SectionCard title="Do these next" description="Things waiting for you in your shops.">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {data.tasks.map((task) => (
               <a
@@ -27,29 +27,29 @@ export default async function DashboardPage() {
           </div>
         </SectionCard>
       ) : (
-        <p className="text-sm text-muted-foreground">No open shop tasks for you right now.</p>
+        <p className="text-sm text-muted-foreground">Nothing is waiting for you right now.</p>
       )}
       <StatGrid>
         <KpiCard
-          label="Total sales"
+          label="All sales money"
           value={formatCurrency(data.kpis.totalSales)}
           trend={data.kpis.salesTrend}
           icon={<Receipt className="h-5 w-5" />}
         />
         <KpiCard
-          label="Total expenses"
+          label="All expenses"
           value={formatCurrency(data.kpis.totalExpense)}
           trend={data.kpis.expenseTrend}
           icon={<CreditCard className="h-5 w-5" />}
         />
         <KpiCard
-          label="Payments made out"
+          label="Money we paid out"
           value={formatCurrency(data.kpis.paymentSent)}
           trend={data.kpis.paymentSentTrend}
           icon={<Banknote className="h-5 w-5" />}
         />
         <KpiCard
-          label="Payments received"
+          label="Money customers paid us"
           value={formatCurrency(data.kpis.paymentReceived)}
           trend={data.kpis.paymentReceivedTrend}
           icon={<Wallet className="h-5 w-5" />}
@@ -58,32 +58,32 @@ export default async function DashboardPage() {
 
       <StatGrid>
         <StatCard
-          label="Waiting for approval"
+          label="Waiting for yes"
           value={String(data.exceptions.pendingApprovals)}
-          hint="Somebody has to decide on these before they can go through"
+          hint="Someone must say yes or no before this work can continue"
           href="/approvals"
           tone={data.exceptions.pendingApprovals > 0 ? "warning" : "neutral"}
         />
         <StatCard
-          label="Walk-in sales with no name"
+          label="Sales with no buyer name"
           value={String(data.exceptions.walkIns)}
-          hint="A return cannot start until the buyer is named"
+          hint="Put a buyer name before anyone can return the phone"
           href="/sales"
           tone={data.exceptions.walkIns > 0 ? "warning" : "neutral"}
         />
         <StatCard
           label="We still owe suppliers"
           value={formatCurrency(data.exceptions.creditorOwed)}
-          hint="Open supplier balances across the shops you can see"
+          hint="Money we still owe suppliers, for the shops you can see"
           href="/suppliers"
         />
         <StatCard
-          label="Shelf count vs IMEI list"
+          label="Shelf number vs phone list"
           value={String(data.exceptions.imeiGaps)}
           hint={
             data.exceptions.imeiGaps === 0
-              ? "Shop list and IMEI list agree"
-              : "Item lines that disagree. Open the check below."
+              ? "Shelf count and phone list agree"
+              : "Some items do not agree. Check the list below."
           }
           href="#imei-check"
           tone={data.exceptions.imeiGaps > 0 ? "danger" : "success"}
@@ -94,32 +94,32 @@ export default async function DashboardPage() {
         <a href="/audit/books" className="font-medium text-primary hover:underline">
           Check the books
         </a>{" "}
-        for money, phones, and a working paper the owner or records checker can print.
+        to see money and phones, and to print a paper for the owner or records checker.
       </p>
 
       <div id="imei-check" className="surface-card overflow-hidden">
         <div className="flex items-center justify-between px-6 py-5">
           <div>
-            <h3 className="font-semibold">IMEI vs shop count</h3>
+            <h3 className="font-semibold">Do phone numbers match the shelf?</h3>
             <p className="text-sm text-muted-foreground">
               {data.exceptions.imeiGaps === 0
-                ? "Every phone and laptop on the shop list has a matching IMEI count."
-                : `${data.exceptions.imeiGaps} product${data.exceptions.imeiGaps === 1 ? "" : "s"} do not match. If it is not on this list, treat the shop count as unproven.`}
+                ? "Every phone and laptop on the shelf has a matching IMEI count."
+                : `${data.exceptions.imeiGaps} item${data.exceptions.imeiGaps === 1 ? "" : "s"} do not match. Fix these before you trust the shelf count.`}
             </p>
           </div>
           <Badge variant={data.exceptions.imeiGaps ? "danger" : "success"}>
-            {data.exceptions.imeiGaps ? "Gaps" : "Match"}
+            {data.exceptions.imeiGaps ? "Do not match" : "They match"}
           </Badge>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-left text-muted-foreground">
               <tr className="border-y border-border">
-                <th className="px-6 py-3 font-medium">Product</th>
+                <th className="px-6 py-3 font-medium">Item</th>
                 <th className="px-3 py-3 font-medium">Shop</th>
-                <th className="px-3 py-3 font-medium">Shop qty</th>
+                <th className="px-3 py-3 font-medium">On the shelf</th>
                 <th className="px-3 py-3 font-medium">IMEIs</th>
-                <th className="px-6 py-3 font-medium">Gap</th>
+                <th className="px-6 py-3 font-medium">Difference</th>
               </tr>
             </thead>
             <tbody>
@@ -131,7 +131,7 @@ export default async function DashboardPage() {
                   <td className="px-3 py-3">{row.imeis}</td>
                   <td className="px-6 py-3">
                     <Badge variant={row.delta === 0 ? "success" : "danger"}>
-                      {row.delta === 0 ? "Match" : row.delta > 0 ? `+${row.delta} extra IMEI` : `${row.delta} short`}
+                      {row.delta === 0 ? "They match" : row.delta > 0 ? `+${row.delta} extra IMEI` : `${row.delta} short`}
                     </Badge>
                   </td>
                 </tr>
@@ -139,7 +139,7 @@ export default async function DashboardPage() {
               {data.imeiCheck.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-8 text-muted-foreground">
-                    No serialized stock in the shops you can see yet.
+                    No phones with IMEI numbers in your shops yet.
                   </td>
                 </tr>
               ) : null}
@@ -152,16 +152,16 @@ export default async function DashboardPage() {
         <div className="surface-card p-6 xl:col-span-4">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h3 className="font-semibold">Sales & purchases</h3>
-              <p className="text-sm text-muted-foreground">Last six months for the shops you can see</p>
+              <h3 className="font-semibold">Sales & buying</h3>
+              <p className="text-sm text-muted-foreground">Last six months, for the shops you can see</p>
             </div>
-            <Badge variant="muted">6 Months</Badge>
+            <Badge variant="muted">6 months</Badge>
           </div>
           <SalesPurchaseChart data={data.chartSales} />
         </div>
         <div className="surface-card p-6 xl:col-span-3">
           <h3 className="font-semibold">Phones in shop</h3>
-          <p className="mb-4 text-sm text-muted-foreground">How many units by brand</p>
+          <p className="mb-4 text-sm text-muted-foreground">How many, by brand</p>
           <DevicePie data={data.devices} />
         </div>
       </div>
@@ -189,7 +189,7 @@ export default async function DashboardPage() {
                     <td className="px-6 py-3 font-medium">
                       <a href={`/sales/${sale.id}`} className="text-primary">{sale.invoiceNumber}</a>
                     </td>
-                    <td className="px-3 py-3">{sale.customer?.name ?? "Walk-in"}</td>
+                    <td className="px-3 py-3">{sale.customer?.name ?? "No name"}</td>
                     <td className="px-3 py-3">{formatDate(sale.saleDate)}</td>
                     <td className="px-3 py-3">{formatCurrency(money(sale.paidAmount))}</td>
                     <td className="px-6 py-3">

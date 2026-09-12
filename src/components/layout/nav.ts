@@ -44,7 +44,7 @@ export const navGroups = [
     items: [
       { name: "Upload stock", href: "/uploads", icon: Upload },
       { name: "Phones & items", href: "/products", icon: Smartphone },
-      { name: "Phone IMEIs", href: "/imei", icon: ScanLine },
+      { name: "Phone numbers (IMEI)", href: "/imei", icon: ScanLine },
       { name: "Shop stock", href: "/inventory", icon: Boxes },
       { name: "Goods on the way", href: "/incoming", icon: Package },
     ],
@@ -64,7 +64,7 @@ export const navGroups = [
     label: "Daily work",
     items: [
       { name: "Shop to shop", href: "/transfers", icon: ArrowLeftRight },
-      { name: "Neighbor shop fill", href: "/neighbor-fills", icon: Handshake },
+      { name: "Buy from next door", href: "/neighbor-fills", icon: Handshake },
       { name: "Returns", href: "/returns", icon: Undo2 },
       { name: "Swaps", href: "/swaps", icon: Repeat2 },
       { name: "Repairs", href: "/repairs", icon: Wrench },
@@ -74,11 +74,11 @@ export const navGroups = [
   {
     label: "Money",
     items: [
-      { name: "Revenue & expenditure", href: "/finance", icon: Wallet },
+      { name: "Money in & out", href: "/finance", icon: Wallet },
       { name: "Check the books", href: "/audit/books", icon: Scale },
       { name: "Profit", href: "/profits", icon: TrendingUp },
       { name: "Expenses", href: "/expenses", icon: Receipt },
-      { name: "Needs approval", href: "/approvals", icon: BadgeCheck },
+      { name: "Waiting for yes", href: "/approvals", icon: BadgeCheck },
     ],
   },
   {

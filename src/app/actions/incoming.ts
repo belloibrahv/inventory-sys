@@ -51,7 +51,7 @@ export async function getIncomingLots() {
 
 export async function createIncomingLot(formData: FormData) {
   const user = await requireUser()
-  if (!(await canBookIncoming(user.role))) return { error: "You cannot book goods before they arrive." }
+  if (!(await canBookIncoming(user.role))) return { error: "You are not allowed to book goods that are still on the way. Ask the main admin." }
 
   const branchId = String(formData.get("branchId") || user.branchId || "")
   const supplierId = String(formData.get("supplierId") || "") || null
@@ -65,7 +65,7 @@ export async function createIncomingLot(formData: FormData) {
   let linkedSupplierId = supplierId
   if (purchaseId) {
     const purchase = await prisma.purchase.findUnique({ where: { id: purchaseId } })
-    if (!purchase) return { error: "That supplier order was not found." }
+    if (!purchase) return { error: "We could not find that supplier bill." }
     if (purchase.branchId !== branchId) return { error: "This order is for a different shop." }
     linkedSupplierId = linkedSupplierId || purchase.supplierId
   }
@@ -95,8 +95,8 @@ export async function createIncomingLot(formData: FormData) {
         const identity = identities[index] ?? "NONE"
         const ids = identity === "NONE" ? [] : parseIds(identifierBlocks[index] ?? "")
         const quantity = identity === "NONE" ? Math.max(1, quantities[index] || 0) : ids.length
-        if (!productId || quantity < 1) throw new Error("Each line needs a product and a quantity or list of numbers.")
-        if (identity !== "NONE" && ids.length === 0) throw new Error("Scan IMEIs or serials for tracked items.")
+        if (!productId || quantity < 1) throw new Error("Every line needs an item, and either how many or the list of numbers.")
+        if (identity !== "NONE" && ids.length === 0) throw new Error("Scan the IMEI or serial number for items that carry one.")
 
         await tx.incomingItem.create({
           data: {
@@ -178,13 +178,13 @@ export type PreviewAndReceivePayload = {
  */
 export async function previewAndReceiveIncoming(payload: PreviewAndReceivePayload) {
   const user = await requireUser()
-  if (!(await canBookIncoming(user.role))) return { error: "You cannot mark goods as arrived." }
+  if (!(await canBookIncoming(user.role))) return { error: "You are not allowed to mark goods as arrived. Ask the main admin." }
 
   const lot = await prisma.incomingLot.findUnique({
     where: { id: payload.lotId },
     include: { items: { include: { product: true } }, branch: true },
   })
-  if (!lot || lot.status !== "COMING") return { error: "This shipment is not in COMING status." }
+  if (!lot || lot.status !== "COMING") return { error: "These goods are not marked as on the way, so you cannot receive them." }
 
   const itemMap = new Map(payload.items.map((it) => [it.itemId, it]))
 
@@ -346,23 +346,23 @@ export async function getOpenPurchases() {
 
 export async function bookPurchaseAsComing(formData: FormData) {
   const user = await requireUser()
-  if (!(await canBookIncoming(user.role))) return { error: "You cannot book goods before they arrive." }
+  if (!(await canBookIncoming(user.role))) return { error: "You are not allowed to book goods that are still on the way. Ask the main admin." }
   const purchaseId = String(formData.get("id") || "")
   const identifiers = parseIds(String(formData.get("imeis") || ""))
   const purchase = await prisma.purchase.findUnique({
     where: { id: purchaseId },
     include: { items: { include: { product: true } } },
   })
-  if (!purchase) return { error: "Purchase not found." }
+  if (!purchase) return { error: "We could not find that supplier bill." }
   const item = purchase.items[0]
-  if (!item) return { error: "This order has no lines." }
+  if (!item) return { error: "That supplier bill has no items on it." }
 
   const alreadyComing = await prisma.incomingItem.aggregate({
     where: { lot: { purchaseId, status: "COMING" }, productId: item.productId },
     _sum: { quantity: true },
   })
   const remaining = item.quantity - item.receivedQty - (alreadyComing._sum.quantity ?? 0)
-  if (remaining < 1) return { error: "Nothing left to book as coming for this order." }
+  if (remaining < 1) return { error: "Every item on this bill is already booked as on the way." }
 
   const tracking = item.product.tracking === "SERIAL" ? "SERIAL" : item.product.tracking === "NONE" ? "NONE" : "IMEI"
   if (tracking !== "NONE" && identifiers.length === 0) {
@@ -386,7 +386,7 @@ export async function bookPurchaseAsComing(formData: FormData) {
 
 export async function setIncomingVisible(formData: FormData) {
   const user = await requireUser()
-  if (!isSuperAdmin(user.role)) return { error: "Only Super Admin can show or hide goods on the way." }
+  if (!isSuperAdmin(user.role)) return { error: "Only the main admin can show or hide goods on the way." }
   const id = String(formData.get("id") || "")
   const visible = String(formData.get("visible") || "") === "true"
   await prisma.incomingLot.update({ where: { id }, data: { visible } })

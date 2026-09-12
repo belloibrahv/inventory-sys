@@ -41,8 +41,8 @@ export const authOptions: NextAuthOptions = {
           })
           if (fails >= 3) {
             await alertWatchers(
-              "Repeated failed sign-in",
-              `${email} failed sign-in ${fails} times in 10 minutes. Check Who did what.`
+              "Somebody keeps failing to sign in",
+              `${email} tried to sign in ${fails} times in 10 minutes and failed every time. Check Who did what.`
             )
           }
           throw new Error("Invalid credentials")

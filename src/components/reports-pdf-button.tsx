@@ -21,7 +21,7 @@ async function loadMark() {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(new Error("Could not read the company mark"))
+    reader.onerror = () => reject(new Error("Could not load the shop logo"))
     reader.readAsDataURL(blob)
   })
 }
@@ -86,7 +86,7 @@ export function ReportsPdfButton({ data }: { data: ReportsPack }) {
           doc.text(`Scope: ${data.scope}`, left, 32)
           doc.text(`Prepared by ${data.preparedBy}`, left + 88, 32)
           doc.text(`Lagos ${formatLagosStamp(new Date(data.preparedAt))}`, right, 32, { align: "right" })
-          doc.text("Every completed record you can see. This pack does not change any invoice.", left, 37)
+          doc.text("Every finished record you are allowed to see. This paper does not change any sale.", left, 37)
         }
         y = full ? 48 : 24
       }
@@ -147,16 +147,16 @@ export function ReportsPdfButton({ data }: { data: ReportsPack }) {
       })
       y += 34
 
-      section("Shop books")
+      section("Shop by shop")
       doc.setTextColor(...MUTED)
       doc.setFontSize(7)
       doc.text("Shop", left + 1, y)
       doc.text("Sales", left + 92, y, { align: "right" })
-      doc.text("Revenue", left + 138, y, { align: "right" })
+      doc.text("Money from sales", left + 138, y, { align: "right" })
       doc.text("Collected", right - 1, y, { align: "right" })
       y += 5
       if (data.byShop.length === 0) {
-        row("No completed sales in this scope", "")
+        row("No finished sale here", "")
       } else {
         data.byShop.forEach((item, index) => {
           ensure(6.5)
@@ -176,27 +176,27 @@ export function ReportsPdfButton({ data }: { data: ReportsPack }) {
         })
       }
 
-      section("Customers still owe")
+      section("Customers still owe us")
       if (data.debtors.length === 0) {
-        row("No open customer balances", "")
+        row("No customer owes us anything", "")
       } else {
         data.debtors.forEach((item, index) => {
           row(`${item.name}  ·  ${item.shop}`, formatPdfMoney(item.amount), index % 2 ? PAPER : undefined)
         })
       }
 
-      section("Unpaid supplier invoices")
+      section("Supplier bills we have not paid")
       if (data.creditors.length === 0) {
-        row("No supplier invoices still owed", "")
+        row("We have paid every supplier bill", "")
       } else {
         data.creditors.forEach((item, index) => {
           row(`${item.invoice}  ·  ${item.supplier}  ·  ${item.shop}`, formatPdfMoney(item.owed), index % 2 ? PAPER : undefined)
         })
       }
 
-      section("Low stock")
+      section("Items running low")
       if (data.lowStock.length === 0) {
-        row("No lines are at or below minimum", "")
+        row("No item is running low", "")
       } else {
         data.lowStock.forEach((item, index) => {
           row(`${item.product}  ·  ${item.shop}`, `${item.quantity} / min ${item.min}`, index % 2 ? PAPER : undefined)
@@ -206,7 +206,7 @@ export function ReportsPdfButton({ data }: { data: ReportsPack }) {
       y += 4
       doc.setFontSize(7)
       doc.setTextColor(...MUTED)
-      doc.text("Software by Techvaults Limited. This pack does not change any invoice.", left, y)
+      doc.text("Software by Techvaults Limited. This paper does not change any sale.", left, y)
 
       footer()
       doc.save(`${data.statementRef}.pdf`)
@@ -217,7 +217,7 @@ export function ReportsPdfButton({ data }: { data: ReportsPack }) {
 
   return (
     <Button type="button" onClick={download} disabled={busy} className="print:hidden">
-      {busy ? "Preparing the PDF" : "Download branded PDF"}
+      {busy ? "Getting the PDF ready" : "Download PDF"}
     </Button>
   )
 }

@@ -41,14 +41,14 @@ export async function getProducts(search?: string) {
 
 export async function createProduct(formData: FormData) {
   const user = await requireUser()
-  if (!(await canManageCatalog(user.role))) return { error: "You cannot add or change phones and items." }
+  if (!(await canManageCatalog(user.role))) return { error: "You are not allowed to add or change items. Ask the main admin." }
 
   const sku = String(formData.get("sku") ?? "").trim()
   const name = String(formData.get("name") ?? "").trim()
-  if (!sku || !name) return { error: "Item code and name are required." }
+  if (!sku || !name) return { error: "Type the item code and the name." }
 
   const existing = await prisma.product.findUnique({ where: { sku } })
-  if (existing) return { error: "That item code already exists." }
+  if (existing) return { error: "That item code is already being used." }
 
   const costPrice = Number(formData.get("costPrice") || 0)
   const sellingPrice = Number(formData.get("sellingPrice") || 0)
@@ -100,7 +100,7 @@ export async function createProduct(formData: FormData) {
 
 export async function updateSelectedPrices(formData: FormData) {
   const user = await requireUser()
-  if (!(await canManageCatalog(user.role))) return { error: "You cannot change prices." }
+  if (!(await canManageCatalog(user.role))) return { error: "You are not allowed to change prices. Ask the main admin." }
 
   const reason = String(formData.get("reason") || "Several prices updated together").trim() || "Several prices updated together"
   let parsed: unknown
@@ -143,7 +143,7 @@ export async function updateSelectedPrices(formData: FormData) {
       continue
     }
     if (change.sellingPrice < Number(product.minimumPrice) && !canFloor) {
-      problems.push(`${product.name} is below the lowest allowed price. Raise it, or ask Super Admin.`)
+      problems.push(`${product.name} is below the lowest allowed price. Raise it, or ask the main admin.`)
       continue
     }
     if (Number(product.sellingPrice) === change.sellingPrice) continue
@@ -156,7 +156,7 @@ export async function updateSelectedPrices(formData: FormData) {
   }
 
   if (problems.length) return { error: problems.slice(0, 4).join(" ") }
-  if (work.length === 0) return { error: "Those selling prices are already the numbers you typed." }
+  if (work.length === 0) return { error: "Those selling prices are already what you typed." }
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -205,12 +205,12 @@ export async function updateSelectedPrices(formData: FormData) {
 
 export async function updateProductWarranty(formData: FormData) {
   const user = await requireUser()
-  if (!(await canManageCatalog(user.role))) return { error: "You cannot add or change phones and items." }
+  if (!(await canManageCatalog(user.role))) return { error: "You are not allowed to add or change items. Ask the main admin." }
   const id = String(formData.get("id") || "")
   const warrantyDays = Number(formData.get("warrantyDays") || 0)
-  if (!id || warrantyDays <= 0) return { error: "Enter warranty days for a product." }
+  if (!id || warrantyDays <= 0) return { error: "Type how many warranty days the item has." }
   const product = await prisma.product.findUnique({ where: { id } })
-  if (!product) return { error: "That item was not found." }
+  if (!product) return { error: "We could not find that item." }
   await prisma.product.update({ where: { id }, data: { warrantyDays } })
   await prisma.auditLog.create({
     data: {
@@ -341,7 +341,7 @@ export async function importProducts(formData: FormData) {
   // The item list is loaded centrally. If three shops could each add items,
   // one phone would end up on the system under three different names.
   if (!(await can(user.role, "action.upload"))) {
-    return { error: "Only Super Admin and the stock uploader can load the item list from a sheet." }
+    return { error: "Only the main admin and the person who loads stock can load the item list from a sheet." }
   }
 
   const file = formData.get("file")
@@ -354,7 +354,7 @@ export async function importProducts(formData: FormData) {
   } catch {
     return { error: "We could not read that file. Save it as Excel or CSV and try again." }
   }
-  if (rows.length === 0) return { error: "The file has no product rows under the header line." }
+  if (rows.length === 0) return { error: "There is no item under the header line in that file." }
   if (rows.length > 400) return { error: "Upload up to 400 products at a time." }
 
   const [brands, categories, shops] = await Promise.all([

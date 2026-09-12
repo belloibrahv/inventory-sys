@@ -22,7 +22,7 @@ export default function LoginPage() {
     const result = await signIn("credentials", { email, password, redirect: false })
     setLoading(false)
     if (result?.error) {
-      setError("Email or password is not correct, or this login is locked.")
+      setError("That email or password is not correct, or this login is locked.")
       return
     }
     router.push("/dashboard")
@@ -37,9 +37,9 @@ export default function LoginPage() {
           <BrandLockup light />
         </div>
         <div className="relative max-w-lg space-y-6">
-          <p className="text-5xl font-semibold tracking-tight leading-tight">Own The Future</p>
+          <p className="text-5xl font-semibold tracking-tight leading-tight">Run the shop with clear numbers</p>
           <p className="text-lg text-white/75">
-            Phones, laptops, and power. Every IMEI and sale in one record. Old figures cannot be secretly changed.
+            See every phone, every sale, and every naira in one place. Old records stay as they are. Nobody can hide a change.
           </p>
         </div>
         <div className="relative space-y-2">
@@ -64,7 +64,7 @@ export default function LoginPage() {
           <div>
             <h1 className="text-3xl font-semibold tracking-tight">Sign in</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Use the work email Super Admin gave you. Locked accounts cannot enter.
+              Use the work email the main admin gave you. A locked login cannot enter.
             </p>
           </div>
           <div className="space-y-2">
@@ -95,7 +95,7 @@ export default function LoginPage() {
             />
           </div>
           <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:bg-amber-500/15 dark:text-amber-200">
-            Practice logins such as ceo@abutwins.com are for training. Change or remove them before this shop goes live.
+            First time here? You will be asked to change your password after you sign in.
           </p>
           {error ? (
             <p role="alert" aria-live="assertive" className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">
@@ -103,7 +103,7 @@ export default function LoginPage() {
             </p>
           ) : null}
           <Button className="w-full" disabled={loading} aria-busy={loading}>
-            {loading ? "Checking your sign-in" : "Sign in"}
+            {loading ? "Checking your details" : "Sign in"}
           </Button>
           <p className="pt-2 text-center text-xs text-muted-foreground">
             Software by{" "}

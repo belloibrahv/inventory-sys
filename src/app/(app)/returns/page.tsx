@@ -12,7 +12,7 @@ export default async function ReturnsPage() {
   return (
     <div className="page-split">
       <div>
-        <PageHeader title="Returns" description="A buyer brings a phone back. The old invoice stays. After approval you refund, give credit, repair, replace, or send the unit back to the supplier. Shop to shop is a different page." />
+        <PageHeader title="Returns" description="A buyer brings a phone back. The old bill stays as it was. After the boss says yes, you can refund, give credit, repair, replace, or send it to the supplier." />
         <WorkflowSteps current={0} steps={["Enter IMEI", "Say why", "Boss approves", "Refund, replace, or send to supplier"]} />
         <div className="space-y-3">
           {rows.map((row) => (
@@ -39,7 +39,7 @@ export default async function ReturnsPage() {
               </div>
               <p className="mt-2 text-xs text-muted-foreground">Fault class: {row.faultClass}</p>
               {row.status === "PENDING" ? (
-                <p className="mt-3 text-xs text-warning">Waiting on approval. The IMEI is locked and cannot be sold.</p>
+                <p className="mt-3 text-xs text-warning">Waiting for the boss to say yes. Nobody can sell this IMEI until then.</p>
               ) : null}
               {row.status === "APPROVED" ? (
                 <div className="mt-4 border-t border-border pt-4">
@@ -51,11 +51,11 @@ export default async function ReturnsPage() {
                       <p className="text-xs text-muted-foreground">
                         This will {
                           row.outcome === "REFUND"
-                            ? "pay cash back from the amount they already paid"
+                            ? "give back cash from what they already paid"
                             : row.outcome === "REPAIR"
                               ? "open a repair job"
                               : row.outcome === "SEND_TO_SUPPLIER"
-                                ? "send this unit back to the supplier. It will not sit in this shop"
+                                ? "send this phone back to the supplier. It will not stay in this shop"
                                 : "post a credit note"
                         } without editing the original sale.
                       </p>

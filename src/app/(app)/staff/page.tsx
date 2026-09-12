@@ -20,7 +20,7 @@ export default async function StaffPage() {
       <div className="min-w-0">
         <PageHeader
           title="Staff"
-          description="Super Admin decides what each person can see. Open Who can see what to tick the pages for each role."
+          description="The main admin decides what each person can see. Open Who can see what and tick the pages for each job."
         />
         <div className="surface-card overflow-hidden">
           <div className="overflow-x-auto">
@@ -78,8 +78,8 @@ export default async function StaffPage() {
             <Input name="email" type="email" placeholder="name@abutwins.com" required />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block text-muted-foreground">Temporary password</span>
-            <Input name="password" type="password" placeholder="They must change this" required />
+            <span className="mb-1 block text-muted-foreground">First password</span>
+            <Input name="password" type="password" placeholder="They must change this after they sign in" required />
           </label>
           <label className="block text-sm">
             <span className="mb-1 block text-muted-foreground">Job</span>
@@ -100,7 +100,7 @@ export default async function StaffPage() {
           </label>
         </ActionForm>
         ) : (
-          <p className="text-sm text-muted-foreground">You can see staff. Super Admin must allow you to add a new login.</p>
+          <p className="text-sm text-muted-foreground">You can see staff, but The main admin must allow you before you can add a new login.</p>
         )}
       </div>
     </div>

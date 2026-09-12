@@ -160,7 +160,7 @@ export function InventoryClientView({
         <StatCard
           label="Value at cost"
           value={formatCurrency(totals.cost)}
-          hint="What this stock cost us. This is money tied up on the shelf."
+          hint="What this stock cost us. This is money sitting on the shelf."
           icon={<Coins className="h-4 w-4" />}
           tone="primary"
         />
@@ -177,7 +177,7 @@ export function InventoryClientView({
           hint={
             totals.lowLines > 0
               ? `${totals.lowLines} item line${totals.lowLines === 1 ? "" : "s"} running low`
-              : "No item line is below its minimum"
+              : "No item is running low"
           }
           tone={totals.lowLines > 0 ? "warning" : "neutral"}
           icon={<AlertTriangle className="h-4 w-4" />}
@@ -236,7 +236,7 @@ export function InventoryClientView({
           <div className="relative min-w-[200px] flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Find an item, code or brand"
+              placeholder="Find an item, a code, or a brand"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               className="h-9 pl-9"
@@ -312,7 +312,7 @@ export function InventoryClientView({
                     <span className={`num text-sm ${mismatch ? "font-semibold text-warning" : "text-muted-foreground"}`}>
                       {imeis}
                     </span>
-                    {mismatch ? <p className="text-[11px] font-medium text-warning">Does not match</p> : null}
+                    {mismatch ? <p className="text-[11px] font-medium text-warning">They do not agree</p> : null}
                   </>
                 ) : (
                   <span className="text-xs text-muted-foreground">Pieces</span>
@@ -323,7 +323,7 @@ export function InventoryClientView({
           )
         })}
         {filtered.length === 0 ? (
-          <TableEmpty colSpan={9}>Nothing matches that shop, condition or search.</TableEmpty>
+          <TableEmpty colSpan={9}>Nothing matches that shop, that condition, or what you typed.</TableEmpty>
         ) : null}
       </TableShell>
     </div>

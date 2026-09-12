@@ -109,7 +109,7 @@ export async function getNeighborFillLookups() {
 
 export async function createNeighborFill(formData: FormData) {
   const user = await requireUser()
-  if (!(await canRecordNeighbor(user.role))) return { error: "You cannot record a neighbor shop fill." }
+  if (!(await canRecordNeighbor(user.role))) return { error: "You are not allowed to record a buy from next door. Ask the main admin." }
 
   const branchId = String(formData.get("branchId") || user.branchId || "")
   const customerId = String(formData.get("customerId") || "")
@@ -126,7 +126,7 @@ export async function createNeighborFill(formData: FormData) {
     return { error: "Pick our shop, the named customer, the item, and the neighboring shop." }
   }
   if (neighborCost < 0 || sellPrice <= 0) return { error: "Enter what the neighbor is owed and what the customer will pay." }
-  if (sellPrice < neighborCost) return { error: "The sell price is below what we owe the neighbor. Check the figures." }
+  if (sellPrice < neighborCost) return { error: "You are selling it for less than what we must pay the neighboring shop. Check the numbers again." }
 
   const scoped = await scopedBranchId(user.role, user.branchId)
   if (scoped && branchId !== scoped) return { error: "You can only record a fill for your own shop." }
@@ -141,7 +141,7 @@ export async function createNeighborFill(formData: FormData) {
   const settings = await getAppSettings()
   const canOverrideFloor = settings.allowBelowMinimum || (await can(user.role, "action.override_floor"))
   if (sellPrice < money(product.minimumPrice) && !canOverrideFloor) {
-    return { error: `${product.name} is below the lowest allowed price. Raise it, or ask Super Admin.` }
+    return { error: `${product.name} is below the lowest allowed price. Raise it, or ask the main admin.` }
   }
 
   if (product.tracking !== "NONE" && imei1.length < 14) {
@@ -157,7 +157,7 @@ export async function createNeighborFill(formData: FormData) {
   let houseId: string | null = supplierId || null
   if (houseId) {
     const house = await prisma.supplier.findUnique({ where: { id: houseId } })
-    if (!house || house.kind !== "NEIGHBOR") return { error: "That list item is not a neighboring shop." }
+    if (!house || house.kind !== "NEIGHBOR") return { error: "The name you picked is a supplier, not a neighboring shop." }
   }
 
   const fill = await prisma.neighborFill.create({
@@ -193,7 +193,7 @@ export async function createNeighborFill(formData: FormData) {
 
 export async function sellNeighborFill(formData: FormData) {
   const user = await requireUser()
-  if (!(await canRecordNeighbor(user.role))) return { error: "You cannot sell a neighbor shop fill." }
+  if (!(await canRecordNeighbor(user.role))) return { error: "You are not allowed to sell a buy from next door. Ask the main admin." }
   const id = String(formData.get("id") || "")
   const paidAmount = Number(formData.get("paidAmount") || 0)
   const method = (String(formData.get("method") || "CASH") || "CASH") as PaymentMethod
@@ -201,7 +201,7 @@ export async function sellNeighborFill(formData: FormData) {
     where: { id },
     include: { product: true, customer: true },
   })
-  if (!fill) return { error: "That neighbor fill was not found." }
+  if (!fill) return { error: "We could not find that neighbor fill." }
   if (fill.status !== "OPEN") return { error: "This fill is already sold or settled." }
 
   const lock = await getSellLock(fill.branchId)
@@ -210,7 +210,7 @@ export async function sellNeighborFill(formData: FormData) {
   const sellPrice = money(fill.sellPrice)
   const paid = Math.min(Math.max(0, paidAmount || sellPrice), sellPrice)
   const due = sellPrice - paid
-  if (due > 0 && !fill.customerId) return { error: "Credit needs a named customer." }
+  if (due > 0 && !fill.customerId) return { error: "A credit sale needs a buyer name." }
 
   const invoiceNumber = generateDocNumber("INV")
 
@@ -281,7 +281,7 @@ export async function sellNeighborFill(formData: FormData) {
             type: "INCOME",
             amount: paid.toFixed(2),
             reference: invoiceNumber,
-            description: `Neighbor fill sale ${fill.fillNumber} · ${fill.customer.name}`,
+            description: `Neighbor fill sold ${fill.fillNumber} · ${fill.customer.name}`,
           },
         })
       }
@@ -295,7 +295,7 @@ export async function sellNeighborFill(formData: FormData) {
             amount: due.toFixed(2),
             balance: money(after.currentBalance).toFixed(2),
             reference: invoiceNumber,
-            description: `Neighbor fill ${fill.fillNumber} still due`,
+            description: `We still owe the neighboring shop on fill ${fill.fillNumber}`,
           },
         })
       }
@@ -335,7 +335,7 @@ export async function sellNeighborFill(formData: FormData) {
 export async function payNeighborFill(formData: FormData) {
   const user = await requireUser()
   if (!(await can(user.role, "action.neighbor")) && !(await can(user.role, "action.finance"))) {
-    return { error: "You cannot pay a neighboring shop from this page." }
+    return { error: "You are not allowed to pay a neighboring shop here. Ask accounts." }
   }
   const id = String(formData.get("id") || "")
   const amount = Number(formData.get("amount") || 0)
@@ -343,7 +343,7 @@ export async function payNeighborFill(formData: FormData) {
   if (!id || amount <= 0) return { error: "Enter what you are sending to the neighboring shop." }
 
   const fill = await prisma.neighborFill.findUnique({ where: { id }, include: { customer: true } })
-  if (!fill) return { error: "That neighbor fill was not found." }
+  if (!fill) return { error: "We could not find that neighbor fill." }
   const due = money(fill.neighborCost) - money(fill.moneySentToNeighbor)
   if (due <= 0) return { error: "This neighboring shop is already paid." }
   const sent = Math.min(amount, due)
@@ -367,7 +367,7 @@ export async function payNeighborFill(formData: FormData) {
         type: "EXPENSE",
         amount: sent.toFixed(2),
         reference: payRef,
-        description: `Paid ${fill.neighborName} for fill ${fill.fillNumber}. Abu Twins keeps profit ${money(fill.profit)}.`,
+        description: `We paid ${fill.neighborName} for fill ${fill.fillNumber}. Abu Twins keeps ${money(fill.profit)} as profit.`,
       },
     })
     await tx.auditLog.create({

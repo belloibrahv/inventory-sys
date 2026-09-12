@@ -78,7 +78,7 @@ export default async function ImeiDetailPage({ params }: { params: Promise<{ id:
                 {` · ${record.sale.branch.name}`}
               </p>
             ) : (
-              <p className="text-muted-foreground">No sale posted against this IMEI yet.</p>
+              <p className="text-muted-foreground">This IMEI has not been sold yet.</p>
             )}
             {record.returns.map((row) => (
               <p key={row.id}>
@@ -104,7 +104,7 @@ export default async function ImeiDetailPage({ params }: { params: Promise<{ id:
               <p className="font-medium">Condition</p>
               <p>Grade {record.cosmeticGrade ?? "-"}{record.batteryHealth != null ? ` · battery ${record.batteryHealth}%` : ""}</p>
               {record.conditionNotes ? <p className="text-muted-foreground">{record.conditionNotes}</p> : null}
-              {record.photoData ? <img src={record.photoData} alt="Phone condition" className="mt-2 h-48 w-full rounded-xl object-cover" /> : null}
+              {record.photoData ? <img src={record.photoData} alt="How the phone looks" className="mt-2 h-48 w-full rounded-xl object-cover" /> : null}
             </div>
           </div>
         </div>
@@ -121,12 +121,12 @@ export default async function ImeiDetailPage({ params }: { params: Promise<{ id:
               </div>
               )
             })}
-            {logs.length === 0 ? <p className="text-sm text-muted-foreground">No diary rows yet for this IMEI.</p> : null}
+            {logs.length === 0 ? <p className="text-sm text-muted-foreground">Nothing has been written about this IMEI yet.</p> : null}
           </div>
         </div>
       </div>
       <div className="surface-card p-5">
-        <h3 className="mb-3 font-semibold">Update condition and photo</h3>
+        <h3 className="mb-3 font-semibold">Change the condition and the photo</h3>
         <ImeiConditionForm
           id={record.id}
           cosmeticGrade={record.cosmeticGrade}

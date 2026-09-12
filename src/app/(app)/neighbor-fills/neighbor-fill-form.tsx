@@ -51,7 +51,7 @@ export function NeighborFillForm({
           setSupplierId(next)
         }}
       >
-        <option value="">Neighbor not on the list. Type the name below.</option>
+        <option value="">The neighboring shop is not on the list. Type the name below.</option>
         {neighbors.map((row) => (
           <option key={row.id} value={row.id}>{row.name}</option>
         ))}
@@ -69,14 +69,14 @@ export function NeighborFillForm({
         placeholder="Neighboring shop phone"
         key={`phone-${supplierId}`}
       />
-      <Select name="customerId" required emptyLabel="No customer on this shop's books yet. Add one on Customers first.">
+      <Select name="customerId" required emptyLabel="This shop has no customer yet. Add one on Customers first.">
         <option value="">Named customer who wants this item</option>
         {shopCustomers.map((row) => (
           <option key={row.id} value={row.id}>{row.name} · {row.phone}</option>
         ))}
       </Select>
       {!shopCustomers.length ? (
-        <p className="text-sm text-danger">Add the customer first. Do not invent a buyer on this page.</p>
+        <p className="text-sm text-danger">Add the customer first. Never make up a buyer on this page.</p>
       ) : null}
       <Select
         name="productId"
@@ -104,7 +104,7 @@ export function NeighborFillForm({
         min={0}
         value={cost}
         onChange={(event) => setCost(event.target.value)}
-        placeholder="What we will return to the neighboring shop"
+        placeholder="What we must send back to the neighboring shop"
         required
       />
       <Input

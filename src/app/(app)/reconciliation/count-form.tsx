@@ -34,13 +34,13 @@ export function CountForm({
   )
 
   return (
-    <ActionForm action={startReconciliation} submit="Submit count" className="space-y-3">
+    <ActionForm action={startReconciliation} submit="Send this count" className="space-y-3">
       <Select name="branchId" value={branchId} onChange={(event) => setBranchId(event.target.value)} required>
         {branches.map((branch) => (
           <option key={branch.id} value={branch.id}>{branch.name}</option>
         ))}
       </Select>
-      <Input name="notes" placeholder="Who counted, and any missing boxes" />
+      <Input name="notes" placeholder="Who counted it, and any box you could not find" />
       <div className="max-h-96 space-y-2 overflow-y-auto">
         {rows.map((row) => {
           const imeis = vault.find((item) => item.productId === row.productId && item.branchId === row.branchId)?.count ?? 0
@@ -52,14 +52,14 @@ export function CountForm({
                 <span className="block text-xs text-muted-foreground">
                   Shop count {row.quantity}
                   {imeis ? ` · IMEIs listed ${imeis}` : ""}
-                  {mismatch ? " · qty and IMEIs do not match" : ""}
+                  {mismatch ? " · the shop count and the IMEI count do not agree" : ""}
                 </span>
               </span>
               <Input name={`count_${row.productId}`} type="number" defaultValue={row.quantity} />
             </label>
           )
         })}
-        {rows.length === 0 ? <p className="text-sm text-muted-foreground">This shop has no stock lines to count.</p> : null}
+        {rows.length === 0 ? <p className="text-sm text-muted-foreground">This shop has nothing to count.</p> : null}
       </div>
     </ActionForm>
   )

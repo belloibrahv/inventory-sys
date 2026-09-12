@@ -174,12 +174,12 @@ export function drawReceipt(doc: jsPDF, data: ReceiptData, mark?: string) {
   doc.setFontSize(7)
   doc.setTextColor(...MUTED)
   doc.text(
-    "This receipt is a record of a finished sale. Later payments are added as new entries and do not change it.",
+    "This receipt shows a sale that is finished. Money paid later is written down on its own and does not change this paper.",
     left,
     y
   )
   y += 4
-  doc.text("Thank you for your custom.", left, y)
+  doc.text("Thank you for buying from us.", left, y)
   y += 6
 
   return y

@@ -19,7 +19,7 @@ export async function flushParkedSales(reason: "auto" | "manual") {
   try {
     await heartbeatParkedSales({ deviceId: await getDeviceId(), rows: await parkedHeartbeatRows() })
   } catch {
-    // Line may have dropped again. Flush still tries to post parked sales.
+    // Line may have dropped again. Flush still tries to post waiting sales.
   }
 
   const pendingSales = await readSaleQueue()
@@ -60,7 +60,7 @@ export async function flushParkedSales(reason: "auto" | "manual") {
     return {
       posted,
       leftover: (await readSaleQueue()).length,
-      error: "The line dropped again. Waiting sales stay on this device.",
+      error: "The network went off again. The waiting sales stay on this phone.",
     }
   }
 }

@@ -16,7 +16,7 @@ export default async function RepairsPage() {
   return (
     <div className="page-split">
       <div>
-        <PageHeader title="Repairs" description="Take the phone, find the fault, wait for parts if needed, repair, then give it back to the customer or put it back in the shop." />
+        <PageHeader title="Repairs" description="Take the phone, find the fault, wait for parts if needed, fix it, then give it back." />
         <WorkflowSteps current={1} steps={["Take in", "Find fault", "Wait for parts", "Repair", "Give back"]} />
         <div className="space-y-3">
           {rows.map((row) => (
@@ -34,7 +34,7 @@ export default async function RepairsPage() {
                       {row.repairCost ? ` · charge ${formatCurrency(money(row.repairCost))} on deliver` : ""}
                     </p>
                   ) : (
-                    <p className="mt-1 text-xs text-muted-foreground">Shop phone. When you finish, it goes back into shop stock.</p>
+                    <p className="mt-1 text-xs text-muted-foreground">This is a shop phone. When you finish, it goes back into shop stock.</p>
                   )}
                 </div>
                 <StatusBadge value={row.status} />
@@ -47,7 +47,7 @@ export default async function RepairsPage() {
                       {stages.map((item) => <option key={item} value={item}>{statusLabel(item)}</option>)}
                     </Select>
                     <Input name="repairCost" type="number" placeholder="Repair cost" defaultValue={row.repairCost ? String(row.repairCost) : ""} />
-                    <Textarea name="diagnosis" placeholder="What you found on this phone" defaultValue={row.diagnosis ?? ""} className="md:col-span-2" />
+                    <Textarea name="diagnosis" placeholder="What you found wrong with this phone" defaultValue={row.diagnosis ?? ""} className="md:col-span-2" />
                   </ActionForm>
                 </div>
               ) : null}

@@ -140,7 +140,7 @@ export async function closeDay(formData: FormData) {
   try {
     const user = await requireUser()
     if (!(await can(user.role, "action.finance")) && !(await can(user.role, "action.sell"))) {
-      return { error: "You cannot close the day." }
+      return { error: "You are not allowed to close the day. Ask the main admin." }
     }
     const businessDate = String(formData.get("businessDate") || watDayKey())
     const rawBranchId = String(formData.get("branchId") || "")

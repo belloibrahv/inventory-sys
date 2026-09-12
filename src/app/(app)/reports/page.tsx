@@ -43,7 +43,7 @@ export default async function ReportsPage({
   ).sort((a, b) => b.revenue - a.revenue)
 
   const selectedBranch = branches.find((b) => b.id === selectedBranchId)
-  const scope = selectedBranch ? `${selectedBranch.name} (${selectedBranch.code})` : "All Shops (Consolidated)"
+  const scope = selectedBranch ? `${selectedBranch.name} (${selectedBranch.code})` : "All shops together"
 
   const pack: ReportsPack = {
     company: {
@@ -93,8 +93,8 @@ export default async function ReportsPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Reports & Analytics"
-        description={`Consolidated and shop-by-shop performance statement for revenue, collections, stock valuations, expenses, and receivables. Position as at ${formatLagosStamp()}.`}
+        title="Reports"
+        description={`One paper on how the shops are doing: sales, money in, stock worth, spending, and who still owes you. As at ${formatLagosStamp()}.`}
       />
       <ReportsClientView
         pack={pack}

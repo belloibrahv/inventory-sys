@@ -27,8 +27,8 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
 
   return (
     <SectionCard
-      title="Load a whole shop from the opening stock Excel"
-      description="For an opening count or a full container. For one or two units, use the upload bill above."
+      title="Load a whole shop from the opening stock Excel sheet"
+      description="Use this for a first big count, or for a whole container. For one or two units, use the bill above."
     >
       <p className="text-sm leading-relaxed text-muted-foreground">
         One file for one shop, with tabs for PHONES, ACCESSORIES, SCREEN and LAPTOPS. Pick the shop and the supplier,
@@ -40,7 +40,7 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
         <li>PHONES tab: one row per phone, IMEI in the QTY/IMEI/SERIAL NO column.</li>
         <li>LAPTOPS tab: one row per laptop, serial in that same column.</li>
         <li>ACCESSORIES and SCREEN tabs: how many pieces are on the shelf.</li>
-        <li>Never invent an IMEI. Sending the same phone twice leaves the first one alone.</li>
+        <li>Never make up an IMEI. If you send the same phone twice, the first one is not touched.</li>
       </ul>
 
       <form
@@ -54,7 +54,7 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
             result = await importOpeningStock(formData)
           } catch {
             setBusy(false)
-            toast.error("That did not reach the shop system. Check your connection and try once more.")
+            toast.error("That did not reach the shop system. Check your network and try again.")
             return
           }
           setBusy(false)
@@ -115,7 +115,7 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
             the system works out what is left against the value of the sheet.
           */}
           <label className="block text-sm">
-            <span className="eyebrow mb-1 block">Amount paid on this bill so far (₦)</span>
+            <span className="eyebrow mb-1 block">What has been paid on this bill so far (₦)</span>
             <Input
               name="amountPaid"
               type="number"
@@ -127,12 +127,12 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
             />
             <span className="mt-1 block text-xs text-muted-foreground">
               Leave it at zero if nothing has been paid. Anything still owed shows on Goods from supplier and on
-              Revenue &amp; expenditure until it is settled.
+              Money in &amp; out until we pay it.
             </span>
           </label>
 
           <label className="block text-sm">
-            <span className="eyebrow mb-1 block">Note or waybill number</span>
+            <span className="eyebrow mb-1 block">Note, or the waybill number</span>
             <Input name="notes" placeholder="Optional" disabled={busy} />
           </label>
         </div>

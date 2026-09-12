@@ -130,7 +130,7 @@ export async function getAuditMonitor(filters: AuditFilters = {}) {
 
 export async function exportAuditCsv(filters: AuditFilters) {
   const user = await requireUser()
-  if (!(await can(user.role, "view.audit"))) return { error: "You cannot export this trail." }
+  if (!(await can(user.role, "view.audit"))) return { error: "You are not allowed to download this trail. Ask the main admin." }
   const rows = await prisma.auditLog.findMany({
     where: whereFrom({ ...filters, views: "1" }),
     include: { user: { select: { name: true, email: true } } },

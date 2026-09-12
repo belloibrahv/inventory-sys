@@ -79,10 +79,10 @@ export function OfflineBanner() {
     const result = await flushParkedSales(reason)
     if (result.error) toast.error(result.error)
     else if (result.posted.length) {
-      toast.success(`${result.posted.length} parked sale${result.posted.length === 1 ? "" : "s"} are now on the server. Who did what has the trail.`)
+      toast.success(`${result.posted.length} waiting sale${result.posted.length === 1 ? "" : "s"} are now saved. You can see them on Who did what.`)
       router.refresh()
     } else if (reason === "manual") {
-      toast.success("Line-down time is now on Who did what.")
+      toast.success("The time the network was down is now on Who did what.")
     }
     setBusy(false)
     syncing.current = false
@@ -96,16 +96,16 @@ export function OfflineBanner() {
     <div className="rounded-xl bg-warning-soft px-4 py-3 text-sm text-warning">
       {offline ? (
         <p>
-          This device is offline. You can still finish a sale on Sell now. Refresh is safe. Parked sales stay on this phone until the line returns, then they post to the shop and Who did what.
+          This phone has no network. You can still finish a sale on Sell now. Refreshing the page is safe. Waiting sales stay on this phone until the network comes back, then they go into the shop system.
         </p>
       ) : queue.length ? (
-        <p>{queue.length} parked sale{queue.length === 1 ? "" : "s"} waiting on this device.</p>
+        <p>{queue.length} sale{queue.length === 1 ? "" : "s"} waiting on this phone to be saved.</p>
       ) : (
-        <p>The line is back. Sending the offline trail to Who did what.</p>
+        <p>The network is back. Sending what happened while you were offline.</p>
       )}
       {!offline && (queue.length || eventCount) ? (
         <Button type="button" size="sm" className="mt-2 min-h-11" disabled={busy} onClick={() => void flush("manual")}>
-          {busy ? "Sending parked work" : "Send parked work now"}
+          {busy ? "Sending waiting sales…" : "Send waiting sales now"}
         </Button>
       ) : null}
     </div>

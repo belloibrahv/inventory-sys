@@ -65,7 +65,7 @@ export function CommandPalette({ allowedHrefs = [] }: { allowedHrefs?: string[] 
         <div className="border-b border-border p-3">
           <Input
             autoFocus
-            placeholder="Find IMEI, invoice, supplier bill, or customer"
+            placeholder="Find an IMEI, an invoice, a supplier bill, or a customer"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -99,7 +99,7 @@ export function CommandPalette({ allowedHrefs = [] }: { allowedHrefs?: string[] 
             </button>
           ))}
           {!pending && query && results.length === 0 && pages.length === 0 ? (
-            <p className="px-3 py-8 text-center text-sm text-muted-foreground">No matches</p>
+            <p className="px-3 py-8 text-center text-sm text-muted-foreground">Nothing matches what you typed</p>
           ) : null}
         </div>
       </DialogContent>

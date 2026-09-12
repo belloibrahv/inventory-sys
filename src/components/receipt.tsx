@@ -96,8 +96,8 @@ export function Receipt({
         <div className="text-xs text-slate-500">
           <p>Payment: {method}</p>
           {notes ? <p className="mt-1">{notes}</p> : null}
-          <p className="mt-3">Goods sold are recorded against this invoice. Later payments, returns, and swaps are posted separately. This invoice cannot be edited.</p>
-          <p className="mt-2 print:hidden">If a receipt printer is attached, printing this invoice can open the cash drawer.</p>
+          <p className="mt-3">This paper shows what was sold. Any money paid later, and any return or swap, is written down on its own. Nobody can change this invoice.</p>
+          <p className="mt-2 print:hidden">If a receipt printer is connected, printing this can open the cash drawer.</p>
         </div>
         <div className="space-y-1 text-sm">
           <div className="flex justify-between"><span>Total</span><span className="font-semibold">{formatCurrency(total)}</span></div>

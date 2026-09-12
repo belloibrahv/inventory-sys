@@ -85,7 +85,7 @@ export default async function SaleDetailPage({
             {sale.customer ? (
               <Link href={`/customers/${sale.customer.id}`} className="text-primary">{sale.customer.name}</Link>
             ) : (
-              "Walk-in. Attach a buyer before any return"
+              "Walk-in. Put a buyer name on it before anybody can return it"
             )}
           </p>
           <p className="text-sm text-muted-foreground">{sale.customer?.phone}</p>
@@ -154,7 +154,7 @@ export default async function SaleDetailPage({
           <ActionForm action={attachSaleCustomer} submit="Attach buyer" className="grid gap-3 md:grid-cols-2">
             <input type="hidden" name="saleId" value={sale.id} />
             <Select name="customerId" defaultValue="" className="md:col-span-2">
-              <option value="">New customer below, or pick one from this branch</option>
+              <option value="">Add a new customer below, or pick one from this shop</option>
               {branchCustomers.map((row) => (
                 <option key={row.id} value={row.id}>
                   {row.name} · {row.phone}
@@ -168,9 +168,9 @@ export default async function SaleDetailPage({
       ) : null}
       {isSuperAdmin(me.role) && sale.payments.length ? (
         <div className="surface-card p-5 print:hidden">
-          <h3 className="mb-2 font-semibold">Undo last collection</h3>
+          <h3 className="mb-2 font-semibold">Undo the last money collected</h3>
           <p className="mb-3 text-sm text-muted-foreground">
-            Super Admin only. Items and IMEIs stay as they are. The last money collected is taken off the record.
+            Main admin only. Items and IMEIs stay as they are. The last money collected is taken off the record.
           </p>
           <ActionForm action={reverseInvoicePayment} submit="Reverse last payment" variant="outline">
             <input type="hidden" name="saleId" value={sale.id} />
@@ -179,8 +179,8 @@ export default async function SaleDetailPage({
       ) : null}
       {due > 0 && sale.customerId ? (
         <div className="surface-card p-5 print:hidden">
-          <h3 className="mb-3 font-semibold">Collect the rest</h3>
-          <ActionForm action={collectInvoicePayment} submit="Post collection" className="grid gap-3 md:grid-cols-[1fr_160px_auto] md:items-end">
+          <h3 className="mb-3 font-semibold">Collect the rest of the money</h3>
+          <ActionForm action={collectInvoicePayment} submit="Save this payment" className="grid gap-3 md:grid-cols-[1fr_160px_auto] md:items-end">
             <input type="hidden" name="saleId" value={sale.id} />
             <Input name="amount" type="number" defaultValue={due} required />
             <Select name="method" defaultValue="TRANSFER">

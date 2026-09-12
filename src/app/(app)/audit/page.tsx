@@ -21,7 +21,7 @@ export default async function AuditPage({
     <div className="space-y-6">
       <PageHeader
         title="Who did what"
-        description="Every sign-in, sale, stock move, money change, export, and blocked screen is kept. Rows cannot be edited. Super Admin, CEO, and Records checker get an alert when something looks wrong."
+        description="Every sign-in, sale, stock move, money change, download, and blocked page is kept here. Nobody can change these rows."
         actions={
           <div className="flex flex-wrap gap-2">
             <a href="/audit/books" className="inline-flex min-h-11 items-center rounded-xl border border-border px-3 text-sm">
@@ -35,26 +35,26 @@ export default async function AuditPage({
       <div className={`rounded-xl px-4 py-3 text-sm ${data.integrity.ok ? "bg-success-soft text-success" : "bg-danger-soft text-danger"}`}>
         {data.integrity.ok
           ? `Trail is sound. ${data.integrity.checked} sealed rows checked. Nobody can quietly rewrite a past action.`
-          : "A sealed row no longer matches. Treat this as a break-in on the trail and keep a backup."}
+          : "A locked row has changed. Treat it like somebody broke into the trail, and keep a backup."}
       </div>
       {books ? (
         <a
           href="/audit/books"
           className={`block rounded-xl px-4 py-3 text-sm ${books.openCount ? "bg-warning-soft text-warning" : "surface-card"}`}
         >
-          <p className="font-medium">Owner and records checker</p>
+          <p className="font-medium">For the owner and the records checker</p>
           <p className="mt-1">{books.verdict}</p>
-          <p className="mt-1 text-primary">Open the working paper</p>
+          <p className="mt-1 text-primary">Open Check the books</p>
         </a>
       ) : null}
 
       <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <WatchCard href="/audit?result=failed&action=LOGIN" label="Failed sign-ins (24h)" value={data.watch.failedLogins} hot={data.watch.failedLogins > 0} />
-        <WatchCard href="/audit?risk=HIGH" label="High risk (24h)" value={data.watch.highRisk} hot={data.watch.highRisk > 0} />
-        <WatchCard href="/audit?action=DENIED" label="Blocked screens (24h)" value={data.watch.denied} hot={data.watch.denied > 0} />
-        <WatchCard href="/audit?action=EXPORT" label="Downloads (7 days)" value={data.watch.exports} hot={data.watch.exports > 0} />
-        <WatchCard href="/audit" label="Night activity (7 days)" value={data.watch.afterHours} hot={data.watch.afterHours > 3} />
-        <WatchCard href="/audit?action=VIEW&views=1" label="Watched screens (24h)" value={data.watch.screens} />
+        <WatchCard href="/audit?result=failed&action=LOGIN" label="Failed sign-ins (last 24 hours)" value={data.watch.failedLogins} hot={data.watch.failedLogins > 0} />
+        <WatchCard href="/audit?risk=HIGH" label="Risky actions (last 24 hours)" value={data.watch.highRisk} hot={data.watch.highRisk > 0} />
+        <WatchCard href="/audit?action=DENIED" label="Blocked pages (last 24 hours)" value={data.watch.denied} hot={data.watch.denied > 0} />
+        <WatchCard href="/audit?action=EXPORT" label="Downloads (last 7 days)" value={data.watch.exports} hot={data.watch.exports > 0} />
+        <WatchCard href="/audit" label="Work done at night (last 7 days)" value={data.watch.afterHours} hot={data.watch.afterHours > 3} />
+        <WatchCard href="/audit?action=VIEW&views=1" label="Pages we watch (last 24 hours)" value={data.watch.screens} />
       </div>
 
       <form className="surface-card grid gap-2 p-4 md:grid-cols-[1fr_160px_140px_180px_140px_auto] md:items-end">
@@ -118,7 +118,7 @@ export default async function AuditPage({
         <div className="surface-card overflow-hidden">
           <div className="border-b border-border px-4 py-3">
             <h3 className="font-semibold">Activity</h3>
-            <p className="text-xs text-muted-foreground">Tap a row for the device, the page, and what changed in shop words.</p>
+            <p className="text-xs text-muted-foreground">Tap any row to see the device, the page, and what changed, in plain words.</p>
           </div>
           <AuditLogRows
             logs={data.logs.map((log) => ({
@@ -128,7 +128,7 @@ export default async function AuditPage({
           />
         </div>
         <div className="surface-card p-5">
-          <h3 className="mb-3 font-semibold">Busiest staff this week</h3>
+          <h3 className="mb-3 font-semibold">Who worked the most this week</h3>
           <div className="space-y-3 text-sm">
             {data.activity.map((row) => (
               <div key={row.name} className="flex items-center justify-between gap-3">
@@ -138,7 +138,7 @@ export default async function AuditPage({
                 </span>
               </div>
             ))}
-            {data.activity.length === 0 ? <p className="text-muted-foreground">No staff actions this week yet.</p> : null}
+            {data.activity.length === 0 ? <p className="text-muted-foreground">No staff has done anything this week yet.</p> : null}
           </div>
         </div>
       </div>

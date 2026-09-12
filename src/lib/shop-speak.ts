@@ -9,8 +9,8 @@ const RECORD_KINDS: Record<string, string> = {
   Sale: "Invoice",
   IncomingLot: "Goods on the way",
   StockTransfer: "Shop to shop",
-  NeighborFill: "Neighbor shop fill",
-  ParkedSale: "Parked sale",
+  NeighborFill: "Buy from next door",
+  ParkedSale: "Waiting sale",
   AuditLog: "Who did what",
   RolePermission: "Who can see what",
   LedgerEntry: "Money movement",
@@ -18,7 +18,7 @@ const RECORD_KINDS: Record<string, string> = {
   Reconciliation: "Stock count",
   Screen: "Screen",
   Access: "Blocked page",
-  Offline: "Line down",
+  Offline: "No network",
   Backup: "Shop backup",
   User: "Staff",
   Payment: "Payment",
@@ -57,7 +57,7 @@ const CHANGE_KEYS: Record<string, string> = {
   queuedAt: "Parked at",
   created: "Added",
   skipped: "Skipped",
-  errors: "Lines that failed",
+  errors: "Lines that did not work",
   file: "File",
   visible: "Shown to the shop",
   lines: "Lines",
@@ -70,8 +70,8 @@ const CHANGE_KEYS: Record<string, string> = {
   faultClass: "Fault",
   cost: "Cost",
   businessDate: "Shop day",
-  expectedCash: "Expected cash",
-  countedCash: "Counted cash",
+  expectedCash: "Cash the till should have",
+  countedCash: "Cash we counted",
   cosmeticGrade: "Grade",
   batteryHealth: "Battery",
   sku: "Item code",
@@ -103,11 +103,11 @@ const HIDDEN_KEYS = new Set([
 const RESULT_WORDS: Record<string, string> = {
   ok: "Worked",
   denied: "Blocked",
-  vanished: "The parked sale left this device",
-  sitting: "The parked sale sat too long",
-  unknown: "Login not recognised",
+  vanished: "The waiting sale disappeared from that phone",
+  sitting: "The waiting sale waited too long",
+  unknown: "We do not know this login",
   bad_password: "Wrong password",
-  locked: "Login is locked",
+  locked: "This login is locked",
 }
 
 function looksLikeSecretId(value: string) {
@@ -124,7 +124,7 @@ function looksTechnical(message: string) {
 }
 
 export function recordKindLabel(entityType: string) {
-  if (!entityType) return "Shop record"
+  if (!entityType) return "A shop record"
   return RECORD_KINDS[entityType] ?? entityType.replace(/([a-z])([A-Z])/g, "$1 $2")
 }
 
@@ -159,10 +159,10 @@ function describeValue(value: unknown, key?: string): string[] {
   if (value == null) return []
   if (typeof value === "boolean") {
     const label = key ? CHANGE_KEYS[key] ?? shopKey(key) : "This"
-    if (key === "goodsUnchanged") return value ? ["Goods stayed as received"] : []
-    if (key === "itemsUntouched") return value ? ["Items on the invoice were not changed"] : []
-    if (key === "passwordChanged") return value ? ["Password was changed"] : []
-    if (key === "visible") return [value ? "Shown to the shop floor" : "Hidden from the shop floor"]
+    if (key === "goodsUnchanged") return value ? ["The goods stayed the way they were received"] : []
+    if (key === "itemsUntouched") return value ? ["Nothing on the invoice was changed"] : []
+    if (key === "passwordChanged") return value ? ["The password was changed"] : []
+    if (key === "visible") return [value ? "Shown to the shop" : "Hidden from the shop"]
     return [`${label}: ${value ? "Yes" : "No"}`]
   }
   if (typeof value === "number") {

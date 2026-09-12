@@ -7,8 +7,8 @@ export default async function FinancePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Revenue & expenditure"
-        description="What the shops earned, what they spent to run, and what went out to suppliers. Click Cash or Bank to see how each balance built up, day by day."
+        title="Money in & out"
+        description="What the shops made, what they spent, and what went to suppliers. Tap Cash or Bank to see the money day by day."
       />
       <FinanceClientView data={data} />
     </div>

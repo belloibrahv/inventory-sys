@@ -37,7 +37,7 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
             </div>
           </div>
           <div className="text-right">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#7CFF86]">Statement of account</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#7CFF86]">Money report</p>
             <p className="mt-1 text-xl font-semibold">{booksRangeTitle(data.range)}</p>
             <p className="font-mono text-xs text-white/80">{data.statementRef}</p>
             <p className="text-[11px] text-white/70">Lagos time {formatLagosStamp(new Date(data.preparedAt))}</p>
@@ -74,11 +74,11 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
       <div className={`border-b px-6 py-4 ${data.openCount ? "border-rose-200 bg-rose-50" : "border-emerald-200 bg-emerald-50"}`}>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Accountant verdict</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">What the books are saying</p>
             <p className="mt-1 text-sm font-medium text-slate-900">{data.verdict}</p>
           </div>
           <p className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${data.openCount ? "bg-rose-600 text-white" : "bg-[#18C020] text-white"}`}>
-            {data.openCount ? `${data.openCount} to clear` : "Clean"}
+            {data.openCount ? `${data.openCount} to fix` : "All clear"}
           </p>
         </div>
         {openPapers.length ? (
@@ -110,10 +110,10 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
 
       <div className="grid grid-cols-4 divide-x divide-slate-200 border-b border-slate-200">
         {[
-          ["Sales Count", String(data.salesCount)],
-          ["Payments Received", formatCurrency(data.collected)],
-          ["Revenue Posted", formatCurrency(data.revenue)],
-          ["Operating Expenses & Pay", formatCurrency(data.moneyOut)],
+          ["How many sales", String(data.salesCount)],
+          ["Money we collected", formatCurrency(data.collected)],
+          ["Money from sales", formatCurrency(data.revenue)],
+          ["Money we spent", formatCurrency(data.moneyOut)],
         ].map(([label, value]) => (
           <div key={label} className="px-4 py-3">
             <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">{label}</p>
@@ -125,10 +125,10 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
       <div className="px-6 py-5">
         <div className="mb-3 flex items-end justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold">Period comparison</h3>
-            <p className="text-[11px] text-slate-500">This period against {compared}.</p>
+            <h3 className="text-sm font-semibold">This time against last time</h3>
+            <p className="text-[11px] text-slate-500">How this time compares with {compared}.</p>
           </div>
-          <p className="text-[10px] uppercase tracking-[0.16em] text-[#001BCE]">Bank working paper</p>
+          <p className="text-[10px] uppercase tracking-[0.16em] text-[#001BCE]">Like a bank statement</p>
         </div>
         <table className="w-full text-[12px]">
           <thead>
@@ -136,7 +136,7 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
               <th className="py-2 pr-2">Line</th>
               <th className="py-2 pr-2 text-right">This period</th>
               <th className="py-2 pr-2 text-right">Compared</th>
-              <th className="py-2 text-right">Movement</th>
+              <th className="py-2 text-right">Up or down</th>
             </tr>
           </thead>
           <tbody>
@@ -157,8 +157,8 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
 
       <div className="grid border-t border-slate-200 md:grid-cols-2">
         <div className="border-b border-slate-200 px-6 py-5 md:border-b-0 md:border-r">
-          <h3 className="text-sm font-semibold">Money add-up (Ledger Reconciliation)</h3>
-          <p className="mb-3 text-[11px] text-slate-500">Read top to bottom. The system mathematically balanced these totals.</p>
+          <h3 className="text-sm font-semibold">How the money adds up</h3>
+          <p className="mb-3 text-[11px] text-slate-500">Read it from top to bottom. The system checked that these numbers balance.</p>
           <div className="space-y-1.5 text-[12px]">
             {moneyLines.map((row) => (
               <div key={row.label} className={`flex justify-between gap-3 ${row.total ? "border-t border-slate-200 pt-1.5 font-semibold text-slate-900" : "text-slate-600"}`}>
@@ -170,10 +170,10 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
         </div>
         <div className="px-6 py-5">
           <div className="flex items-center justify-between mb-1">
-            <h3 className="text-sm font-semibold">Working paper Audit Checks</h3>
-            <span className="text-[10px] text-slate-500 font-medium">Click open items to resolve</span>
+            <h3 className="text-sm font-semibold">Checks on the books</h3>
+            <span className="text-[10px] text-slate-500 font-medium">Tap a red one to go and fix it</span>
           </div>
-          <p className="mb-3 text-[11px] text-slate-500">Every audit item links directly to its resolution and proof trail.</p>
+          <p className="mb-3 text-[11px] text-slate-500">Each check takes you straight to the page where you fix it.</p>
           <div className="space-y-2">
             {data.papers.map((row, index) => {
               const content = (
@@ -203,7 +203,7 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
                         row.ok ? "bg-emerald-100 text-emerald-800" : "bg-rose-600 text-white shadow-xs"
                       }`}
                     >
-                      {row.ok ? "Pass" : "Resolve →"}
+                      {row.ok ? "Good" : "Go and fix →"}
                     </span>
                   </div>
                 </div>
@@ -223,7 +223,7 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
 
       <div className="grid border-t border-slate-200 md:grid-cols-2">
         <div className="border-b border-slate-200 px-6 py-5 md:border-b-0 md:border-r">
-          <h3 className="text-sm font-semibold">Sales Collection by Staff</h3>
+          <h3 className="text-sm font-semibold">Money collected by each staff</h3>
           <div className="mt-3 space-y-1.5 text-[12px]">
             {data.byStaff.map((row) => (
               <p key={row.name} className="flex justify-between gap-3">
@@ -235,34 +235,34 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
           </div>
         </div>
         <div className="px-6 py-5">
-          <h3 className="text-sm font-semibold">Outstanding Balances & Till Status</h3>
+          <h3 className="text-sm font-semibold">What is still owed, and the till</h3>
           <div className="mt-3 space-y-1.5 text-[12px]">
             <p className="flex justify-between gap-3">
-              <span className="text-slate-500">Customers still owe (Receivables)</span>
+              <span className="text-slate-500">Customers still owe us</span>
               <Link href="/customers" className="tabular-nums font-semibold text-primary hover:underline">
                 {formatCurrency(data.customersOwe)}
               </Link>
             </p>
             <p className="flex justify-between gap-3">
-              <span className="text-slate-500">We still owe suppliers (Payables)</span>
+              <span className="text-slate-500">We still owe suppliers</span>
               <Link href="/suppliers" className="tabular-nums font-semibold text-primary hover:underline">
                 {formatCurrency(data.supplierOwed)}
               </Link>
             </p>
             <p className="flex justify-between gap-3">
-              <span className="text-slate-500">Walk-in unassigned sales</span>
+              <span className="text-slate-500">Sales with no buyer name</span>
               <span>{data.walkIns}</span>
             </p>
             <p className="flex justify-between gap-3">
-              <span className="text-slate-500">Till expected cash</span>
+              <span className="text-slate-500">Cash the till should have</span>
               <span className="tabular-nums font-medium">{formatCurrency(data.expectedCash)}</span>
             </p>
             <p className="flex justify-between gap-3">
-              <span className="text-slate-500">Till counted cash</span>
+              <span className="text-slate-500">Cash we counted</span>
               <span className="tabular-nums">{data.countedCash == null ? "Not closed" : formatCurrency(data.countedCash)}</span>
             </p>
             <p className="flex justify-between gap-3 font-semibold">
-              <span>Till count variance</span>
+              <span>Short or plenty</span>
               <span className={`tabular-nums ${data.variance && data.variance !== 0 ? "text-rose-600" : "text-emerald-700"}`}>
                 {data.variance == null ? "Not closed" : formatCurrency(data.variance)}
               </span>
@@ -273,9 +273,9 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
 
       <div className="border-t border-slate-200 px-6 py-5">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold">Invoices in this period</h3>
+          <h3 className="text-sm font-semibold">Sales in this time</h3>
           <Link href="/sales" className="text-[11px] text-primary hover:underline flex items-center gap-1 font-medium">
-            Open All Sales Records <ArrowRight className="h-3 w-3" />
+            See all sales <ArrowRight className="h-3 w-3" />
           </Link>
         </div>
         <table className="w-full text-[11px]">
@@ -283,7 +283,7 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
             <tr className="border-y border-slate-200 bg-slate-50 text-left text-[10px] uppercase tracking-wider text-slate-500">
               <th className="py-2 pr-2">Invoice</th>
               <th className="py-2 pr-2">Buyer</th>
-              <th className="py-2 pr-2">Method</th>
+              <th className="py-2 pr-2">Paid by</th>
               <th className="py-2 text-right">Paid</th>
             </tr>
           </thead>
@@ -308,13 +308,13 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
 
       <div className="grid border-t border-slate-200 md:grid-cols-2">
         <div className="border-b border-slate-200 px-6 py-5 md:border-b-0 md:border-r">
-          <h3 className="text-sm font-semibold">Till closes</h3>
+          <h3 className="text-sm font-semibold">Days we closed</h3>
           <table className="mt-3 w-full text-[11px]">
             <thead>
               <tr className="border-y border-slate-200 bg-slate-50 text-left text-[10px] uppercase tracking-wider text-slate-500">
                 <th className="py-2 pr-2">Day</th>
-                <th className="py-2 pr-2 text-right">Expected</th>
-                <th className="py-2 text-right">Variance</th>
+                <th className="py-2 pr-2 text-right">Should be</th>
+                <th className="py-2 text-right">Short or plenty</th>
               </tr>
             </thead>
             <tbody>
@@ -342,17 +342,17 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
         </div>
         <div className="px-6 py-5">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">IMEI Serial vs Physical Shop Stock</h3>
+            <h3 className="text-sm font-semibold">IMEI list against shop count</h3>
             <Link href="/inventory" className="text-[11px] text-primary hover:underline font-medium">
-              View Shop Stock →
+              Open Shop stock →
             </Link>
           </div>
           <table className="mt-3 w-full text-[11px]">
             <thead>
               <tr className="border-y border-slate-200 bg-slate-50 text-left text-[10px] uppercase tracking-wider text-slate-500">
-                <th className="py-2 pr-2">Product</th>
-                <th className="py-2 pr-2 text-right">Shop / Serial Qty</th>
-                <th className="py-2 text-right">Gap Status</th>
+                <th className="py-2 pr-2">Item</th>
+                <th className="py-2 pr-2 text-right">Shop count / IMEI count</th>
+                <th className="py-2 text-right">Do they agree?</th>
               </tr>
             </thead>
             <tbody>
@@ -362,13 +362,13 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
                   <td className="py-1.5 pr-2 text-right tabular-nums font-mono">{row.shopQty} / {row.imeis}</td>
                   <td className="py-1.5 text-right tabular-nums font-bold">
                     <span className={row.delta === 0 ? "text-emerald-700" : "text-rose-600"}>
-                      {row.delta === 0 ? "✓ Match" : row.delta > 0 ? `+${row.delta} excess` : `${row.delta} missing`}
+                      {row.delta === 0 ? "✓ Match" : row.delta > 0 ? `${row.delta} extra` : `${Math.abs(row.delta)} missing`}
                     </span>
                   </td>
                 </tr>
               ))}
               {data.imeiRows.length === 0 ? (
-                <tr><td colSpan={3} className="py-4 text-slate-500">No serialized stock in this shop.</td></tr>
+                <tr><td colSpan={3} className="py-4 text-slate-500">No phone or serial item in this shop.</td></tr>
               ) : null}
             </tbody>
           </table>
@@ -380,9 +380,9 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
         <div className="flex items-start gap-3">
           <ShieldCheck className="h-5 w-5 text-primary shrink-0 mt-0.5" />
           <div className="text-xs text-slate-600 space-y-1">
-            <p className="font-bold text-slate-900">Audit certification and management attestation</p>
+            <p className="font-bold text-slate-900">Sign here to say the books are true</p>
             <p>
-              I hereby certify that I have examined the bank statement receipts, physical till registers, serial/IMEI inventory listings, and vendor expense vouchers for this statement period. The figures presented above accurately reflect the financial and operational position of the organization.
+              I have checked the bank papers, the till counts, the phone and IMEI list, and the bills we paid for this time. The numbers on this paper are a true picture of the money and the stock.
             </p>
           </div>
         </div>
@@ -390,9 +390,9 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
 
       <div className="grid gap-6 border-t border-slate-200 px-6 py-8 sm:grid-cols-3">
         {[
-          ["Prepared by (Auditor)", data.preparedBy],
-          ["Checked by (Accountant)", ""],
-          ["Approved by (Owner / CEO)", ""],
+          ["Written by (records checker)", data.preparedBy],
+          ["Checked by (accountant)", ""],
+          ["Approved by (owner)", ""],
         ].map(([title, name]) => (
           <div key={title}>
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{title}</p>
@@ -405,7 +405,7 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
 
       <footer className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-6 py-3 text-[10px] text-slate-500">
         <p>{data.company.phone} · {data.company.email}</p>
-        <p>Software by Techvaults Limited · Verified Statutory Financial & Inventory Pack.</p>
+        <p>Software by Techvaults Limited · Checked money and stock report.</p>
       </footer>
     </section>
   )

@@ -10,7 +10,7 @@ import { ALL_PERM_KEYS, ensureRolePermissions } from "@/lib/permissions"
 
 export async function getRoleMatrix() {
   const user = await requireUser()
-  if (!isSuperAdmin(user.role)) return { error: "Only Super Admin can open access control." as const }
+  if (!isSuperAdmin(user.role)) return { error: "Only the main admin can open Who can see what." as const }
   await ensureRolePermissions()
   const rows = await prisma.rolePermission.findMany()
   return { rows }
@@ -18,9 +18,9 @@ export async function getRoleMatrix() {
 
 export async function saveRoleAccess(formData: FormData) {
   const user = await requireUser()
-  if (!isSuperAdmin(user.role)) return { error: "Only Super Admin can change what others see." }
+  if (!isSuperAdmin(user.role)) return { error: "Only the main admin can change what others see." }
   const role = String(formData.get("role") || "") as UserRole
-  if (!role || role === "SUPER_ADMIN") return { error: "Super Admin access cannot be reduced." }
+  if (!role || role === "SUPER_ADMIN") return { error: "Nobody can take pages away from the main admin." }
 
   await ensureRolePermissions()
   for (const key of ALL_PERM_KEYS) {
@@ -45,7 +45,7 @@ export async function saveRoleAccess(formData: FormData) {
       action: "UPDATE",
       entityType: "RolePermission",
       entityId: role,
-      newValue: "Access matrix updated",
+      newValue: "Who can see what was changed",
       branchId: user.branchId,
     },
   })
@@ -56,13 +56,13 @@ export async function saveRoleAccess(formData: FormData) {
 
 export async function setStaffActive(formData: FormData) {
   const user = await requireUser()
-  if (!isSuperAdmin(user.role)) return { error: "Only Super Admin can disable or restore staff." }
+  if (!isSuperAdmin(user.role)) return { error: "Only the main admin can disable or restore staff." }
   const id = String(formData.get("id") || "")
   const next = String(formData.get("active") || "") === "true"
   const target = await prisma.user.findUnique({ where: { id } })
-  if (!target) return { error: "Staff not found." }
-  if (target.id === user.id) return { error: "You cannot disable your own Super Admin login." }
-  if (target.role === "SUPER_ADMIN" && !next) return { error: "Disable another Super Admin from the database owner only after handover." }
+  if (!target) return { error: "We could not find that staff." }
+  if (target.id === user.id) return { error: "You cannot lock your own main admin login." }
+  if (target.role === "SUPER_ADMIN" && !next) return { error: "Only the person who owns the database can lock another main admin, and only after a proper handover." }
 
   await prisma.user.update({ where: { id }, data: { isActive: next } })
   await prisma.auditLog.create({
@@ -83,15 +83,15 @@ export async function setStaffActive(formData: FormData) {
 
 export async function reverseInvoicePayment(formData: FormData) {
   const user = await requireUser()
-  if (!isSuperAdmin(user.role)) return { error: "Only Super Admin can undo a collection." }
+  if (!isSuperAdmin(user.role)) return { error: "Only the main admin can undo a collection." }
   const saleId = String(formData.get("saleId") || "")
   const sale = await prisma.sale.findUnique({
     where: { id: saleId },
     include: { customer: true, payments: { orderBy: { paidAt: "desc" } } },
   })
-  if (!sale) return { error: "Invoice not found." }
+  if (!sale) return { error: "We could not find that sale." }
   const last = sale.payments[0]
-  if (!last) return { error: "This sale has no payment to undo." }
+  if (!last) return { error: "Nobody has paid on this sale yet, so there is nothing to undo." }
 
   const amount = Number(last.amount)
   await prisma.$transaction(async (tx) => {
@@ -115,7 +115,7 @@ export async function reverseInvoicePayment(formData: FormData) {
           amount: amount.toFixed(2),
           balance: Number(after.currentBalance).toFixed(2),
           reference: sale.invoiceNumber,
-          description: `Super Admin reversed collection on ${sale.invoiceNumber}`,
+          description: `Main admin undid money collected on ${sale.invoiceNumber}`,
         },
       })
     }
@@ -126,7 +126,7 @@ export async function reverseInvoicePayment(formData: FormData) {
         type: "EXPENSE",
         amount: amount.toFixed(2),
         reference: sale.invoiceNumber,
-        description: `Reversal of collection ${sale.invoiceNumber}`,
+        description: `Undid money collected on ${sale.invoiceNumber}`,
       },
     })
     await tx.auditLog.create({
@@ -150,12 +150,12 @@ export async function reverseInvoicePayment(formData: FormData) {
 
 export async function reverseSupplierPayment(formData: FormData) {
   const user = await requireUser()
-  if (!isSuperAdmin(user.role)) return { error: "Only Super Admin can undo a supplier payment." }
+  if (!isSuperAdmin(user.role)) return { error: "Only the main admin can undo a supplier payment." }
   const id = String(formData.get("id") || "")
   const purchase = await prisma.purchase.findUnique({ where: { id } })
-  if (!purchase) return { error: "Purchase not found." }
+  if (!purchase) return { error: "We could not find that supplier bill." }
   const paid = Number(purchase.paidAmount)
-  if (paid <= 0) return { error: "Nothing has been paid on this PO." }
+  if (paid <= 0) return { error: "Nothing has been paid on this supplier bill yet." }
 
   const last = await prisma.financeEntry.findFirst({
     where: { description: { contains: purchase.invoiceNumber } },
@@ -176,7 +176,7 @@ export async function reverseSupplierPayment(formData: FormData) {
         type: "INCOME",
         amount: undo.toFixed(2),
         reference: purchase.invoiceNumber,
-        description: `Reversal of supplier payment ${purchase.invoiceNumber}`,
+        description: `Undid a payment to the supplier on ${purchase.invoiceNumber}`,
       },
     })
     await tx.auditLog.create({

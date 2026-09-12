@@ -94,7 +94,7 @@ export function ActionForm({
           console.error("ActionForm submission failed:", err)
           // A dropped connection used to leave the button spinning with no word
           // to the person standing at the counter.
-          toast.error("That did not reach the shop system. Check your connection and try once more.")
+          toast.error("That did not reach the shop system. Check your network and try again.")
           return
         }
         if (result && "error" in result && result.error) {

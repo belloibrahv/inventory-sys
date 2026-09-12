@@ -244,12 +244,12 @@ export async function createPurchase(formData: FormData) {
   const productId = String(formData.get("productId"))
   const quantity = Number(formData.get("quantity") || 0)
   const costPrice = Number(formData.get("costPrice") || 0)
-  if (!supplierId || !branchId || !productId || quantity < 1) return { error: "Complete the expected-goods form." }
+  if (!supplierId || !branchId || !productId || quantity < 1) return { error: "Fill the form for the goods you are expecting." }
 
   const supplier = await prisma.supplier.findUnique({ where: { id: supplierId } })
   if (!supplier) return { error: "Pick a supplier from the list." }
   if (supplier.kind === "NEIGHBOR") {
-    return { error: "A neighboring shop is not a supplier carton. Use Neighbor shop fill." }
+    return { error: "A neighboring shop is not a supplier carton. Use Buy from next door." }
   }
 
   const originCountry = String(formData.get("originCountry") || "").trim() || supplier.country
@@ -295,23 +295,23 @@ export async function createPurchase(formData: FormData) {
 
 export async function receivePurchaseImeis(formData: FormData) {
   const user = await requireUser()
-  if (!(await can(user.role, "action.intake"))) return { error: "You cannot receive purchases." }
+  if (!(await can(user.role, "action.intake"))) return { error: "You are not allowed to receive supplier goods. Ask the main admin." }
   const id = String(formData.get("id"))
   const purchase = await prisma.purchase.findUnique({
     where: { id },
     include: { items: { include: { product: true } }, supplier: true },
   })
-  if (!purchase) return { error: "Purchase not found." }
-  if (purchase.status === "RECEIVED") return { error: "This shipment is already closed." }
+  if (!purchase) return { error: "We could not find that supplier bill." }
+  if (purchase.status === "RECEIVED") return { error: "These goods have already been received and the bill is closed." }
 
   const item = purchase.items[0]
-  if (!item) return { error: "Purchase has no lines." }
+  if (!item) return { error: "That supplier bill has no items on it." }
 
   const imeis = parseImeis(String(formData.get("imeis") || ""))
   const remaining = item.quantity - item.receivedQty
 
   if (imeis.length === 0) {
-    if (remaining < 1) return { error: "Nothing left to receive." }
+    if (remaining < 1) return { error: "There is nothing left to receive on this bill." }
     try {
       await prisma.$transaction(async (tx) => {
         // Only book in against the count this screen was showing. Two people
@@ -417,7 +417,7 @@ export async function receivePurchaseImeis(formData: FormData) {
 
 export async function payPurchase(formData: FormData) {
   const user = await requireUser()
-  if (!(await canManageFinance(user.role))) return { error: "You cannot pay suppliers." }
+  if (!(await canManageFinance(user.role))) return { error: "You are not allowed to pay suppliers. Ask accounts." }
   const id = String(formData.get("id") || "")
   const amount = Number(formData.get("amount") || 0)
   const method = String(formData.get("method") || "TRANSFER")
@@ -427,9 +427,9 @@ export async function payPurchase(formData: FormData) {
     where: { id },
     include: { supplier: true },
   })
-  if (!purchase) return { error: "Purchase not found." }
+  if (!purchase) return { error: "We could not find that supplier bill." }
   const due = money(purchase.totalAmount) - money(purchase.paidAmount)
-  if (due <= 0) return { error: "This supplier invoice is already settled." }
+  if (due <= 0) return { error: "This supplier bill is already fully paid." }
   const sent = Math.min(amount, due)
   const payRef = generateDocNumber("SPAY")
 
@@ -519,14 +519,14 @@ export async function getSoldImeis() {
 
 export async function createReturn(formData: FormData) {
   const user = await requireUser()
-  if (!(await can(user.role, "action.return"))) return { error: "You cannot log returns." }
+  if (!(await can(user.role, "action.return"))) return { error: "You are not allowed to record a return. Ask the main admin." }
   const imei1 = String(formData.get("imei1") ?? "").trim()
   const imei = await prisma.imeiRecord.findUnique({
     where: { imei1 },
     include: { sale: { include: { items: true } }, customer: true, product: true },
   })
-  if (!imei || imei.status !== "SOLD") return { error: "That IMEI is not on a completed sale." }
-  if (!imei.customerId) return { error: "This sale has no customer name. Add the buyer before returning." }
+  if (!imei || imei.status !== "SOLD") return { error: "That IMEI was never sold, so it cannot be returned." }
+  if (!imei.customerId) return { error: "This sale has no buyer name. Add the buyer before you start the return." }
   const open = await prisma.stockReturn.findFirst({
     where: { imeiId: imei.id, status: { in: ["PENDING", "APPROVED"] } },
   })
@@ -571,7 +571,7 @@ export async function createReturn(formData: FormData) {
     where: { role: { in: ["CEO", "BRANCH_MANAGER", "AUDITOR"] }, isActive: true },
   })
   for (const manager of managers) {
-    await notify(manager.id, "Return needs approval", `${record.returnNumber} for IMEI ${imei1}`, "/approvals", "APPROVAL_REQUEST")
+    await notify(manager.id, "A return is waiting for you to say yes", `${record.returnNumber} for IMEI ${imei1}`, "/approvals", "APPROVAL_REQUEST")
   }
   refreshOps()
   return { success: true }
@@ -584,10 +584,10 @@ export async function completeReturn(formData: FormData) {
     where: { id },
     include: { customer: true, imei: { include: { product: true } } },
   })
-  if (!record) return { error: "Return not found." }
-  if (record.status === "COMPLETED") return { error: "Return already closed." }
+  if (!record) return { error: "We could not find that return." }
+  if (record.status === "COMPLETED") return { error: "That return is already finished." }
   if (record.status !== "APPROVED" && !(await canApprove(user.role))) {
-    return { error: "This return still needs approval." }
+    return { error: "The boss has not approved this return yet." }
   }
   const sale = record.saleId
     ? await prisma.sale.findUnique({ where: { id: record.saleId } })
@@ -762,7 +762,7 @@ export async function getSwaps() {
 
 export async function createSwap(formData: FormData) {
   const user = await requireUser()
-  if (!(await can(user.role, "action.swap"))) return { error: "You cannot log swaps." }
+  if (!(await can(user.role, "action.swap"))) return { error: "You are not allowed to record a swap. Ask the main admin." }
   const customerId = String(formData.get("customerId"))
   const oldImei1 = String(formData.get("oldImei1") ?? "").trim()
   const newImeiId = String(formData.get("newImeiId"))
@@ -773,13 +773,13 @@ export async function createSwap(formData: FormData) {
 
   if (oldImei1.length < 14) return { error: "Enter the customer device IMEI." }
   const exists = await prisma.imeiRecord.findFirst({ where: { OR: [{ imei1: oldImei1 }, { imei2: oldImei1 }] } })
-  if (exists) return { error: "That incoming IMEI is already in the shop." }
+  if (exists) return { error: "That IMEI is already in the shop." }
 
   const newImei = await prisma.imeiRecord.findUnique({
     where: { id: newImeiId },
     include: { product: true },
   })
-  if (!newImei || newImei.status !== "IN_STOCK") return { error: "That phone is not In shop." }
+  if (!newImei || newImei.status !== "IN_STOCK") return { error: "That phone is not in the shop." }
   if (newImei.branchId !== branchId) return { error: "That IMEI is not in the selected shop." }
 
   const incoming = await prisma.imeiRecord.create({
@@ -824,7 +824,7 @@ export async function createSwap(formData: FormData) {
     where: { role: { in: ["CEO", "BRANCH_MANAGER"] }, isActive: true },
   })
   for (const manager of managers) {
-    await notify(manager.id, "Swap needs valuation approval", swap.swapNumber, "/approvals", "APPROVAL_REQUEST")
+    await notify(manager.id, "A swap is waiting for you to agree the trade-in value", swap.swapNumber, "/approvals", "APPROVAL_REQUEST")
   }
   refreshOps()
   return { success: true }
@@ -839,10 +839,10 @@ export async function completeSwap(formData: FormData) {
     where: { id },
     include: { customer: true, newProduct: true, oldImei: true },
   })
-  if (!swap || !swap.newImeiId) return { error: "Swap not found." }
-  if (swap.status === "COMPLETED") return { error: "Swap already completed." }
+  if (!swap || !swap.newImeiId) return { error: "We could not find that swap." }
+  if (swap.status === "COMPLETED") return { error: "That swap is already finished." }
   if (swap.status !== "APPROVED" && !(await canApprove(user.role))) {
-    return { error: "Wait for trade-in approval before collecting the difference." }
+    return { error: "Wait for the boss to approve the trade-in value before you collect the difference." }
   }
 
   const invoiceNumber = generateDocNumber("INV")
@@ -976,10 +976,10 @@ export async function getRepairs() {
 
 export async function createRepair(formData: FormData) {
   const user = await requireUser()
-  if (!(await can(user.role, "action.repair"))) return { error: "You cannot open repairs." }
+  if (!(await can(user.role, "action.repair"))) return { error: "You are not allowed to open a repair. Ask the main admin." }
   const imei1 = String(formData.get("imei1") ?? "").trim()
   const imei = await prisma.imeiRecord.findUnique({ where: { imei1 } })
-  if (!imei) return { error: "IMEI not found." }
+  if (!imei) return { error: "We could not find that IMEI." }
   if (["SOLD", "IN_STOCK", "RETURNED", "REPAIRED"].includes(imei.status) === false) {
     return { error: `${imei1} cannot go on the bench from ${imei.status}.` }
   }
@@ -1027,7 +1027,7 @@ export async function advanceRepair(formData: FormData) {
     where: { id },
     include: { customer: true, imei: { include: { product: true } } },
   })
-  if (!repair) return { error: "Repair not found." }
+  if (!repair) return { error: "We could not find that repair." }
 
   const nextCost = formData.get("repairCost") ? Number(formData.get("repairCost")) : money(repair.repairCost)
   const closing = status === "COMPLETED" || status === "DELIVERED"
@@ -1142,7 +1142,7 @@ export async function createTransfer(formData: FormData): Promise<{
   success?: boolean
 }> {
   const user = await requireUser()
-  if (!(await can(user.role, "action.transfer"))) return { error: "You cannot send goods between our shops." }
+  if (!(await can(user.role, "action.transfer"))) return { error: "You are not allowed to send goods to another shop. Ask the main admin." }
   const fromBranchId = String(formData.get("fromBranchId") || "")
   const toBranchId = String(formData.get("toBranchId") || "")
   if (!fromBranchId || !toBranchId) return { error: "Pick the sending shop and the receiving shop." }
@@ -1161,7 +1161,7 @@ export async function createTransfer(formData: FormData): Promise<{
   } catch {
     return { error: "We could not read that file. Save it as CSV or Excel and try again." }
   }
-  if (!rows.length) return { error: "The file has no rows under the header line." }
+  if (!rows.length) return { error: "There is nothing under the header line in that file." }
   if (rows.length > 200) return { error: "Send up to 200 lines at a time." }
 
   const products = await prisma.product.findMany({ where: { isActive: true } })
@@ -1258,7 +1258,7 @@ export async function createTransfer(formData: FormData): Promise<{
 
   if (errors.length) return { error: errors[0], errors }
   if (!phones.length && accessoryQty.size === 0) {
-    return { error: "The file has no phones or accessories to send." }
+    return { error: "That file has no phone or accessory to send." }
   }
 
   const qtyByProduct = new Map<string, number>()
@@ -1353,7 +1353,7 @@ export async function createTransfer(formData: FormData): Promise<{
     where: { branchId: toBranchId, isActive: true },
   })
   for (const staff of destStaff) {
-    await notify(staff.id, "Shop to shop send", `${transfer.transferNumber} · confirm IMEIs on arrival`, "/transfers", "TRANSFER")
+    await notify(staff.id, "Goods sent to another of our shops", `${transfer.transferNumber} · confirm IMEIs on arrival`, "/transfers", "TRANSFER")
   }
   refreshOps()
   return { success: true }
@@ -1361,14 +1361,14 @@ export async function createTransfer(formData: FormData): Promise<{
 
 export async function receiveTransfer(formData: FormData) {
   const user = await requireUser()
-  if (!(await can(user.role, "action.transfer"))) return { error: "You cannot receive transfers." }
+  if (!(await can(user.role, "action.transfer"))) return { error: "You are not allowed to receive goods from another shop. Ask the main admin." }
   const id = String(formData.get("id") || "")
   const transfer = await prisma.stockTransfer.findUnique({
     where: { id },
     include: { items: true, toBranch: true },
   })
-  if (!transfer) return { error: "Transfer not found." }
-  if (transfer.status === "RECEIVED") return { error: "Already received." }
+  if (!transfer) return { error: "We could not find that send." }
+  if (transfer.status === "RECEIVED") return { error: "This send has already been received." }
   if (!(await canSeeAllBranches(user.role)) && user.branchId && user.branchId !== transfer.toBranchId) {
     return { error: `Only ${transfer.toBranch.name} (or head office) can receive this.` }
   }
@@ -1471,7 +1471,7 @@ export async function getSupplierReturnCandidates() {
 export async function sendUnitsToSupplier(formData: FormData) {
   const user = await requireUser()
   if (!(await can(user.role, "action.intake")) && !(await can(user.role, "action.return"))) {
-    return { error: "You cannot send goods back to a supplier." }
+    return { error: "You are not allowed to send goods back to a supplier. Ask the main admin." }
   }
   const supplierId = String(formData.get("supplierId") || "").trim()
   const imeis = parseImeis(String(formData.get("imeis") || ""))
@@ -1481,9 +1481,9 @@ export async function sendUnitsToSupplier(formData: FormData) {
     where: { imei1: { in: imeis } },
     include: { product: true, supplier: true },
   })
-  if (records.length !== imeis.length) return { error: "One or more IMEIs were not found." }
+  if (records.length !== imeis.length) return { error: "We could not find one or more of those IMEIs." }
   if (records.some((row) => !["FAULTY", "RETURNED", "IN_STOCK"].includes(row.status))) {
-    return { error: "Only in-shop, returned, or faulty units can go back to a supplier." }
+    return { error: "You can only send back a phone that is in the shop, returned, or faulty." }
   }
 
   const scoped = await scopedBranchId(user.role, user.branchId)
@@ -1507,7 +1507,7 @@ export async function sendUnitsToSupplier(formData: FormData) {
           status: "RETURNED_TO_SUPPLIER",
           customerId: null,
           supplierId: houseId || record.supplierId,
-          notes: [record.notes, "Sent back to supplier"].filter(Boolean).join(" · "),
+          notes: [record.notes, "Sent back to the supplier"].filter(Boolean).join(" · "),
         },
       })
       if (record.status === "IN_STOCK") {

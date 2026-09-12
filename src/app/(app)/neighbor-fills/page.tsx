@@ -15,20 +15,20 @@ export default async function NeighborFillsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Neighbor shop fill"
-        description="A customer wants a unit we do not have. We collect it from a neighboring dealer, sell it here, return that dealer their money, and keep our profit. This is not Shop to shop, and it is not a supplier carton."
+        title="Buy from next door"
+        description="A buyer wants something we do not have. You get it from the shop next door, sell it here, send them their money, and keep our profit."
       />
       <div className="grid gap-4 md:grid-cols-3">
         <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">Open fills</p>
+          <p className="text-sm text-muted-foreground">Not finished yet</p>
           <p className="text-2xl font-semibold">{rows.filter((row) => row.status === "OPEN").length}</p>
         </div>
         <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">Profit kept on sold fills</p>
+          <p className="text-sm text-muted-foreground">Profit we kept</p>
           <p className="text-2xl font-semibold">{formatCurrency(openProfit)}</p>
         </div>
         <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">Still to return to neighbors</p>
+          <p className="text-sm text-muted-foreground">Money we still owe next door</p>
           <p className="text-2xl font-semibold">{formatCurrency(stillOwed)}</p>
         </div>
       </div>
@@ -36,7 +36,7 @@ export default async function NeighborFillsPage() {
         <div className="space-y-3">
           {rows.length === 0 ? (
             <div className="surface-card p-5 text-sm text-muted-foreground">
-              No neighbor fills yet. Use this when you walk next door for one customer, not when Iwo Road sends stock to Challenge.
+              Nothing bought from next door yet. Use this when you walk next door for one buyer, not when Iwo Road sends stock to Challenge.
             </div>
           ) : null}
           {rows.map((row) => {
@@ -58,7 +58,7 @@ export default async function NeighborFillsPage() {
                     </p>
                     <p className="mt-1 text-sm">
                       Customer pays {formatCurrency(row.sellPrice)}
-                      {" · neighbor is owed "}
+                      {" · next door is owed "}
                       {formatCurrency(row.neighborCost)}
                       {" · we keep "}
                       {formatCurrency(row.profit)}
@@ -93,7 +93,7 @@ export default async function NeighborFillsPage() {
                     <p className="mb-2 text-sm text-muted-foreground">
                       Return {formatCurrency(neighborDue)} to {row.neighborName}. Our profit stays in this shop.
                     </p>
-                    <ActionForm action={payNeighborFill} submit="Return money to neighboring shop" className="grid gap-3 md:grid-cols-[1fr_160px_auto] md:items-end">
+                    <ActionForm action={payNeighborFill} submit="Send the money to the next door shop" className="grid gap-3 md:grid-cols-[1fr_160px_auto] md:items-end">
                       <input type="hidden" name="id" value={row.id} />
                       <Input name="amount" type="number" defaultValue={neighborDue} required />
                       <Select name="method" defaultValue="CASH">
@@ -104,16 +104,16 @@ export default async function NeighborFillsPage() {
                     </ActionForm>
                   </div>
                 ) : row.status === "SETTLED" ? (
-                  <p className="mt-3 text-sm text-success">Neighbor paid. Profit {formatCurrency(row.profit)} stays with Abu Twins.</p>
+                  <p className="mt-3 text-sm text-success">Next door paid. Profit {formatCurrency(row.profit)} stays with Abu Twins.</p>
                 ) : null}
               </div>
             )
           })}
         </div>
         <div className="surface-card p-5">
-          <h3 className="mb-2 font-semibold">Record a neighbor fill</h3>
+          <h3 className="mb-2 font-semibold">Record a buy from next door</h3>
           <p className="mb-4 text-sm text-muted-foreground">
-            The customer stays in this shop. You go next door, bring the unit, sell it here, then send the neighbor their cost.
+            The buyer stays in this shop. You go next door, bring the unit, sell it here, then send next door their cost.
           </p>
           <NeighborFillForm
             customers={lookups.customers}

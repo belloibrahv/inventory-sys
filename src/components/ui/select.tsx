@@ -37,7 +37,7 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
       >
         {isEmpty ? (
           <option value="" disabled>
-            {emptyLabel ?? "Nothing to choose here yet"}
+            {emptyLabel ?? "There is nothing to pick here yet"}
           </option>
         ) : (
           children

@@ -88,7 +88,7 @@ async function readSheet(formData: FormData): Promise<{ rows: Record<string, str
   } catch {
     return { error: "We could not read that file. Save it as Excel or CSV and try again." }
   }
-  if (!rows.length) return { error: "The file has no rows under the header line." }
+  if (!rows.length) return { error: "There is nothing under the header line in that file." }
   if (rows.length > MAX_ROWS) return { error: `Upload up to ${MAX_ROWS.toLocaleString("en-NG")} rows at a time. Split the sheet and send it in parts.` }
   return { rows, name: file.name }
 }
@@ -96,7 +96,7 @@ async function readSheet(formData: FormData): Promise<{ rows: Record<string, str
 async function requireUploader() {
   const user = await requireUser()
   if (!(await can(user.role, "action.upload"))) {
-    return { error: "Only Super Admin and the stock uploader can load the shop system from a sheet." as const }
+    return { error: "Only the main admin and the person who loads stock can load the shop from a sheet." as const }
   }
   return { user }
 }
@@ -136,7 +136,7 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
   const supplier = await prisma.supplier.findFirst({ where: { id: supplierId, isActive: true } })
   if (!supplier) return { error: "Pick the supplier these goods were bought from." }
   if (supplier.kind === "NEIGHBOR") {
-    return { error: "A neighboring shop is not a supplier carton. Use Neighbor shop fill for that." }
+    return { error: "A neighboring shop is not a supplier carton. Use Buy from next door for that." }
   }
 
   // The client asked for the paid / not-paid buttons to go: "we only type in
@@ -150,7 +150,7 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
   try {
     sheets = await readWorkbookGrids(file)
   } catch {
-    return { error: "We could not read that Excel file. Save it again and try once more." }
+    return { error: "We could not read that Excel file. Save it again and try one more time." }
   }
 
   const plan = planOpeningStock(sheets)
@@ -163,7 +163,7 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
   if (!plan.products.length) {
     return {
       error:
-        "No stock rows were found. Use the PHONES, ACCESSORIES, SCREEN, and LAPTOPS tabs with PRODUCT NAME on the header row.",
+        "We found no stock in that sheet. Use the PHONES, ACCESSORIES, SCREEN, and LAPTOPS tabs, and put PRODUCT NAME on the header row.",
     }
   }
 
@@ -261,7 +261,7 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
       receivedDate: new Date(),
       originCountry: supplier.country,
       originCity: supplier.city,
-      notes: ["Loaded from opening stock Excel on Upload stock.", note || null, `File: ${file.name}`]
+      notes: ["Loaded from the opening stock Excel sheet on Upload stock.", note || null, `File: ${file.name}`]
         .filter(Boolean)
         .join(" "),
     },
@@ -269,7 +269,7 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
 
   const unitPayload = plan.units.map((row) => {
     const productId = productIdByKey.get(row.productKey)
-    if (!productId) throw new Error("Opening stock product key missing after create.")
+    if (!productId) throw new Error("Something went wrong while saving that item. Try the upload again.")
     return {
       imei1: row.identity.value,
       serialNumber: row.identity.kind === "serial" ? row.identity.value : null,
@@ -375,7 +375,7 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
         phonesAdded: 0,
         phonesAlready: unitPayload.length,
         pieceLines: 0,
-        note: "Nothing new to add. No supplier bill was kept.",
+        note: "There was nothing new to add, so no supplier bill was saved.",
       },
       shop.id
     )
@@ -408,9 +408,9 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
       paidAmount: settled.toFixed(2),
       paymentMethod: fullyPaid ? MARKED_PAID_ON_UPLOAD : settled > 0 ? "PARTIAL_PAYMENT" : "UNPAID",
       notes: [
-        "Loaded from opening stock Excel on Upload stock.",
+        "Loaded from the opening stock Excel sheet on Upload stock.",
         fullyPaid
-          ? "Bill fully cleared on upload."
+          ? "This bill was paid in full when the stock was loaded."
           : settled > 0
             ? `Paid ${settled.toFixed(2)} on upload. Still owed ${balanceOwed.toFixed(2)}.`
             : `Nothing paid on upload. Still owed ${balanceOwed.toFixed(2)}.`,
@@ -501,7 +501,7 @@ export async function importImeis(formData: FormData): Promise<UploadResult> {
   if (plan.problems.length) {
     return { error: `${plan.problems.length} line(s) need fixing. Nothing was loaded.`, problems: plan.problems.slice(0, 40) }
   }
-  if (!plan.rows.length) return { error: "The sheet has no phones on it." }
+  if (!plan.rows.length) return { error: "There is no phone on that sheet." }
 
   // A phone already on the system is left exactly as it is. Re-sending the same
   // container must never move a sold phone back onto the shelf.
@@ -577,7 +577,7 @@ export async function importStock(formData: FormData): Promise<UploadResult> {
   if (plan.problems.length) {
     return { error: `${plan.problems.length} line(s) need fixing. Nothing was loaded.`, problems: plan.problems.slice(0, 40) }
   }
-  if (!plan.rows.length) return { error: "The sheet has no shelf counts on it." }
+  if (!plan.rows.length) return { error: "There is no shelf count on that sheet." }
 
   for (const row of plan.rows) {
     await prisma.inventory.upsert({
@@ -609,7 +609,7 @@ export async function importCustomers(formData: FormData): Promise<UploadResult>
   if (plan.problems.length) {
     return { error: `${plan.problems.length} line(s) need fixing. Nothing was loaded.`, problems: plan.problems.slice(0, 40) }
   }
-  if (!plan.rows.length) return { error: "The sheet has no customers on it." }
+  if (!plan.rows.length) return { error: "There is no customer on that sheet." }
 
   const existing = await prisma.customer.findMany({
     where: { phone: { in: plan.rows.map((p) => p.phone) } },
@@ -750,14 +750,14 @@ export async function batchUploadStock(payload: BatchUploadPayload): Promise<Upl
   const { user } = gate
 
   if (!payload.branchId) {
-    return { error: "Please select destination shop for this upload." }
+    return { error: "Pick the shop these goods are going to." }
   }
 
   const shop = await prisma.branch.findFirst({ where: { id: payload.branchId, isActive: true } })
-  if (!shop) return { error: "Selected shop does not exist or is inactive." }
+  if (!shop) return { error: "That shop does not exist, or it is closed." }
 
   if (!payload.items || payload.items.length === 0) {
-    return { error: "Please add at least one product item to upload." }
+    return { error: "Add at least one item before you upload." }
   }
 
   // 1. Resolve Supplier
@@ -779,10 +779,10 @@ export async function batchUploadStock(payload: BatchUploadPayload): Promise<Upl
     supplierName = newSupp.name
   } else if (supplierId) {
     const supp = await prisma.supplier.findUnique({ where: { id: supplierId } })
-    if (!supp) return { error: "Selected supplier was not found." }
+    if (!supp) return { error: "We could not find that supplier." }
     supplierName = supp.name
   } else {
-    return { error: "Please pick a supplier or enter a new supplier name." }
+    return { error: "Pick a supplier, or type the name of a new one." }
   }
 
   // 2. Validate all items and identities (IMEIs)
@@ -822,7 +822,7 @@ export async function batchUploadStock(payload: BatchUploadPayload): Promise<Upl
   // Check for duplicate IMEIs in input batch
   const uniqueSet = new Set(allIdentities)
   if (uniqueSet.size < allIdentities.length) {
-    return { error: "Duplicate IMEIs or serials detected in your upload batch." }
+    return { error: "The same IMEI or serial number appears more than once in what you are uploading. Remove the repeat and try again." }
   }
 
   // Check for existing IMEIs in database
@@ -863,13 +863,13 @@ export async function batchUploadStock(payload: BatchUploadPayload): Promise<Upl
     if (item.productMode === "new" && item.newProduct) {
       const np = item.newProduct
       const name = cleanIdentity(np.name)
-      if (!name) return { error: "Product name is required for new product." }
+      if (!name) return { error: "Type a name for this new item." }
 
       const [brand, category] = await Promise.all([
         prisma.brand.findUnique({ where: { id: np.brandId } }),
         prisma.category.findUnique({ where: { id: np.categoryId } }),
       ])
-      if (!brand || !category) return { error: "Please select valid brand and category for new product." }
+      if (!brand || !category) return { error: "Pick the brand and the kind of item for this new item." }
 
       const sku = makeOpeningSku({
         brand: brand.name,
@@ -901,7 +901,7 @@ export async function batchUploadStock(payload: BatchUploadPayload): Promise<Upl
             minimumPrice: np.minimumPrice.toFixed(2),
             sellingPrice: np.sellingPrice.toFixed(2),
             warrantyDays: 365,
-            description: "Created during Stock Upload",
+            description: "Added while loading stock",
           },
         })
         if (activeShops.length) {
@@ -914,7 +914,7 @@ export async function batchUploadStock(payload: BatchUploadPayload): Promise<Upl
         isNewProd = true
       }
     } else {
-      if (!prodId) return { error: "Product is not specified." }
+      if (!prodId) return { error: "Pick the item first." }
       const prod = await prisma.product.findUnique({ where: { id: prodId } })
       if (!prod) return { error: `Product ID ${prodId} not found.` }
       prodName = prod.name
@@ -962,7 +962,7 @@ export async function batchUploadStock(payload: BatchUploadPayload): Promise<Upl
         notes: [
           `Uploaded on Stock Upload.`,
           amountPaid >= totalAmount
-            ? "Invoice fully settled on upload."
+            ? "This bill was paid in full when the stock was loaded."
             : amountPaid > 0
               ? `Partial payment of ₦${amountPaid.toLocaleString("en-NG")} on upload. Balance: ₦${balanceOwed.toLocaleString("en-NG")}.`
               : `Unpaid invoice. Balance: ₦${balanceOwed.toLocaleString("en-NG")}.`,

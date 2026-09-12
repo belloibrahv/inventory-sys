@@ -32,13 +32,13 @@ export function SwapForm({
 
   return (
     <ActionForm action={createSwap} className="space-y-3">
-      <Select name="customerId" emptyLabel="No customer on this shop's books yet. Add one on Customers first." required>
+      <Select name="customerId" emptyLabel="This shop has no customer yet. Add one on Customers first." required>
         {customers.map((customer) => (
           <option key={customer.id} value={customer.id}>{customer.name}</option>
         ))}
       </Select>
       <Input name="oldImei1" placeholder="Customer device IMEI" required />
-      <Select name="oldProductId" required emptyLabel="No items on the list yet. Add them on Phones and items first.">
+      <Select name="oldProductId" required emptyLabel="No item is on the list yet. Add them on Phones and items first.">
         {products.map((product) => (
           <option key={product.id} value={product.id}>{product.name}</option>
         ))}
@@ -54,13 +54,13 @@ export function SwapForm({
           <option key={branch.id} value={branch.id}>{branch.name}</option>
         ))}
       </Select>
-      <Select name="newImeiId" required emptyLabel="No phone of that kind is In shop here. Receive goods first, or pick another item.">
+      <Select name="newImeiId" required emptyLabel="No phone like that is in this shop. Receive the goods first, or pick another item.">
         {stock.map((imei) => (
           <option key={imei.id} value={imei.id}>{imei.product.name} · {imei.imei1}</option>
         ))}
       </Select>
       {stock.length === 0 ? (
-        <p className="text-xs text-danger">No IMEIs in this shop for that phone.</p>
+        <p className="text-xs text-danger">This shop has no IMEI for that phone.</p>
       ) : null}
     </ActionForm>
   )

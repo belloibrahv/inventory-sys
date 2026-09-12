@@ -316,18 +316,18 @@ export async function getDashboardData() {
       imeiGaps: imeiCheck.filter((row) => row.delta !== 0).length,
     },
     tasks: [
-      { href: "/finance/close", label: "Days not closed. Sell now is locked until you count the till", count: unclosedCount },
-      { href: "/pos", label: "Parked sales sitting too long", count: parked.sitting },
-      { href: "/audit?risk=HIGH", label: "Parked sales that vanished from a device", count: parked.vanished },
-      { href: "/incoming", label: "Overdue goods on the way", count: overdueIncoming },
-      { href: "/transfers", label: "Transfers waiting for confirm", count: pendingTransfers },
-      { href: "/sales", label: "Walk-in sales with no name", count: walkIns },
+      { href: "/finance/close", label: "Days you have not closed. Sell now stays locked until you count the till", count: unclosedCount },
+      { href: "/pos", label: "Waiting sales that have waited too long", count: parked.sitting },
+      { href: "/audit?risk=HIGH", label: "Waiting sales that disappeared from a phone", count: parked.vanished },
+      { href: "/incoming", label: "Goods on the way that are late", count: overdueIncoming },
+      { href: "/transfers", label: "Goods sent to another shop, waiting to be confirmed", count: pendingTransfers },
+      { href: "/sales", label: "Sales with no buyer name", count: walkIns },
       {
         href: "/inventory",
-        label: "Low stock",
+        label: "Items running low",
         count: stock.filter((row) => row.quantity <= (row.minStock > 0 ? row.minStock : 3)).length,
       },
-      { href: "/approvals", label: "Waiting for approval", count: pendingApprovals },
+      { href: "/approvals", label: "Things waiting for somebody to say yes", count: pendingApprovals },
     ].filter((task) => task.count > 0),
   }
 }

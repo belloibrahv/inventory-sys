@@ -109,8 +109,8 @@ export function StockCountView({
         "System says",
         "We counted",
         "Difference",
-        "Value of difference",
-        "Gain or loss",
+        "What the difference is worth",
+        "Extra or missing",
       ],
       ...rows.map((row) => {
         const expected = row.quantity
@@ -126,13 +126,13 @@ export function StockCountView({
           String(counted),
           diff > 0 ? `+${diff}` : String(diff),
           (diff * cost).toFixed(2),
-          diff > 0 ? "Gain" : diff < 0 ? "Loss" : "Balanced",
+          diff > 0 ? "Extra" : diff < 0 ? "Loss" : "Balanced",
         ]
       }),
       [],
-      ["System value", summary.systemValue.toFixed(2)],
-      ["Counted value", summary.countedValue.toFixed(2)],
-      ["Net gain or loss", summary.netValue.toFixed(2)],
+      ["What the system says it is worth", summary.systemValue.toFixed(2)],
+      ["What you counted is worth", summary.countedValue.toFixed(2)],
+      ["Extra or missing in total", summary.netValue.toFixed(2)],
     ]
   }
 
@@ -156,11 +156,11 @@ export function StockCountView({
         toast.error(result.error)
         return
       }
-      toast.success("Stock count sent for the manager to approve.")
+      toast.success("Your count has gone to the manager to approve.")
       router.refresh()
     } catch {
       setBusy(false)
-      toast.error("That did not reach the shop system. Check your connection and try once more.")
+      toast.error("That did not reach the shop system. Check your network and try again.")
     }
   }
 
@@ -181,14 +181,14 @@ export function StockCountView({
           tone="primary"
         />
         <StatCard
-          label="Gaining margin"
+          label="Extra on the shelf"
           value={`+${summary.gainedUnits} units`}
           hint={`More on the shelf than the system says · ${formatCurrency(summary.gainedValue)}`}
           icon={<TrendingUp className="h-4 w-4" />}
           tone={summary.gainedUnits > 0 ? "success" : "neutral"}
         />
         <StatCard
-          label="Losing margin"
+          label="Missing from the shelf"
           value={`−${summary.lostUnits} units`}
           hint={`Fewer on the shelf than the system says · ${formatCurrency(summary.lostValue)}`}
           icon={<TrendingDown className="h-4 w-4" />}
@@ -198,13 +198,13 @@ export function StockCountView({
 
       {/* Only on paper: the approver reads this instead of the screen. */}
       <div className="mb-6 hidden border-b pb-4 print:block">
-        <h1 className="text-xl font-bold">Physical stock count sheet</h1>
+        <h1 className="text-xl font-bold">Sheet for counting what is on the shelf</h1>
         <p className="text-sm">
           Shop: <strong>{selectedBranch?.name}</strong> · Date:{" "}
           <strong>{new Date().toLocaleDateString("en-NG")}</strong>
         </p>
         <p className="mt-1 text-xs">
-          System value {formatCurrency(summary.systemValue)} · Counted value {formatCurrency(summary.countedValue)} ·
+          System says {formatCurrency(summary.systemValue)} · You counted {formatCurrency(summary.countedValue)} ·
           Net {formatCurrency(summary.netValue)}
         </p>
         {notes.trim() ? <p className="mt-1 text-xs">Notes: {notes.trim()}</p> : null}
@@ -224,7 +224,7 @@ export function StockCountView({
               </Select>
             </label>
             <Input
-              placeholder="Who counted, and anything worth noting"
+              placeholder="Who counted it, and anything you want to say"
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
               disabled={busy}
@@ -256,7 +256,7 @@ export function StockCountView({
             { label: "System says", align: "center" },
             { label: "We counted", align: "center" },
             { label: "Difference", align: "center" },
-            { label: "Gaining / losing margin", align: "right" },
+            { label: "Extra or missing", align: "right" },
           ]}
         >
           {rows.map((row) => {
@@ -308,7 +308,7 @@ export function StockCountView({
               </tr>
             )
           })}
-          {rows.length === 0 ? <TableEmpty colSpan={6}>Nothing on the shelf in this shop yet.</TableEmpty> : null}
+          {rows.length === 0 ? <TableEmpty colSpan={6}>There is nothing on the shelf in this shop yet.</TableEmpty> : null}
         </TableShell>
 
         {/* Only on paper: somewhere to sign. */}
@@ -324,7 +324,7 @@ export function StockCountView({
 
         <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border pt-4 print:hidden">
           <p className="text-sm">
-            <span className="text-muted-foreground">Net gain or loss on this count: </span>
+            <span className="text-muted-foreground">Extra or missing on this count: </span>
             <strong className={summary.netValue >= 0 ? "text-success" : "text-danger"}>
               {summary.netValue > 0 ? `+${formatCurrency(summary.netValue)}` : formatCurrency(summary.netValue)}
             </strong>

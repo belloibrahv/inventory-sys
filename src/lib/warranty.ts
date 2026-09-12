@@ -17,7 +17,7 @@ export function warrantyUntil(soldAt: Date | string | null | undefined, days?: n
 export function warrantyState(soldAt: Date | string | null | undefined, days?: number | string | null, now = new Date()) {
   const length = coverDays(days)
   const until = warrantyUntil(soldAt, length)
-  if (!until) return { label: "No warranty window", until: null, active: false, daysLeft: 0, days: length }
+  if (!until) return { label: "No warranty", until: null, active: false, daysLeft: 0, days: length }
   const daysLeft = Math.ceil((until.getTime() - now.getTime()) / 86_400_000)
   if (daysLeft >= 0) {
     return { label: `In warranty until ${formatDate(until)}`, until, active: true, daysLeft, days: length }

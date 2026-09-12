@@ -31,7 +31,7 @@ export default async function CustomersPage() {
     <div className="space-y-6">
       <PageHeader
         title="Customers"
-        description="Track buyer accounts, lifetime purchases, and outstanding debts. Filter debtor accounts and review customer transaction statements."
+        description="Everyone who has bought from us. See what they bought, what they paid, and what they still owe."
       />
 
       <div className="page-split">

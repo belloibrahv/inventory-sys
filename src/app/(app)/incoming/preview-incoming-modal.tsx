@@ -136,7 +136,7 @@ export function PreviewIncomingModal({ lot }: { lot: IncomingLot }) {
             className="surface-card relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-b-none shadow-xl sm:rounded-lg"
           >
             <div className="border-b border-border px-5 py-3.5">
-              <p className="eyebrow">Check before it goes into the shop</p>
+              <p className="eyebrow">Check it before it enters the shop</p>
               <h2 className="text-base font-semibold tracking-tight">{lot.lotNumber}</h2>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 Going to <strong className="text-foreground">{lot.branch.name}</strong>
@@ -200,7 +200,7 @@ export function PreviewIncomingModal({ lot }: { lot: IncomingLot }) {
 
                     {item.identity !== "NONE" && originalIds.length > 0 ? (
                       <div className="space-y-2 rounded-md bg-muted/50 p-3">
-                        <p className="eyebrow">Tick the ones physically in the box</p>
+                        <p className="eyebrow">Tick the ones that are really in the box</p>
                         <div className="grid gap-1.5 sm:grid-cols-2">
                           {originalIds.map((imei) => {
                             const isChecked = adj.identities.includes(imei)
@@ -232,9 +232,9 @@ export function PreviewIncomingModal({ lot }: { lot: IncomingLot }) {
               })}
 
               <label className="block text-sm">
-                <span className="eyebrow mb-1 block">Note about anything that did not match</span>
+                <span className="eyebrow mb-1 block">Write down anything that did not match</span>
                 <Input
-                  placeholder="e.g. two units short in the carton, waybill adjusted"
+                  placeholder="Example: two units short in the carton, waybill corrected"
                   value={notes}
                   onChange={(event) => setNotes(event.target.value)}
                   disabled={busy}

@@ -20,7 +20,7 @@ export default async function HelpPage() {
       <div className="manual-chrome print:hidden space-y-4">
         <PageHeader
           title="How to use this"
-          description={`A book for ${data.roleLabel} only. It covers the pages and work this login can use. Print it. Keep it at the till.`}
+          description={`A small book for ${data.roleLabel} only. It shows the pages and the work this login can do. Print it and keep it at the till.`}
           actions={<PrintButton label="Print / Save PDF" />}
         />
         <ManualLookup data={data} />

@@ -55,10 +55,10 @@ type BranchOption = { id: string; name: string; code: string }
 type Drilldown = "REVENUE" | "RECEIVED" | "EXPENSES" | "STOCK"
 
 const DRILLDOWN_TITLE: Record<Drilldown, string> = {
-  REVENUE: "Every invoice that makes up revenue posted",
-  RECEIVED: "Every payment received in this period",
-  EXPENSES: "Every expense voucher in this period",
-  STOCK: "Every stock line that makes up stock at cost",
+  REVENUE: "Every sale that makes up this money",
+  RECEIVED: "Every payment we collected in this time",
+  EXPENSES: "Every bill we paid in this time",
+  STOCK: "Every item that makes up this stock value",
 }
 
 export function ReportsClientView({
@@ -118,7 +118,7 @@ export function ReportsClientView({
               <Link href="/audit/books">Check the books</Link>
             </Button>
             <Button asChild variant="ghost" size="sm">
-              <Link href="/finance">Revenue &amp; expenditure</Link>
+              <Link href="/finance">Money in &amp; out</Link>
             </Button>
             <ReportsPdfButton data={pack} />
             <PrintButton label="Print / Save PDF" />
@@ -144,33 +144,33 @@ export function ReportsClientView({
         {/* Every headline figure opens the rows that add up to it. */}
         <StatGrid>
           <StatCard
-            label="Revenue posted"
+            label="Money from sales"
             value={formatCurrency(pack.totals.revenue)}
-            hint={`${sales.length} invoice${sales.length === 1 ? "" : "s"} billed in this period`}
+            hint={`${sales.length} sale${sales.length === 1 ? "" : "s"} in this time`}
             icon={<TrendingUp className="h-4 w-4" />}
             tone="neutral"
             onClick={() => setDrilldown("REVENUE")}
           />
           <StatCard
-            label="Payments received"
+            label="Money we collected"
             value={formatCurrency(pack.totals.collected)}
-            hint="Money actually taken in cash, transfer or POS"
+            hint="Money that truly entered our hand: cash, transfer or POS"
             icon={<Banknote className="h-4 w-4" />}
             tone="success"
             onClick={() => setDrilldown("RECEIVED")}
           />
           <StatCard
-            label="Operating expenses"
+            label="Money we spent"
             value={formatCurrency(pack.totals.expenses)}
-            hint={`${expenses.length} voucher${expenses.length === 1 ? "" : "s"} posted`}
+            hint={`${expenses.length} bill${expenses.length === 1 ? "" : "s"} recorded`}
             icon={<TrendingDown className="h-4 w-4" />}
             tone="danger"
             onClick={() => setDrilldown("EXPENSES")}
           />
           <StatCard
-            label="Stock at cost"
+            label="What the stock cost us"
             value={formatCurrency(pack.totals.stock)}
-            hint={`${inventory.length} stock line${inventory.length === 1 ? "" : "s"} on the shelf`}
+            hint={`${inventory.length} item${inventory.length === 1 ? "" : "s"} on the shelf`}
             icon={<Package className="h-4 w-4" />}
             tone="warning"
             onClick={() => setDrilldown("STOCK")}
@@ -187,19 +187,19 @@ export function ReportsClientView({
           <StatCard
             label="We still owe suppliers"
             value={formatCurrency(supplierOwed)}
-            hint={`${pack.creditors.length} unpaid supplier bill${pack.creditors.length === 1 ? "" : "s"}`}
+            hint={`${pack.creditors.length} supplier bill${pack.creditors.length === 1 ? "" : "s"} not yet paid`}
             href="/suppliers"
           />
           <StatCard
-            label="Swap balances"
+            label="Money from swaps"
             value={formatCurrency(pack.totals.swaps)}
-            hint="Difference customers paid on phone trade-ins"
+            hint="The extra money customers added when they swapped an old phone"
             href="/swaps"
           />
           <StatCard
-            label="Returns filed"
+            label="Things brought back"
             value={String(pack.totals.returns)}
-            hint="Items customers brought back in this period"
+            hint="Items customers returned in this time"
             href="/returns"
           />
         </StatGrid>
@@ -216,9 +216,9 @@ export function ReportsClientView({
             }
             columns={[
               { label: "Shop" },
-              { label: "Invoices", align: "right" },
-              { label: "Revenue posted", align: "right" },
-              { label: "Payments received", align: "right" },
+              { label: "How many sales", align: "right" },
+              { label: "Money from sales", align: "right" },
+              { label: "Money we collected", align: "right" },
             ]}
           >
             {pack.byShop.map((row) => (
@@ -230,14 +230,14 @@ export function ReportsClientView({
               </tr>
             ))}
             {pack.byShop.length === 0 ? (
-              <TableEmpty colSpan={4}>No sales recorded for this shop and period.</TableEmpty>
+              <TableEmpty colSpan={4}>This shop made no sale in this time.</TableEmpty>
             ) : null}
           </TableShell>
 
           <TableShell
             caption={
               <>
-                <h2 className="text-sm font-semibold tracking-tight">Customers who still owe</h2>
+                <h2 className="text-sm font-semibold tracking-tight">Customers who still owe us</h2>
                 <Button asChild variant="ghost" size="sm">
                   <Link href="/customers">All customers</Link>
                 </Button>
@@ -268,7 +268,7 @@ export function ReportsClientView({
           <TableShell
             caption={
               <>
-                <h2 className="text-sm font-semibold tracking-tight">Supplier bills still unpaid</h2>
+                <h2 className="text-sm font-semibold tracking-tight">Supplier bills we have not paid</h2>
                 <Button asChild variant="ghost" size="sm">
                   <Link href="/suppliers">All suppliers</Link>
                 </Button>
@@ -291,7 +291,7 @@ export function ReportsClientView({
               </tr>
             ))}
             {pack.creditors.length === 0 ? (
-              <TableEmpty colSpan={3}>Every supplier bill is settled.</TableEmpty>
+              <TableEmpty colSpan={3}>We have paid every supplier bill.</TableEmpty>
             ) : null}
           </TableShell>
 
@@ -320,7 +320,7 @@ export function ReportsClientView({
               </tr>
             ))}
             {pack.lowStock.length === 0 ? (
-              <TableEmpty colSpan={3}>Every item is above its minimum.</TableEmpty>
+              <TableEmpty colSpan={3}>No item is running low.</TableEmpty>
             ) : null}
           </TableShell>
         </div>
@@ -388,7 +388,7 @@ export function ReportsClientView({
                   </td>
                 </tr>
               ))}
-              {sales.length === 0 ? <TableEmpty colSpan={7}>No invoices in this period.</TableEmpty> : null}
+              {sales.length === 0 ? <TableEmpty colSpan={7}>No sale in this time.</TableEmpty> : null}
             </tbody>
           </table>
         ) : null}
@@ -422,7 +422,7 @@ export function ReportsClientView({
                   </td>
                 </tr>
               ))}
-              {paidSales.length === 0 ? <TableEmpty colSpan={5}>No money received in this period.</TableEmpty> : null}
+              {paidSales.length === 0 ? <TableEmpty colSpan={5}>No money was collected in this time.</TableEmpty> : null}
             </tbody>
           </table>
         ) : null}
@@ -452,7 +452,7 @@ export function ReportsClientView({
                   <td className="text-right num font-semibold text-danger">{formatCurrency(money(expense.amount))}</td>
                 </tr>
               ))}
-              {expenses.length === 0 ? <TableEmpty colSpan={6}>No expenses posted in this period.</TableEmpty> : null}
+              {expenses.length === 0 ? <TableEmpty colSpan={6}>No bill was recorded in this time.</TableEmpty> : null}
             </tbody>
           </table>
         ) : null}
@@ -484,7 +484,7 @@ export function ReportsClientView({
                   </td>
                 </tr>
               ))}
-              {inventory.length === 0 ? <TableEmpty colSpan={6}>Nothing on the shelf here.</TableEmpty> : null}
+              {inventory.length === 0 ? <TableEmpty colSpan={6}>Nothing is on the shelf here.</TableEmpty> : null}
             </tbody>
           </table>
         ) : null}

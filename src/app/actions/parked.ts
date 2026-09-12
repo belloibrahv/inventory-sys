@@ -71,8 +71,8 @@ export async function heartbeatParkedSales(input: {
       risk: "HIGH",
     })
     await alertWatchers(
-      "Parked sale disappeared",
-      `${user.name ?? user.email} had a parked sale from ${row.queuedAt.toLocaleString("en-NG")} that is no longer on that device. Open Who did what.`,
+      "A waiting sale disappeared",
+      `${user.name ?? user.email} had a waiting sale from ${row.queuedAt.toLocaleString("en-NG")}. It is no longer on that phone. Open Who did what.`,
       "/audit?risk=HIGH"
     )
   }
@@ -87,8 +87,8 @@ export async function heartbeatParkedSales(input: {
   for (const row of sitting) {
     await prisma.parkedSale.update({ where: { id: row.id }, data: { alertedAt: now } })
     await alertWatchers(
-      "Parked sale sitting too long",
-      `A sale parked at ${row.queuedAt.toLocaleString("en-NG")} has not been posted. Cash may be in a drawer with no invoice.`,
+      "A waiting sale has waited too long",
+      `A sale parked at ${row.queuedAt.toLocaleString("en-NG")} has still not gone into the system. Money may be in the drawer with no invoice.`,
       "/pos"
     )
     await writeAudit({

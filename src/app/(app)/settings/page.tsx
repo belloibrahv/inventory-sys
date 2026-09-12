@@ -14,9 +14,9 @@ const labels: Record<string, string> = {
   "company.address": "Address on invoices",
   "company.email": "Email on invoices",
   "company.currency": "Currency",
-  "sales.allow_below_minimum": "Can cashiers sell below the lowest price?",
-  "inventory.low_stock_threshold": "Alert when stock is this low",
-  "sales.warranty_days": "Default warranty (days)",
+  "sales.allow_below_minimum": "Can cashiers sell under the lowest price?",
+  "inventory.low_stock_threshold": "Warn me when an item drops to this many",
+  "sales.warranty_days": "Warranty days for a new item",
 }
 
 export default async function SettingsPage() {
@@ -26,7 +26,7 @@ export default async function SettingsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Settings"
-        description="These settings change receipts, selling rules, and stock alerts for every shop."
+        description="These settings change receipts, selling rules, and low stock alerts for every shop."
       />
       <div className="grid gap-4 md:grid-cols-2">
         {settings.map((setting) => (
@@ -38,8 +38,8 @@ export default async function SettingsPage() {
               <input type="hidden" name="key" value={setting.key} />
               {setting.key === "sales.allow_below_minimum" ? (
                 <Select name="value" defaultValue={setting.value}>
-                  <option value="false">No. Only Super Admin can go below the lowest price</option>
-                  <option value="true">Yes. Cashiers may go below the lowest price</option>
+                  <option value="false">No. Only the main admin can sell under the lowest price</option>
+                  <option value="true">Yes. Cashiers can sell under the lowest price</option>
                 </Select>
               ) : (
                 <Input name="value" defaultValue={setting.value} />

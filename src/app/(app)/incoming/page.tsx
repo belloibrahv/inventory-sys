@@ -26,13 +26,13 @@ export default async function IncomingPage() {
       <div>
         <PageHeader
           title="Goods on the way"
-          description="Cartons booked before they reach Ibadan. They stay Coming until someone opens the list, checks what actually turned up, and confirms. Nothing is added to a shop until then."
+          description="Book cartons before they reach Ibadan. They stay as Coming until someone checks what landed and says yes."
         />
         <div className="mt-5 space-y-3">
           {lots.length === 0 ? (
             <EmptyState
-              title="Nothing on the way that you can see"
-              hint="Book a carton on the right and its IMEIs or piece counts will wait here until the boxes land."
+              title="You cannot see anything on the way"
+              hint="Book a carton on the right. Its IMEIs or piece counts will wait here until the boxes land."
             />
           ) : null}
           {lots.map((lot) => (
@@ -87,11 +87,11 @@ export default async function IncomingPage() {
       </div>
       <SectionCard
         title="Book a carton before it arrives"
-        description="Stock in the shops does not go up until arrival is confirmed."
+        description="Shop stock does not go up until somebody confirms the goods have landed."
       >
         <p className="mb-4 text-sm text-muted-foreground">
-          Super Admin or Goods intake can scan IMEIs, scan serials, or enter a simple piece count. Tie the list to a
-          supplier order where you can, so the carton has a trail if a unit later goes missing.
+          The main admin or Goods intake can scan phone numbers (IMEIs), scan serials, or enter a simple piece count. Tie the list to a
+          supplier order where you can, so you can find a missing unit later.
         </p>
         {canBook ? (
           <IncomingForm
@@ -104,7 +104,7 @@ export default async function IncomingPage() {
           />
         ) : (
           <p className="text-sm text-muted-foreground">
-            You can see lists Super Admin has shown. Ask Super Admin to let you book goods, or to show a hidden list.
+            You can see lists the main admin has shown. Ask the main admin to let you book goods, or to show a hidden list.
           </p>
         )}
       </SectionCard>

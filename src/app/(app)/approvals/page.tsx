@@ -23,7 +23,7 @@ export default async function ApprovalsPage() {
   const pending = rows.filter((row) => row.status === "PENDING").length
   return (
     <div className="space-y-6">
-      <PageHeader title="Needs approval" description={`${pending} waiting. Say yes or no to swaps, refunds, expenses, and stock counts. After you decide, the work continues.`} />
+      <PageHeader title="Waiting for yes" description={`${pending} waiting for you. Say yes or no to swaps, refunds, expenses, and stock counts.`} />
       <WorkflowSteps current={pending ? 1 : 2} steps={["Staff asked", "You check", "Done"]} />
       <div className="space-y-3">
         {rows.map((row) => (

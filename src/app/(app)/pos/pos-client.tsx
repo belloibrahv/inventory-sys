@@ -173,11 +173,11 @@ export function PosClient({
 
   async function saveCustomer() {
     if (typeof navigator !== "undefined" && !navigator.onLine) {
-      toast.error("Add a new name while the line is up. Use a customer already on this phone.")
+      toast.error("You can only add a new name when the network is good. Use a customer already saved on this phone.")
       return
     }
     if (!newName.trim() || !newPhone.trim()) {
-      toast.error("Name and phone are required for a new customer.")
+      toast.error("A new customer needs a name and a phone number.")
       return
     }
     setSavingCustomer(true)
@@ -191,7 +191,7 @@ export function PosClient({
       toast.error(result.error)
       return
     }
-    toast.success("Customer saved for this branch.")
+    toast.success("Customer saved for this shop.")
     if (result.id) setCustomerId(result.id)
     setNewName("")
     setNewPhone("")
@@ -208,7 +208,7 @@ export function PosClient({
       return
     }
     setQuery(code)
-    toast.error("That IMEI is not In shop here. Check Goods on the way or the shop.")
+    toast.error("That IMEI is not in this shop. Check Goods on the way, or check the shop.")
   }
 
   function addImei(item: TillImei) {
@@ -255,15 +255,15 @@ export function PosClient({
 
   async function checkout() {
     if (method === "CREDIT" && !customerId) {
-      toast.error("Credit sale needs a customer name.")
+      toast.error("A credit sale needs a buyer name.")
       return
     }
     if (due > 0 && !customerId) {
-      toast.error("Part payment needs a customer name. Walk-in must pay everything now.")
+      toast.error("A part payment needs a buyer name. A walk-in must pay everything now.")
       return
     }
     if (!canOverrideFloor && cart.some((line) => line.unitPrice < line.minPrice)) {
-      toast.error("One price is below the lowest allowed. Raise it, or ask Super Admin.")
+      toast.error("One price is under the lowest price allowed. Raise it, or ask the main admin.")
       return
     }
     const payload = {
@@ -295,7 +295,7 @@ export function PosClient({
     }
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       await keepOnDevice()
-      toast.message("Saved on this device. Send it when the line returns.")
+      toast.message("Saved on this phone. Send it when the network comes back.")
       return
     }
     let result: Awaited<ReturnType<typeof checkoutSale>>
@@ -303,7 +303,7 @@ export function PosClient({
       result = await checkoutSale(payload)
     } catch {
       await keepOnDevice()
-      toast.message("The server did not answer. This sale is waiting on this device.")
+      toast.message("The shop system did not answer. This sale is waiting on this phone.")
       return
     }
     setBusy(false)
@@ -311,7 +311,7 @@ export function PosClient({
       toast.error(result.error)
       return
     }
-    toast.success("Sale saved. This invoice cannot be edited.")
+    toast.success("Sale saved. Nobody can change this invoice.")
     // Straight to the receipt, printing itself, so the customer is handed it
     // before they leave the counter.
     router.push(`/sales/${result.saleId}?receipt=1`)
@@ -322,7 +322,7 @@ export function PosClient({
     <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
       {usingDeviceList || lineDown ? (
         <div className="rounded-xl bg-warning-soft px-4 py-3 text-sm text-warning xl:col-span-2">
-          Selling from the last In shop list saved on this phone. Only names already on this phone. Coming phones are not here. The invoice is born when the line returns.
+          You are selling from the last shop list saved on this phone. You can only use names already on this phone. Phones still on the way are not here. The real invoice is created when the network comes back.
         </div>
       ) : null}
       {sellLock?.locked ? (
@@ -378,7 +378,7 @@ export function PosClient({
                 </button>
               ))}
               {filtered.length === 0 && accessoryHits.length === 0 ? (
-                <p className="px-3 py-4 text-sm text-muted-foreground">Nothing in this shop matches that search.</p>
+                <p className="px-3 py-4 text-sm text-muted-foreground">Nothing in this shop matches what you typed.</p>
               ) : null}
             </div>
           ) : null}
@@ -401,7 +401,7 @@ export function PosClient({
                     {line.unitPrice < line.minPrice ? (
                       <p className="text-xs text-danger">
                         Below lowest price {formatCurrency(line.minPrice)}
-                        {canOverrideFloor ? " · Super Admin can still sell this" : " · you cannot complete this sale"}
+                        {canOverrideFloor ? " · The main admin can still sell this" : " · you cannot complete this sale"}
                       </p>
                     ) : null}
                   </td>
@@ -467,7 +467,7 @@ export function PosClient({
         <label className="block text-sm">
           <span className="mb-1 block text-muted-foreground">Customer</span>
           <Select value={customerId} onChange={(event) => setCustomerId(event.target.value)}>
-            <option value="">Walk-in (must pay now)</option>
+            <option value="">No name (must pay now)</option>
             {customers
               .filter((row) => row.branchId === branchId && !row.name.toLowerCase().includes("walk-in"))
               .map((row) => (
@@ -483,7 +483,7 @@ export function PosClient({
             </p>
           ) : lineDown ? (
             <p className="mt-2 text-xs text-muted-foreground">
-              New buyers cannot be saved while the line is down. Pick a name already on this phone, or take a walk-in who pays in full.
+              You cannot save a new buyer while the network is down. Pick a name already on this phone, or take a walk-in who pays everything now.
             </p>
           ) : (
             <div className="mt-2 grid grid-cols-2 gap-2">
@@ -536,7 +536,7 @@ export function PosClient({
           ) : null}
         </div>
         <Button className="min-h-12 w-full" disabled={!cart.length || busy || Boolean(sellLock?.locked)} onClick={checkout}>
-          {busy ? "Posting this sale" : sellLock?.locked ? "Close yesterday first" : "Complete sale"}
+          {busy ? "Saving this sale" : sellLock?.locked ? "Close yesterday first" : "Complete sale"}
         </Button>
         <p className="text-xs text-muted-foreground">
           USB scanners work like a keyboard. Print the invoice after the sale. If a receipt printer is attached, printing can open the cash drawer.

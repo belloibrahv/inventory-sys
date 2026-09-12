@@ -140,15 +140,15 @@ export function UploadStockWizard({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!branchId) {
-      toast.error("Please select a destination shop.")
+      toast.error("Pick the shop these goods are going to.")
       return
     }
     if (supplierMode === "existing" && !supplierId) {
-      toast.error("Please select a supplier.")
+      toast.error("Pick the supplier.")
       return
     }
     if (supplierMode === "new" && !newSupplierName.trim()) {
-      toast.error("Please enter a new supplier name.")
+      toast.error("Type the name of the new supplier.")
       return
     }
 
@@ -184,7 +184,7 @@ export function UploadStockWizard({
       result = await batchUploadStock(payload)
     } catch {
       setBusy(false)
-      toast.error("That did not reach the shop system. Check your connection and try once more.")
+      toast.error("That did not reach the shop system. Check your network and try again.")
       return
     }
     setBusy(false)
@@ -227,8 +227,8 @@ export function UploadStockWizard({
       */}
       <header className="flex flex-wrap items-start justify-between gap-4 border-b border-border bg-muted/40 px-5 py-4">
         <div>
-          <p className="eyebrow">Supplier upload bill</p>
-          <h2 className="text-base font-semibold tracking-tight">Book a carton onto the system</h2>
+          <p className="eyebrow">Supplier bill</p>
+          <h2 className="text-base font-semibold tracking-tight">Put a carton of goods on the system</h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Enter the supplier and the items. The IMEI boxes open to match the quantity you type.
           </p>
@@ -250,7 +250,7 @@ export function UploadStockWizard({
 
           <div className="grid gap-3 sm:grid-cols-3">
             <label className="block text-sm">
-              <span className="eyebrow mb-1 block">Which shop it goes to</span>
+              <span className="eyebrow mb-1 block">Which shop the goods go to</span>
               <Select value={branchId} onChange={(e) => setBranchId(e.target.value)} required disabled={busy}>
                 {shops.map((shop) => (
                   <option key={shop.id} value={shop.id}>
@@ -300,7 +300,7 @@ export function UploadStockWizard({
                 onChange={(e) => setSupplierId(e.target.value)}
                 required
                 disabled={busy || suppliers.length === 0}
-                emptyLabel="No suppliers on the books yet. Choose New supplier."
+                emptyLabel="No supplier is on the list yet. Choose New supplier."
               >
                 {suppliers.map((supplier) => (
                   <option key={supplier.id} value={supplier.id}>
@@ -398,7 +398,7 @@ export function UploadStockWizard({
                       value={item.productId}
                       onChange={(e) => handleProductSelect(itemIdx, e.target.value)}
                       disabled={busy}
-                      emptyLabel="No items on the list yet. Load the item list first."
+                      emptyLabel="No item is on the list yet. Load the item list first."
                     >
                       {products.map((product) => (
                         <option key={product.id} value={product.id}>
@@ -495,7 +495,7 @@ export function UploadStockWizard({
 
           <div className="grid gap-3 md:grid-cols-3">
             <div className="rounded-lg border border-border p-4">
-              <p className="eyebrow">Total value of this bill</p>
+              <p className="eyebrow">What this whole bill is worth</p>
               <p className="mt-1 text-2xl font-semibold num">{formatCurrency(totalInvoiceValue)}</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 From {items.length} line{items.length === 1 ? "" : "s"}, {unitCount} unit{unitCount === 1 ? "" : "s"}
@@ -504,7 +504,7 @@ export function UploadStockWizard({
 
             <div className="rounded-lg border border-border p-4">
               <label className="block">
-                <span className="eyebrow mb-1 block">Amount paid now (₦)</span>
+                <span className="eyebrow mb-1 block">What you are paying now (₦)</span>
                 <Input
                   type="number"
                   min={0}
@@ -527,7 +527,7 @@ export function UploadStockWizard({
             </div>
 
             <div className={`rounded-lg border p-4 ${isFullyPaid ? "border-success/30 bg-success-soft" : "border-border"}`}>
-              <p className="eyebrow">Still to be paid</p>
+              <p className="eyebrow">What is still to be paid</p>
               <p className={`mt-1 text-2xl font-semibold num ${balanceOwed > 0 ? "text-warning" : "text-success"}`}>
                 {formatCurrency(balanceOwed)}
               </p>
@@ -546,11 +546,11 @@ export function UploadStockWizard({
           </div>
 
           <label className="block text-sm">
-            <span className="eyebrow mb-1 block">Note or carton reference</span>
+            <span className="eyebrow mb-1 block">Note, or the carton number</span>
             <Input
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="e.g. carton 4 from the Dubai cargo, waybill 88392"
+              placeholder="Example: carton 4 from the Dubai cargo, waybill 88392"
               disabled={busy}
             />
           </label>

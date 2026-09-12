@@ -21,7 +21,7 @@ async function loadMark() {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(new Error("Could not read the company mark"))
+    reader.onerror = () => reject(new Error("Could not load the shop logo"))
     reader.readAsDataURL(blob)
   })
 }
@@ -79,7 +79,7 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
         doc.setTextColor(255, 255, 255)
         doc.setFont("helvetica", "bold")
         doc.setFontSize(full ? 12 : 9)
-        doc.text("STATEMENT OF ACCOUNT", right, full ? 12 : 8, { align: "right" })
+        doc.text("MONEY REPORT", right, full ? 12 : 8, { align: "right" })
         doc.setFont("helvetica", "normal")
         doc.setFontSize(8)
         doc.text(data.statementRef, right, full ? 18 : 13, { align: "right" })
@@ -88,8 +88,8 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
           doc.setTextColor(210, 220, 255)
           doc.text(data.company.address, left + 20, 24)
           doc.text(`${data.shopName}  ·  ${data.shopCode}`, left, 34)
-          doc.text(`This period: ${period}`, left + 78, 34)
-          doc.text(`Compared: ${compared}`, right, 34, { align: "right" })
+          doc.text(`This time: ${period}`, left + 78, 34)
+          doc.text(`Compared with: ${compared}`, right, 34, { align: "right" })
           doc.text(`${booksRangeTitle(data.range)}  ·  Lagos ${formatLagosStamp(new Date(data.preparedAt))}`, left, 39)
         }
         y = full ? 50 : 26
@@ -147,7 +147,7 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
       doc.setFont("helvetica", "bold")
       doc.setFontSize(8)
       doc.setTextColor(...NAVY)
-      doc.text(data.openCount ? `ACCOUNTANT VERDICT  ·  ${data.openCount} TO CLEAR` : "ACCOUNTANT VERDICT  ·  CLEAN", left + 3, y + 5)
+      doc.text(data.openCount ? `WHAT THE BOOKS SAY  ·  ${data.openCount} TO FIX` : "WHAT THE BOOKS SAY  ·  ALL CLEAR", left + 3, y + 5)
       doc.setFont("helvetica", "normal")
       doc.setTextColor(...INK)
       const verdict = doc.splitTextToSize(data.verdict, width - 6)
@@ -175,13 +175,13 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
       })
       y += 18
 
-      section("Period comparison")
+      section("This time against last time")
       doc.setTextColor(...MUTED)
       doc.setFontSize(7)
       doc.text("Line", left + 1, y)
-      doc.text("This period", left + 92, y, { align: "right" })
-      doc.text("Compared", left + 138, y, { align: "right" })
-      doc.text("Movement", right - 1, y, { align: "right" })
+      doc.text("This time", left + 92, y, { align: "right" })
+      doc.text("Last time", left + 138, y, { align: "right" })
+      doc.text("Up or down", right - 1, y, { align: "right" })
       y += 5
       booksCompareRows(data).forEach((item, index) => {
         const now = item.money ? formatPdfMoney(item.now) : String(item.now)
@@ -190,12 +190,12 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
         row(item.label, now, then, move, index % 2 ? PAPER : undefined)
       })
 
-      section("Money add-up")
+      section("How the money adds up")
       booksMoneyLines(data).forEach((item, index) => {
         row(item.label, formatPdfMoney(item.value), undefined, undefined, item.total ? [232, 237, 255] : index % 2 ? PAPER : undefined)
       })
 
-      section("Working paper")
+      section("Checks on the books")
       data.papers.forEach((item, index) => {
         ensure(14)
         doc.setFillColor(item.ok ? 236 : 255, item.ok ? 253 : 241, item.ok ? 245 : 242)
@@ -205,7 +205,7 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
         doc.setFontSize(8)
         doc.text(`${index + 1}. ${item.label}`, left + 2, y + 1)
         doc.setTextColor(item.ok ? 5 : 190, item.ok ? 150 : 18, item.ok ? 105 : 60)
-        doc.text(item.ok ? "PASS" : "FAIL", right - 2, y + 1, { align: "right" })
+        doc.text(item.ok ? "GOOD" : "FIX THIS", right - 2, y + 1, { align: "right" })
         doc.setFont("helvetica", "normal")
         doc.setTextColor(...MUTED)
         doc.setFontSize(7)
@@ -213,26 +213,26 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
         y += 13
       })
 
-      section("Who collected")
+      section("Who collected the money")
       if (data.byStaff.length === 0) {
-        row("No completed sales in this period", "")
+        row("No finished sale in this time", "")
       } else {
         data.byStaff.forEach((item, index) => {
           row(`${item.name}  ·  ${item.count} sale${item.count === 1 ? "" : "s"}`, formatPdfMoney(item.collected), undefined, undefined, index % 2 ? PAPER : undefined)
         })
       }
 
-      section("Position still open")
+      section("Still not settled")
       row("Customers still owe", formatPdfMoney(data.customersOwe))
       row("We still owe suppliers", formatPdfMoney(data.supplierOwed))
-      row("Walk-in sales", String(data.walkIns))
-      row("Till expected", formatPdfMoney(data.expectedCash))
-      row("Till counted", data.countedCash == null ? "Not closed" : formatPdfMoney(data.countedCash))
-      row("Till variance", data.variance == null ? "Not closed" : formatPdfMoney(data.variance), undefined, undefined, PAPER)
+      row("Sales with no buyer name", String(data.walkIns))
+      row("Cash the till should have", formatPdfMoney(data.expectedCash))
+      row("Cash we counted", data.countedCash == null ? "Day not closed" : formatPdfMoney(data.countedCash))
+      row("Short or plenty", data.variance == null ? "Day not closed" : formatPdfMoney(data.variance), undefined, undefined, PAPER)
 
-      section("Invoices")
+      section("Sales")
       if (data.invoices.length === 0) {
-        row("No completed sales in this period", "")
+        row("No finished sale in this time", "")
       } else {
         data.invoices.forEach((item, index) => {
           row(
@@ -245,29 +245,29 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
         })
       }
 
-      section("Till closes")
+      section("Days we closed")
       if (data.closes.length === 0) {
-        row("No till close in this period", "")
+        row("No day was closed in this time", "")
       } else {
         data.closes.forEach((item, index) => {
-          row(`${formatWatLong(item.day)}  ·  ${item.staff}`, formatPdfMoney(item.expected), "variance", formatPdfMoney(item.variance), index % 2 ? PAPER : undefined)
+          row(`${formatWatLong(item.day)}  ·  ${item.staff}`, formatPdfMoney(item.expected), "short or plenty", formatPdfMoney(item.variance), index % 2 ? PAPER : undefined)
         })
       }
 
-      section("IMEI vs shop count")
+      section("IMEI list against shop count")
       if (data.imeiRows.length === 0) {
-        row("No serialized stock in this shop", "")
+        row("No phone or serial item in this shop", "")
       } else {
         data.imeiRows.forEach((item, index) => {
-          row(item.product, `${item.shopQty} / ${item.imeis}`, undefined, item.delta === 0 ? "Match" : String(item.delta), index % 2 ? PAPER : undefined)
+          row(item.product, `${item.shopQty} / ${item.imeis}`, undefined, item.delta === 0 ? "They agree" : String(item.delta), index % 2 ? PAPER : undefined)
         })
       }
 
       ensure(42)
       y += 4
-      section("Sign-off")
+      section("Sign here")
       const boxesW = (width - 8) / 3
-      ;["Prepared by", "Checked by records", "Owner / CEO"].forEach((title, index) => {
+      ;["Written by", "Checked by records checker", "Approved by owner"].forEach((title, index) => {
         const x = left + index * (boxesW + 4)
         doc.setTextColor(...MUTED)
         doc.setFontSize(7)
@@ -286,7 +286,7 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
       y += 32
       doc.setFontSize(7)
       doc.setTextColor(...MUTED)
-      doc.text("Software by Techvaults Limited. This pack does not change any invoice.", left, y)
+      doc.text("Software by Techvaults Limited. This paper does not change any sale.", left, y)
 
       footer()
       doc.save(`${data.statementRef}.pdf`)
@@ -297,7 +297,7 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
 
   return (
     <Button type="button" onClick={download} disabled={busy} className="print:hidden">
-      {busy ? "Preparing the PDF" : "Download branded PDF"}
+      {busy ? "Getting the PDF ready" : "Download PDF"}
     </Button>
   )
 }

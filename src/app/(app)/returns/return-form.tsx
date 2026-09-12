@@ -29,7 +29,7 @@ export function ReturnForm({ sold }: { sold: Sold[] }) {
 
   return (
     <ActionForm action={createReturn} className="space-y-3">
-      <Select name="imei1" value={imei1} onChange={(event) => setImei1(event.target.value)} required emptyLabel="No sold phone from this shop yet. A return needs a phone this shop sold.">
+      <Select name="imei1" value={imei1} onChange={(event) => setImei1(event.target.value)} required emptyLabel="This shop has not sold any phone yet. A return needs a phone that this shop sold.">
         {sold.map((row) => (
           <option key={row.imei1} value={row.imei1}>
             {row.imei1} · {row.product.name} · {row.customer?.name ?? "Walk-in"}
@@ -42,7 +42,7 @@ export function ReturnForm({ sold }: { sold: Sold[] }) {
           {warranty ? ` · ${warranty.label}` : ""}
         </p>
       ) : (
-        <p className="text-xs text-danger">No sold IMEIs on this book.</p>
+        <p className="text-xs text-danger">No IMEI has been sold here.</p>
       )}
       <Select name="reason" defaultValue="FAULTY">
         {["FAULTY", "WARRANTY", "CUSTOMER_DISSATISFACTION", "DAMAGED", "WRONG_PRODUCT", "SUPPLIER_RETURN"].map((item) => (
@@ -63,7 +63,7 @@ export function ReturnForm({ sold }: { sold: Sold[] }) {
       </Select>
       <Input name="refundAmount" type="number" defaultValue={refund || ""} key={`${imei1}-${refund}`} placeholder="Refund / credit if cash goes back" />
       <p className="text-xs text-muted-foreground">Suggested from the original sale: {formatCurrency(refund)}</p>
-      <Textarea name="notes" placeholder="What the customer said" />
+      <Textarea name="notes" placeholder="What the customer told you" />
     </ActionForm>
   )
 }

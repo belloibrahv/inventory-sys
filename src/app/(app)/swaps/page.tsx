@@ -15,7 +15,7 @@ export default async function SwapsPage() {
   return (
     <div className="page-split">
       <div>
-        <PageHeader title="Swaps" description="Customer brings an old phone. You give a value, wait for approval, give a new phone, collect or pay the difference, then print the invoice." />
+        <PageHeader title="Swaps" description="A buyer brings an old phone. Agree what it is worth, wait for yes, hand over the new phone, settle the money, then print the bill." />
         <WorkflowSteps current={0} steps={["Old phone in", "Agree value", "Boss approves", "New phone out", "Balance", "Invoice"]} />
         <div className="space-y-3">
           {swaps.map((swap) => (
@@ -36,11 +36,11 @@ export default async function SwapsPage() {
                 </p>
               ) : null}
               {swap.status === "PENDING" ? (
-                <p className="mt-3 text-xs text-warning">Waiting on CEO / manager approval. Collecting now is only for approvers.</p>
+                <p className="mt-3 text-xs text-warning">Waiting for the CEO or the manager to say yes. Only they can collect the money now.</p>
               ) : null}
               {swap.status === "APPROVED" || swap.status === "PENDING" ? (
                 <div className="mt-4 border-t border-border pt-4">
-                  <p className="mb-2 text-sm font-medium">Collect difference and close</p>
+                  <p className="mb-2 text-sm font-medium">Collect the difference and finish</p>
                   <ActionForm action={completeSwap} submit="Collect & invoice" className="grid gap-2 md:grid-cols-3">
                     <input type="hidden" name="id" value={swap.id} />
                     <Input name="paidAmount" type="number" defaultValue={money(swap.balanceAmount)} />

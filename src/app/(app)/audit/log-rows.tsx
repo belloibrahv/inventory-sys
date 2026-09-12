@@ -27,7 +27,7 @@ export function AuditLogRows({ logs }: { logs: Log[] }) {
   const [open, setOpen] = useState<string | null>(null)
 
   if (!logs.length) {
-    return <p className="px-4 py-10 text-center text-sm text-muted-foreground">Nothing matches these filters.</p>
+    return <p className="px-4 py-10 text-center text-sm text-muted-foreground">Nothing matches what you picked.</p>
   }
 
   return (
@@ -68,8 +68,8 @@ export function AuditLogRows({ logs }: { logs: Log[] }) {
                 <p>Work email: {log.email}</p>
                 <p>Device: {log.ip ?? "Not recorded"}</p>
                 {page ? <p>Page: {page}</p> : null}
-                {change ? <p>{change}</p> : <p>No extra detail on this row.</p>}
-                <p className="text-muted-foreground">This row cannot be edited or deleted.</p>
+                {change ? <p>{change}</p> : <p>There is nothing more to show on this row.</p>}
+                <p className="text-muted-foreground">Nobody can change or delete this row.</p>
               </div>
             ) : null}
           </button>

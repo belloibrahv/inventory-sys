@@ -77,7 +77,7 @@ export function UploadCard({
               result = await action(formData)
             } catch {
               setBusy(false)
-              toast.error("That did not reach the shop system. Check your connection and try once more.")
+              toast.error("That did not reach the shop system. Check your network and try again.")
               return
             }
             setBusy(false)

@@ -135,7 +135,7 @@ export function StatCard({
       {hint ? <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{hint}</p> : null}
       {interactive ? (
         <p className="mt-2 text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
-          View the rows behind this &rarr;
+          See the rows that make this number &rarr;
         </p>
       ) : null}
     </>

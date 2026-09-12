@@ -17,7 +17,7 @@ import { VIEW_SHOP_COOKIE } from "@/lib/branch-scope"
 export async function setViewShop(branchId: string) {
   const user = await requireUser()
   if (!(await canSeeAllBranches(user.role))) {
-    return { error: "You only work in your own shop." }
+    return { error: "You work in your own shop only." }
   }
 
   if (branchId !== "ALL") {
@@ -25,7 +25,7 @@ export async function setViewShop(branchId: string) {
       where: { id: branchId, isActive: true },
       select: { id: true },
     })
-    if (!branch) return { error: "That shop is not open." }
+    if (!branch) return { error: "That shop is closed." }
   }
 
   const jar = await cookies()

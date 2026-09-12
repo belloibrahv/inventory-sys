@@ -13,7 +13,7 @@ export function AuditExportButton({ filters }: { filters: AuditFilters }) {
       onClick={async () => {
         const result = await exportAuditCsv(filters)
         if (result.error || !result.csv) {
-          toast.error(result.error ?? "Could not export.")
+          toast.error(result.error ?? "The download did not work.")
           return
         }
         const blob = new Blob([result.csv], { type: "text/csv" })
@@ -23,7 +23,7 @@ export function AuditExportButton({ filters }: { filters: AuditFilters }) {
         link.download = `who-did-what-${new Date().toISOString().slice(0, 10)}.csv`
         link.click()
         URL.revokeObjectURL(url)
-        toast.success("Trail downloaded. That download is itself on the trail.")
+        toast.success("Downloaded. This download is also kept on the trail.")
       }}
     >
       Download trail
