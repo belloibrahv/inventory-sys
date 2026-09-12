@@ -10,7 +10,7 @@ import { ShopTag, StatCard, StatGrid, TableEmpty, TableShell, TonePill, Toolbar 
 import { TablePager, usePagedRows } from "@/components/table-pager"
 import { downloadTable } from "@/lib/download-table"
 import { formatCurrency, money } from "@/lib/utils"
-import { lowStockLimit } from "@/lib/settings"
+import { lowStockLimit } from "@/lib/stock-limits"
 
 type Branch = { id: string; name: string; code: string }
 type InventoryRow = {
