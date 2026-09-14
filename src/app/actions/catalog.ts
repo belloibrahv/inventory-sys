@@ -466,3 +466,208 @@ export async function importProducts(formData: FormData) {
   revalidatePath("/incoming")
   return { success: true, created, skipped, errors }
 }
+
+function cleanLabel(raw: FormDataEntryValue | null, label: string) {
+  const name = String(raw ?? "").trim()
+  if (!name) throw new Error(`Type the ${label}.`)
+  return name
+}
+
+export async function getCatalogTaxonomy() {
+  await requireUser()
+  const [brands, categories] = await Promise.all([
+    prisma.brand.findMany({
+      orderBy: { name: "asc" },
+      include: { _count: { select: { products: true } } },
+    }),
+    prisma.category.findMany({
+      orderBy: { name: "asc" },
+      include: { _count: { select: { products: true } } },
+    }),
+  ])
+  return { brands, categories }
+}
+
+export async function createBrand(formData: FormData) {
+  const user = await requireUser()
+  if (!(await canManageCatalog(user.role))) return { error: "You are not allowed to add brands. Ask the main admin." }
+  try {
+    const name = cleanLabel(formData.get("name"), "brand name")
+    const exists = await prisma.brand.findUnique({ where: { name } })
+    if (exists) return { error: `${name} is already on the brand list.` }
+    await prisma.brand.create({ data: { name } })
+    await prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "CREATE",
+        entityType: "Brand",
+        entityId: name,
+        newValue: JSON.stringify({ name }),
+        branchId: user.branchId,
+      },
+    })
+  } catch (error) {
+    return { error: shopError(error, "Could not add that brand.") }
+  }
+  revalidatePath("/products")
+  revalidatePath("/products/brands")
+  revalidatePath("/products/new")
+  return { success: true }
+}
+
+export async function updateBrand(formData: FormData) {
+  const user = await requireUser()
+  if (!(await canManageCatalog(user.role))) return { error: "You are not allowed to rename brands. Ask the main admin." }
+  const id = String(formData.get("id") || "")
+  try {
+    const name = cleanLabel(formData.get("name"), "brand name")
+    const existing = await prisma.brand.findUnique({ where: { id } })
+    if (!existing) return { error: "We could not find that brand." }
+    if (name !== existing.name) {
+      const taken = await prisma.brand.findUnique({ where: { name } })
+      if (taken) return { error: `${name} is already on the brand list.` }
+    }
+    await prisma.brand.update({ where: { id }, data: { name } })
+    await prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "UPDATE",
+        entityType: "Brand",
+        entityId: name,
+        oldValue: existing.name,
+        newValue: name,
+        branchId: user.branchId,
+      },
+    })
+  } catch (error) {
+    return { error: shopError(error, "Could not rename that brand.") }
+  }
+  revalidatePath("/products")
+  revalidatePath("/products/brands")
+  revalidatePath("/products/new")
+  return { success: true }
+}
+
+export async function deleteBrand(formData: FormData) {
+  const user = await requireUser()
+  if (!(await canManageCatalog(user.role))) return { error: "You are not allowed to remove brands. Ask the main admin." }
+  const id = String(formData.get("id") || "")
+  const brand = await prisma.brand.findUnique({
+    where: { id },
+    include: { _count: { select: { products: true } } },
+  })
+  if (!brand) return { error: "We could not find that brand." }
+  if (brand._count.products > 0) {
+    return {
+      error: `${brand.name} still has ${brand._count.products} item${brand._count.products === 1 ? "" : "s"} on the price list. Move those items first.`,
+    }
+  }
+  await prisma.brand.delete({ where: { id } })
+  await prisma.auditLog.create({
+    data: {
+      userId: user.id,
+      action: "DELETE",
+      entityType: "Brand",
+      entityId: brand.name,
+      oldValue: brand.name,
+      branchId: user.branchId,
+    },
+  })
+  revalidatePath("/products")
+  revalidatePath("/products/brands")
+  revalidatePath("/products/new")
+  return { success: true }
+}
+
+export async function createCategory(formData: FormData) {
+  const user = await requireUser()
+  if (!(await canManageCatalog(user.role))) return { error: "You are not allowed to add categories. Ask the main admin." }
+  try {
+    const name = cleanLabel(formData.get("name"), "category name")
+    const description = String(formData.get("description") || "").trim() || null
+    const exists = await prisma.category.findUnique({ where: { name } })
+    if (exists) return { error: `${name} is already on the category list.` }
+    await prisma.category.create({ data: { name, description } })
+    await prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "CREATE",
+        entityType: "Category",
+        entityId: name,
+        newValue: JSON.stringify({ name, description }),
+        branchId: user.branchId,
+      },
+    })
+  } catch (error) {
+    return { error: shopError(error, "Could not add that category.") }
+  }
+  revalidatePath("/products")
+  revalidatePath("/products/brands")
+  revalidatePath("/products/new")
+  return { success: true }
+}
+
+export async function updateCategory(formData: FormData) {
+  const user = await requireUser()
+  if (!(await canManageCatalog(user.role))) return { error: "You are not allowed to edit categories. Ask the main admin." }
+  const id = String(formData.get("id") || "")
+  try {
+    const name = cleanLabel(formData.get("name"), "category name")
+    const description = String(formData.get("description") || "").trim() || null
+    const existing = await prisma.category.findUnique({ where: { id } })
+    if (!existing) return { error: "We could not find that category." }
+    if (name !== existing.name) {
+      const taken = await prisma.category.findUnique({ where: { name } })
+      if (taken) return { error: `${name} is already on the category list.` }
+    }
+    await prisma.category.update({ where: { id }, data: { name, description } })
+    await prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "UPDATE",
+        entityType: "Category",
+        entityId: name,
+        oldValue: JSON.stringify({ name: existing.name, description: existing.description }),
+        newValue: JSON.stringify({ name, description }),
+        branchId: user.branchId,
+      },
+    })
+  } catch (error) {
+    return { error: shopError(error, "Could not edit that category.") }
+  }
+  revalidatePath("/products")
+  revalidatePath("/products/brands")
+  revalidatePath("/products/new")
+  return { success: true }
+}
+
+export async function deleteCategory(formData: FormData) {
+  const user = await requireUser()
+  if (!(await canManageCatalog(user.role))) return { error: "You are not allowed to remove categories. Ask the main admin." }
+  const id = String(formData.get("id") || "")
+  const category = await prisma.category.findUnique({
+    where: { id },
+    include: { _count: { select: { products: true } } },
+  })
+  if (!category) return { error: "We could not find that category." }
+  if (category._count.products > 0) {
+    return {
+      error: `${category.name} still has ${category._count.products} item${category._count.products === 1 ? "" : "s"} on the price list. Move those items first.`,
+    }
+  }
+  await prisma.category.delete({ where: { id } })
+  await prisma.auditLog.create({
+    data: {
+      userId: user.id,
+      action: "DELETE",
+      entityType: "Category",
+      entityId: category.name,
+      oldValue: category.name,
+      branchId: user.branchId,
+    },
+  })
+  revalidatePath("/products")
+  revalidatePath("/products/brands")
+  revalidatePath("/products/new")
+  return { success: true }
+}

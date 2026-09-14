@@ -111,6 +111,7 @@ export const navGroups: NavGroup[] = [
         icon: Smartphone,
         children: [
           { name: "Price list", href: "/products", icon: Tags, hint: "Every model, cost, lowest price and sell price" },
+          { name: "Brands & categories", href: "/products/brands", icon: Factory, hint: "Add Samsung, Tecno, phones, power — the lists items pick from" },
           { name: "Add one item", href: "/products/new", icon: PlusCircle, hint: "Put a single new model on the list" },
           { name: "Add from a sheet", href: "/products/bulk", icon: FileSpreadsheet, hint: "Paste or upload many models at once" },
           { name: "Warranty days", href: "/products/warranty", icon: ShieldCheck, hint: "How long each item is covered" },
