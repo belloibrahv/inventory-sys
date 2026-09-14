@@ -28,7 +28,8 @@
     "staff:owner": "tsx scripts/create-owner.ts",
     "staff:seed": "tsx scripts/create-staff.ts",
     "staff:local": "tsx scripts/seed-local-logins.ts",
-    "stock:opening": "tsx scripts/import-opening-stock.ts"
+    "stock:opening": "tsx scripts/import-opening-stock.ts",
+    "stock:heal-imei": "tsx scripts/heal-imei-shelf.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

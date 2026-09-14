@@ -160,8 +160,11 @@ export async function checkoutSale(input: {
   const stockByProduct = new Map(stockRows.map((row) => [row.productId, row]))
 
   // Pieces wanted per product, so a cart holding the same accessory on two lines
-  // is checked against stock once, on the combined figure.
+  // is checked against stock once, on the combined figure. Phone IMEI lines are
+  // checked here too (shelf must move with the IMEI), but drawn in the claim
+  // loop below — never twice.
   const wantByProduct = new Map<string, number>()
+  const shelfWantByProduct = new Map<string, number>()
 
   for (const item of input.items) {
     const product = productById.get(item.productId)
@@ -179,14 +182,16 @@ export async function checkoutSale(input: {
       const imei = imeiById.get(item.imeiId)
       if (!imei || imei.status !== "IN_STOCK") return { error: `IMEI ${imei?.imei1 ?? ""} is not available.` }
       if (imei.branchId !== input.branchId) return { error: `${imei.imei1} is not in this shop.` }
+      shelfWantByProduct.set(item.productId, (shelfWantByProduct.get(item.productId) ?? 0) + (item.quantity || 1))
     } else if (product._count.imeiRecords > 0) {
       return { error: `${product.name} must be sold with an IMEI from this shop.` }
     } else {
       wantByProduct.set(item.productId, (wantByProduct.get(item.productId) ?? 0) + item.quantity)
+      shelfWantByProduct.set(item.productId, (shelfWantByProduct.get(item.productId) ?? 0) + item.quantity)
     }
   }
 
-  for (const [productId, wanted] of wantByProduct) {
+  for (const [productId, wanted] of shelfWantByProduct) {
     const stock = stockByProduct.get(productId)
     if (!stock || stock.quantity < wanted) {
       return { error: `${productById.get(productId)?.name ?? "This item"} does not have enough units at this branch.` }
@@ -265,9 +270,14 @@ export async function checkoutSale(input: {
       // The checks above are for a helpful message. These are the ones that
       // decide the sale: a guarded write that only lands while the unit is still
       // In shop here, so two tills cannot both sell the same phone.
+      //
+      // Shelf quantity must move with the IMEI. Before this, phones were marked
+      // Sold while Shop stock still showed them on the shelf — the Home
+      // "phone list vs shelf" gaps were that bug showing up.
       for (const item of input.items) {
         if (!item.imeiId) continue
-        const label = imeiById.get(item.imeiId)?.imei1 ?? "That phone"
+        const claimed = imeiById.get(item.imeiId)
+        const label = claimed?.imei1 ?? "That phone"
         await claimImei(tx, {
           imeiId: item.imeiId,
           branchId: input.branchId,
@@ -278,6 +288,12 @@ export async function checkoutSale(input: {
             customerId: input.customerId || null,
           },
         })
+        await drawStock(tx, {
+          productId: item.productId,
+          branchId: input.branchId,
+          quantity: item.quantity || 1,
+          label,
+        })
         await tx.auditLog.create({
           data: {
             userId: user.id,
@@ -285,7 +301,7 @@ export async function checkoutSale(input: {
             entityType: "IMEIRecord",
             entityId: label,
             oldValue: "IN_STOCK",
-            newValue: JSON.stringify({ status: "SOLD", invoice: invoiceNumber }),
+            newValue: JSON.stringify({ status: "SOLD", invoice: invoiceNumber, shelfDrawn: item.quantity || 1 }),
             branchId: input.branchId,
           },
         })
