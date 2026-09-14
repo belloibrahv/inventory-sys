@@ -9,7 +9,7 @@ Honest status after codebase audit. Screens are largely built; these items close
 | P0-1 | **IMEI sale ↔ shelf quantity** | Selling a phone marked IMEI Sold but left Shop stock high → false stock & false value | **Fixed in code** — `checkoutSale` now `drawStock` after `claimImei`. Heal old drift: `npx tsx scripts/heal-imei-shelf.ts --apply` |
 | P0-2 | **Heal production / local shelf drift** | Past sales already inflated shelf counts | Script ready; run on each DB that sold phones before P0-1 |
 | P0-3 | **E2E sign-off of the 13 go-live steps** on production | Checklist is not “done” until admin + auditor walk it live | Pending human test |
-| P0-4 | **Receive shortage alert** (expected 50 / got 48) | Auditor must see variance without Excel | Partial today (incoming preview); needs clear auditor alert |
+| P0-4 | **Receive shortage alert** (expected 50 / got 48) | Auditor must see variance without Excel | **Fixed** — expected/received stored on each line; note required on mismatch; books desk + managers alerted; carton list shows short/extra |
 | P0-5 | **Prove transfer 10 phones Ibadan→Lagos** | Branch truth + audit trail | Code exists; must be signed off on live data |
 
 ## P1 — Close soon (controls & master data)
@@ -35,6 +35,15 @@ Honest status after codebase audit. Screens are largely built; these items close
 | P2-4 | Offline receipts & offline stock count | Offline sales + sync already work |
 | P2-5 | High-debt threshold watches | Unpaid invoice alerts exist |
 | P2-6 | Transfer IMEI as proper relation (not notes) | Works; brittle for long-term audit |
+
+## How to verify P0-4
+
+1. Book a Coming carton for e.g. 50 pieces (or 5 IMEIs).
+2. Preview and receive with only 48 (or untick 2 IMEIs).
+3. Confirm is blocked until you write a note.
+4. After confirm: carton shows **expected 50 · got 48 · short 2**.
+5. Auditor / accountant / admin get an Alerts notification.
+6. Linked supplier bill goes to **Part received** if anything remains.
 
 ## How to verify P0-1
 

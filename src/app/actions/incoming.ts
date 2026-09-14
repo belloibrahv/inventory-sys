@@ -103,6 +103,7 @@ export async function createIncomingLot(formData: FormData) {
             lotId: lot.id,
             productId,
             quantity,
+            expectedQuantity: quantity,
             identity,
             identifiers: ids.length ? ids.join("\n") : null,
           },
@@ -174,7 +175,9 @@ export type PreviewAndReceivePayload = {
 
 /**
  * Preview and edit incoming goods before confirming arrival into shop stock.
- * Handles discrepancies (e.g., expected 4, received 2) and updates IMEIs accordingly.
+ * Handles discrepancies (e.g., expected 50, received 48): records the variance
+ * on each line, keeps the original expected count, and alerts the records
+ * checker / books desk.
  */
 export async function previewAndReceiveIncoming(payload: PreviewAndReceivePayload) {
   const user = await requireUser()
@@ -182,32 +185,71 @@ export async function previewAndReceiveIncoming(payload: PreviewAndReceivePayloa
 
   const lot = await prisma.incomingLot.findUnique({
     where: { id: payload.lotId },
-    include: { items: { include: { product: true } }, branch: true },
+    include: { items: { include: { product: true } }, branch: true, supplier: true, purchase: true },
   })
   if (!lot || lot.status !== "COMING") return { error: "These goods are not marked as on the way, so you cannot receive them." }
 
   const itemMap = new Map(payload.items.map((it) => [it.itemId, it]))
 
+  type LineVariance = {
+    productName: string
+    expected: number
+    received: number
+    short: number
+  }
+  const variances: LineVariance[] = []
+
+  for (const item of lot.items) {
+    const adjustment = itemMap.get(item.id)
+    const expected = item.expectedQuantity > 0 ? item.expectedQuantity : item.quantity
+    let received = adjustment ? Math.max(0, adjustment.receivedQuantity) : expected
+    if (item.identity !== "NONE") {
+      const confirmed = (adjustment?.confirmedIdentities || []).map((id) => id.trim()).filter(Boolean)
+      if (confirmed.length > 0) received = confirmed.length
+    }
+    if (received !== expected) {
+      variances.push({
+        productName: item.product.name,
+        expected,
+        received,
+        short: expected - received,
+      })
+    }
+  }
+
+  const note = (payload.notes || "").trim()
+  if (variances.length > 0 && !note) {
+    return {
+      error:
+        "The count does not match what was expected. Write a short note (for example: two units short in the carton) before you confirm.",
+    }
+  }
+
   try {
     await prisma.$transaction(async (tx) => {
       for (const item of lot.items) {
         const adjustment = itemMap.get(item.id)
-        const receivedQty = adjustment ? Math.max(0, adjustment.receivedQuantity) : item.quantity
+        const expected = item.expectedQuantity > 0 ? item.expectedQuantity : item.quantity
         const confirmedIds = (adjustment?.confirmedIdentities || []).map((id) => id.trim()).filter(Boolean)
+        let receivedQty = adjustment ? Math.max(0, adjustment.receivedQuantity) : expected
 
         if (item.identity === "NONE") {
           // Decrement all incoming, increment only actually received quantity
           await tx.inventory.upsert({
             where: { productId_branchId: { productId: item.productId, branchId: lot.branchId } },
             update: {
-              incomingQty: { decrement: item.quantity },
+              incomingQty: { decrement: expected },
               quantity: { increment: receivedQty },
             },
             create: { productId: item.productId, branchId: lot.branchId, quantity: receivedQty, incomingQty: 0 },
           })
           await tx.incomingItem.update({
             where: { id: item.id },
-            data: { quantity: receivedQty },
+            data: {
+              expectedQuantity: expected,
+              receivedQuantity: receivedQty,
+              quantity: receivedQty,
+            },
           })
         } else {
           // For IMEI / Serial:
@@ -243,11 +285,12 @@ export async function previewAndReceiveIncoming(payload: PreviewAndReceivePayloa
           }
 
           const actualReceived = confirmedIds.length > 0 ? confirmedIds.length : receivedQty
+          receivedQty = actualReceived
 
           await tx.inventory.upsert({
             where: { productId_branchId: { productId: item.productId, branchId: lot.branchId } },
             update: {
-              incomingQty: { decrement: item.quantity },
+              incomingQty: { decrement: expected },
               quantity: { increment: actualReceived },
             },
             create: { productId: item.productId, branchId: lot.branchId, quantity: actualReceived, incomingQty: 0 },
@@ -256,37 +299,63 @@ export async function previewAndReceiveIncoming(payload: PreviewAndReceivePayloa
           await tx.incomingItem.update({
             where: { id: item.id },
             data: {
+              expectedQuantity: expected,
+              receivedQuantity: actualReceived,
               quantity: actualReceived,
               identifiers: confirmedIds.length ? confirmedIds.join("\n") : item.identifiers,
             },
           })
         }
+
+        // Keep purchase receivedQty in sync with what really entered the shop.
+        if (lot.purchaseId) {
+          const purchase = await tx.purchase.findUnique({
+            where: { id: lot.purchaseId },
+            include: { items: true },
+          })
+          if (purchase) {
+            const line = purchase.items.find((it) => it.productId === item.productId) ?? purchase.items[0]
+            if (line) {
+              const newReceived = Math.min(line.quantity, line.receivedQty + receivedQty)
+              await tx.purchaseItem.update({ where: { id: line.id }, data: { receivedQty: newReceived } })
+            }
+          }
+        }
       }
+
+      const varianceSummary =
+        variances.length === 0
+          ? null
+          : variances
+              .map((row) =>
+                row.short > 0
+                  ? `${row.productName}: expected ${row.expected}, got ${row.received} (short ${row.short})`
+                  : `${row.productName}: expected ${row.expected}, got ${row.received} (extra ${-row.short})`
+              )
+              .join(" · ")
+
+      const nextNotes = [
+        lot.notes,
+        note || null,
+        varianceSummary ? `Variance: ${varianceSummary}` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
 
       await tx.incomingLot.update({
         where: { id: lot.id },
         data: {
           status: IncomingStatus.ARRIVED,
-          notes: payload.notes ? `${lot.notes ? `${lot.notes} · ` : ""}${payload.notes}` : lot.notes,
+          notes: nextNotes || null,
         },
       })
 
-      // Update linked purchase if exists
       if (lot.purchaseId) {
         const purchase = await tx.purchase.findUnique({
           where: { id: lot.purchaseId },
           include: { items: true },
         })
         if (purchase) {
-          for (const incoming of lot.items) {
-            const adjustment = itemMap.get(incoming.id)
-            const actualQty = adjustment ? adjustment.receivedQuantity : incoming.quantity
-            const line = purchase.items.find((it) => it.productId === incoming.productId) ?? purchase.items[0]
-            if (!line) continue
-            const newReceived = Math.min(line.quantity, line.receivedQty + actualQty)
-            await tx.purchaseItem.update({ where: { id: line.id }, data: { receivedQty: newReceived } })
-            line.receivedQty = newReceived
-          }
           const done = purchase.items.every((it) => it.receivedQty >= it.quantity)
           await tx.purchase.update({
             where: { id: purchase.id },
@@ -304,7 +373,11 @@ export async function previewAndReceiveIncoming(payload: PreviewAndReceivePayloa
           action: "UPDATE",
           entityType: "IncomingLot",
           entityId: lot.lotNumber,
-          newValue: JSON.stringify({ status: "ARRIVED", previewAdjusted: true }),
+          newValue: JSON.stringify({
+            status: "ARRIVED",
+            variance: variances,
+            note: note || null,
+          }),
           branchId: lot.branchId,
         },
       })
@@ -313,12 +386,83 @@ export async function previewAndReceiveIncoming(payload: PreviewAndReceivePayloa
     return { error: shopError(error, "Could not confirm arrival of these goods.") }
   }
 
+  if (variances.length > 0) {
+    await alertReceiveShortage({
+      lotNumber: lot.lotNumber,
+      branchId: lot.branchId,
+      branchName: lot.branch.name,
+      supplierName: lot.supplier?.name ?? null,
+      purchaseInvoice: lot.purchase?.invoiceNumber ?? null,
+      variances,
+      note,
+    })
+  }
+
   revalidatePath("/incoming")
   revalidatePath("/inventory")
   revalidatePath("/imei")
   revalidatePath("/pos")
   revalidatePath("/purchases")
-  return { success: true }
+  revalidatePath("/dashboard")
+  revalidatePath("/notifications")
+  return {
+    success: true,
+    variance: variances.length > 0,
+    shortUnits: variances.reduce((sum, row) => sum + Math.max(0, row.short), 0),
+  }
+}
+
+async function alertReceiveShortage(input: {
+  lotNumber: string
+  branchId: string
+  branchName: string
+  supplierName: string | null
+  purchaseInvoice: string | null
+  variances: Array<{ productName: string; expected: number; received: number; short: number }>
+  note: string
+}) {
+  const shortTotal = input.variances.reduce((sum, row) => sum + Math.max(0, row.short), 0)
+  const extraTotal = input.variances.reduce((sum, row) => sum + Math.max(0, -row.short), 0)
+  const headline =
+    shortTotal > 0
+      ? `Shortage on ${input.lotNumber}: ${shortTotal} unit${shortTotal === 1 ? "" : "s"} short`
+      : `Extra units on ${input.lotNumber}: ${extraTotal} more than expected`
+  const lines = input.variances
+    .map((row) =>
+      row.short > 0
+        ? `${row.productName} — expected ${row.expected}, got ${row.received} (short ${row.short})`
+        : `${row.productName} — expected ${row.expected}, got ${row.received} (extra ${-row.short})`
+    )
+    .join("; ")
+  const where = [
+    input.branchName,
+    input.supplierName,
+    input.purchaseInvoice ? `bill ${input.purchaseInvoice}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ")
+  const message = `${where}. ${lines}. Note: ${input.note}`
+
+  const watchers = await prisma.user.findMany({
+    where: {
+      isActive: true,
+      OR: [
+        { role: { in: ["SUPER_ADMIN", "CEO", "AUDITOR", "ACCOUNTANT", "VAULT_MANAGER"] } },
+        { role: "BRANCH_MANAGER", branchId: input.branchId },
+      ],
+    },
+    select: { id: true },
+  })
+  if (!watchers.length) return
+  await prisma.notification.createMany({
+    data: watchers.map((watcher) => ({
+      userId: watcher.id,
+      type: "SYSTEM" as const,
+      title: headline,
+      message,
+      actionUrl: "/incoming",
+    })),
+  })
 }
 
 

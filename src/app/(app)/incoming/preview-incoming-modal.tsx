@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { AlertCircle, Eye, Loader2, PackageCheck } from "lucide-react"
 import { toast } from "sonner"
@@ -12,6 +12,8 @@ type IncomingItem = {
   id: string
   productId: string
   quantity: number
+  expectedQuantity?: number
+  receivedQuantity?: number | null
   identity: "IMEI" | "SERIAL" | "NONE"
   identifiers: string | null
   product: {
@@ -41,9 +43,10 @@ export function PreviewIncomingModal({ lot }: { lot: IncomingLot }) {
   const [adjustments, setAdjustments] = useState<Record<string, { qty: number; identities: string[] }>>(() => {
     const map: Record<string, { qty: number; identities: string[] }> = {}
     for (const item of lot.items) {
+      const expected = item.expectedQuantity && item.expectedQuantity > 0 ? item.expectedQuantity : item.quantity
       const ids = item.identifiers ? item.identifiers.split(/[\r\n,]+/).map((s) => s.trim()).filter(Boolean) : []
       map[item.id] = {
-        qty: item.quantity,
+        qty: expected,
         identities: ids,
       }
     }
@@ -82,12 +85,18 @@ export function PreviewIncomingModal({ lot }: { lot: IncomingLot }) {
   }
 
   async function handleConfirm() {
+    if (hasDiscrepancy && !notes.trim()) {
+      toast.error("Write a short note about the shortage or extra units before you confirm.")
+      return
+    }
+
     setBusy(true)
     const itemsPayload: ReceiveItemAdjustment[] = lot.items.map((item) => {
       const adj = adjustments[item.id]
+      const expected = item.expectedQuantity && item.expectedQuantity > 0 ? item.expectedQuantity : item.quantity
       return {
         itemId: item.id,
-        receivedQuantity: adj ? adj.qty : item.quantity,
+        receivedQuantity: adj ? adj.qty : expected,
         confirmedIdentities: adj ? adj.identities : [],
       }
     })
@@ -104,14 +113,32 @@ export function PreviewIncomingModal({ lot }: { lot: IncomingLot }) {
       return
     }
 
-    toast.success(`Arrival confirmed for ${lot.lotNumber}! Stock added to ${lot.branch.name}.`)
+    if (result && "variance" in result && result.variance) {
+      toast.warning(
+        `Arrival recorded with a shortage/extra. The records checker has been alerted (${result.shortUnits ?? 0} short).`
+      )
+    } else {
+      toast.success(`Arrival confirmed for ${lot.lotNumber}. Stock added to ${lot.branch.name}.`)
+    }
     setOpen(false)
     router.refresh()
   }
 
-  const totalExpected = lot.items.reduce((s, i) => s + i.quantity, 0)
-  const totalReceiving = Object.values(adjustments).reduce((s, a) => s + a.qty, 0)
+  const lineExpected = useMemo(
+    () =>
+      Object.fromEntries(
+        lot.items.map((item) => [
+          item.id,
+          item.expectedQuantity && item.expectedQuantity > 0 ? item.expectedQuantity : item.quantity,
+        ])
+      ),
+    [lot.items]
+  )
+
+  const totalExpected = lot.items.reduce((sum, item) => sum + lineExpected[item.id], 0)
+  const totalReceiving = Object.values(adjustments).reduce((sum, row) => sum + row.qty, 0)
   const hasDiscrepancy = totalExpected !== totalReceiving
+  const shortBy = totalExpected - totalReceiving
 
   return (
     <>
@@ -146,12 +173,22 @@ export function PreviewIncomingModal({ lot }: { lot: IncomingLot }) {
             </div>
 
             {hasDiscrepancy ? (
-              <div className="flex items-center gap-2 border-b border-warning/30 bg-warning-soft px-5 py-2.5 text-xs text-warning">
-                <AlertCircle className="h-4 w-4 shrink-0" />
+              <div className="flex items-start gap-2 border-b border-warning/30 bg-warning-soft px-5 py-2.5 text-xs text-warning">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>
-                  The list says <strong>{totalExpected}</strong> unit{totalExpected === 1 ? "" : "s"}, you are receiving{" "}
-                  <strong>{totalReceiving}</strong>. That is a difference of{" "}
-                  <strong>{Math.abs(totalExpected - totalReceiving)}</strong>.
+                  Expected <strong>{totalExpected}</strong>, you are receiving <strong>{totalReceiving}</strong>
+                  {shortBy > 0 ? (
+                    <>
+                      {" "}
+                      — <strong>{shortBy} short</strong>. The records checker will get an alert.
+                    </>
+                  ) : (
+                    <>
+                      {" "}
+                      — <strong>{-shortBy} extra</strong>. The records checker will get an alert.
+                    </>
+                  )}{" "}
+                  A short note is required before you confirm.
                 </span>
               </div>
             ) : null}
@@ -163,10 +200,12 @@ export function PreviewIncomingModal({ lot }: { lot: IncomingLot }) {
               </p>
 
               {lot.items.map((item) => {
-                const adj = adjustments[item.id] || { qty: item.quantity, identities: [] }
+                const expected = lineExpected[item.id]
+                const adj = adjustments[item.id] || { qty: expected, identities: [] }
                 const originalIds = item.identifiers
                   ? item.identifiers.split(/[\r\n,]+/).map((value) => value.trim()).filter(Boolean)
                   : []
+                const lineShort = expected - adj.qty
 
                 return (
                   <div key={item.id} className="space-y-3 rounded-lg border border-border p-4">
@@ -180,7 +219,13 @@ export function PreviewIncomingModal({ lot }: { lot: IncomingLot }) {
                             : item.identity === "SERIAL"
                               ? "tracked by serial"
                               : "counted in pieces"}{" "}
-                          · list says {item.quantity}
+                          · expected {expected}
+                          {lineShort !== 0 ? (
+                            <span className="text-warning">
+                              {" "}
+                              · {lineShort > 0 ? `short ${lineShort}` : `extra ${-lineShort}`}
+                            </span>
+                          ) : null}
                         </p>
                       </div>
 
@@ -189,7 +234,7 @@ export function PreviewIncomingModal({ lot }: { lot: IncomingLot }) {
                         <Input
                           type="number"
                           min={0}
-                          max={item.quantity * 2}
+                          max={expected * 2}
                           value={adj.qty}
                           onChange={(event) => handleQtyChange(item.id, Number(event.target.value))}
                           className="h-9 w-20 text-center font-semibold num"
@@ -232,12 +277,15 @@ export function PreviewIncomingModal({ lot }: { lot: IncomingLot }) {
               })}
 
               <label className="block text-sm">
-                <span className="eyebrow mb-1 block">Write down anything that did not match</span>
+                <span className="eyebrow mb-1 block">
+                  {hasDiscrepancy ? "Explain the shortage or extra (required)" : "Write down anything that did not match"}
+                </span>
                 <Input
                   placeholder="Example: two units short in the carton, waybill corrected"
                   value={notes}
                   onChange={(event) => setNotes(event.target.value)}
                   disabled={busy}
+                  required={hasDiscrepancy}
                 />
               </label>
             </div>
@@ -246,12 +294,18 @@ export function PreviewIncomingModal({ lot }: { lot: IncomingLot }) {
               <span className="text-xs text-muted-foreground">
                 Adding <strong className="text-foreground">{totalReceiving}</strong> unit
                 {totalReceiving === 1 ? "" : "s"} to {lot.branch.name}
+                {hasDiscrepancy ? (
+                  <span className="text-warning">
+                    {" "}
+                    · expected {totalExpected}
+                  </span>
+                ) : null}
               </span>
               <div className="flex gap-2">
                 <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={busy}>
                   Cancel
                 </Button>
-                <Button type="button" onClick={handleConfirm} disabled={busy}>
+                <Button type="button" onClick={handleConfirm} disabled={busy || (hasDiscrepancy && !notes.trim())}>
                   {busy ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Confirming…

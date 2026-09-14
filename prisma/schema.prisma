@@ -974,15 +974,21 @@ model ParkedSale {
 }
 
 model IncomingItem {
-  id          String           @id @default(cuid())
-  lotId       String
-  lot         IncomingLot      @relation(fields: [lotId], references: [id], onDelete: Cascade)
-  productId   String
-  product     Product          @relation(fields: [productId], references: [id])
-  quantity    Int
-  identity    IncomingIdentity
-  identifiers String?
-  createdAt   DateTime         @default(now())
+  id               String           @id @default(cuid())
+  lotId            String
+  lot              IncomingLot      @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  productId        String
+  product          Product          @relation(fields: [productId], references: [id])
+  /// How many the carton / bill said were coming. Never overwritten on receive.
+  expectedQuantity Int              @default(0)
+  /// How many actually entered the shop. Null while still Coming.
+  receivedQuantity Int?
+  /// Kept in sync with expectedQuantity (Coming) or receivedQuantity (Arrived)
+  /// so older screens that only read quantity stay correct.
+  quantity         Int
+  identity         IncomingIdentity
+  identifiers      String?
+  createdAt        DateTime         @default(now())
 
   @@index([lotId])
   @@index([productId])

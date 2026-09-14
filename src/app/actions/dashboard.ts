@@ -47,6 +47,7 @@ export async function getDashboardData() {
     revenueByBranch,
     inStockByProduct,
     pendingTransfers,
+    receiveShortages,
   ] = await Promise.all([
     prisma.sale.aggregate({
       where: { ...saleWhere, saleDate: { gte: monthStart } },
@@ -146,6 +147,17 @@ export async function getDashboardData() {
         status: { in: ["PENDING", "IN_TRANSIT"] },
         ...(branchId ? { OR: [{ fromBranchId: branchId }, { toBranchId: branchId }] } : {}),
       },
+    }),
+    prisma.incomingItem.findMany({
+      where: {
+        receivedQuantity: { not: null },
+        lot: {
+          status: "ARRIVED",
+          ...(branchId ? { branchId } : {}),
+          updatedAt: { gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) },
+        },
+      },
+      select: { expectedQuantity: true, receivedQuantity: true, quantity: true },
     }),
   ])
 
@@ -320,6 +332,14 @@ export async function getDashboardData() {
       { href: "/pos", label: "Waiting sales that have waited too long", count: parked.sitting },
       { href: "/audit?risk=HIGH", label: "Waiting sales that disappeared from a phone", count: parked.vanished },
       { href: "/incoming", label: "Goods on the way that are late", count: overdueIncoming },
+      {
+        href: "/incoming",
+        label: "Cartons that arrived short or with extras (last 30 days)",
+        count: receiveShortages.filter((row) => {
+          const expected = row.expectedQuantity > 0 ? row.expectedQuantity : row.quantity
+          return row.receivedQuantity != null && row.receivedQuantity !== expected
+        }).length,
+      },
       { href: "/transfers", label: "Goods sent to another shop, waiting to be confirmed", count: pendingTransfers },
       { href: "/sales", label: "Sales with no buyer name", count: walkIns },
       {

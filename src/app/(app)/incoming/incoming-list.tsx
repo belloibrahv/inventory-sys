@@ -26,6 +26,8 @@ type IncomingLot = {
     id: string
     productId: string
     quantity: number
+    expectedQuantity?: number
+    receivedQuantity?: number | null
     identity: "IMEI" | "SERIAL" | "NONE"
     identifiers: string | null
     product: { name: string; brand?: { name: string } }
@@ -103,16 +105,44 @@ export function IncomingList({
               </div>
             </div>
             <ul className="mt-3 space-y-1 border-t border-border pt-3 text-sm">
-              {lot.items.map((item) => (
-                <li key={item.id} className="flex items-center justify-between gap-3">
-                  <span className="min-w-0">{item.product.name}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {item.quantity} ·{" "}
-                    {item.identity === "IMEI" ? "by IMEI" : item.identity === "SERIAL" ? "by serial" : "piece count"}
-                  </span>
-                </li>
-              ))}
+              {lot.items.map((item) => {
+                const expected = item.expectedQuantity && item.expectedQuantity > 0 ? item.expectedQuantity : item.quantity
+                const received = item.receivedQuantity
+                const short = received != null ? expected - received : 0
+                return (
+                  <li key={item.id} className="flex items-center justify-between gap-3">
+                    <span className="min-w-0">{item.product.name}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {received != null ? (
+                        <>
+                          expected {expected} · got {received}
+                          {short !== 0 ? (
+                            <span className="text-warning">
+                              {" "}
+                              · {short > 0 ? `short ${short}` : `extra ${-short}`}
+                            </span>
+                          ) : null}
+                        </>
+                      ) : (
+                        <>
+                          {expected} ·{" "}
+                          {item.identity === "IMEI" ? "by IMEI" : item.identity === "SERIAL" ? "by serial" : "piece count"}
+                        </>
+                      )}
+                    </span>
+                  </li>
+                )
+              })}
             </ul>
+            {lot.status === "ARRIVED" &&
+            lot.items.some((item) => {
+              const expected = item.expectedQuantity && item.expectedQuantity > 0 ? item.expectedQuantity : item.quantity
+              return item.receivedQuantity != null && item.receivedQuantity !== expected
+            }) ? (
+              <p className="mt-2 rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-warning">
+                This carton arrived with a shortage or extra. The records checker was alerted.
+              </p>
+            ) : null}
             {lot.notes ? <p className="mt-2 text-xs text-muted-foreground">{lot.notes}</p> : null}
             <div className="mt-4 flex flex-wrap gap-2">
               {canBook && lot.status === "COMING" ? <PreviewIncomingModal lot={lot} /> : null}
