@@ -23,9 +23,9 @@ export default function AccountPage() {
       <div className="surface-card p-5">
         <h3 className="mb-3 font-semibold">Change password</h3>
         <ActionForm action={changePassword} submit="Save new password" className="space-y-3">
-          <Input name="currentPassword" type="password" placeholder="The password you use now" required className="min-h-12" />
-          <Input name="newPassword" type="password" placeholder="Your new password" required className="min-h-12" />
-          <Input name="confirmPassword" type="password" placeholder="Type the new password again" required className="min-h-12" />
+          <PasswordInput name="currentPassword" placeholder="The password you use now" required className="min-h-12" autoComplete="current-password" />
+          <PasswordInput name="newPassword" placeholder="Your new password" required className="min-h-12" autoComplete="new-password" />
+          <PasswordInput name="confirmPassword" placeholder="Type the new password again" required className="min-h-12" autoComplete="new-password" />
         </ActionForm>
       </div>
     </div>

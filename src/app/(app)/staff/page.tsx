@@ -5,6 +5,7 @@ import { ActionForm } from "@/components/action-form"
 import { PageHeader } from "@/components/shared"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { PasswordInput } from "@/components/ui/password-input"
 import { Select } from "@/components/ui/select"
 import { canManageStaff, isSuperAdmin, ROLE_LABELS } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
@@ -79,7 +80,7 @@ export default async function StaffPage() {
           </label>
           <label className="block text-sm">
             <span className="mb-1 block text-muted-foreground">First password</span>
-            <Input name="password" type="password" placeholder="They must change this after they sign in" required />
+            <PasswordInput name="password" placeholder="They must change this after they sign in" required />
           </label>
           <label className="block text-sm">
             <span className="mb-1 block text-muted-foreground">Job</span>
