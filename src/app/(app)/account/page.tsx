@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { changePassword, getAccountState } from "@/app/actions/account"
 import { ActionForm } from "@/components/action-form"
-import { Input } from "@/components/ui/input"
+import { PasswordInput } from "@/components/ui/password-input"
 
 export default function AccountPage() {
   const [mustChange, setMustChange] = useState(false)
