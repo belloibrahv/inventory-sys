@@ -520,6 +520,79 @@ export async function createStaff(formData: FormData) {
   return { success: true }
 }
 
+const HEAD_OFFICE_ROLES: UserRole[] = ["SUPER_ADMIN", "CEO", "AUDITOR", "ACCOUNTANT"]
+
+export async function updateStaff(formData: FormData) {
+  const user = await requireUser()
+  if (!(await canManageStaff(user.role))) return { error: "You are not allowed to edit staff. Ask the main admin." }
+
+  const id = String(formData.get("id") || "")
+  const name = String(formData.get("name") || "").trim()
+  const role = String(formData.get("role") || "") as UserRole
+  const branchRaw = String(formData.get("branchId") || "")
+  const branchId = branchRaw || null
+
+  if (!id) return { error: "We could not find that staff." }
+  if (!name) return { error: "Type the person's name." }
+  if (!Object.values(UserRole).includes(role)) return { error: "Pick a valid job." }
+
+  const target = await prisma.user.findUnique({ where: { id } })
+  if (!target) return { error: "We could not find that staff." }
+
+  if (role === "SUPER_ADMIN" && !isSuperAdmin(user.role)) {
+    return { error: "Only the main admin can make someone a main admin." }
+  }
+  if (target.role === "SUPER_ADMIN" && !isSuperAdmin(user.role)) {
+    return { error: "Only the main admin can edit another main admin." }
+  }
+  if (target.id === user.id && role !== target.role) {
+    return { error: "You cannot change your own job. Ask another main admin." }
+  }
+
+  // Shop managers may edit people in their shop only, and may not move them away.
+  const managerScope = await branchFilter(user)
+  if (managerScope) {
+    if (target.branchId !== managerScope) {
+      return { error: "You can only edit staff in your own shop." }
+    }
+    if (branchId && branchId !== managerScope) {
+      return { error: "You can only keep staff in your own shop. Ask the main admin to move them." }
+    }
+    if (HEAD_OFFICE_ROLES.includes(role)) {
+      return { error: "Only the main admin can give head-office jobs." }
+    }
+  }
+
+  const nextBranchId = HEAD_OFFICE_ROLES.includes(role) ? null : branchId
+  if (!HEAD_OFFICE_ROLES.includes(role) && !nextBranchId) {
+    return { error: "Pick the shop this person works in." }
+  }
+  if (nextBranchId) {
+    const shop = await prisma.branch.findUnique({ where: { id: nextBranchId } })
+    if (!shop) return { error: "We could not find that shop." }
+    if (!shop.isActive) return { error: "That shop is closed. Open it again before you put staff there." }
+  }
+
+  await prisma.user.update({
+    where: { id },
+    data: { name, role, branchId: nextBranchId },
+  })
+  await prisma.auditLog.create({
+    data: {
+      userId: user.id,
+      action: "UPDATE",
+      entityType: "User",
+      entityId: target.email,
+      oldValue: JSON.stringify({ name: target.name, role: target.role, branchId: target.branchId }),
+      newValue: JSON.stringify({ name, role, branchId: nextBranchId }),
+      branchId: nextBranchId ?? user.branchId,
+    },
+  })
+  revalidatePath("/staff")
+  revalidatePath("/audit")
+  return { success: true }
+}
+
 export async function getSettings() {
   await requireUser()
   await prisma.setting.upsert({

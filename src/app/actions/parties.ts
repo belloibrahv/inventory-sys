@@ -149,6 +149,54 @@ export async function createBranch(formData: FormData) {
   return { success: true }
 }
 
+export async function updateBranch(formData: FormData) {
+  const user = await requireUser()
+  if (!isSuperAdmin(user.role)) return { error: "Only the main admin can edit a shop." }
+
+  const id = String(formData.get("id") || "")
+  const name = String(formData.get("name") ?? "").trim()
+  const code = String(formData.get("code") ?? "").trim().toUpperCase()
+  const address = String(formData.get("address") ?? "").trim()
+  const phone = String(formData.get("phone") || "").trim() || null
+  const email = String(formData.get("email") || "").trim() || null
+
+  if (!id) return { error: "We could not find that shop." }
+  if (!name || !code || !address) return { error: "Type the name, short code, and address." }
+
+  const existing = await prisma.branch.findUnique({ where: { id } })
+  if (!existing) return { error: "We could not find that shop." }
+
+  if (code !== existing.code) {
+    const taken = await prisma.branch.findUnique({ where: { code } })
+    if (taken) return { error: `Another shop already uses the code ${code}.` }
+  }
+
+  await prisma.branch.update({
+    where: { id },
+    data: { name, code, address, phone, email },
+  })
+  await prisma.auditLog.create({
+    data: {
+      userId: user.id,
+      action: "UPDATE",
+      entityType: "Branch",
+      entityId: code,
+      oldValue: JSON.stringify({
+        name: existing.name,
+        code: existing.code,
+        address: existing.address,
+        phone: existing.phone,
+        email: existing.email,
+      }),
+      newValue: JSON.stringify({ name, code, address, phone, email }),
+      branchId: id,
+    },
+  })
+  revalidatePath("/branches")
+  revalidatePath("/audit")
+  return { success: true }
+}
+
 export async function toggleBranch(id: string) {
   const user = await requireUser()
   if (!isSuperAdmin(user.role)) return { error: "Only the main admin can close a shop or open it again." }

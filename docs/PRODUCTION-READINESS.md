@@ -16,8 +16,8 @@ Honest status after codebase audit. Screens are largely built; these items close
 
 | ID | Item | Notes |
 |---|---|---|
-| P1-1 | Edit shop details after create | Address / phone / name |
-| P1-2 | Reassign staff to another shop | Today only set at create |
+| P1-1 | Edit shop details after create | **Done** — Shops → Edit shop details (name, code, address, phone, email) |
+| P1-2 | Reassign staff to another shop | **Done** — Staff → Edit job or move shop (audit logged) |
 | P1-3 | Brand & category admin screens | Today seed + import side-effects |
 | P1-4 | Cost re-check at goods receipt | Wrong PO cost becomes permanent profit base |
 | P1-5 | Dual-control on incoming arrival | Optional second yes before sellable |
