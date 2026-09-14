@@ -30,7 +30,10 @@ type IncomingLot = {
     receivedQuantity?: number | null
     identity: "IMEI" | "SERIAL" | "NONE"
     identifiers: string | null
-    product: { name: string; brand?: { name: string } }
+    suggestedCost?: number
+    catalogCost?: number
+    billCost?: number | null
+    product: { name: string; brand?: { name: string }; costPrice?: number }
   }>
 }
 

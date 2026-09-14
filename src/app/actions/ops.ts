@@ -8,6 +8,7 @@ import {
   RepairStatus,
   ReturnOutcome,
   ReturnReason,
+  type Prisma,
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { requireUser } from "@/lib/session"
@@ -307,6 +308,43 @@ export async function receivePurchaseImeis(formData: FormData) {
   const item = purchase.items[0]
   if (!item) return { error: "That supplier bill has no items on it." }
 
+  const costRaw = String(formData.get("costPrice") ?? "").trim()
+  const unitCost = costRaw === "" ? money(item.costPrice) : Number(costRaw)
+  if (!Number.isFinite(unitCost) || unitCost < 0) {
+    return { error: "Enter a valid unit cost from the supplier paper before you receive." }
+  }
+  const costNote = String(formData.get("costNote") || "").trim()
+  if (unitCost !== money(item.product.costPrice) && !costNote) {
+    return { error: "The unit cost differs from the price list. Write a short note before you receive." }
+  }
+
+  async function applyCost(tx: Prisma.TransactionClient) {
+    const next = unitCost.toFixed(2)
+    const previous = money(item!.product.costPrice)
+    if (previous !== unitCost) {
+      await tx.product.update({ where: { id: item!.productId }, data: { costPrice: next } })
+      await tx.priceHistory.create({
+        data: {
+          productId: item!.productId,
+          oldPrice: previous.toFixed(2),
+          newPrice: next,
+          priceType: "COST_PRICE",
+          reason: costNote || `Checked on receive ${purchase!.invoiceNumber}`,
+          changedBy: user.id,
+        },
+      })
+    }
+    const lineTotal = (unitCost * item!.quantity).toFixed(2)
+    await tx.purchaseItem.update({
+      where: { id: item!.id },
+      data: { costPrice: next, totalAmount: lineTotal },
+    })
+    await tx.purchase.update({
+      where: { id: purchase!.id },
+      data: { totalAmount: lineTotal },
+    })
+  }
+
   const imeis = parseImeis(String(formData.get("imeis") || ""))
   const remaining = item.quantity - item.receivedQty
 
@@ -323,6 +361,7 @@ export async function receivePurchaseImeis(formData: FormData) {
         if (booked.count !== 1) {
           throw new ConflictError(`${purchase.invoiceNumber} was already received by someone else. Refresh to see it.`)
         }
+        await applyCost(tx)
         await tx.purchase.update({
           where: { id },
           data: { status: "RECEIVED", receivedDate: new Date() },
@@ -333,6 +372,7 @@ export async function receivePurchaseImeis(formData: FormData) {
       return { error: shopError(error, "Could not receive this shipment.") }
     }
     refreshOps()
+    revalidatePath("/products")
     return { success: true }
   }
 
@@ -376,6 +416,7 @@ export async function receivePurchaseImeis(formData: FormData) {
         },
       })
     }
+    await applyCost(tx)
     await tx.purchase.update({
       where: { id },
       data: {
@@ -390,7 +431,12 @@ export async function receivePurchaseImeis(formData: FormData) {
         action: "IMPORT",
         entityType: "Purchase",
         entityId: purchase.invoiceNumber,
-        newValue: JSON.stringify({ imeis, receivedQty, status: done ? "RECEIVED" : "PARTIAL_RECEIVED" }),
+        newValue: JSON.stringify({
+          imeis,
+          receivedQty,
+          unitCost,
+          status: done ? "RECEIVED" : "PARTIAL_RECEIVED",
+        }),
         branchId: purchase.branchId,
       },
     })
@@ -412,6 +458,7 @@ export async function receivePurchaseImeis(formData: FormData) {
   }
 
   refreshOps()
+  revalidatePath("/products")
   return { success: true }
 }
 

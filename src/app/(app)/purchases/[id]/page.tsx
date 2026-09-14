@@ -182,6 +182,24 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
             </p>
             <ActionForm action={receivePurchaseImeis} submit={`Add ${remaining} unit(s) to shop`} className="space-y-3">
               <input type="hidden" name="id" value={purchase.id} />
+              <label className="block text-sm">
+                <span className="mb-1 block text-muted-foreground">Unit cost on this carton (₦)</span>
+                <Input
+                  name="costPrice"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  defaultValue={item ? money(item.costPrice) : 0}
+                  required
+                />
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  Price list now {item ? formatCurrency(money(item.product.costPrice)) : "—"}. If you change it, write why below.
+                </span>
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-muted-foreground">Note if the cost changed</span>
+                <Input name="costNote" placeholder="Example: supplier invoice showed a new cost" />
+              </label>
               <ScanList name="imeis" required={false} />
             </ActionForm>
           </div>

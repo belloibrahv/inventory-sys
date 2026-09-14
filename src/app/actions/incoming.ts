@@ -1,13 +1,15 @@
 "use server"
 
-import { IncomingIdentity, IncomingStatus } from "@prisma/client"
+import { IncomingIdentity, IncomingStatus, type Prisma } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { can, isSuperAdmin } from "@/lib/permissions"
 import { scopedBranchId } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
-import { generateDocNumber } from "@/lib/utils"
+import { generateDocNumber, money } from "@/lib/utils"
 import { shopError } from "@/lib/shop-speak"
+
+type Tx = Prisma.TransactionClient
 
 function parseIds(raw: string) {
   return [...new Set(raw.split(/[\s,;]+/).map((item) => item.trim()).filter(Boolean))]
@@ -40,13 +42,43 @@ export async function getIncomingLots() {
       branch: true,
       supplier: true,
       user: true,
-      purchase: true,
+      purchase: {
+        include: {
+          items: { select: { productId: true, costPrice: true, quantity: true } },
+        },
+      },
       items: { include: { product: { include: { brand: true } } } },
     },
     orderBy: { createdAt: "desc" },
     take: 80,
   })
-  return lots
+
+  // Plain numbers for the receive form: bill cost when linked, else catalogue cost.
+  return lots.map((lot) => {
+    const billCostByProduct = new Map(
+      (lot.purchase?.items ?? []).map((row) => [row.productId, money(row.costPrice)])
+    )
+    return {
+      ...lot,
+      purchase: lot.purchase
+        ? { id: lot.purchase.id, invoiceNumber: lot.purchase.invoiceNumber }
+        : null,
+      items: lot.items.map((item) => {
+        const catalogCost = money(item.product.costPrice)
+        const billCost = billCostByProduct.get(item.productId)
+        return {
+          ...item,
+          product: {
+            ...item.product,
+            costPrice: catalogCost,
+          },
+          suggestedCost: billCost != null ? billCost : catalogCost,
+          catalogCost,
+          billCost: billCost ?? null,
+        }
+      }),
+    }
+  })
 }
 
 export async function createIncomingLot(formData: FormData) {
@@ -165,12 +197,67 @@ export type ReceiveItemAdjustment = {
   itemId: string
   receivedQuantity: number
   confirmedIdentities?: string[]
+  /** Unit cost confirmed on the carton / waybill before stock goes sellable. */
+  unitCost: number
 }
 
 export type PreviewAndReceivePayload = {
   lotId: string
   notes?: string
   items: ReceiveItemAdjustment[]
+}
+
+async function applyConfirmedUnitCost(
+  tx: Tx,
+  input: {
+    productId: string
+    productName: string
+    unitCost: number
+    userId: string
+    lotNumber: string
+    purchaseId: string | null
+  }
+) {
+  const product = await tx.product.findUnique({ where: { id: input.productId } })
+  if (!product) throw new Error(`${input.productName} is missing from the price list.`)
+  const next = input.unitCost.toFixed(2)
+  const previous = money(product.costPrice)
+  if (previous !== input.unitCost) {
+    await tx.product.update({
+      where: { id: input.productId },
+      data: { costPrice: next },
+    })
+    await tx.priceHistory.create({
+      data: {
+        productId: input.productId,
+        oldPrice: previous.toFixed(2),
+        newPrice: next,
+        priceType: "COST_PRICE",
+        reason: `Checked on receive ${input.lotNumber}`,
+        changedBy: input.userId,
+      },
+    })
+  }
+
+  if (!input.purchaseId) return
+  const line = await tx.purchaseItem.findFirst({
+    where: { purchaseId: input.purchaseId, productId: input.productId },
+  })
+  if (!line) return
+  const lineTotal = (input.unitCost * line.quantity).toFixed(2)
+  await tx.purchaseItem.update({
+    where: { id: line.id },
+    data: { costPrice: next, totalAmount: lineTotal },
+  })
+  const siblings = await tx.purchaseItem.findMany({ where: { purchaseId: input.purchaseId } })
+  const billTotal = siblings.reduce((sum, row) => {
+    if (row.id === line.id) return sum + input.unitCost * line.quantity
+    return sum + money(row.totalAmount)
+  }, 0)
+  await tx.purchase.update({
+    where: { id: input.purchaseId },
+    data: { totalAmount: billTotal.toFixed(2) },
+  })
 }
 
 /**
@@ -198,13 +285,20 @@ export async function previewAndReceiveIncoming(payload: PreviewAndReceivePayloa
     short: number
   }
   const variances: LineVariance[] = []
+  const costChanges: Array<{ productName: string; from: number; to: number }> = []
 
   for (const item of lot.items) {
     const adjustment = itemMap.get(item.id)
+    if (!adjustment) return { error: `Confirm the cost and count for ${item.product.name}.` }
+    const unitCost = Number(adjustment.unitCost)
+    if (!Number.isFinite(unitCost) || unitCost < 0) {
+      return { error: `Enter a valid unit cost for ${item.product.name}.` }
+    }
+
     const expected = item.expectedQuantity > 0 ? item.expectedQuantity : item.quantity
-    let received = adjustment ? Math.max(0, adjustment.receivedQuantity) : expected
+    let received = Math.max(0, adjustment.receivedQuantity)
     if (item.identity !== "NONE") {
-      const confirmed = (adjustment?.confirmedIdentities || []).map((id) => id.trim()).filter(Boolean)
+      const confirmed = (adjustment.confirmedIdentities || []).map((id) => id.trim()).filter(Boolean)
       if (confirmed.length > 0) received = confirmed.length
     }
     if (received !== expected) {
@@ -215,6 +309,10 @@ export async function previewAndReceiveIncoming(payload: PreviewAndReceivePayloa
         short: expected - received,
       })
     }
+    const catalogCost = money(item.product.costPrice)
+    if (catalogCost !== unitCost) {
+      costChanges.push({ productName: item.product.name, from: catalogCost, to: unitCost })
+    }
   }
 
   const note = (payload.notes || "").trim()
@@ -224,14 +322,21 @@ export async function previewAndReceiveIncoming(payload: PreviewAndReceivePayloa
         "The count does not match what was expected. Write a short note (for example: two units short in the carton) before you confirm.",
     }
   }
+  if (costChanges.length > 0 && !note) {
+    return {
+      error:
+        "The unit cost differs from the price list. Write a short note (for example: supplier invoice showed a new cost) before you confirm.",
+    }
+  }
 
   try {
     await prisma.$transaction(async (tx) => {
       for (const item of lot.items) {
-        const adjustment = itemMap.get(item.id)
+        const adjustment = itemMap.get(item.id)!
         const expected = item.expectedQuantity > 0 ? item.expectedQuantity : item.quantity
-        const confirmedIds = (adjustment?.confirmedIdentities || []).map((id) => id.trim()).filter(Boolean)
-        let receivedQty = adjustment ? Math.max(0, adjustment.receivedQuantity) : expected
+        const confirmedIds = (adjustment.confirmedIdentities || []).map((id) => id.trim()).filter(Boolean)
+        let receivedQty = Math.max(0, adjustment.receivedQuantity)
+        const unitCost = Number(adjustment.unitCost)
 
         if (item.identity === "NONE") {
           // Decrement all incoming, increment only actually received quantity
@@ -307,6 +412,15 @@ export async function previewAndReceiveIncoming(payload: PreviewAndReceivePayloa
           })
         }
 
+        await applyConfirmedUnitCost(tx, {
+          productId: item.productId,
+          productName: item.product.name,
+          unitCost,
+          userId: user.id,
+          lotNumber: lot.lotNumber,
+          purchaseId: lot.purchaseId,
+        })
+
         // Keep purchase receivedQty in sync with what really entered the shop.
         if (lot.purchaseId) {
           const purchase = await tx.purchase.findUnique({
@@ -376,6 +490,7 @@ export async function previewAndReceiveIncoming(payload: PreviewAndReceivePayloa
           newValue: JSON.stringify({
             status: "ARRIVED",
             variance: variances,
+            costChanges,
             note: note || null,
           }),
           branchId: lot.branchId,
@@ -403,11 +518,13 @@ export async function previewAndReceiveIncoming(payload: PreviewAndReceivePayloa
   revalidatePath("/imei")
   revalidatePath("/pos")
   revalidatePath("/purchases")
+  revalidatePath("/products")
   revalidatePath("/dashboard")
   revalidatePath("/notifications")
   return {
     success: true,
     variance: variances.length > 0,
+    costChanged: costChanges.length > 0,
     shortUnits: variances.reduce((sum, row) => sum + Math.max(0, row.short), 0),
   }
 }
