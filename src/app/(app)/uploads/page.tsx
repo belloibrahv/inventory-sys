@@ -1,3 +1,5 @@
+import Link from "next/link"
+import { FileSpreadsheet, PackagePlus, ScanLine } from "lucide-react"
 import { PageHeader } from "@/components/shared"
 import { getUploadProgress } from "@/app/actions/uploads"
 import { watDayKey } from "@/lib/lagos-day"
@@ -9,10 +11,9 @@ export const dynamic = "force-dynamic"
 /**
  * Upload stock, section one: one supplier carton going onto the system today.
  *
- * The opening stock sheet and the four old Excel sheets used to sit under this
- * form on the same screen, so the person loading one carton scrolled past two
- * jobs they were not doing. They are their own screens now, reached from the
- * tab strip or the Upload stock fold in the menu.
+ * Staff asked for two clear ways to load stock: many phones at once from Excel,
+ * and one phone after another on a bill. This screen is the bill path. The Excel
+ * path and the single-phone path sit one click away.
  */
 export default async function UploadsPage() {
   const progress = await getUploadProgress()
@@ -21,9 +22,45 @@ export default async function UploadsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Procurement Bill & Inventory Intake"
-        description="Process vendor purchase bills and intake inventory consignments. Assign vendor, line items, serialized assets (IMEI), and payment disbursements."
+        title="Upload stock · Supplier bill"
+        description="Add phones that came with a supplier bill. You can type one IMEI after another, or put many lines on the same bill."
       />
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="surface-card border-primary/30 bg-primary/5 p-4">
+          <p className="flex items-center gap-2 text-sm font-bold text-foreground">
+            <PackagePlus className="h-4 w-4 text-primary" />
+            This page: one by one or many
+          </p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Use the form below. Add one phone, save, then add the next. Or put several IMEIs on the same bill before you save.
+          </p>
+        </div>
+        <Link
+          href="/uploads/opening-stock"
+          className="surface-card p-4 transition-colors hover:border-primary/40 hover:bg-accent"
+        >
+          <p className="flex items-center gap-2 text-sm font-bold text-foreground">
+            <FileSpreadsheet className="h-4 w-4 text-primary" />
+            Many at once (Excel)
+          </p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Put a whole shop on the system from one Excel file. Use this once per shop when you first load what is already on the shelf.
+          </p>
+        </Link>
+        <Link
+          href="/imei/intake"
+          className="surface-card p-4 transition-colors hover:border-primary/40 hover:bg-accent"
+        >
+          <p className="flex items-center gap-2 text-sm font-bold text-foreground">
+            <ScanLine className="h-4 w-4 text-primary" />
+            One phone at a time
+          </p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            A single phone already in your hand, with no supplier bill to type. Goes straight In shop.
+          </p>
+        </Link>
+      </div>
 
       <UploadStockWizard
         shops={progress.branches}
@@ -36,24 +73,30 @@ export default async function UploadsPage() {
       />
 
       <div className="surface-card p-5">
-        <h2 className="text-sm font-semibold">Consignment Intake Protocols</h2>
+        <h2 className="text-sm font-semibold">Which way should I use?</h2>
         <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
           <li>
-            <span className="font-medium text-foreground">Standard Inbound Consignment:</span> Use the purchase intake wizard above.
+            <span className="font-medium text-foreground">New carton with a bill:</span> stay on this page. Pick the supplier, add each phone or many lines, say what was paid.
           </li>
           <li>
-            <span className="font-medium text-foreground">Initial System Migration:</span> Navigate to{" "}
-            <span className="font-medium text-foreground">Opening Stock Import</span> to upload comprehensive baseline inventory sheets.
+            <span className="font-medium text-foreground">First time loading a shop:</span> open{" "}
+            <Link href="/uploads/opening-stock" className="font-medium text-primary hover:underline">
+              Many at once (Excel)
+            </Link>
+            .
           </li>
           <li>
-            <span className="font-medium text-foreground">Legacy File Formatting:</span> Use{" "}
-            <span className="font-medium text-foreground">Legacy Spreadsheet Import</span> for raw historical spreadsheets.
+            <span className="font-medium text-foreground">One phone, no bill:</span> open{" "}
+            <Link href="/imei/intake" className="font-medium text-primary hover:underline">
+              One phone at a time
+            </Link>
+            .
           </li>
           <li>
-            <span className="font-medium text-foreground">Accounts Payable:</span> Any unpaid purchase balance is automatically accrued under Accounts Payable and reflected in the General Ledger.
+            <span className="font-medium text-foreground">Unpaid balance:</span> shows on Goods from supplier as money we still owe.
           </li>
           <li>
-            <span className="font-medium text-foreground">Serialized Deduplication:</span> Duplicate serial numbers/IMEIs are safely rejected without disrupting existing active inventory.
+            <span className="font-medium text-foreground">Same IMEI twice:</span> the system stops the copy. Nothing already in the shop is changed.
           </li>
         </ul>
       </div>

@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { PageHeader } from "@/components/shared"
 import { getUploadProgress } from "@/app/actions/uploads"
 import { OpeningStockCard } from "../opening-stock-card"
@@ -12,9 +13,24 @@ export default async function OpeningStockPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Opening stock sheet"
-        description="Use this once per shop, when you are putting what is already on the shelf onto the system. One Excel file, one shop, one supplier bill."
+        title="Upload stock · Many at once (Excel)"
+        description="Put a whole shop on the system from one Excel file. Use this once per shop for what is already on the shelf."
       />
+
+      <div className="surface-card border-primary/30 bg-primary/5 p-4 text-sm text-muted-foreground">
+        <p className="font-bold text-foreground">Need to add phones one after another instead?</p>
+        <p className="mt-1">
+          Open{" "}
+          <Link href="/uploads" className="font-medium text-primary hover:underline">
+            Supplier bill
+          </Link>{" "}
+          for a carton with a bill, or{" "}
+          <Link href="/imei/intake" className="font-medium text-primary hover:underline">
+            One phone at a time
+          </Link>{" "}
+          for a single phone with no bill.
+        </p>
+      </div>
 
       <OpeningStockCard shops={progress.branches} suppliers={progress.suppliers} />
 
@@ -27,6 +43,13 @@ export default async function OpeningStockPage() {
             Type what has been paid on that stock. Whatever is left shows as money we still owe on Goods from supplier.
           </li>
           <li>Phones that are already on the system are left exactly as they are. Nothing is doubled.</li>
+          <li>
+            After this first load, new cartons go on{" "}
+            <Link href="/uploads" className="font-medium text-primary hover:underline">
+              Supplier bill
+            </Link>
+            , not on this Excel again.
+          </li>
         </ul>
       </div>
     </div>

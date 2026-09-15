@@ -7,9 +7,9 @@ export { isSuperAdmin, isBooksDesk, BOOKS_DESK_ROLES } from "@/lib/roles"
 
 export const VIEW_PERMS = [
   { key: "view.dashboard", label: "Executive Dashboard", href: "/dashboard" },
+  { key: "view.uploads", label: "Upload stock", href: "/uploads" },
   { key: "view.products", label: "Product Catalog & SKUs", href: "/products" },
-  { key: "view.uploads", label: "Data Ingestion & Imports", href: "/uploads" },
-  { key: "view.imei", label: "Serialized Assets (IMEI)", href: "/imei" },
+  { key: "view.imei", label: "Phone IMEIs", href: "/imei" },
   { key: "view.inventory", label: "Current Stock on Hand", href: "/inventory" },
   { key: "view.incoming", label: "Inbound Vendor Shipments", href: "/incoming" },
   { key: "view.sales", label: "Sales Orders & Invoices", href: "/sales" },
@@ -39,8 +39,8 @@ export const VIEW_PERMS = [
 export const ACTION_PERMS = [
   { key: "action.sell", label: "Execute Sales & Process Payments" },
   { key: "action.catalog", label: "Manage Catalog Items & Set Prices" },
-  { key: "action.upload", label: "Execute Batch Spreadsheet Imports" },
-  { key: "action.intake", label: "Receive Vendor Stock & Register IMEIs" },
+  { key: "action.upload", label: "Upload stock from a sheet or supplier bill" },
+  { key: "action.intake", label: "Put one phone on the shelf" },
   { key: "action.incoming", label: "Book Inbound Shipments in Transit" },
   { key: "action.transfer", label: "Dispatch & Receive Inter-Branch Transfers" },
   { key: "action.neighbor", label: "Process External Partner Sourced Units" },
@@ -118,21 +118,21 @@ const DEFAULTS: Record<UserRole, string[]> = {
   AUDITOR: BOOKS_DESK_KEYS,
   ACCOUNTANT: BOOKS_DESK_KEYS,
   BRANCH_MANAGER: V(
-    "view.dashboard", "view.products", "view.imei", "view.inventory", "view.incoming", "view.sales", "view.pos",
+    "view.dashboard", "view.products", "view.uploads", "view.imei", "view.inventory", "view.incoming", "view.sales", "view.pos",
     "view.purchases", "view.customers", "view.suppliers", "view.transfers", "view.neighbor-fills", "view.returns",
     "view.swaps", "view.repairs", "view.reconciliation", "view.finance", "view.expenses", "view.profits",
     "view.approvals", "view.staff", "view.reports", "view.notifications",
-    "action.sell", "action.intake", "action.incoming", "action.transfer", "action.neighbor",
+    "action.sell", "action.upload", "action.intake", "action.incoming", "action.transfer", "action.neighbor",
     "action.return", "action.swap", "action.repair", "action.recon", "action.approve", "action.finance", "action.staff"
   ),
   VAULT_MANAGER: V(
-    "view.dashboard", "view.products", "view.imei", "view.inventory", "view.incoming", "view.purchases",
+    "view.dashboard", "view.products", "view.uploads", "view.imei", "view.inventory", "view.incoming", "view.purchases",
     "view.suppliers", "view.transfers", "view.notifications",
-    "action.intake", "action.incoming", "action.transfer"
+    "action.upload", "action.intake", "action.incoming", "action.transfer"
   ),
   STOCK_UPLOADER: V(
     "view.dashboard", "view.uploads", "view.products", "view.imei", "view.inventory", "view.purchases", "view.notifications",
-    "action.upload", "action.catalog", "action.all_branches"
+    "action.upload", "action.intake", "action.catalog", "action.all_branches"
   ),
   CASHIER: V(
     "view.dashboard", "view.pos", "view.sales", "view.customers", "view.expenses", "view.finance", "view.neighbor-fills", "view.returns", "view.notifications",
@@ -177,6 +177,17 @@ export const ensureRolePermissions = cache(async () => {
     where: {
       role: { in: ["CASHIER", "SALES_EXECUTIVE"] },
       permKey: { in: ["view.expenses", "view.finance", "view.customers", "action.finance"] },
+      allowed: false,
+    },
+    data: { allowed: true },
+  })
+
+  // Goods intake and shop managers must be able to load stock both ways:
+  // many phones from Excel, and one phone after another on a supplier bill.
+  await prisma.rolePermission.updateMany({
+    where: {
+      role: { in: ["BRANCH_MANAGER", "VAULT_MANAGER", "STOCK_UPLOADER"] },
+      permKey: { in: ["view.uploads", "action.upload", "action.intake", "view.imei", "view.products", "view.inventory"] },
       allowed: false,
     },
     data: { allowed: true },

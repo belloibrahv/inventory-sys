@@ -23,8 +23,8 @@ export default async function ImeiIntakePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Stock intake"
-        description="Put a phone that is already in your hands onto the shelf. It goes in as In shop with today's Lagos time, and it shows on the phone list straight away."
+        title="One phone at a time"
+        description="Put a phone that is already in your hands onto the shelf. It goes in as In shop. For a carton with a supplier bill, use Upload stock · Supplier bill instead."
       />
 
       <StatGrid>

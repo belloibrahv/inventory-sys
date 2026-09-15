@@ -42,15 +42,15 @@ const ROLE_JOB: Record<UserRole, { job: string; shops: string }> = {
     shops: "You see every shop.",
   },
   BRANCH_MANAGER: {
-    job: "You run one shop: sell, receive, transfer, approve shop work, and add staff for that shop.",
+    job: "You run one shop: sell, receive, upload stock one by one or many from Excel, transfer, approve shop work, and add staff for that shop. You do not add item names or change prices.",
     shops: "You see your shop only, unless the main admin later ticks See every shop.",
   },
   VAULT_MANAGER: {
-    job: "You book goods before they arrive, receive phones, and send stock to a shop. You do not take till money.",
+    job: "You book goods before they arrive, receive phones, upload stock one by one or many from Excel, and send stock to a shop. You do not take till money.",
     shops: "You work in the shop the main admin set on your login.",
   },
   STOCK_UPLOADER: {
-    job: "You put stock on the shelf from Upload stock. Start a supplier bill, add phones by IMEI or load the opening stock Excel, and leave a clear trail for accounts. You do not sell, you do not post cash payments, and you do not approve anything.",
+    job: "You put stock on the shelf from Upload stock. Use Supplier bill for one phone after another, Many at once (Excel) for a whole shop sheet, or One phone at a time when there is no bill. You do not sell, you do not post cash payments, and you do not approve anything.",
     shops: "You load for every shop. Each bill names which shop the goods sit in.",
   },
   CASHIER: {
@@ -145,8 +145,9 @@ const PAGES: Array<
     doThis: [
       "Type an IMEI or serial in the search, or leave it empty and search.",
       "Open a number to see the shop, the invoice, the buyer, and the warranty days left.",
-      "If you can receive goods, use Stock intake to add a phone that is already in your hands. It sits under Phone numbers (IMEI) in the menu.",
-      "On Stock intake, pick how the phone looks: Brand new, Uk, OPENBOX, Faulty, or Non Active. Pick a supplier from the list, or choose Add new supplier.",
+      "If you can receive goods, use One phone at a time to add a phone that is already in your hands. It sits under Phone IMEIs in the menu.",
+      "On One phone at a time, pick how the phone looks: Brand new, Uk, OPENBOX, Faulty, or Non Active. Pick a supplier from the list, or choose Add new supplier.",
+      "For a carton with a bill, or many phones at once from Excel, use Upload stock.",
     ],
     watch: [
       "Coming phones are not for sale on Sell now.",

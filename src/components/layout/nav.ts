@@ -82,27 +82,27 @@ export const navGroups: NavGroup[] = [
     label: "Inventory Management",
     items: [
       {
-        name: "Data Import",
+        name: "Upload stock",
         href: "/uploads",
         icon: Upload,
         children: [
           {
-            name: "Purchase Invoices",
+            name: "Supplier bill",
             href: "/uploads",
             icon: PackagePlus,
-            hint: "Inbound vendor shipment invoice, line items, and serial numbers",
+            hint: "Add phones one by one or many on one supplier bill",
           },
           {
-            name: "Opening Stock Sheet",
+            name: "Many at once (Excel)",
             href: "/uploads/opening-stock",
             icon: FileSpreadsheet,
-            hint: "Initial stock balance upload for a branch from spreadsheet",
+            hint: "Put a whole shop on the system from one Excel file",
           },
           {
-            name: "Legacy Migration",
+            name: "Old Excel sheets",
             href: "/uploads/sheets",
             icon: ListOrdered,
-            hint: "Tabular data migration: products, stock balances, serials, customers",
+            hint: "Step-by-step sheets for items, stock, IMEIs, and customers",
           },
         ],
       },
@@ -120,12 +120,12 @@ export const navGroups: NavGroup[] = [
         ],
       },
       {
-        name: "Serialized Assets (IMEI)",
+        name: "Phone IMEIs",
         href: "/imei",
         icon: ScanLine,
         children: [
-          { name: "Serialized Assets Register", href: "/imei", icon: ScanLine, hint: "Lifecycle tracking and audit trail for serialized units" },
-          { name: "Serial Intake", href: "/imei/intake", icon: PackagePlus, hint: "Physical device serialization and inventory intake" },
+          { name: "All phone numbers", href: "/imei", icon: ScanLine, hint: "Find any phone by IMEI and see its life" },
+          { name: "One phone at a time", href: "/imei/intake", icon: PackagePlus, hint: "Put one phone already in your hand onto the shelf" },
         ],
       },
       { name: "Stock on Hand", href: "/inventory", icon: Boxes },
