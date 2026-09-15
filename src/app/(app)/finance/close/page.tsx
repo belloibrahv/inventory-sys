@@ -234,10 +234,14 @@ export default async function DayClosePage({
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4 border-b border-border pb-3">
             <div>
               <h3 className="font-bold text-base">
-                Count cash to remit — {preview.branchName || "Shop"} ({preview.businessDate})
+                {preview.expectedCash > 0
+                  ? `Count cash to remit — ${preview.branchName || "Shop"} (${preview.businessDate})`
+                  : `Close the day — ${preview.branchName || "Shop"} (${preview.businessDate})`}
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Count the physical cash inside the till drawer. Remit this cash and enter the amount below.
+                {preview.expectedCash > 0
+                  ? "Count the physical cash inside the till drawer. Remit this cash and enter the amount below."
+                  : "No cash sales today. Transfer and POS do not need a till count. Close the day so Sell now can open tomorrow."}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -250,33 +254,45 @@ export default async function DayClosePage({
             </div>
           </div>
 
-          <ActionForm action={closeDay} submit="Count is correct, close the day" className="space-y-4">
+          <ActionForm
+            action={closeDay}
+            submit={preview.expectedCash > 0 ? "Count is correct, close the day" : "Close the day"}
+            className="space-y-4"
+          >
             <input type="hidden" name="branchId" value={preview.branchId} />
             <input type="hidden" name="businessDate" value={preview.businessDate} />
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
-                Cash remitted (Money counted in the till) (₦) *
-              </label>
-              <Input
-                name="countedCash"
-                type="number"
-                step="any"
-                defaultValue={preview.expectedCash}
-                required
-                className="min-h-12 text-lg font-mono font-bold"
-                placeholder="Type the cash remitted"
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                The physical cash handed over or remitted from the drawer. When balanced, this matches the cash sales of {formatCurrency(preview.expectedCash)}.
-              </p>
-            </div>
+            {preview.expectedCash > 0 ? (
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
+                  Cash remitted (Money counted in the till) (₦) *
+                </label>
+                <Input
+                  name="countedCash"
+                  type="number"
+                  step="any"
+                  defaultValue={preview.expectedCash}
+                  required
+                  className="min-h-12 text-lg font-mono font-bold"
+                  placeholder="Type the cash remitted"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  The physical cash handed over or remitted from the drawer. When balanced, this matches the cash sales of {formatCurrency(preview.expectedCash)}.
+                </p>
+              </div>
+            ) : (
+              <input type="hidden" name="countedCash" value="0" />
+            )}
             <div>
               <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
                 Note (optional)
               </label>
               <Input
                 name="notes"
-                placeholder="If there is a shortage or overage, say why. Example: ₦2,000 used to buy shop supplies."
+                placeholder={
+                  preview.expectedCash > 0
+                    ? "If there is a shortage or overage, say why. Example: ₦2,000 used to buy shop supplies."
+                    : "Optional note for this day, for example: transfer and POS only."
+                }
               />
             </div>
           </ActionForm>

@@ -22,8 +22,8 @@ export default async function OpeningStockBookPage({
   if (!shops.length) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Opening Balance Reconciliation & Finalization" />
-        <EmptyState title="No accessible locations found" hint="You only have access to view opening balances for authorized branch locations." />
+        <PageHeader title="Correct & close opening stock" />
+        <EmptyState title="No shop is open to you" hint="You can only correct opening stock for shops you are allowed to see." />
       </div>
     )
   }
@@ -38,11 +38,11 @@ export default async function OpeningStockBookPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Opening Balance Reconciliation & Finalization"
-        description="Reconcile physical inventory counts against staged migration loads. Validate quantities, serialized IMEIs, and unit costs prior to balance sheet lock. Finalized opening balances serve as the immutable historical baseline."
+        title="Correct & close opening stock"
+        description="Count the shelf against what was loaded. Tap Phones, Accessories, Screen, or Laptop to give each person their own group. When the count is right, the CEO or main admin closes it so the shop can sell."
       />
 
-      <nav className="flex flex-wrap gap-2" aria-label="Locations">
+      <nav className="flex flex-wrap gap-2" aria-label="Shops">
         {shops.map((shop) => (
           <Link
             key={shop.id}
@@ -53,7 +53,7 @@ export default async function OpeningStockBookPage({
           >
             {shop.name}
             <TonePill tone={shop.status === "CLOSED" ? "success" : shop.status === "OPEN" ? "warning" : "neutral"}>
-              {shop.status === "CLOSED" ? "Finalized" : shop.status === "OPEN" ? "In Review" : "Uninitialized"}
+              {shop.status === "CLOSED" ? "Closed" : shop.status === "OPEN" ? "Still open" : "Not loaded"}
             </TonePill>
           </Link>
         ))}
@@ -63,8 +63,8 @@ export default async function OpeningStockBookPage({
         <OpeningStockBook key={`${selected.id}-${book.record.status}`} branchId={selected.id} book={book} />
       ) : (
         <EmptyState
-          title={`${selected.name} has no staged opening balances`}
-          hint="Import an initial inventory schedule via Batch Data Import. Once staged, initial inventory lines will appear here for audit verification."
+          title={`${selected.name} has no opening stock yet`}
+          hint="Load the shop first from Upload stock → Many at once (Excel). Then come back here to count and close."
         />
       )}
     </div>

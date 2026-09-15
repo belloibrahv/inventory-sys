@@ -34,11 +34,11 @@ const ROLE_JOB: Record<UserRole, { job: string; shops: string }> = {
     shops: "You see every shop.",
   },
   AUDITOR: {
-    job: "You sit on the books desk with the accountant. You check records, sign the books, say yes or no to requests, and you can also post money, pay suppliers, and collect payments — same pages as the accountant.",
+    job: "You oversee every shop page with the accountant. You read sales, stock, repairs, and money. You can post money and pay suppliers. You cannot sell, open repairs, load stock, approve shop work, or change Who can see what.",
     shops: "You see every shop.",
   },
   ACCOUNTANT: {
-    job: "You sit on the books desk with the records checker. You watch money, invoices, expenses, and the books, and you can also open Who did what and Check the books — same pages as the records checker.",
+    job: "You oversee every shop page with the records checker. You read every workflow, post money, pay suppliers, and check the books. You cannot sell, open repairs, load stock, approve shop work, or change Who can see what.",
     shops: "You see every shop.",
   },
   BRANCH_MANAGER: {
@@ -234,15 +234,18 @@ const PAGES: Array<
     id: "close",
     href: "/finance/close",
     title: "Close the day",
-    what: "The till count. You pick the Lagos business day, see cash expected from cash sales, type the cash you counted, and save the difference.",
+    what: "Close every past day that had sales so Sell now can open. If cash came into the till, count it and type cash remitted. If the day was only transfer and POS, close with no till count.",
     doThis: [
       "Open Close the day from the left, from the lock on Sell now, or from Home.",
-      "Confirm the date is the unclosed day, not today, if yesterday still needs a count.",
-      "Count the physical cash. Type that number. Add a short note for shortfall or leftover.",
+      "Confirm the date is the unclosed day, not today, if yesterday still needs a close.",
+      "Read cash expected, transfer, and POS.",
+      "If cash expected is more than zero, count the drawer and type cash remitted.",
+      "If cash expected is zero, click Close the day. No till count is needed.",
       "Close this day. If another old day is still listed, close that one too.",
     ],
     watch: [
       "Cash expected is only cash sales for that business day.",
+      "Transfer and POS days still need a close, but not a till count.",
       "You cannot close the same shop day twice.",
       "Cashiers and sales people can close even if they cannot see the full Money in & out page.",
     ],

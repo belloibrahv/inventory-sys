@@ -247,7 +247,7 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
         ? `${unclosed.length} previous business day(s) with sales have not been closed yet.`
         : "All previous days with sales have been closed and counted.",
       fix: unclosed.length
-        ? `Go to Finance → Close Day → select each of the ${unclosed.length} open day(s) → enter the physical cash counted in the till → click "Close Day". This flag clears once every past day is closed.`
+        ? `Go to Close the day. Pick each open day. If cash came in, count the till and type cash remitted. If the day was transfer and POS only, just click Close the day. This flag clears once every past day with sales is closed.`
         : null,
       href: "/finance/close",
     },

@@ -59,7 +59,7 @@ export async function getSellLock(branchId?: string) {
     locked: true,
     dates,
     href: `/finance/close?date=${dates[0]}&branchId=${shopId}`,
-    message: `This shop has not closed ${dates[0]}${dates.length > 1 ? ` and ${dates.length - 1} more day(s)` : ""}. Count the till before any new sale.`,
+    message: `This shop has not closed ${dates[0]}${dates.length > 1 ? ` and ${dates.length - 1} more day(s)` : ""}. Close that day before any new sale.`,
     branchId: shopId,
   }
 }
@@ -208,8 +208,15 @@ export async function closeDay(formData: FormData) {
     const preview = await getDayClosePreview(rawBranchId || undefined, businessDate)
     if (!preview.branchId) return { error: "Choose a shop." }
     if (preview.alreadyClosed) return { error: "This shop already closed that day." }
-    const countedCash = Number(formData.get("countedCash") || 0)
-    if (Number.isNaN(countedCash)) return { error: "Enter the cash you counted." }
+    // Cash remittance is only required when cash came into the till. Transfer
+    // and POS days still close, so Sell now can open tomorrow, but with ₦0 remitted.
+    let countedCash = 0
+    if (preview.expectedCash > 0) {
+      const raw = String(formData.get("countedCash") ?? "").trim()
+      if (!raw) return { error: "Cash came in today. Count the till and type the cash remitted." }
+      countedCash = Number(raw)
+      if (Number.isNaN(countedCash)) return { error: "Enter the cash you counted." }
+    }
 
     // Re-check inside the posting. Two clicks on Close the day used to write two
     // closes for the same date, which then confused the till lock and the books.

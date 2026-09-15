@@ -106,7 +106,7 @@ export const navGroups: NavGroup[] = [
           },
         ],
       },
-      { name: "Opening Balance Audit", href: "/opening-stock", icon: Lock },
+      { name: "Correct & close opening stock", href: "/opening-stock", icon: Lock },
       {
         name: "Product Catalog",
         href: "/products",

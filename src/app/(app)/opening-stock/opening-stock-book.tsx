@@ -14,12 +14,14 @@ import {
   type OpeningBook,
 } from "@/app/actions/opening-stock"
 import { DrilldownModal } from "@/components/drilldown-modal"
+import { FilterChips } from "@/components/filter-chips"
 import { SectionCard, StatCard, StatGrid, TableEmpty, TableShell, TonePill, Toolbar } from "@/components/shared"
 import { TablePager, usePagedRows } from "@/components/table-pager"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { downloadWorkbook } from "@/lib/download-table"
 import { bookSheets, cleanIdentity, type BookLine } from "@/lib/opening-book"
+import { formatCondition } from "@/lib/status"
 import { formatCurrency, formatDate } from "@/lib/utils"
 
 type Edit = {
@@ -31,25 +33,55 @@ type Edit = {
   removeIdentities?: string[]
 }
 
+/** Shop words for the big opening-stock groups the client counts by hand. */
+const CATEGORY_FILTERS = [
+  { key: "ALL", label: "All categories", match: null as RegExp | null },
+  { key: "PHONES", label: "Phones", match: /phone/i },
+  { key: "ACCESSORIES", label: "Accessories", match: /accessor/i },
+  { key: "SCREEN", label: "Screen", match: /screen/i },
+  { key: "LAPTOP", label: "Laptop", match: /laptop/i },
+] as const
+
+function lineMatchesCategory(line: BookLine, key: string) {
+  if (key === "ALL") return true
+  const filter = CATEGORY_FILTERS.find((row) => row.key === key)
+  if (!filter?.match) return true
+  return filter.match.test(line.category)
+}
+
 export function OpeningStockBook({ branchId, book }: { branchId: string; book: OpeningBook }) {
   const router = useRouter()
   const record = book.record!
   const closed = record.status === "CLOSED"
   const [query, setQuery] = useState("")
+  const [categoryFilter, setCategoryFilter] = useState<string>("ALL")
   const [edits, setEdits] = useState<Record<string, Edit>>({})
   const [saving, setSaving] = useState(false)
   const [unitsFor, setUnitsFor] = useState<BookLine | null>(null)
   const [newUnits, setNewUnits] = useState("")
   const [showAddModal, setShowAddModal] = useState(false)
 
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { ALL: book.lines.length }
+    for (const filter of CATEGORY_FILTERS) {
+      if (filter.key === "ALL") continue
+      counts[filter.key] = book.lines.filter((line) => lineMatchesCategory(line, filter.key)).length
+    }
+    return counts
+  }, [book.lines])
+
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase()
-    if (!needle) return book.lines
-    return book.lines.filter((line) =>
-      [line.name, line.sku, line.brand, line.category, ...line.identities].join(" ").toLowerCase().includes(needle)
-    )
-  }, [book.lines, query])
-  const pager = usePagedRows(visible, query)
+    return book.lines.filter((line) => {
+      if (!lineMatchesCategory(line, categoryFilter)) return false
+      if (!needle) return true
+      return [line.name, line.sku, line.brand, line.category, line.storage, line.condition, ...line.identities]
+        .join(" ")
+        .toLowerCase()
+        .includes(needle)
+    })
+  }, [book.lines, query, categoryFilter])
+  const pager = usePagedRows(visible, `${categoryFilter}|${query}`)
   const dirty = Object.entries(edits).filter(([, edit]) => Object.values(edit).some((v) => (Array.isArray(v) ? v.length : v !== undefined)))
   const offShelf = book.lines.filter((line) => line.shelfQty !== line.openingQty)
   const fileBase = `opening-stock-${record.shopCode.toLowerCase()}-${new Date().toISOString().slice(0, 10)}`
@@ -135,8 +167,8 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
       {!closed ? (
         <SectionCard title="How to finish opening stock">
           <ol className="grid gap-2 text-sm text-muted-foreground md:grid-cols-4">
-            <li><span className="font-semibold text-foreground">1. Download the count sheet.</span> Every item, count, cost, both selling prices, and every IMEI.</li>
-            <li><span className="font-semibold text-foreground">2. Count the shelf.</span> Write what you really find in COUNTED QTY. Mark a missing phone NO.</li>
+            <li><span className="font-semibold text-foreground">1. Download the count sheet.</span> Every item, category, count, cost, both selling prices, and every IMEI.</li>
+            <li><span className="font-semibold text-foreground">2. Count the shelf.</span> Tap Phones, Accessories, Screen, or Laptop above the list to give each person their own group. Write what you really find in COUNTED QTY. Mark a missing phone NO.</li>
             <li><span className="font-semibold text-foreground">3. Correct.</span> Upload the filled sheet and check the preview, or change a line on screen below.</li>
             <li><span className="font-semibold text-foreground">4. Close.</span> The CEO or main admin closes it. After that it is final and the shop can sell.</li>
           </ol>
@@ -155,11 +187,22 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
         </p>
       ) : null}
 
+      <FilterChips
+        label="Count by category"
+        activeKey={categoryFilter}
+        onSelect={setCategoryFilter}
+        chips={CATEGORY_FILTERS.filter((row) => row.key === "ALL" || (categoryCounts[row.key] ?? 0) > 0).map((row) => ({
+          key: row.key,
+          label: row.label,
+          count: categoryCounts[row.key] ?? 0,
+        }))}
+      />
+
       <TableShell
         caption={
           <>
             <Input
-              placeholder="Find an item, item code or IMEI"
+              placeholder="Find an item, item code, category, or IMEI"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               className="h-9 max-w-xs"
@@ -189,6 +232,7 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
         }
         columns={[
           { label: "Item" },
+          { label: "Category" },
           { label: "Count", align: "right" },
           { label: "Unit cost", align: "right" },
           { label: "Lowest price", align: "right" },
@@ -216,12 +260,14 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
               ? Number(e.quantity ?? line.openingQty)
               : line.openingQty + (e.addIdentities?.length ?? 0) - (e.removeIdentities?.length ?? 0)
           const cost = Number(e.costPrice ?? line.costPrice)
+          const spec = [line.storage, formatCondition(line.condition)].filter(Boolean).join(" · ")
           return (
             <tr key={line.sku}>
               <td>
                 <p className="font-medium">{line.name}</p>
                 <p className="text-xs text-muted-foreground">
                   {line.brand} · <span className="font-mono">{line.sku}</span>
+                  {spec ? ` · ${spec}` : ""}
                   {line.shelfQty !== line.openingQty && !closed ? ` · shelf row ${line.shelfQty}` : ""}
                 </p>
                 {line.tracking !== "NONE" ? (
@@ -229,6 +275,11 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
                     {line.tracking === "IMEI" ? "IMEIs" : "Serials"} ({qty}){book.canCorrect ? " · add or take off" : ""}
                   </button>
                 ) : null}
+              </td>
+              <td>
+                <span className="inline-flex rounded-md bg-muted px-2 py-1 text-xs font-semibold text-foreground">
+                  {line.category || "General"}
+                </span>
               </td>
               <td className="text-right">
                 {line.tracking === "NONE" ? (
@@ -252,7 +303,7 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
             </tr>
           )
         })}
-        {visible.length === 0 ? <TableEmpty colSpan={6}>No item matches that search.</TableEmpty> : null}
+        {visible.length === 0 ? <TableEmpty colSpan={7}>No item matches that category or search.</TableEmpty> : null}
       </TableShell>
 
       <DrilldownModal

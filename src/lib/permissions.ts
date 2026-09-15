@@ -63,43 +63,16 @@ const ALL = ALL_PERM_KEYS
 const V = (...keys: string[]) => keys
 
 /**
- * One key ring for the books desk.
+ * One key ring for the books desk (Financial Accountant and Internal Auditor).
  *
- * Records checker used to only check and approve. Accountant used to only
- * post money. In this shop the same person (or two people on the same desk)
- * needs both: see Who did what, Check the books, pay suppliers, record
- * expenses, and collect money. So both jobs open the same pages and do the
- * same money work.
+ * At Abu Twins the auditor also oversees every workflow, so both jobs may open
+ * every shop page except Who can see what. They may post money and pay
+ * suppliers. They may not sell, repair, approve shop work, load stock, or
+ * change Settings — that stays with floor staff and Super Admin.
  */
 export const BOOKS_DESK_KEYS = V(
-  "view.dashboard",
-  "view.products",
-  "view.imei",
-  "view.inventory",
-  "view.incoming",
-  "view.sales",
-  "view.pos",
-  "view.purchases",
-  "view.customers",
-  "view.suppliers",
-  "view.transfers",
-  "view.neighbor-fills",
-  "view.returns",
-  "view.swaps",
-  "view.repairs",
-  "view.reconciliation",
-  "view.finance",
-  "view.expenses",
-  "view.profits",
-  "view.approvals",
-  "view.branches",
-  "view.reports",
-  "view.audit",
-  "view.notifications",
-  "action.sell",
+  ...VIEW_PERMS.filter((row) => row.key !== "view.access").map((row) => row.key),
   "action.finance",
-  "action.approve",
-  "action.recon",
   "action.all_branches"
 )
 
@@ -191,6 +164,45 @@ export const ensureRolePermissions = cache(async () => {
       allowed: false,
     },
     data: { allowed: true },
+  })
+
+  // Books desk: open every shop page for oversight, keep money posting, and
+  // close floor actions that used to sit on this key ring by mistake.
+  const booksViews = VIEW_PERMS.filter((row) => row.key !== "view.access").map((row) => row.key)
+  await prisma.rolePermission.updateMany({
+    where: {
+      role: { in: ["AUDITOR", "ACCOUNTANT"] },
+      permKey: { in: [...booksViews, "action.finance", "action.all_branches"] },
+      allowed: false,
+    },
+    data: { allowed: true },
+  })
+  await prisma.rolePermission.updateMany({
+    where: {
+      role: { in: ["AUDITOR", "ACCOUNTANT"] },
+      permKey: {
+        in: [
+          "view.access",
+          "action.sell",
+          "action.catalog",
+          "action.upload",
+          "action.intake",
+          "action.incoming",
+          "action.transfer",
+          "action.neighbor",
+          "action.return",
+          "action.swap",
+          "action.repair",
+          "action.recon",
+          "action.approve",
+          "action.staff",
+          "action.settings",
+          "action.override_floor",
+        ],
+      },
+      allowed: true,
+    },
+    data: { allowed: false },
   })
 })
 
