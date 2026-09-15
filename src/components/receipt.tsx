@@ -1,6 +1,15 @@
 import { formatCurrency, formatDateTime, money } from "@/lib/utils"
 
-type Line = { name: string; imei?: string | null; quantity: number; amount: number; warranty?: string | null }
+type Line = {
+  name: string
+  imei?: string | null
+  quantity: number
+  amount: number
+  warranty?: string | null
+  storage?: string | null
+  condition?: string | null
+  color?: string | null
+}
 
 export function Receipt({
   company,
@@ -81,7 +90,12 @@ export function Receipt({
           {items.map((item, index) => (
             <tr key={`${item.name}-${index}`} className="border-b border-slate-100">
               <td className="px-6 py-3">
-                {item.name}
+                <p className="font-medium text-slate-900">{item.name}</p>
+                {(item.storage || item.condition || item.color) ? (
+                  <p className="text-[11px] font-medium text-slate-600">
+                    {[item.storage, item.condition, item.color].filter(Boolean).join(" · ")}
+                  </p>
+                ) : null}
                 {item.warranty ? <span className="block text-[10px] text-slate-500">{item.warranty}</span> : null}
               </td>
               <td className="px-3 py-3 font-mono text-xs">{item.imei ?? "-"}</td>

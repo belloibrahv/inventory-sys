@@ -125,6 +125,7 @@ export async function checkoutSale(input: {
   branchId: string
   paymentMethod: PaymentMethod
   paidAmount: number
+  splitTenders?: Array<{ method: "CASH" | "TRANSFER" | "POS"; amount: number }>
   notes?: string
   wholesale?: boolean
   queuedAt?: string
@@ -213,8 +214,14 @@ export async function checkoutSale(input: {
   }
 
   const subtotal = input.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0)
-  const paid = Math.min(Math.max(0, input.paidAmount), subtotal)
-  const method = paid < subtotal ? "CREDIT" : input.paymentMethod
+  const validSplits = (input.splitTenders ?? []).filter((t) => Number.isFinite(t.amount) && t.amount > 0)
+  const isSplit = input.paymentMethod === "SPLIT_PAYMENT" || validSplits.length > 1
+  const rawPaid = isSplit && validSplits.length > 0
+    ? validSplits.reduce((sum, t) => sum + t.amount, 0)
+    : input.paidAmount
+
+  const paid = Math.min(Math.max(0, rawPaid), subtotal)
+  const method = paid < subtotal ? "CREDIT" : (isSplit ? "SPLIT_PAYMENT" : input.paymentMethod)
   const due = subtotal - paid
 
   if (due > 0 && !input.customerId) {
@@ -266,10 +273,17 @@ export async function checkoutSale(input: {
           payments:
             paid > 0
               ? {
-                  create: {
-                    amount: paid.toFixed(2),
-                    method: input.paymentMethod,
-                  },
+                  create: isSplit && validSplits.length > 0
+                    ? validSplits.map((t) => ({
+                        amount: t.amount.toFixed(2),
+                        method: t.method,
+                      }))
+                    : [
+                        {
+                          amount: paid.toFixed(2),
+                          method: input.paymentMethod === "CREDIT" ? "CASH" : input.paymentMethod,
+                        },
+                      ],
                 }
               : undefined,
         },
@@ -365,16 +379,31 @@ export async function checkoutSale(input: {
       }
 
       if (paid > 0) {
-        await tx.financeEntry.create({
-          data: {
-            branchId: input.branchId,
-            account: input.paymentMethod === "CASH" ? "CASH" : "BANK",
-            type: "INCOME",
-            amount: paid.toFixed(2),
-            reference: invoiceNumber,
-            description: "Money collected on a sale",
-          },
-        })
+        if (isSplit && validSplits.length > 0) {
+          for (const t of validSplits) {
+            await tx.financeEntry.create({
+              data: {
+                branchId: input.branchId,
+                account: t.method === "CASH" ? "CASH" : "BANK",
+                type: "INCOME",
+                amount: t.amount.toFixed(2),
+                reference: invoiceNumber,
+                description: `Sales revenue received (${t.method}): ${invoiceNumber}`,
+              },
+            })
+          }
+        } else {
+          await tx.financeEntry.create({
+            data: {
+              branchId: input.branchId,
+              account: input.paymentMethod === "CASH" ? "CASH" : "BANK",
+              type: "INCOME",
+              amount: paid.toFixed(2),
+              reference: invoiceNumber,
+              description: `Sales revenue received (${input.paymentMethod}): ${invoiceNumber}`,
+            },
+          })
+        }
       }
 
       await tx.auditLog.create({
@@ -387,6 +416,7 @@ export async function checkoutSale(input: {
             total: subtotal,
             paid,
             method,
+            ...(isSplit ? { splitTenders: validSplits } : {}),
             ...(input.queuedAt
               ? { postedFromOffline: true, queuedAt: input.queuedAt, offlineId: input.offlineId ?? null }
               : {}),

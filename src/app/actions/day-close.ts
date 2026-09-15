@@ -102,6 +102,7 @@ export async function getDayClosePreview(branchId?: string, businessDate?: strin
         customer: true,
         user: true,
         items: { include: { product: true, imei: true } },
+        payments: true,
       },
       orderBy: { saleDate: "desc" },
     }),
@@ -118,18 +119,28 @@ export async function getDayClosePreview(branchId?: string, businessDate?: strin
 
   const totalSales = sales.reduce((sum, sale) => sum + money(sale.totalAmount), 0)
   const totalPaid = sales.reduce((sum, sale) => sum + money(sale.paidAmount), 0)
-  const expectedCash = sales
-    .filter((sale) => sale.paymentMethod === "CASH")
-    .reduce((sum, sale) => sum + money(sale.paidAmount), 0)
-  const transferTotal = sales
-    .filter((sale) => sale.paymentMethod === "TRANSFER")
-    .reduce((sum, sale) => sum + money(sale.paidAmount), 0)
-  const posTotal = sales
-    .filter((sale) => sale.paymentMethod === "POS")
-    .reduce((sum, sale) => sum + money(sale.paidAmount), 0)
-  const creditTotal = sales
-    .filter((sale) => sale.paymentMethod === "CREDIT")
-    .reduce((sum, sale) => sum + Math.max(0, money(sale.totalAmount) - money(sale.paidAmount)), 0)
+
+  let expectedCash = 0
+  let transferTotal = 0
+  let posTotal = 0
+
+  for (const sale of sales) {
+    if (sale.payments && sale.payments.length > 0) {
+      for (const p of sale.payments) {
+        const amt = money(p.amount)
+        if (p.method === "CASH") expectedCash += amt
+        else if (p.method === "TRANSFER") transferTotal += amt
+        else if (p.method === "POS") posTotal += amt
+      }
+    } else {
+      const paid = money(sale.paidAmount)
+      if (sale.paymentMethod === "CASH") expectedCash += paid
+      else if (sale.paymentMethod === "TRANSFER") transferTotal += paid
+      else if (sale.paymentMethod === "POS") posTotal += paid
+    }
+  }
+
+  const creditTotal = sales.reduce((sum, sale) => sum + Math.max(0, money(sale.totalAmount) - money(sale.paidAmount)), 0)
 
   return {
     sales: sales.map((sale) => ({

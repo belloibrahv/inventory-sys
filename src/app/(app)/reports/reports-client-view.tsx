@@ -94,16 +94,16 @@ type Drilldown =
   | "RETURNS"
 
 const DRILLDOWN_TITLE: Record<Drilldown, string> = {
-  REVENUE: "Every sale that makes up this money",
-  RECEIVED: "Every payment we collected in this time",
-  EXPENSES: "Every bill we paid in this time",
-  STOCK: "Every item that makes up this stock value",
-  OPENING: "Every item each shop opened the software with",
-  BOUGHT: "Every supplier bill after opening stock",
-  DEBTORS: "Every customer who still owes money (Receivables)",
-  CREDITORS: "Every supplier bill we still owe (Payables)",
-  SWAPS: "Every completed device swap transaction",
-  RETURNS: "Every customer return and warranty RMA",
+  REVENUE: "Itemized Gross Sales Transactions",
+  RECEIVED: "Payments & Collections Received",
+  EXPENSES: "Authorized Operating Expenditures (OPEX)",
+  STOCK: "Current Stock Valuation Ledger",
+  OPENING: "Opening Stock Capital Baseline",
+  BOUGHT: "Vendor Purchases & Inbound Goods Receipts",
+  DEBTORS: "Customer Accounts Receivable Ledger (Debtors)",
+  CREDITORS: "Vendor Accounts Payable Ledger (Creditors)",
+  SWAPS: "Customer Device Trade-Ins & Swaps",
+  RETURNS: "Customer Returns & Warranty RMA Log",
 }
 
 const day = (value: Date | string) => new Date(value).toISOString().slice(0, 10)
@@ -330,10 +330,10 @@ export function ReportsClientView({
 
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="ghost" size="sm">
-              <Link href="/audit/books">Check the books</Link>
+              <Link href="/audit/books">Financial Audit Pack</Link>
             </Button>
             <Button asChild variant="ghost" size="sm">
-              <Link href="/finance">Money in &amp; out</Link>
+              <Link href="/finance">Cash Flow &amp; Ledger</Link>
             </Button>
             <ReportsPdfButton data={pack} />
             <PrintButton label="Print / Save PDF" />

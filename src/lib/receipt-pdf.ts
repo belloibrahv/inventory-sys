@@ -19,6 +19,9 @@ export type ReceiptLine = {
   quantity: number
   amount: number
   warranty?: string | null
+  storage?: string | null
+  condition?: string | null
+  color?: string | null
 }
 
 export type ReceiptData = {
@@ -126,9 +129,14 @@ export function drawReceipt(doc: jsPDF, data: ReceiptData, mark?: string) {
     doc.text(String(item.quantity), right - 46, y, { align: "right" })
     doc.text(naira(item.amount), right, y, { align: "right" })
     y += 4
-    const under = [item.imei ? `IMEI ${item.imei}` : "", item.warranty ? `Warranty ${item.warranty}` : ""]
+    const spec = [item.storage, item.condition, item.color].filter(Boolean).join(" · ")
+    const under = [
+      spec,
+      item.imei ? `IMEI: ${item.imei}` : "",
+      item.warranty ? `Warranty: ${item.warranty}` : "",
+    ]
       .filter(Boolean)
-      .join("  ·  ")
+      .join("  |  ")
     if (under) {
       doc.setTextColor(...MUTED)
       doc.setFontSize(7)

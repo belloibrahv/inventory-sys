@@ -55,8 +55,11 @@ export function PosClient({
   const [query, setQuery] = useState("")
   const [customerId, setCustomerId] = useState("")
   const [branchId, setBranchId] = useState(defaultBranchId || serverBranches[0]?.id || "")
-  const [method, setMethod] = useState<"CASH" | "TRANSFER" | "POS" | "CREDIT">("CASH")
+  const [method, setMethod] = useState<"CASH" | "TRANSFER" | "POS" | "CREDIT" | "SPLIT_PAYMENT">("CASH")
   const [paid, setPaid] = useState(0)
+  const [splitCash, setSplitCash] = useState(0)
+  const [splitTransfer, setSplitTransfer] = useState(0)
+  const [splitPos, setSplitPos] = useState(0)
   const [notes, setNotes] = useState("")
   const [wholesale, setWholesale] = useState(false)
   const [newName, setNewName] = useState("")
@@ -83,6 +86,9 @@ export function PosClient({
   function resetSale() {
     setCart([])
     setPaid(0)
+    setSplitCash(0)
+    setSplitTransfer(0)
+    setSplitPos(0)
     setCustomerId("")
     setNotes("")
     setWholesale(false)
@@ -234,12 +240,15 @@ export function PosClient({
 
   const total = useMemo(() => cart.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0), [cart])
   const customer = customers.find((row) => row.id === customerId)
-  const due = Math.max(0, total - (method === "CREDIT" ? 0 : paid))
+  const effectivePaid = method === "SPLIT_PAYMENT"
+    ? (splitCash + splitTransfer + splitPos)
+    : (method === "CREDIT" ? 0 : paid)
+  const due = Math.max(0, total - effectivePaid)
   const nextDebt = (customer?.currentBalance ?? 0) + (method === "CREDIT" ? total : due)
   const sellLock = sellLocks?.[branchId]
 
   function setPaidTo(nextTotal: number) {
-    if (method !== "CREDIT") setPaid(nextTotal)
+    if (method !== "CREDIT" && method !== "SPLIT_PAYMENT") setPaid(nextTotal)
   }
 
   async function saveCustomer() {
@@ -350,7 +359,7 @@ export function PosClient({
         confirmLabel: "Yes, Book Receivable",
         cancelLabel: "Adjust Payment Amount",
         impactItems: [
-          `Immediate payment received: ${formatCurrency(paid)}`,
+          `Immediate payment received: ${formatCurrency(effectivePaid)}`,
           `Remaining balance owed to shop: ${formatCurrency(due)}`,
           `Customer ledger: ${cust?.name || "Selected customer"}`,
         ],
@@ -361,11 +370,21 @@ export function PosClient({
       toast.error("One price is under the lowest price allowed. Raise it, or ask the main admin.")
       return
     }
+
+    const splitTenders = method === "SPLIT_PAYMENT"
+      ? [
+          { method: "CASH" as const, amount: splitCash },
+          { method: "TRANSFER" as const, amount: splitTransfer },
+          { method: "POS" as const, amount: splitPos },
+        ].filter((t) => t.amount > 0)
+      : undefined
+
     const payload = {
       customerId: customerId || undefined,
       branchId,
       paymentMethod: method,
-      paidAmount: method === "CREDIT" ? 0 : paid,
+      paidAmount: effectivePaid,
+      splitTenders,
       notes,
       wholesale,
       items: cart.map((line) => ({
@@ -683,30 +702,86 @@ export function PosClient({
           )}
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block text-muted-foreground">Payment</span>
+          <span className="mb-1 block text-muted-foreground">Payment Method</span>
           <Select
             value={method}
             onChange={(event) => {
               const next = event.target.value as typeof method
               setMethod(next)
-              setPaid(next === "CREDIT" ? 0 : total)
+              if (next === "CREDIT") {
+                setPaid(0)
+              } else if (next === "SPLIT_PAYMENT") {
+                setSplitCash(total)
+                setSplitTransfer(0)
+                setSplitPos(0)
+              } else {
+                setPaid(total)
+              }
             }}
           >
             <option value="CASH">Cash</option>
-            <option value="TRANSFER">Transfer</option>
-            <option value="POS">POS</option>
-            <option value="CREDIT">Credit / due</option>
+            <option value="TRANSFER">Bank Transfer</option>
+            <option value="POS">POS Terminal</option>
+            <option value="SPLIT_PAYMENT">Split Payment (Multiple Tenders)</option>
+            <option value="CREDIT">Credit / Account Due</option>
           </Select>
         </label>
-        <label className="block text-sm">
-          <span className="mb-1 block text-muted-foreground">Amount paid</span>
-          <Input
-            type="number"
-            value={method === "CREDIT" ? 0 : paid}
-            disabled={method === "CREDIT"}
-            onChange={(event) => setPaid(Number(event.target.value))}
-          />
-        </label>
+        {method === "SPLIT_PAYMENT" ? (
+          <div className="space-y-3 rounded-lg border border-border/80 bg-muted/20 p-3.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold uppercase tracking-wider text-muted-foreground">Multi-Tender Breakdown</span>
+              <span className="font-semibold text-primary">Invoice Total: {formatCurrency(total)}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <span className="mb-1 block text-xs text-muted-foreground">Cash (₦)</span>
+                <Input
+                  type="number"
+                  min="0"
+                  value={splitCash || ""}
+                  placeholder="0"
+                  onChange={(e) => setSplitCash(Math.max(0, Number(e.target.value) || 0))}
+                />
+              </div>
+              <div>
+                <span className="mb-1 block text-xs text-muted-foreground">Transfer (₦)</span>
+                <Input
+                  type="number"
+                  min="0"
+                  value={splitTransfer || ""}
+                  placeholder="0"
+                  onChange={(e) => setSplitTransfer(Math.max(0, Number(e.target.value) || 0))}
+                />
+              </div>
+              <div>
+                <span className="mb-1 block text-xs text-muted-foreground">POS (₦)</span>
+                <Input
+                  type="number"
+                  min="0"
+                  value={splitPos || ""}
+                  placeholder="0"
+                  onChange={(e) => setSplitPos(Math.max(0, Number(e.target.value) || 0))}
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-xs pt-1 border-t border-border/60">
+              <span className="text-muted-foreground">Combined Tenders:</span>
+              <span className={`font-semibold ${splitCash + splitTransfer + splitPos === total ? "text-emerald-600" : "text-amber-600"}`}>
+                {formatCurrency(splitCash + splitTransfer + splitPos)}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <label className="block text-sm">
+            <span className="mb-1 block text-muted-foreground">Amount paid</span>
+            <Input
+              type="number"
+              value={method === "CREDIT" ? 0 : paid}
+              disabled={method === "CREDIT"}
+              onChange={(event) => setPaid(Number(event.target.value))}
+            />
+          </label>
+        )}
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={wholesale} onChange={(event) => setWholesale(event.target.checked)} />
           Wholesale / dealer sale

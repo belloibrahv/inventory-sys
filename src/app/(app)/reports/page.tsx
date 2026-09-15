@@ -95,8 +95,8 @@ export default async function ReportsPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Reports"
-        description={`One paper on how the shops are doing: sales, money in, stock worth, spending, and who still owes you. As at ${formatLagosStamp()}.`}
+        title="Business Intelligence & Operational Reports"
+        description={`Comprehensive enterprise executive summary: revenue performance, cash collections, asset valuation, operational expenses, and trade receivables aging as of ${formatLagosStamp()}.`}
       />
       <ReportsClientView
         pack={pack}

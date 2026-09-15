@@ -130,7 +130,7 @@ export async function getFinance() {
         date: po.receivedDate || po.createdAt,
         branch: po.branch.name,
         type: "OUT" as const,
-        category: "Money paid to a supplier",
+        category: "Suppliers payment",
         description: `PO ${po.invoiceNumber} payment to ${po.supplier.name}`,
         amount: money(po.paidAmount),
       })

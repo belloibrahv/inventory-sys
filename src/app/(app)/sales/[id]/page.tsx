@@ -15,7 +15,7 @@ import { Select } from "@/components/ui/select"
 import { isSuperAdmin } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { formatCurrency, formatDateTime, money } from "@/lib/utils"
-import { statusLabel } from "@/lib/status"
+import { formatCondition, statusLabel } from "@/lib/status"
 import { warrantyState } from "@/lib/warranty"
 
 export default async function SaleDetailPage({
@@ -54,6 +54,9 @@ export default async function SaleDetailPage({
       quantity: item.quantity,
       amount: money(item.totalPrice),
       warranty: warrantyState(sale.saleDate, item.warrantyDays ?? item.product.warrantyDays).label,
+      storage: item.product.storage,
+      condition: item.product.condition,
+      color: item.product.color,
     })),
     total: money(sale.totalAmount),
     paid: money(sale.paidAmount),
@@ -123,7 +126,28 @@ export default async function SaleDetailPage({
           <tbody>
             {sale.items.map((item) => (
               <tr key={item.id} className="border-b border-border/70">
-                <td className="px-4 py-3">{item.product.name}</td>
+                <td className="px-4 py-3">
+                  <p className="font-medium">{item.product.name}</p>
+                  {(item.product.storage || item.product.condition || item.product.color) ? (
+                    <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                      {item.product.storage ? (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200 font-semibold text-[10px]">
+                          {item.product.storage}
+                        </span>
+                      ) : null}
+                      {item.product.condition ? (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 font-medium text-[10px]">
+                          {formatCondition(item.product.condition)}
+                        </span>
+                      ) : null}
+                      {item.product.color ? (
+                        <span className="text-[11px] text-muted-foreground">
+                          · {item.product.color}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </td>
                 <td className="px-4 py-3">
                   {item.imei ? (
                     <Link href={`/imei/${item.imei.id}`} className="text-primary">{item.imei.imei1}</Link>

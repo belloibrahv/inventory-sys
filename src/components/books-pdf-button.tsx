@@ -175,13 +175,13 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
       })
       y += 18
 
-      section("This time against last time")
+      section("Period-over-Period Variance Analysis")
       doc.setTextColor(...MUTED)
       doc.setFontSize(7)
-      doc.text("Line", left + 1, y)
-      doc.text("This time", left + 92, y, { align: "right" })
-      doc.text("Last time", left + 138, y, { align: "right" })
-      doc.text("Up or down", right - 1, y, { align: "right" })
+      doc.text("Account Line", left + 1, y)
+      doc.text("Current Period", left + 92, y, { align: "right" })
+      doc.text("Prior Period", left + 138, y, { align: "right" })
+      doc.text("Net Movement", right - 1, y, { align: "right" })
       y += 5
       booksCompareRows(data).forEach((item, index) => {
         const now = item.money ? formatPdfMoney(item.now) : String(item.now)
@@ -190,12 +190,12 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
         row(item.label, now, then, move, index % 2 ? PAPER : undefined)
       })
 
-      section("How the money adds up")
+      section("Statement of Cash Flows & Collections")
       booksMoneyLines(data).forEach((item, index) => {
         row(item.label, formatPdfMoney(item.value), undefined, undefined, item.total ? [232, 237, 255] : index % 2 ? PAPER : undefined)
       })
 
-      section("Checks on the books")
+      section("Internal Audit Controls & Verifications")
       data.papers.forEach((item, index) => {
         ensure(14)
         doc.setFillColor(item.ok ? 236 : 255, item.ok ? 253 : 241, item.ok ? 245 : 242)
@@ -205,7 +205,7 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
         doc.setFontSize(8)
         doc.text(`${index + 1}. ${item.label}`, left + 2, y + 1)
         doc.setTextColor(item.ok ? 5 : 190, item.ok ? 150 : 18, item.ok ? 105 : 60)
-        doc.text(item.ok ? "GOOD" : "FIX THIS", right - 2, y + 1, { align: "right" })
+        doc.text(item.ok ? "COMPLIANT" : "ACTION REQUIRED", right - 2, y + 1, { align: "right" })
         doc.setFont("helvetica", "normal")
         doc.setTextColor(...MUTED)
         doc.setFontSize(7)
@@ -213,26 +213,26 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
         y += 13
       })
 
-      section("Who collected the money")
+      section("Collections by Sales Executive")
       if (data.byStaff.length === 0) {
-        row("No finished sale in this time", "")
+        row("No completed sales transactions recorded for this period", "")
       } else {
         data.byStaff.forEach((item, index) => {
           row(`${item.name}  ·  ${item.count} sale${item.count === 1 ? "" : "s"}`, formatPdfMoney(item.collected), undefined, undefined, index % 2 ? PAPER : undefined)
         })
       }
 
-      section("Still not settled")
-      row("Customers still owe", formatPdfMoney(data.customersOwe))
-      row("We still owe suppliers", formatPdfMoney(data.supplierOwed))
-      row("Sales with no buyer name", String(data.walkIns))
+      section("Outstanding Balances & Reconciliation")
+      row("Accounts Receivable (Trade Debtors)", formatPdfMoney(data.customersOwe))
+      row("Accounts Payable (Trade Creditors)", formatPdfMoney(data.supplierOwed))
+      row("Unregistered Walk-in Transactions", String(data.walkIns))
       row("Cash sales (Expected in till)", formatPdfMoney(data.expectedCash))
       row("Cash remitted", data.countedCash == null ? "Day not closed" : formatPdfMoney(data.countedCash))
       row("Shortage / Overage", data.variance == null ? "Day not closed" : formatPdfMoney(data.variance), undefined, undefined, PAPER)
 
-      section("Sales")
+      section("Sales Ledger")
       if (data.invoices.length === 0) {
-        row("No finished sale in this time", "")
+        row("No completed sales transactions recorded for this period", "")
       } else {
         data.invoices.forEach((item, index) => {
           row(
@@ -245,29 +245,29 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
         })
       }
 
-      section("Days we closed")
+      section("Daily Register Closes")
       if (data.closes.length === 0) {
-        row("No day was closed in this time", "")
+        row("No business days closed in this period", "")
       } else {
         data.closes.forEach((item, index) => {
-          row(`${formatWatLong(item.day)}  ·  ${item.staff}`, formatPdfMoney(item.expected), "short or plenty", formatPdfMoney(item.variance), index % 2 ? PAPER : undefined)
+          row(`${formatWatLong(item.day)}  ·  ${item.staff}`, formatPdfMoney(item.expected), "Variance", formatPdfMoney(item.variance), index % 2 ? PAPER : undefined)
         })
       }
 
-      section("IMEI list against shop count")
+      section("Physical Count vs System IMEI Ledger")
       if (data.imeiRows.length === 0) {
-        row("No phone or serial item in this shop", "")
+        row("No serialized inventory present at this branch", "")
       } else {
         data.imeiRows.forEach((item, index) => {
-          row(item.product, `${item.shopQty} / ${item.imeis}`, undefined, item.delta === 0 ? "They agree" : String(item.delta), index % 2 ? PAPER : undefined)
+          row(item.product, `${item.shopQty} / ${item.imeis}`, undefined, item.delta === 0 ? "Matched" : String(item.delta), index % 2 ? PAPER : undefined)
         })
       }
 
       ensure(42)
       y += 4
-      section("Sign here")
+      section("Auditor Certification & Statutory Sign-Off")
       const boxesW = (width - 8) / 3
-      ;["Written by", "Checked by records checker", "Approved by owner"].forEach((title, index) => {
+      ;["Prepared by (Internal Auditor)", "Verified by (Financial Accountant)", "Approved by (Managing Director)"].forEach((title, index) => {
         const x = left + index * (boxesW + 4)
         doc.setTextColor(...MUTED)
         doc.setFontSize(7)

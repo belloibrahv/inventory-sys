@@ -175,15 +175,13 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
                     </div>
                     <p className={`text-[11px] mt-0.5 ${row.ok ? "text-slate-600" : "text-rose-900"}`}>{row.detail}</p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                      className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
                         row.ok ? "bg-emerald-100 text-emerald-800" : "bg-rose-600 text-white shadow-xs"
                       }`}
                     >
-                      {row.ok ? "Good" : "Go and fix →"}
+                      {row.ok ? "Verified" : "Action Required →"}
                     </span>
-                  </div>
                 </div>
               )
 
@@ -358,9 +356,9 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
         <div className="flex items-start gap-3">
           <ShieldCheck className="h-5 w-5 text-primary shrink-0 mt-0.5" />
           <div className="text-xs text-slate-600 space-y-1">
-            <p className="font-bold text-slate-900">Sign here to say the books are true</p>
+            <p className="font-bold text-slate-900">Auditor Certification & Statutory Attestation</p>
             <p>
-              I have checked the bank papers, the till counts, the phone and IMEI list, and the bills we paid for this time. The numbers on this paper are a true picture of the money and the stock.
+              I have examined the underlying cash registers, daily till reconciliations, serialized asset ledgers, and authorized disbursements for the stated period. In my professional opinion, this statement presents fairly, in all material respects, the financial position and inventory valuation of the enterprise.
             </p>
           </div>
         </div>
@@ -368,9 +366,9 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
 
       <div className="grid gap-6 border-t border-slate-200 px-6 py-8 sm:grid-cols-3">
         {[
-          ["Written by (records checker)", data.preparedBy],
-          ["Checked by (accountant)", ""],
-          ["Approved by (owner)", ""],
+          ["Prepared by (Internal Auditor)", data.preparedBy],
+          ["Verified by (Financial Accountant)", ""],
+          ["Approved by (Managing Director)", ""],
         ].map(([title, name]) => (
           <div key={title}>
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{title}</p>
@@ -383,7 +381,7 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
 
       <footer className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-6 py-3 text-[10px] text-slate-500">
         <p>{data.company.phone} · {data.company.email}</p>
-        <p>Software by Techvaults Limited · Checked money and stock report.</p>
+        <p>Software by Techvaults Limited · Certified Financial &amp; Inventory Audit Statement.</p>
       </footer>
     </section>
   )

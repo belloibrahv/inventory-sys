@@ -6,11 +6,12 @@ export type QueuedSale = {
   payload: {
     customerId?: string
     branchId: string
-    paymentMethod: "CASH" | "TRANSFER" | "POS" | "CREDIT"
+    paymentMethod: "CASH" | "TRANSFER" | "POS" | "CREDIT" | "SPLIT_PAYMENT"
     paidAmount: number
+    splitTenders?: Array<{ method: "CASH" | "TRANSFER" | "POS"; amount: number }>
     notes?: string
     wholesale?: boolean
-    items: Array<{ productId: string; imeiId?: string; quantity: number; unitPrice: number }>
+    items: Array<{ productId: string; imeiId?: string; quantity: number; unitPrice: number; warrantyDays?: number }>
   }
 }
 
