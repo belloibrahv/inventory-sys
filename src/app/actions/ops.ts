@@ -481,9 +481,17 @@ export async function payPurchase(formData: FormData) {
 
   const purchase = await prisma.purchase.findUnique({
     where: { id },
-    include: { supplier: true },
+    include: { supplier: true, openingStock: true },
   })
   if (!purchase) return { error: "We could not find that supplier bill." }
+  if (
+    purchase.openingStock ||
+    purchase.source === "UPLOAD_STOCK" ||
+    purchase.paymentMethod === "OPENING_STOCK" ||
+    purchase.invoiceNumber.startsWith("OPEN-")
+  ) {
+    return { error: "Opening stock represents an independent inventory asset valuation baseline and has no payment model." }
+  }
   const due = money(purchase.totalAmount) - money(purchase.paidAmount)
   if (due <= 0) return { error: "This supplier bill is already fully paid." }
   const sent = Math.min(amount, due)

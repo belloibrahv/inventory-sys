@@ -73,6 +73,9 @@ export async function createCustomer(formData: FormData) {
 export async function getSuppliers() {
   await requireUser()
   return prisma.supplier.findMany({
+    where: {
+      name: { not: "Opening stock" },
+    },
     include: {
       _count: { select: { purchases: true, imeiRecords: true } },
       purchases: { select: { totalAmount: true, paidAmount: true } },

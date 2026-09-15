@@ -43,7 +43,13 @@ export async function getFinance() {
       orderBy: { date: "desc" },
     }),
     prisma.purchase.findMany({
-      where: { ...where, status: { not: "CANCELLED" } },
+      where: {
+        ...where,
+        status: { not: "CANCELLED" },
+        source: { not: "UPLOAD_STOCK" },
+        paymentMethod: { not: "OPENING_STOCK" },
+        invoiceNumber: { not: { startsWith: "OPEN-" } },
+      },
       include: { supplier: true, branch: true },
       orderBy: { createdAt: "desc" },
     }),
@@ -682,7 +688,13 @@ export async function getReportData(requestedBranchId?: string) {
       orderBy: { currentBalance: "desc" },
     }),
     prisma.purchase.findMany({
-      where: { ...(branchId ? { branchId } : {}), status: { not: "CANCELLED" } },
+      where: {
+        ...(branchId ? { branchId } : {}),
+        status: { not: "CANCELLED" },
+        source: { not: "UPLOAD_STOCK" },
+        paymentMethod: { not: "OPENING_STOCK" },
+        invoiceNumber: { not: { startsWith: "OPEN-" } },
+      },
       include: { supplier: true, branch: true },
     }),
   ])

@@ -109,17 +109,25 @@ export function PurchasesList({
           const owedVal = Math.max(0, totalVal - paidVal)
           const when = purchase.receivedDate ?? purchase.createdAt
 
+          const isOpening =
+            purchase.source === "UPLOAD_STOCK" ||
+            purchase.invoiceNumber.startsWith("OPEN-")
+
           return (
             <Link key={purchase.id} href={`/purchases/${purchase.id}`} className="surface-card block p-5 hover:bg-muted/40">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-semibold">{purchase.invoiceNumber}</p>
-                  {purchase.source === "UPLOAD_STOCK" ? (
-                    <p className="text-xs font-medium text-primary">Loaded on Upload stock</p>
-                  ) : null}
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold">{purchase.invoiceNumber}</p>
+                    {isOpening ? (
+                      <span className="badge badge-outline text-[11px] font-semibold text-primary">
+                        Independent Opening Stock
+                      </span>
+                    ) : null}
+                  </div>
                   <p className="text-sm text-muted-foreground">
-                    {purchase.supplier.name}
-                    {origin ? ` · from ${origin}` : ""}
+                    {isOpening ? "Physical Opening Count & Baseline" : purchase.supplier.name}
+                    {origin && !isOpening ? ` · from ${origin}` : ""}
                     {" · "}
                     {purchase.branch.name}
                   </p>
@@ -141,7 +149,7 @@ export function PurchasesList({
                       shop.
                     </p>
                   ) : null}
-                  {purchase.expectedDate ? (
+                  {purchase.expectedDate && !isOpening ? (
                     <p className="mt-1 text-sm text-muted-foreground">Due {formatShopWhen(purchase.expectedDate)}</p>
                   ) : null}
                   {comingLots ? (
@@ -157,22 +165,43 @@ export function PurchasesList({
                   </p>
                 </div>
               </div>
-              <div className="mt-3 grid gap-3 border-t border-border pt-3 text-sm sm:grid-cols-3">
-                <span>
-                  <span className="eyebrow block">Bill value</span>
-                  <strong className="num">{formatCurrency(totalVal)}</strong>
-                </span>
-                <span>
-                  <span className="eyebrow block">We have paid</span>
-                  <strong className="num text-success">{formatCurrency(paidVal)}</strong>
-                </span>
-                <span>
-                  <span className="eyebrow block">Still owed</span>
-                  <strong className={`num ${owedVal > 0 ? "text-warning" : "text-success"}`}>
-                    {formatCurrency(owedVal)}
-                  </strong>
-                </span>
-              </div>
+              {isOpening ? (
+                <div className="mt-3 grid gap-3 border-t border-border pt-3 text-sm sm:grid-cols-3">
+                  <span>
+                    <span className="eyebrow block">Asset Valuation</span>
+                    <strong className="num">{formatCurrency(totalVal)}</strong>
+                  </span>
+                  <span>
+                    <span className="eyebrow block">Payment Model</span>
+                    <span className="text-xs font-medium text-muted-foreground">
+                      None (Independent Asset)
+                    </span>
+                  </span>
+                  <span>
+                    <span className="eyebrow block">Accounting Nature</span>
+                    <span className="text-xs font-semibold text-success">
+                      Opening Capital Equity
+                    </span>
+                  </span>
+                </div>
+              ) : (
+                <div className="mt-3 grid gap-3 border-t border-border pt-3 text-sm sm:grid-cols-3">
+                  <span>
+                    <span className="eyebrow block">Bill value</span>
+                    <strong className="num">{formatCurrency(totalVal)}</strong>
+                  </span>
+                  <span>
+                    <span className="eyebrow block">We have paid</span>
+                    <strong className="num text-success">{formatCurrency(paidVal)}</strong>
+                  </span>
+                  <span>
+                    <span className="eyebrow block">Still owed</span>
+                    <strong className={`num ${owedVal > 0 ? "text-warning" : "text-success"}`}>
+                      {formatCurrency(owedVal)}
+                    </strong>
+                  </span>
+                </div>
+              )}
             </Link>
           )
         })

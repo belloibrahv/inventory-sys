@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { requireUser } from "@/lib/session"
 import { getProducts } from "@/app/actions/catalog"
 import { getPurchases, getSupplierReturnCandidates, sendUnitsToSupplier } from "@/app/actions/ops"
@@ -23,22 +24,30 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
     getSupplierReturnCandidates(),
   ])
 
-  const houses = suppliers.filter((row) => row.kind !== "NEIGHBOR")
-  const expected = purchases.reduce((sum, row) => sum + row.trace.expected, 0)
-  const recorded = purchases.reduce((sum, row) => sum + row.trace.recorded, 0)
-  const sold = purchases.reduce((sum, row) => sum + row.trace.sold, 0)
-  const soldToday = purchases.reduce((sum, row) => sum + row.trace.soldToday, 0)
-  const inShop = purchases.reduce((sum, row) => sum + row.trace.inShop, 0)
-  const shortVsBill = purchases.reduce((sum, row) => sum + row.trace.shortVsBill, 0)
-  const billed = purchases.reduce((sum, row) => sum + money(row.totalAmount), 0)
-  const paid = purchases.reduce((sum, row) => sum + money(row.paidAmount), 0)
+  const houses = suppliers.filter((row) => row.kind !== "NEIGHBOR" && row.name !== "Opening stock")
+  const regularPurchases = purchases.filter(
+    (p) => p.source !== "UPLOAD_STOCK" && !p.invoiceNumber.startsWith("OPEN-")
+  )
+  const openingPurchases = purchases.filter(
+    (p) => p.source === "UPLOAD_STOCK" || p.invoiceNumber.startsWith("OPEN-")
+  )
+
+  const expected = regularPurchases.reduce((sum, row) => sum + row.trace.expected, 0)
+  const recorded = regularPurchases.reduce((sum, row) => sum + row.trace.recorded, 0)
+  const sold = regularPurchases.reduce((sum, row) => sum + row.trace.sold, 0)
+  const soldToday = regularPurchases.reduce((sum, row) => sum + row.trace.soldToday, 0)
+  const inShop = regularPurchases.reduce((sum, row) => sum + row.trace.inShop, 0)
+  const shortVsBill = regularPurchases.reduce((sum, row) => sum + row.trace.shortVsBill, 0)
+  const billed = regularPurchases.reduce((sum, row) => sum + money(row.totalAmount), 0)
+  const paid = regularPurchases.reduce((sum, row) => sum + money(row.paidAmount), 0)
   const owed = Math.max(0, billed - paid)
+  const openingValue = openingPurchases.reduce((sum, row) => sum + money(row.totalAmount), 0)
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Goods from supplier"
-        description="Each supplier bill and the money on it. If the shelf has fewer phones than the system says, something may have left without a sale."
+        description="Supplier procurement bills and vendor accounts payable. Track expected cartons, received stock, and vendor disbursements."
       />
 
       <form className="grid gap-2 md:grid-cols-[1fr_auto]">
@@ -46,12 +55,26 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
         <Button type="submit">Search</Button>
       </form>
 
+      {openingPurchases.length > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary-soft p-4 text-sm text-foreground">
+          <div className="space-y-0.5">
+            <p className="font-semibold text-primary">Independent Opening Stock Valuation ({formatCurrency(openingValue)})</p>
+            <p className="text-xs text-muted-foreground">
+              Opening inventory stands independently as an asset valuation baseline. It requires no supplier payments and carries zero trade debt.
+            </p>
+          </div>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/opening-stock">View &amp; Audit Opening Stock &rarr;</Link>
+          </Button>
+        </div>
+      ) : null}
+
       {/* The money first: what these bills came to, what we paid, what is left. */}
       <StatGrid>
         <StatCard
           label="Value of these bills"
           value={formatCurrency(billed)}
-          hint={`${purchases.length} supplier bill${purchases.length === 1 ? "" : "s"}`}
+          hint={`${regularPurchases.length} supplier bill${regularPurchases.length === 1 ? "" : "s"}`}
         />
         <StatCard
           label="We have paid"
