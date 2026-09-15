@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useSyncExternalStore } from "react"
+import * as React from "react"
 
 export type NetworkState = "online" | "offline" | "reconnecting" | "syncing"
 
@@ -11,22 +11,37 @@ export interface NetworkInfo {
   offlineSince: Date | null
 }
 
+const SERVER_SNAPSHOT: NetworkInfo = Object.freeze({
+  state: "online",
+  latencyMs: null,
+  lastOnlineAt: null,
+  offlineSince: null,
+})
+
 class NetworkMonitor {
   private state: NetworkState = "online"
   private latencyMs: number | null = null
-  private lastOnlineAt: Date | null = new Date()
+  private lastOnlineAt: Date | null = null
   private offlineSince: Date | null = null
   private listeners = new Set<() => void>()
   private checkTimer: number | null = null
   private isChecking = false
+  private currentSnapshot: NetworkInfo
 
   constructor() {
-    if (typeof window !== "undefined") {
-      this.state = navigator.onLine ? "online" : "offline"
-      if (!navigator.onLine) {
-        this.offlineSince = new Date()
-      }
+    const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true
+    this.state = isOnline ? "online" : "offline"
+    this.lastOnlineAt = isOnline ? new Date() : null
+    this.offlineSince = isOnline ? null : new Date()
 
+    this.currentSnapshot = Object.freeze({
+      state: this.state,
+      latencyMs: this.latencyMs,
+      lastOnlineAt: this.lastOnlineAt,
+      offlineSince: this.offlineSince,
+    })
+
+    if (typeof window !== "undefined") {
       window.addEventListener("online", () => this.handleBrowserOnline())
       window.addEventListener("offline", () => this.handleBrowserOffline())
 
@@ -40,7 +55,13 @@ class NetworkMonitor {
     }
   }
 
-  private notify() {
+  private updateSnapshot() {
+    this.currentSnapshot = Object.freeze({
+      state: this.state,
+      latencyMs: this.latencyMs,
+      lastOnlineAt: this.lastOnlineAt,
+      offlineSince: this.offlineSince,
+    })
     for (const listener of this.listeners) {
       listener()
     }
@@ -48,7 +69,7 @@ class NetworkMonitor {
 
   private handleBrowserOnline() {
     this.state = "reconnecting"
-    this.notify()
+    this.updateSnapshot()
     void this.ping()
   }
 
@@ -56,16 +77,16 @@ class NetworkMonitor {
     this.state = "offline"
     this.offlineSince = new Date()
     this.latencyMs = null
-    this.notify()
+    this.updateSnapshot()
   }
 
   public setSyncing(isSyncing: boolean) {
     if (isSyncing) {
       this.state = "syncing"
     } else {
-      this.state = navigator.onLine ? "online" : "offline"
+      this.state = typeof navigator !== "undefined" && navigator.onLine ? "online" : "offline"
     }
-    this.notify()
+    this.updateSnapshot()
   }
 
   public async ping(): Promise<boolean> {
@@ -74,7 +95,8 @@ class NetworkMonitor {
       if (this.state !== "offline") {
         this.state = "offline"
         this.offlineSince = this.offlineSince || new Date()
-        this.notify()
+        this.latencyMs = null
+        this.updateSnapshot()
       }
       return false
     }
@@ -102,7 +124,7 @@ class NetworkMonitor {
         if (this.state !== "syncing") {
           this.state = "online"
         }
-        this.notify()
+        this.updateSnapshot()
         this.isChecking = false
         return true
       } else {
@@ -115,22 +137,21 @@ class NetworkMonitor {
       if (!this.offlineSince) {
         this.offlineSince = new Date()
       }
-      this.notify()
+      this.updateSnapshot()
       this.isChecking = false
       return false
     }
   }
 
-  public getSnapshot(): NetworkInfo {
-    return {
-      state: this.state,
-      latencyMs: this.latencyMs,
-      lastOnlineAt: this.lastOnlineAt,
-      offlineSince: this.offlineSince,
-    }
+  public getSnapshot = (): NetworkInfo => {
+    return this.currentSnapshot
   }
 
-  public subscribe(callback: () => void): () => void {
+  public getServerSnapshot = (): NetworkInfo => {
+    return SERVER_SNAPSHOT
+  }
+
+  public subscribe = (callback: () => void): () => void => {
     this.listeners.add(callback)
     return () => {
       this.listeners.delete(callback)
@@ -150,19 +171,19 @@ export function getNetworkMonitor(): NetworkMonitor {
 export function useNetworkStatus(): NetworkInfo & { checkNow: () => Promise<boolean> } {
   const monitor = getNetworkMonitor()
 
-  const snapshot = useSyncExternalStore(
-    (callback) => monitor.subscribe(callback),
-    () => monitor.getSnapshot(),
-    () => ({
-      state: "online" as NetworkState,
-      latencyMs: null,
-      lastOnlineAt: null,
-      offlineSince: null,
-    })
+  const snapshot = React.useSyncExternalStore(
+    monitor.subscribe,
+    monitor.getSnapshot,
+    monitor.getServerSnapshot
   )
 
-  return {
-    ...snapshot,
-    checkNow: () => monitor.ping(),
-  }
+  const checkNow = React.useCallback(() => monitor.ping(), [monitor])
+
+  return React.useMemo(
+    () => ({
+      ...snapshot,
+      checkNow,
+    }),
+    [snapshot, checkNow]
+  )
 }
