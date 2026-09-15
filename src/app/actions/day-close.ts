@@ -7,12 +7,17 @@ import { scopedBranchId } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { recentWatDays, shiftWatDay, watBounds, watDayKey } from "@/lib/lagos-day"
 import { money } from "@/lib/utils"
+import { viewBranchFilter } from "@/lib/branch-scope"
 
 async function resolveShop(user: { role: Parameters<typeof scopedBranchId>[0]; branchId: string | null }, requested?: string) {
   const scoped = await scopedBranchId(user.role, user.branchId, requested)
   let shopId = scoped || requested || user.branchId || ""
   if (!shopId) {
-    const shop = await prisma.branch.findFirst({ where: { isActive: true }, orderBy: { isHq: "desc" } })
+    const fromCookie = await viewBranchFilter(user)
+    if (fromCookie) shopId = fromCookie
+  }
+  if (!shopId) {
+    const shop = await prisma.branch.findFirst({ where: { isActive: true }, orderBy: [{ isHq: "desc" }, { name: "asc" }] })
     shopId = shop?.id ?? ""
   }
   return shopId
@@ -66,7 +71,7 @@ export async function getSellLock(branchId?: string) {
   return {
     locked: true,
     dates,
-    href: `/finance/close?date=${dates[0]}`,
+    href: `/finance/close?date=${dates[0]}&branchId=${shopId}`,
     message: `This shop has not closed ${dates[0]}${dates.length > 1 ? ` and ${dates.length - 1} more day(s)` : ""}. Count the till before any new sale.`,
     branchId: shopId,
   }
@@ -77,12 +82,15 @@ export async function getDayClosePreview(branchId?: string, businessDate?: strin
   if (!(await can(user.role, "view.finance")) && !(await can(user.role, "action.sell"))) {
     return {
       sales: [],
+      totalSales: 0,
+      totalPaid: 0,
       expectedCash: 0,
       transferTotal: 0,
       posTotal: 0,
       creditTotal: 0,
       saleCount: 0,
       alreadyClosed: false,
+      closedRecord: null,
       branchId: "",
       branchName: "",
       businessDate: watDayKey(),
@@ -94,7 +102,7 @@ export async function getDayClosePreview(branchId?: string, businessDate?: strin
     shopId ? getUnclosedBusinessDays(shopId) : Promise.resolve([]),
     shopId ? prisma.branch.findUnique({ where: { id: shopId }, select: { name: true } }) : Promise.resolve(null),
   ])
-  const day = businessDate && businessDate.length === 10 ? businessDate : unclosed[0] || watDayKey()
+  const day = businessDate && businessDate.length === 10 ? businessDate : watDayKey()
   const { start, end } = watBounds(day)
   const [sales, existing] = await Promise.all([
     prisma.sale.findMany({
@@ -103,7 +111,11 @@ export async function getDayClosePreview(branchId?: string, businessDate?: strin
         ...(shopId ? { branchId: shopId } : {}),
         saleDate: { gte: start, lt: end },
       },
-      include: { customer: true },
+      include: {
+        customer: true,
+        user: true,
+        items: { include: { product: true } },
+      },
       orderBy: { saleDate: "desc" },
     }),
     shopId
@@ -112,9 +124,13 @@ export async function getDayClosePreview(branchId?: string, businessDate?: strin
             branchId: shopId,
             OR: [{ businessDate: day }, { closeDate: { gte: start, lt: end } }],
           },
+          include: { user: true },
         })
       : Promise.resolve(null),
   ])
+
+  const totalSales = sales.reduce((sum, sale) => sum + money(sale.totalAmount), 0)
+  const totalPaid = sales.reduce((sum, sale) => sum + money(sale.paidAmount), 0)
   const expectedCash = sales
     .filter((sale) => sale.paymentMethod === "CASH")
     .reduce((sum, sale) => sum + money(sale.paidAmount), 0)
@@ -126,22 +142,43 @@ export async function getDayClosePreview(branchId?: string, businessDate?: strin
     .reduce((sum, sale) => sum + money(sale.paidAmount), 0)
   const creditTotal = sales
     .filter((sale) => sale.paymentMethod === "CREDIT")
-    .reduce((sum, sale) => sum + money(sale.totalAmount), 0)
+    .reduce((sum, sale) => sum + Math.max(0, money(sale.totalAmount) - money(sale.paidAmount)), 0)
+
   return {
     sales: sales.map((sale) => ({
       id: sale.id,
       invoiceNumber: sale.invoiceNumber,
-      customer: sale.customer?.name ?? "Walk-in",
+      saleDate: sale.saleDate,
+      customer: sale.customer?.name ?? "Walk-in customer",
+      staff: sale.user?.name ?? "Staff",
       method: sale.paymentMethod,
       paid: money(sale.paidAmount),
       total: money(sale.totalAmount),
+      itemCount: sale.items.reduce((sum, item) => sum + item.quantity, 0),
+      itemsSummary: sale.items.map((it) => `${it.quantity}x ${it.product.name}`).join(", "),
     })),
+    totalSales,
+    totalPaid,
     expectedCash,
     transferTotal,
     posTotal,
     creditTotal,
     saleCount: sales.length,
     alreadyClosed: Boolean(existing),
+    closedRecord: existing
+      ? {
+          id: existing.id,
+          closedBy: existing.user?.name ?? "Staff",
+          closeDate: existing.closeDate,
+          expectedCash: money(existing.expectedCash),
+          countedCash: money(existing.countedCash),
+          variance: money(existing.variance),
+          transferTotal: money(existing.transferTotal),
+          posTotal: money(existing.posTotal),
+          creditTotal: money(existing.creditTotal),
+          notes: existing.notes,
+        }
+      : null,
     branchId: shopId,
     branchName: shop?.name ?? "",
     businessDate: day,
@@ -207,7 +244,12 @@ export async function closeDay(formData: FormData) {
     revalidatePath("/pos")
     revalidatePath("/dashboard")
     const leftover = await getUnclosedBusinessDays(preview.branchId)
-    return { success: true, redirectTo: leftover[0] ? `/finance/close?date=${leftover[0]}` : "/pos" }
+    return {
+      success: true,
+      redirectTo: leftover[0]
+        ? `/finance/close?date=${leftover[0]}&branchId=${preview.branchId}`
+        : `/finance/close?branchId=${preview.branchId}&date=${businessDate}`,
+    }
   } catch (error) {
     console.error("Failed to close day:", error)
     return { error: error instanceof Error ? error.message : "Failed to close the day. Please try again." }
@@ -217,26 +259,34 @@ export async function closeDay(formData: FormData) {
 export async function getDayCloses(requestedBranchId?: string) {
   const user = await requireUser()
   if (!(await can(user.role, "view.finance"))) return []
-  const branchId = await scopedBranchId(user.role, user.branchId, requestedBranchId)
+  const branchId = await resolveShop(user, requestedBranchId)
   const rows = await prisma.dayClose.findMany({
     where: branchId ? { branchId } : {},
     include: { branch: true, user: true },
     orderBy: { closeDate: "desc" },
     take: 40,
   })
-  return rows.map((row) => ({
-    id: row.id,
-    branch: row.branch.name,
-    user: row.user.name,
-    closeDate: row.closeDate,
-    businessDate: row.businessDate || watDayKey(row.closeDate),
-    expectedCash: money(row.expectedCash),
-    countedCash: money(row.countedCash),
-    variance: money(row.variance),
-    transferTotal: money(row.transferTotal),
-    posTotal: money(row.posTotal),
-    creditTotal: money(row.creditTotal),
-    saleCount: row.saleCount,
-    notes: row.notes,
-  }))
+  return rows.map((row) => {
+    const expectedCash = money(row.expectedCash)
+    const transferTotal = money(row.transferTotal)
+    const posTotal = money(row.posTotal)
+    const creditTotal = money(row.creditTotal)
+    const totalSales = expectedCash + transferTotal + posTotal + creditTotal
+    return {
+      id: row.id,
+      branch: row.branch.name,
+      user: row.user.name,
+      closeDate: row.closeDate,
+      businessDate: row.businessDate || watDayKey(row.closeDate),
+      totalSales,
+      expectedCash,
+      countedCash: money(row.countedCash),
+      variance: money(row.variance),
+      transferTotal,
+      posTotal,
+      creditTotal,
+      saleCount: row.saleCount,
+      notes: row.notes,
+    }
+  })
 }

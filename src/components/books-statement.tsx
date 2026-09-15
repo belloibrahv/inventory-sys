@@ -258,11 +258,11 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
               <span className="tabular-nums font-medium">{formatCurrency(data.expectedCash)}</span>
             </p>
             <p className="flex justify-between gap-3">
-              <span className="text-slate-500">Cash we counted</span>
+              <span className="text-slate-500">Cash we counted (Cash remitted)</span>
               <span className="tabular-nums">{data.countedCash == null ? "Not closed" : formatCurrency(data.countedCash)}</span>
             </p>
             <p className="flex justify-between gap-3 font-semibold">
-              <span>Short or plenty</span>
+              <span>Shortage / Overage (Short or plenty)</span>
               <span className={`tabular-nums ${data.variance && data.variance !== 0 ? "text-rose-600" : "text-emerald-700"}`}>
                 {data.variance == null ? "Not closed" : formatCurrency(data.variance)}
               </span>
@@ -313,8 +313,8 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
             <thead>
               <tr className="border-y border-slate-200 bg-slate-50 text-left text-[10px] uppercase tracking-wider text-slate-500">
                 <th className="py-2 pr-2">Day</th>
-                <th className="py-2 pr-2 text-right">Should be</th>
-                <th className="py-2 text-right">Short or plenty</th>
+                <th className="py-2 pr-2 text-right">Total sales</th>
+                <th className="py-2 text-right">Shortage / Overage</th>
               </tr>
             </thead>
             <tbody>
@@ -326,10 +326,10 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
                     </Link>
                     <span className="block text-[10px] text-slate-500">{row.staff}</span>
                   </td>
-                  <td className="py-1.5 pr-2 text-right tabular-nums">{formatCurrency(row.expected)}</td>
+                  <td className="py-1.5 pr-2 text-right tabular-nums font-semibold">{formatCurrency(row.totalSales ?? row.expected)}</td>
                   <td className="py-1.5 text-right tabular-nums font-semibold">
                     <span className={row.variance === 0 ? "text-emerald-700" : "text-rose-700"}>
-                      {formatCurrency(row.variance)}
+                      {row.variance === 0 ? "Balanced" : (row.variance > 0 ? `+${formatCurrency(row.variance)}` : formatCurrency(row.variance))}
                     </span>
                   </td>
                 </tr>

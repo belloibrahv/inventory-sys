@@ -226,9 +226,9 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
       row("Customers still owe", formatPdfMoney(data.customersOwe))
       row("We still owe suppliers", formatPdfMoney(data.supplierOwed))
       row("Sales with no buyer name", String(data.walkIns))
-      row("Cash the till should have", formatPdfMoney(data.expectedCash))
-      row("Cash we counted", data.countedCash == null ? "Day not closed" : formatPdfMoney(data.countedCash))
-      row("Short or plenty", data.variance == null ? "Day not closed" : formatPdfMoney(data.variance), undefined, undefined, PAPER)
+      row("Cash sales (Expected in till)", formatPdfMoney(data.expectedCash))
+      row("Cash remitted", data.countedCash == null ? "Day not closed" : formatPdfMoney(data.countedCash))
+      row("Shortage / Overage", data.variance == null ? "Day not closed" : formatPdfMoney(data.variance), undefined, undefined, PAPER)
 
       section("Sales")
       if (data.invoices.length === 0) {

@@ -362,15 +362,22 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
       total: money(sale.totalAmount),
       paid: money(sale.paidAmount),
     })),
-    closes: closes.map((row) => ({
-      id: row.id,
-      day: row.businessDate || row.closeDate.toISOString().slice(0, 10),
-      staff: row.user.name,
-      expected: money(row.expectedCash),
-      counted: money(row.countedCash),
-      variance: money(row.variance),
-      sales: row.saleCount,
-    })),
+    closes: closes.map((row) => {
+      const expectedCash = money(row.expectedCash)
+      const transferTotal = money(row.transferTotal)
+      const posTotal = money(row.posTotal)
+      const creditTotal = money(row.creditTotal)
+      return {
+        id: row.id,
+        day: row.businessDate || row.closeDate.toISOString().slice(0, 10),
+        staff: row.user.name,
+        totalSales: expectedCash + transferTotal + posTotal + creditTotal,
+        expected: expectedCash,
+        counted: money(row.countedCash),
+        variance: money(row.variance),
+        sales: row.saleCount,
+      }
+    }),
     byStaff,
     imeiGaps: imeiGaps.length,
     imeiRows: imeiRows.slice(0, 20),

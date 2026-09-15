@@ -6,8 +6,9 @@ import { PageHeader } from "@/components/shared"
 import { Input } from "@/components/ui/input"
 import { requireUser } from "@/lib/session"
 import { viewBranchFilter } from "@/lib/branch-scope"
+import { watDayKey } from "@/lib/lagos-day"
 import { formatCurrency, formatDate } from "@/lib/utils"
-import { Store, CheckCircle2, AlertTriangle, ArrowLeft } from "lucide-react"
+import { Store, CheckCircle2, AlertTriangle, ArrowLeft, ArrowRight, Calendar } from "lucide-react"
 
 export default async function DayClosePage({
   searchParams,
@@ -17,6 +18,7 @@ export default async function DayClosePage({
   const user = await requireUser()
   const activeBranch = await viewBranchFilter(user)
   const params = await searchParams
+  const today = watDayKey()
   const date = params.date
   const selectedBranchId = params.branchId || activeBranch || undefined
 
@@ -26,12 +28,14 @@ export default async function DayClosePage({
     getBranches(),
   ])
 
+  const isViewingToday = preview.businessDate === today
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <PageHeader
           title="Close the day"
-          description="Count the cash in the till. Match it to cash sales on the system. Transfer and POS money stay on the bank side."
+          description="Total sales for the day, money sent to the bank, and cash remittance reconciliation."
         />
         <Link
           href="/finance"
@@ -69,86 +73,169 @@ export default async function DayClosePage({
         </div>
       )}
 
-      {/* Unclosed Days Warning Banner */}
+      {/* Unclosed Days Warning Banner or Date Switcher */}
       {preview.unclosed.length ? (
-        <div className="rounded-xl border border-danger/30 bg-danger-soft p-4 text-sm text-danger">
-          <div className="flex items-center gap-2 font-bold text-danger">
-            <AlertTriangle className="h-4 w-4" />
-            <span>
-              Old days not closed yet {preview.branchName ? `for ${preview.branchName}` : ""}
+        <div className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm text-foreground">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2 font-bold text-warning">
+              <AlertTriangle className="h-4 w-4" />
+              <span>
+                {preview.unclosed.length} old day(s) not closed yet {preview.branchName ? `for ${preview.branchName}` : ""}
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              Close older days first so till history stays straight.
             </span>
           </div>
-          <p className="mt-1 text-xs text-danger">
-            Close the days one after the other, oldest first. Pick a day below and count that day's till:
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-muted-foreground">Select date:</span>
+            <Link
+              href={`/finance/close?branchId=${preview.branchId}&date=${today}`}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                isViewingToday
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-background border border-border text-foreground hover:bg-muted"
+              }`}
+            >
+              📅 Today ({today}) {isViewingToday ? " (Active)" : ""}
+            </Link>
             {preview.unclosed.map((day) => (
               <Link
                 key={day}
                 href={`/finance/close?branchId=${preview.branchId}&date=${day}`}
                 className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
                   day === preview.businessDate
-                    ? "bg-danger text-white shadow-sm"
-                    : "bg-white/80 border border-danger/30 text-danger hover:bg-danger-soft dark:bg-black/30"
+                    ? "bg-warning text-black font-bold shadow-sm"
+                    : "bg-background border border-warning/40 text-foreground hover:bg-warning/20"
                 }`}
               >
-                📅 {day} {day === preview.businessDate ? " (you are here)" : ""}
+                ⚠️ {day} {day === preview.businessDate ? " (Active)" : ""}
               </Link>
             ))}
           </div>
+        </div>
+      ) : !isViewingToday ? (
+        <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-primary" />
+            <span>
+              Viewing records for past day: <strong>{preview.businessDate}</strong>
+            </span>
+          </div>
+          <Link
+            href={`/finance/close?branchId=${preview.branchId}&date=${today}`}
+            className="text-primary font-semibold hover:underline"
+          >
+            Switch to Today's sales ({today}) →
+          </Link>
         </div>
       ) : null}
 
       {/* Overview Metric Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="surface-card p-5 border-l-4 border-l-emerald-500">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">What the till should have</p>
-          <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">{formatCurrency(preview.expectedCash)}</p>
+        <div className="surface-card p-5 border-l-4 border-l-primary bg-primary/5">
+          <p className="text-xs font-bold uppercase tracking-wider text-primary">Total sales for the day</p>
+          <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">{formatCurrency(preview.totalSales)}</p>
           <p className="text-xs text-muted-foreground mt-1">
-            {preview.branchName ? `${preview.branchName} · ` : ""}{preview.businessDate}
+            {preview.saleCount} {preview.saleCount === 1 ? "sale" : "sales"} · {preview.branchName} · {preview.businessDate}
           </p>
+        </div>
+        <div className="surface-card p-5 border-l-4 border-l-emerald-500">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cash sales (Expected in till)</p>
+          <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">{formatCurrency(preview.expectedCash)}</p>
+          <p className="text-xs text-muted-foreground mt-1">Physical cash taken in today</p>
         </div>
         <div className="surface-card p-5">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Money sent to the bank</p>
           <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">{formatCurrency(preview.transferTotal)}</p>
-          <p className="text-xs text-muted-foreground mt-1">Customers who paid straight into the bank</p>
+          <p className="text-xs text-muted-foreground mt-1">Customers who paid by Bank Transfer</p>
         </div>
         <div className="surface-card p-5">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">POS machine</p>
           <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">{formatCurrency(preview.posTotal)}</p>
-          <p className="text-xs text-muted-foreground mt-1">Customers who paid with a card</p>
-        </div>
-        <div className="surface-card p-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sales on that day</p>
-          <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">{preview.saleCount}</p>
-          <p className="text-xs text-muted-foreground mt-1">How many sales were finished on that day</p>
+          <p className="text-xs text-muted-foreground mt-1">Customers who paid with card on POS</p>
         </div>
       </div>
+
+      {preview.creditTotal > 0 ? (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-800 dark:text-amber-200 flex items-center justify-between">
+          <span>Part payment / credit sales balance left unpaid today:</span>
+          <span className="font-bold tabular-nums text-sm">{formatCurrency(preview.creditTotal)}</span>
+        </div>
+      ) : null}
 
       {/* Till Count Form or Closed Notice */}
       {preview.alreadyClosed ? (
         <div className="surface-card p-6 border-success/30 bg-success-soft">
-          <div className="flex items-center gap-2 text-success font-bold">
-            <CheckCircle2 className="h-5 w-5" />
-            <span>This day is counted and closed</span>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2 text-success font-bold">
+              <CheckCircle2 className="h-5 w-5" />
+              <span>This day is counted and closed</span>
+            </div>
+            {preview.closedRecord ? (
+              <span className="text-xs text-muted-foreground">
+                Closed by <strong>{preview.closedRecord.closedBy}</strong> on {formatDate(preview.closedRecord.closeDate)}
+              </span>
+            ) : null}
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {preview.branchName || "This shop"} has already counted the till and closed <strong>{preview.businessDate}</strong>.
-          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-4 pt-3 border-t border-success/20">
+            <div>
+              <p className="text-xs text-muted-foreground uppercase font-semibold">Total sales for the day</p>
+              <p className="text-lg font-bold font-mono">{formatCurrency(preview.totalSales)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase font-semibold">Cash expected</p>
+              <p className="text-lg font-bold font-mono">{formatCurrency(preview.closedRecord?.expectedCash ?? preview.expectedCash)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase font-semibold">Cash remitted</p>
+              <p className="text-lg font-bold font-mono text-primary">{formatCurrency(preview.closedRecord?.countedCash ?? 0)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase font-semibold">Shortage / Overage</p>
+              <p className="text-lg font-bold font-mono">
+                <span
+                  className={`inline-block rounded-md px-2 py-0.5 text-xs font-bold ${
+                    (preview.closedRecord?.variance ?? 0) === 0
+                      ? "bg-success-soft text-success"
+                      : (preview.closedRecord?.variance ?? 0) < 0
+                      ? "bg-danger-soft text-danger"
+                      : "bg-warning-soft text-warning"
+                  }`}
+                >
+                  {(preview.closedRecord?.variance ?? 0) === 0
+                    ? "Balanced (₦0.00)"
+                    : (preview.closedRecord?.variance ?? 0) < 0
+                    ? `Shortage: ${formatCurrency(preview.closedRecord?.variance ?? 0)}`
+                    : `Overage: +${formatCurrency(preview.closedRecord?.variance ?? 0)}`}
+                </span>
+              </p>
+            </div>
+          </div>
+          {preview.closedRecord?.notes ? (
+            <p className="mt-3 text-xs text-muted-foreground bg-background/50 p-2.5 rounded border border-border/50">
+              <span className="font-semibold">Note:</span> {preview.closedRecord.notes}
+            </p>
+          ) : null}
         </div>
       ) : (
         <div className="surface-card p-6 border-primary/20">
-          <div className="flex items-center justify-between mb-4 border-b border-border pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4 border-b border-border pb-3">
             <div>
               <h3 className="font-bold text-base">
-                Count the money in the till — {preview.branchName || "Shop"} ({preview.businessDate})
+                Count cash to remit — {preview.branchName || "Shop"} ({preview.businessDate})
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Count the notes inside the drawer, then type the total you counted below.
+                Count the physical cash inside the till drawer. Remit this cash and enter the amount below.
               </p>
             </div>
-            <div className="rounded-lg bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
-              Should be: {formatCurrency(preview.expectedCash)}
+            <div className="flex flex-wrap gap-2">
+              <div className="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary">
+                Total sales for the day: {formatCurrency(preview.totalSales)}
+              </div>
+              <div className="rounded-lg bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                Cash expected: {formatCurrency(preview.expectedCash)}
+              </div>
             </div>
           </div>
 
@@ -157,7 +244,7 @@ export default async function DayClosePage({
             <input type="hidden" name="businessDate" value={preview.businessDate} />
             <div>
               <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
-                Money you counted in the till (₦) *
+                Cash remitted (Money counted in the till) (₦) *
               </label>
               <Input
                 name="countedCash"
@@ -166,34 +253,113 @@ export default async function DayClosePage({
                 defaultValue={preview.expectedCash}
                 required
                 className="min-h-12 text-lg font-mono font-bold"
-                placeholder="Type the money you counted"
+                placeholder="Type the cash remitted"
               />
+              <p className="mt-1 text-xs text-muted-foreground">
+                The physical cash handed over or remitted from the drawer. When balanced, this matches the cash sales of {formatCurrency(preview.expectedCash)}.
+              </p>
             </div>
             <div>
               <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
-                Note (you can leave this empty)
+                Note (optional)
               </label>
               <Input
                 name="notes"
-                placeholder="If the money is short or plenty, say why. Example: ₦2,000 used to buy fuel."
+                placeholder="If there is a shortage or overage, say why. Example: ₦2,000 used to buy shop supplies."
               />
             </div>
           </ActionForm>
         </div>
       )}
 
+      {/* Sales Made On This Day */}
+      <div className="surface-card overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <div>
+            <h3 className="font-bold text-base">Sales made on this day ({preview.sales.length})</h3>
+            <p className="text-xs text-muted-foreground">
+              Every completed sale making up the {formatCurrency(preview.totalSales)} total on {preview.businessDate}
+            </p>
+          </div>
+          <Link
+            href="/sales"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+          >
+            All sales <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-muted-foreground bg-muted/40 text-xs uppercase tracking-wider">
+              <tr className="border-b border-border">
+                <th className="px-5 py-3">Invoice</th>
+                <th className="px-4 py-3">Customer</th>
+                <th className="px-4 py-3">Items</th>
+                <th className="px-4 py-3">Staff</th>
+                <th className="px-4 py-3">Paid by</th>
+                <th className="px-4 py-3 text-right">Total amount</th>
+                <th className="px-5 py-3 text-right">Paid</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/60">
+              {preview.sales.map((sale) => (
+                <tr key={sale.id} className="hover:bg-muted/30">
+                  <td className="px-5 py-3">
+                    <Link
+                      href={`/sales/${sale.id}`}
+                      className="font-mono font-bold text-primary hover:underline"
+                    >
+                      {sale.invoiceNumber}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3 font-medium">{sale.customer}</td>
+                  <td className="px-4 py-3 text-xs text-muted-foreground max-w-xs truncate" title={sale.itemsSummary}>
+                    {sale.itemsSummary || `${sale.itemCount} items`}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-muted-foreground">{sale.staff}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-block rounded-md px-2 py-0.5 text-xs font-bold ${
+                        sale.method === "CASH"
+                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                          : sale.method === "TRANSFER"
+                          ? "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                          : sale.method === "POS"
+                          ? "bg-purple-500/10 text-purple-600 dark:text-purple-400"
+                          : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                      }`}
+                    >
+                      {sale.method}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono font-semibold">{formatCurrency(sale.total)}</td>
+                  <td className="px-5 py-3 text-right font-mono font-bold text-foreground">{formatCurrency(sale.paid)}</td>
+                </tr>
+              ))}
+              {preview.sales.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-5 py-8 text-center text-muted-foreground">
+                    No completed sales recorded on this day.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* Historical Closes Ledger */}
       <div className="surface-card overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div>
             <h3 className="font-bold text-base">Days you have closed before</h3>
-            <p className="text-xs text-muted-foreground">Every till count kept, with what was short or plenty</p>
+            <p className="text-xs text-muted-foreground">Every day close record with total sales, cash remitted, and shortage or overage</p>
           </div>
           <a
             className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-primary hover:bg-muted"
             href={`data:text/csv;charset=utf-8,${encodeURIComponent(
-              ["Shop day,Closed at,Shop,Should be,You counted,Short or plenty,Transfer,POS,How many sales,Note", ...closes.map((row) =>
-                [row.businessDate, formatDate(row.closeDate), row.branch, row.expectedCash, row.countedCash, row.variance, row.transferTotal, row.posTotal, row.saleCount, `"${row.notes || ""}"`].join(",")
+              ["Shop day,Closed at,Shop,Total sales for the day,Cash expected,Cash remitted,Shortage or overage,Transfer,POS,Credit,How many sales,Closed by,Note", ...closes.map((row) =>
+                [row.businessDate, formatDate(row.closeDate), row.branch, row.totalSales, row.expectedCash, row.countedCash, row.variance, row.transferTotal, row.posTotal, row.creditTotal, row.saleCount, `"${row.user}"`, `"${row.notes || ""}"`].join(",")
               )].join("\n")
             )}`}
             download="day-close-audits.csv"
@@ -207,9 +373,10 @@ export default async function DayClosePage({
               <tr className="border-b border-border">
                 <th className="px-5 py-3">Shop day</th>
                 <th className="px-4 py-3">Shop</th>
-                <th className="px-4 py-3">Should be</th>
-                <th className="px-4 py-3">You counted</th>
-                <th className="px-4 py-3">Short or plenty</th>
+                <th className="px-4 py-3 text-right">Total sales for the day</th>
+                <th className="px-4 py-3 text-right">Cash expected</th>
+                <th className="px-4 py-3 text-right">Cash remitted</th>
+                <th className="px-4 py-3 text-right">Shortage / Overage</th>
                 <th className="px-4 py-3">Transfer & POS</th>
                 <th className="px-5 py-3">Who closed it</th>
               </tr>
@@ -217,11 +384,16 @@ export default async function DayClosePage({
             <tbody className="divide-y divide-border/60">
               {closes.map((row) => (
                 <tr key={row.id} className="hover:bg-muted/30">
-                  <td className="px-5 py-3 font-semibold">{row.businessDate}</td>
+                  <td className="px-5 py-3 font-semibold">
+                    <Link href={`/finance/close?branchId=${preview.branchId}&date=${row.businessDate}`} className="text-primary hover:underline">
+                      {row.businessDate}
+                    </Link>
+                  </td>
                   <td className="px-4 py-3 font-medium">{row.branch}</td>
-                  <td className="px-4 py-3 font-mono">{formatCurrency(row.expectedCash)}</td>
-                  <td className="px-4 py-3 font-mono font-semibold">{formatCurrency(row.countedCash)}</td>
-                  <td className="px-4 py-3 font-mono">
+                  <td className="px-4 py-3 text-right font-mono font-bold text-foreground">{formatCurrency(row.totalSales)}</td>
+                  <td className="px-4 py-3 text-right font-mono text-muted-foreground">{formatCurrency(row.expectedCash)}</td>
+                  <td className="px-4 py-3 text-right font-mono font-semibold text-primary">{formatCurrency(row.countedCash)}</td>
+                  <td className="px-4 py-3 text-right font-mono">
                     <span
                       className={`inline-block rounded-md px-2 py-0.5 text-xs font-bold ${
                         row.variance === 0
@@ -231,7 +403,11 @@ export default async function DayClosePage({
                           : "bg-warning-soft text-warning"
                       }`}
                     >
-                      {row.variance > 0 ? `+${formatCurrency(row.variance)}` : formatCurrency(row.variance)}
+                      {row.variance === 0
+                        ? "Balanced"
+                        : row.variance < 0
+                        ? `Short: ${formatCurrency(row.variance)}`
+                        : `Overage: +${formatCurrency(row.variance)}`}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">
@@ -242,7 +418,7 @@ export default async function DayClosePage({
               ))}
               {closes.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-8 text-center text-muted-foreground">No day has been closed yet.</td>
+                  <td colSpan={8} className="px-5 py-8 text-center text-muted-foreground">No day has been closed yet.</td>
                 </tr>
               ) : null}
             </tbody>

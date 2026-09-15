@@ -43,7 +43,8 @@ export async function getSale(id: string) {
 
 export async function getPosLookups() {
   const user = await requireUser()
-  const branchId = (await scopedBranchId(user.role, user.branchId)) ?? user.branchId ?? undefined
+  const viewShop = await viewBranchFilter(user)
+  const branchId = (await scopedBranchId(user.role, user.branchId)) ?? user.branchId ?? viewShop ?? undefined
   const [products, customers, imeis, branches] = await Promise.all([
     prisma.product.findMany({
       where: { isActive: true },
@@ -59,7 +60,7 @@ export async function getPosLookups() {
       include: { product: true, branch: true },
       orderBy: { createdAt: "desc" },
     }),
-    prisma.branch.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    prisma.branch.findMany({ where: { isActive: true }, orderBy: [{ isHq: "desc" }, { name: "asc" }] }),
   ])
   const settings = await getAppSettings()
   return {
