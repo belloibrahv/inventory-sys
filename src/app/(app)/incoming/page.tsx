@@ -23,20 +23,19 @@ export default async function IncomingPage() {
     <div className="page-split">
       <div>
         <PageHeader
-          title="Goods on the way"
-          description="Book cartons before they reach Ibadan. They stay as Coming until someone checks what landed and says yes."
+          title="Inbound Shipments"
+          description="Pre-alert and track inbound consignments prior to delivery. Shipments remain In Transit until physical inspection, receiving, and authorization are finalized."
         />
         <div className="mt-5">
           <IncomingList lots={lots} canBook={canBook} isAdmin={isSuperAdmin(me.role)} />
         </div>
       </div>
       <SectionCard
-        title="Book a carton before it arrives"
-        description="Shop stock does not go up until somebody confirms the goods have landed."
+        title="Register Inbound Consignment"
+        description="Available inventory balances will not increment until warehouse receipt and receiving approval are confirmed."
       >
         <p className="mb-4 text-sm text-muted-foreground">
-          The main admin or Goods intake can scan phone numbers (IMEIs), scan serials, or enter a simple piece count. Tie
-          the list to a supplier order where you can, so you can find a missing unit later.
+          Intake personnel can register serialized assets (IMEI / Serial) or bulk quantities. Link consignments to Purchase Orders for automated AP and variance matching.
         </p>
         {canBook ? (
           <IncomingForm
@@ -49,8 +48,7 @@ export default async function IncomingPage() {
           />
         ) : (
           <p className="text-sm text-muted-foreground">
-            You can see lists the main admin has shown. Ask the main admin to let you book goods, or to show a hidden
-            list.
+            Displaying authorized inbound consignments. Contact your system administrator to request receiving permissions or update visibility flags.
           </p>
         )}
       </SectionCard>

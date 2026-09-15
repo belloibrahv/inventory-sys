@@ -38,8 +38,8 @@ export default async function ReconciliationPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Stock count"
-        description="Count what is really on the shelf. Match it to what the system says. Print or download the sheet for the person who will say yes."
+        title="Physical Inventory Audit & Cycle Count"
+        description="Perform physical stock counts, verify perpetual balances against physical counts, calculate inventory variance, and submit cycle count audits for executive sign-off."
       />
 
       {/* Stock count form and table */}
@@ -47,7 +47,7 @@ export default async function ReconciliationPage() {
 
       {/* Past Stock Count Reports */}
       <div className="space-y-4 print:hidden">
-        <h2 className="text-sm font-semibold tracking-tight">Counts already sent</h2>
+        <h2 className="text-sm font-semibold tracking-tight">Historical Cycle Count Audits</h2>
         <div className="grid gap-4 md:grid-cols-2">
           {rows.map((row) => {
             const expected = money(row.totalExpected)
@@ -61,7 +61,7 @@ export default async function ReconciliationPage() {
                   <div>
                     <p className="font-medium">{row.branch.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {formatDate(row.createdAt)} · counted by {row.user.name}
+                      {formatDate(row.createdAt)} · Audited by {row.user.name}
                     </p>
                   </div>
                   <StatusBadge value={row.status} />
@@ -69,15 +69,15 @@ export default async function ReconciliationPage() {
 
                 <div className="grid grid-cols-3 gap-2 text-sm">
                   <div>
-                    <p className="eyebrow">System said</p>
+                    <p className="eyebrow">Perpetual Ledger</p>
                     <p className="num font-medium">{formatCurrency(expected)}</p>
                   </div>
                   <div>
-                    <p className="eyebrow">They counted</p>
+                    <p className="eyebrow">Physical Count</p>
                     <p className="num font-medium">{formatCurrency(counted)}</p>
                   </div>
                   <div>
-                    <p className="eyebrow">Extra or missing</p>
+                    <p className="eyebrow">Variance</p>
                     <p className={`num font-semibold ${variance > 0 ? "text-success" : variance < 0 ? "text-danger" : ""}`}>
                       {variance > 0 ? `+${formatCurrency(variance)}` : formatCurrency(variance)}
                     </p>
@@ -98,7 +98,7 @@ export default async function ReconciliationPage() {
                     </div>
                   ))}
                   {offLines.length === 0 ? (
-                    <p className="font-medium text-success">Every item agreed with the system.</p>
+                    <p className="font-medium text-success">Zero variance detected. Physical count matches perpetual inventory ledger.</p>
                   ) : null}
                 </div>
               </div>
@@ -108,8 +108,8 @@ export default async function ReconciliationPage() {
           {rows.length === 0 ? (
             <div className="md:col-span-2">
               <EmptyState
-                title="Nobody has counted stock yet"
-                hint="Count a shop above and send it for approval. Counts you have sent, and what was extra or missing, will show here."
+                title="No cycle count audits recorded"
+                hint="Initiate a cycle count audit above and submit it for authorization. Historical audits, variance reconciliations, and sign-offs will appear here."
               />
             </div>
           ) : null}

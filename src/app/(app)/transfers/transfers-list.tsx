@@ -49,27 +49,27 @@ export function TransfersList({ transfers }: { transfers: TransferRow[] }) {
         steps={[
           {
             key: "all",
-            label: "All sends",
+            label: "All Transfers",
             count: counts.all,
-            hint: "Every shop-to-shop move",
+            hint: "All inter-branch transfer orders",
           },
           {
             key: "PENDING",
-            label: "Waiting to leave",
+            label: "Awaiting Dispatch",
             count: counts.PENDING ?? 0,
-            hint: "Listed, not yet on the road",
+            hint: "Manifest created, pending departure",
           },
           {
             key: "IN_TRANSIT",
-            label: "On the way",
+            label: "In Transit",
             count: counts.IN_TRANSIT ?? 0,
-            hint: "Going to the other shop",
+            hint: "Dispatched and en route",
           },
           {
             key: "RECEIVED",
-            label: "In that shop",
+            label: "Received & Cleared",
             count: counts.RECEIVED ?? 0,
-            hint: "Confirmed on arrival",
+            hint: "Intake confirmed at destination",
           },
         ]}
       />
@@ -97,28 +97,28 @@ export function TransfersList({ transfers }: { transfers: TransferRow[] }) {
                 <div className="text-right">
                   <StatusBadge value={transfer.status} />
                   <p className="mt-2 text-xs font-medium tabular-nums text-muted-foreground">
-                    {transfer.receivedAt ? "Arrived" : transfer.sentAt ? "Sent" : "Booked"} {formatShopWhen(when)}
+                    {transfer.receivedAt ? "Received" : transfer.sentAt ? "Dispatched" : "Created"} {formatShopWhen(when)}
                   </p>
                 </div>
               </div>
               {transfer.status !== "RECEIVED" ? (
                 <div className="mt-4 border-t border-border pt-4">
                   <p className="mb-2 text-sm text-muted-foreground">
-                    {transfer.toBranch.name} must scan or paste every IMEI from the list that actually arrived.
+                    {transfer.toBranch.name} receiving staff must scan or enter verified serialized IMEIs upon physical arrival.
                   </p>
-                  <ActionForm action={receiveTransfer} submit="Confirm arrival" className="space-y-2">
+                  <ActionForm action={receiveTransfer} submit="Confirm Receipt & Intake" className="space-y-2">
                     <input type="hidden" name="id" value={transfer.id} />
                     {transfer.imeis.length ? (
                       <ScanList name="imeis" />
                     ) : (
                       <p className="text-sm text-muted-foreground">
-                        Nothing on this send has a unique number. Just confirm how many accessories arrived.
+                        Non-serialized consignment. Confirm intake of line items to complete transfer.
                       </p>
                     )}
                   </ActionForm>
                 </div>
               ) : (
-                <p className="mt-2 text-xs text-success">Live at {transfer.toBranch.name}.</p>
+                <p className="mt-2 text-xs text-success">Stock on Hand active at {transfer.toBranch.name}.</p>
               )}
             </div>
           )
@@ -126,8 +126,8 @@ export function TransfersList({ transfers }: { transfers: TransferRow[] }) {
         {filtered.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
             {transfers.length === 0
-              ? "No shop-to-shop sends yet."
-              : "No send matches this filter. Tap another stage above."}
+              ? "No inter-branch transfers recorded yet."
+              : "No transfer orders match this filter. Select another stage above."}
           </p>
         ) : (
           <div className="surface-card overflow-hidden">
@@ -140,7 +140,7 @@ export function TransfersList({ transfers }: { transfers: TransferRow[] }) {
               end={pager.end}
               onPageChange={pager.setPage}
               onPageSizeChange={pager.setPageSize}
-              noun="sends"
+              noun="transfers"
             />
           </div>
         )}

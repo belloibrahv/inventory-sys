@@ -21,8 +21,8 @@ export default async function UploadsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Supplier bill"
-        description="Put a supplier carton on the system. Pick the supplier and items, scan each phone number (IMEI), then type what you paid."
+        title="Procurement Bill & Inventory Intake"
+        description="Process vendor purchase bills and intake inventory consignments. Assign vendor, line items, serialized assets (IMEI), and payment disbursements."
       />
 
       <UploadStockWizard
@@ -36,25 +36,25 @@ export default async function UploadsPage() {
       />
 
       <div className="surface-card p-5">
-        <h2 className="text-sm font-semibold">Is this the right screen?</h2>
+        <h2 className="text-sm font-semibold">Consignment Intake Protocols</h2>
         <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
           <li>
-            <span className="font-medium text-foreground">One carton today:</span> yes, use the form above.
+            <span className="font-medium text-foreground">Standard Inbound Consignment:</span> Use the purchase intake wizard above.
           </li>
           <li>
-            <span className="font-medium text-foreground">A big first stock count:</span> go to{" "}
-            <span className="font-medium text-foreground">Opening stock sheet</span>. Fill the Excel for one shop and
-            upload it. The system makes its own bill number.
+            <span className="font-medium text-foreground">Initial System Migration:</span> Navigate to{" "}
+            <span className="font-medium text-foreground">Opening Stock Import</span> to upload comprehensive baseline inventory sheets.
           </li>
           <li>
-            <span className="font-medium text-foreground">An old plain sheet:</span> go to{" "}
-            <span className="font-medium text-foreground">Old Excel &amp; CSV</span>.
+            <span className="font-medium text-foreground">Legacy File Formatting:</span> Use{" "}
+            <span className="font-medium text-foreground">Legacy Spreadsheet Import</span> for raw historical spreadsheets.
           </li>
           <li>
-            Always type the amount paid. Whatever is left shows as money we still owe on Goods from supplier and Money
-            in &amp; out.
+            <span className="font-medium text-foreground">Accounts Payable:</span> Any unpaid purchase balance is automatically accrued under Accounts Payable and reflected in the General Ledger.
           </li>
-          <li>If you upload the same phone twice, nothing breaks. The phone already on the system stays as it is.</li>
+          <li>
+            <span className="font-medium text-foreground">Serialized Deduplication:</span> Duplicate serial numbers/IMEIs are safely rejected without disrupting existing active inventory.
+          </li>
         </ul>
       </div>
     </div>

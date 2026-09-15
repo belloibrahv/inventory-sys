@@ -69,24 +69,24 @@ export function IncomingList({
         activeKey={status}
         onSelect={setStatus}
         steps={[
-          { key: "all", label: "All cartons", count: counts.all, hint: "Everything booked" },
-          { key: "COMING", label: "Still coming", count: counts.COMING ?? 0, hint: "Not landed yet" },
+          { key: "all", label: "All Consignments", count: counts.all, hint: "All registered shipments" },
+          { key: "COMING", label: "In Transit", count: counts.COMING ?? 0, hint: "En route / Pending receipt" },
           {
             key: "PENDING_APPROVAL",
-            label: "Waiting for yes",
+            label: "Pending Approval",
             count: counts.PENDING_APPROVAL ?? 0,
-            hint: "Checked; needs second person",
+            hint: "Received; awaits supervisor sign-off",
           },
-          { key: "ARRIVED", label: "In shop", count: counts.ARRIVED ?? 0, hint: "Checked in" },
-          { key: "CANCELLED", label: "Cancelled", count: counts.CANCELLED ?? 0, hint: "Not coming" },
+          { key: "ARRIVED", label: "Received & Stocked", count: counts.ARRIVED ?? 0, hint: "Verified and stocked" },
+          { key: "CANCELLED", label: "Cancelled", count: counts.CANCELLED ?? 0, hint: "Shipment voided" },
         ]}
       />
 
       <div className="space-y-3">
         {lots.length === 0 ? (
           <EmptyState
-            title="You cannot see anything on the way"
-            hint="Book a carton on the right. Its IMEIs or piece counts will wait here until the boxes land."
+            title="No inbound consignments found"
+            hint="Register an inbound consignment on the right. Serial numbers or quantity counts will remain en route until warehouse intake."
           />
         ) : null}
         {pager.pageRows.map((lot) => (
@@ -95,21 +95,21 @@ export function IncomingList({
               <div className="min-w-0">
                 <p className="font-semibold">{lot.lotNumber}</p>
                 <p className="text-sm text-muted-foreground">
-                  Going to {lot.branch.name}
-                  {lot.supplier ? ` · ${lot.supplier.name}` : ""}
-                  {lot.purchase ? ` · order ${lot.purchase.invoiceNumber}` : ""}
-                  {lot.expectedDate ? ` · due ${formatShopWhen(lot.expectedDate)}` : ""}
+                  Destination: {lot.branch.name}
+                  {lot.supplier ? ` · Vendor: ${lot.supplier.name}` : ""}
+                  {lot.purchase ? ` · PO #${lot.purchase.invoiceNumber}` : ""}
+                  {lot.expectedDate ? ` · ETA: ${formatShopWhen(lot.expectedDate)}` : ""}
                 </p>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-2">
                 <div className="flex items-center gap-2">
                   <Badge variant={lot.visible ? "info" : "muted"}>
-                    {lot.visible ? "Shown to staff" : "Hidden"}
+                    {lot.visible ? "Published" : "Restricted"}
                   </Badge>
                   <StatusBadge value={lot.status} />
                 </div>
                 <p className="text-xs font-medium tabular-nums text-muted-foreground">
-                  Booked {formatShopWhen(lot.createdAt)}
+                  Registered {formatShopWhen(lot.createdAt)}
                 </p>
               </div>
             </div>
@@ -124,18 +124,18 @@ export function IncomingList({
                     <span className="shrink-0 text-xs text-muted-foreground">
                       {received != null ? (
                         <>
-                          expected {expected} · got {received}
+                          Expected: {expected} · Received: {received}
                           {short !== 0 ? (
                             <span className="text-warning">
                               {" "}
-                              · {short > 0 ? `short ${short}` : `extra ${-short}`}
+                              · {short > 0 ? `Variance: -${short}` : `Surplus: +${-short}`}
                             </span>
                           ) : null}
                         </>
                       ) : (
                         <>
-                          {expected} ·{" "}
-                          {item.identity === "IMEI" ? "by IMEI" : item.identity === "SERIAL" ? "by serial" : "piece count"}
+                          {expected} units ·{" "}
+                          {item.identity === "IMEI" ? "IMEI Tracked" : item.identity === "SERIAL" ? "Serial Tracked" : "Standard SKU"}
                         </>
                       )}
                     </span>
@@ -145,8 +145,7 @@ export function IncomingList({
             </ul>
             {lot.status === "PENDING_APPROVAL" ? (
               <p className="mt-2 rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-warning">
-                Count and cost are checked. Open Waiting for yes — a second person must approve before these units can be
-                sold.
+                Intake verification and unit costing completed. A supervisor must approve this consignment in the Approval Queue before inventory is released to Stock on Hand.
               </p>
             ) : null}
             {lot.status === "ARRIVED" &&
@@ -155,7 +154,7 @@ export function IncomingList({
               return item.receivedQuantity != null && item.receivedQuantity !== expected
             }) ? (
               <p className="mt-2 rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-warning">
-                This carton arrived with a shortage or extra. The records checker was alerted.
+                This consignment arrived with receiving variances against expected PO quantities. Variance logs have been generated.
               </p>
             ) : null}
             {lot.notes ? <p className="mt-2 text-xs text-muted-foreground">{lot.notes}</p> : null}
@@ -164,7 +163,7 @@ export function IncomingList({
               {isAdmin && lot.status === "COMING" ? (
                 <ActionForm
                   action={setIncomingVisible}
-                  submit={lot.visible ? "Hide from other staff" : "Show to staff who can open this page"}
+                  submit={lot.visible ? "Restrict Visibility" : "Publish to Branch Staff"}
                   variant="outline"
                   size="sm"
                   buttonClassName=""
@@ -178,7 +177,7 @@ export function IncomingList({
         ))}
         {lots.length > 0 && filtered.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
-            No carton matches this stage. Tap another step above.
+            No consignments match this status filter. Select another stage above.
           </p>
         ) : null}
         {filtered.length > 0 ? (
@@ -192,7 +191,7 @@ export function IncomingList({
               end={pager.end}
               onPageChange={pager.setPage}
               onPageSizeChange={pager.setPageSize}
-              noun="cartons"
+              noun="consignments"
             />
           </div>
         ) : null}

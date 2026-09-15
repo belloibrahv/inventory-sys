@@ -20,12 +20,12 @@ export default async function AuditPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Who did what"
-        description="Every sign-in, sale, stock move, money change, download, and blocked page is kept here. Nobody can change these rows."
+        title="System Audit Trail & Event Log"
+        description="Immutable ledger tracking user authentication, transactional mutations, inventory adjustments, financial disbursements, data exports, and security violations."
         actions={
           <div className="flex flex-wrap gap-2">
             <a href="/audit/books" className="inline-flex min-h-11 items-center rounded-xl border border-border px-3 text-sm">
-              Check the books
+              Financial Audit Pack
             </a>
             <AuditExportButton filters={filters} />
           </div>
@@ -34,36 +34,36 @@ export default async function AuditPage({
 
       <div className={`rounded-xl px-4 py-3 text-sm ${data.integrity.ok ? "bg-success-soft text-success" : "bg-danger-soft text-danger"}`}>
         {data.integrity.ok
-          ? `Trail is sound. ${data.integrity.checked} sealed rows checked. Nobody can quietly rewrite a past action.`
-          : "A locked row has changed. Treat it like somebody broke into the trail, and keep a backup."}
+          ? `Audit trail verified. ${data.integrity.checked} cryptographically sealed records validated. Log immutability guaranteed.`
+          : "Audit integrity exception: detected unauthorized modification in sealed audit chain. Contact security administrator."}
       </div>
       {books ? (
         <a
           href="/audit/books"
           className={`block rounded-xl px-4 py-3 text-sm ${books.openCount ? "bg-warning-soft text-warning" : "surface-card"}`}
         >
-          <p className="font-medium">For the owner and the records checker</p>
+          <p className="font-medium">Executive & Controller Briefing</p>
           <p className="mt-1">{books.verdict}</p>
-          <p className="mt-1 text-primary">Open Check the books</p>
+          <p className="mt-1 text-primary">Open Financial Audit Pack</p>
         </a>
       ) : null}
 
       <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <WatchCard href="/audit?result=failed&action=LOGIN" label="Failed sign-ins (last 24 hours)" value={data.watch.failedLogins} hot={data.watch.failedLogins > 0} />
-        <WatchCard href="/audit?risk=HIGH" label="Risky actions (last 24 hours)" value={data.watch.highRisk} hot={data.watch.highRisk > 0} />
-        <WatchCard href="/audit?action=DENIED" label="Blocked pages (last 24 hours)" value={data.watch.denied} hot={data.watch.denied > 0} />
-        <WatchCard href="/audit?action=EXPORT" label="Downloads (last 7 days)" value={data.watch.exports} hot={data.watch.exports > 0} />
-        <WatchCard href="/audit" label="Work done at night (last 7 days)" value={data.watch.afterHours} hot={data.watch.afterHours > 3} />
-        <WatchCard href="/audit?action=VIEW&views=1" label="Pages we watch (last 24 hours)" value={data.watch.screens} />
+        <WatchCard href="/audit?result=failed&action=LOGIN" label="Failed Authentications (24h)" value={data.watch.failedLogins} hot={data.watch.failedLogins > 0} />
+        <WatchCard href="/audit?risk=HIGH" label="High-Risk Operations (24h)" value={data.watch.highRisk} hot={data.watch.highRisk > 0} />
+        <WatchCard href="/audit?action=DENIED" label="Access Denied Events (24h)" value={data.watch.denied} hot={data.watch.denied > 0} />
+        <WatchCard href="/audit?action=EXPORT" label="Data Exports (7d)" value={data.watch.exports} hot={data.watch.exports > 0} />
+        <WatchCard href="/audit" label="After-Hours Activity (7d)" value={data.watch.afterHours} hot={data.watch.afterHours > 3} />
+        <WatchCard href="/audit?action=VIEW&views=1" label="Audited Screen Views (24h)" value={data.watch.screens} />
       </div>
 
       <form className="surface-card grid gap-2 p-4 md:grid-cols-[1fr_160px_140px_180px_140px_auto] md:items-end">
         <label className="text-sm">
           <span className="mb-1 block text-muted-foreground">Search</span>
-          <Input name="q" defaultValue={filters.q} placeholder="Name, email, IMEI, or invoice" />
+          <Input name="q" defaultValue={filters.q} placeholder="Actor name, email, IMEI, or invoice #" />
         </label>
         <label className="text-sm">
-          <span className="mb-1 block text-muted-foreground">Action</span>
+          <span className="mb-1 block text-muted-foreground">Action Type</span>
           <Select name="action" defaultValue={filters.action ?? ""}>
             <option value="">All actions</option>
             {ACTIONS.map((action) => (
@@ -72,18 +72,18 @@ export default async function AuditPage({
           </Select>
         </label>
         <label className="text-sm">
-          <span className="mb-1 block text-muted-foreground">Risk</span>
+          <span className="mb-1 block text-muted-foreground">Risk Level</span>
           <Select name="risk" defaultValue={filters.risk ?? ""}>
-            <option value="">Any</option>
-            <option value="HIGH">High</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="LOW">Low</option>
+            <option value="">All Risk Levels</option>
+            <option value="HIGH">High Risk</option>
+            <option value="MEDIUM">Medium Risk</option>
+            <option value="LOW">Low Risk</option>
           </Select>
         </label>
         <label className="text-sm">
-          <span className="mb-1 block text-muted-foreground">Staff</span>
+          <span className="mb-1 block text-muted-foreground">Actor / User</span>
           <Select name="userId" defaultValue={filters.userId ?? ""}>
-            <option value="">Anyone</option>
+            <option value="">All Users</option>
             {data.staff.map((person) => (
               <option key={person.id} value={person.id}>{person.name}</option>
             ))}
@@ -92,33 +92,33 @@ export default async function AuditPage({
         <label className="text-sm">
           <span className="mb-1 block text-muted-foreground">Result</span>
           <Select name="result" defaultValue={filters.result ?? ""}>
-            <option value="">All</option>
-            <option value="ok">Worked</option>
-            <option value="failed">Failed</option>
+            <option value="">All Results</option>
+            <option value="ok">Success</option>
+            <option value="failed">Failed / Rejected</option>
           </Select>
         </label>
         <button type="submit" className="min-h-11 rounded-xl bg-primary px-4 text-sm text-primary-foreground">
-          Filter
+          Apply Filter
         </button>
         <label className="text-sm">
-          <span className="mb-1 block text-muted-foreground">From</span>
+          <span className="mb-1 block text-muted-foreground">Start Date</span>
           <Input name="from" type="date" defaultValue={filters.from} />
         </label>
         <label className="text-sm">
-          <span className="mb-1 block text-muted-foreground">To</span>
+          <span className="mb-1 block text-muted-foreground">End Date</span>
           <Input name="to" type="date" defaultValue={filters.to} />
         </label>
         <label className="flex items-center gap-2 text-sm md:col-span-2">
           <input type="checkbox" name="views" value="1" defaultChecked={filters.views === "1"} />
-          Include screen opens
+          Include Screen Navigation & Read Events
         </label>
       </form>
 
       <div className="grid gap-4 xl:grid-cols-[1.4fr_0.6fr]">
         <div className="surface-card overflow-hidden">
           <div className="border-b border-border px-4 py-3">
-            <h3 className="font-semibold">Activity</h3>
-            <p className="text-xs text-muted-foreground">Tap any row to see the device, the page, and what changed, in plain words.</p>
+            <h3 className="font-semibold">Event Log</h3>
+            <p className="text-xs text-muted-foreground">Select any log entry to view client telemetry, payload differentials, and mutated records.</p>
           </div>
           <AuditLogRows
             resetKey={[filters.q, filters.action, filters.risk, filters.userId, filters.result, filters.from, filters.to, filters.views].join("|")}
@@ -129,17 +129,17 @@ export default async function AuditPage({
           />
         </div>
         <div className="surface-card p-5">
-          <h3 className="mb-3 font-semibold">Who worked the most this week</h3>
+          <h3 className="mb-3 font-semibold">User Activity Distribution (7 Days)</h3>
           <div className="space-y-3 text-sm">
             {data.activity.map((row) => (
               <div key={row.name} className="flex items-center justify-between gap-3">
                 <span>{row.name}</span>
                 <span className="text-muted-foreground">
-                  {row.count} actions{row.high ? ` · ${row.high} high` : ""}
+                  {row.count} events{row.high ? ` · ${row.high} high risk` : ""}
                 </span>
               </div>
             ))}
-            {data.activity.length === 0 ? <p className="text-muted-foreground">No staff has done anything this week yet.</p> : null}
+            {data.activity.length === 0 ? <p className="text-muted-foreground">No user activity recorded for this period.</p> : null}
           </div>
         </div>
       </div>

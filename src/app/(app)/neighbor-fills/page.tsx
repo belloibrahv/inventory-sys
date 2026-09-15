@@ -15,20 +15,20 @@ export default async function NeighborFillsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Buy from next door"
-        description="A buyer wants something we do not have. You get it from the shop next door, sell it here, send them their money, and keep our profit."
+        title="External Partner Sourcing & Cross-Fulfillment"
+        description="Manage back-to-back cross-fulfillment from external merchant partners when local inventory is unavailable. Track partner payables, customer billing, and retained gross margins."
       />
       <div className="grid gap-4 md:grid-cols-3">
         <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">Not finished yet</p>
+          <p className="text-sm text-muted-foreground">Pending Orders</p>
           <p className="text-2xl font-semibold">{rows.filter((row) => row.status === "OPEN").length}</p>
         </div>
         <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">Profit we kept</p>
+          <p className="text-sm text-muted-foreground">Retained Gross Margin</p>
           <p className="text-2xl font-semibold">{formatCurrency(openProfit)}</p>
         </div>
         <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">Money we still owe next door</p>
+          <p className="text-sm text-muted-foreground">Accounts Payable (Partners)</p>
           <p className="text-2xl font-semibold">{formatCurrency(stillOwed)}</p>
         </div>
       </div>
@@ -36,7 +36,7 @@ export default async function NeighborFillsPage() {
         <div className="space-y-3">
           {rows.length === 0 ? (
             <div className="surface-card p-5 text-sm text-muted-foreground">
-              Nothing bought from next door yet. Use this when you walk next door for one buyer, not when Iwo Road sends stock to Challenge.
+              No partner cross-fulfillment transactions recorded. Use this workflow for back-to-back external sourcing to fulfill orders without stocking inventory.
             </div>
           ) : null}
           {rows.map((row) => {
@@ -47,20 +47,20 @@ export default async function NeighborFillsPage() {
                   <div>
                     <p className="font-semibold">{row.fillNumber}</p>
                     <p className="text-sm text-muted-foreground">
-                      {row.shop} collected from {row.neighborName}
+                      {row.shop} sourced from Partner: {row.neighborName}
                       {row.neighborPhone ? ` · ${row.neighborPhone}` : ""}
                     </p>
                     <p className="mt-1 text-sm">
                       {row.productName}
                       {row.imei1 ? ` · ${row.imei1}` : ""}
                       {" · "}
-                      {row.customerName}
+                      Customer: {row.customerName}
                     </p>
                     <p className="mt-1 text-sm">
-                      Customer pays {formatCurrency(row.sellPrice)}
-                      {" · next door is owed "}
+                      Customer Price: {formatCurrency(row.sellPrice)}
+                      {" · Partner Cost: "}
                       {formatCurrency(row.neighborCost)}
-                      {" · we keep "}
+                      {" · Retained Margin: "}
                       {formatCurrency(row.profit)}
                     </p>
                     {row.invoiceNumber && row.saleId ? (
@@ -75,15 +75,15 @@ export default async function NeighborFillsPage() {
                 {row.status === "OPEN" ? (
                   <div className="mt-4 border-t border-border pt-4">
                     <p className="mb-2 text-sm text-muted-foreground">
-                      Sell to this named customer. The unit does not sit on our shelf as In shop stock.
+                      Execute customer sale. The item is fulfilled directly to the client and bypasses warehouse stocking.
                     </p>
-                    <ActionForm action={sellNeighborFill} submit="Sell to this customer" className="grid gap-3 md:grid-cols-[1fr_160px_auto] md:items-end">
+                    <ActionForm action={sellNeighborFill} submit="Post Customer Sale" className="grid gap-3 md:grid-cols-[1fr_160px_auto] md:items-end">
                       <input type="hidden" name="id" value={row.id} />
                       <Input name="paidAmount" type="number" defaultValue={row.sellPrice} required />
                       <Select name="method" defaultValue="CASH">
                         <option value="CASH">Cash</option>
-                        <option value="TRANSFER">Transfer</option>
-                        <option value="POS">POS</option>
+                        <option value="TRANSFER">Bank Transfer</option>
+                        <option value="POS">POS / Card</option>
                       </Select>
                     </ActionForm>
                   </div>
@@ -91,29 +91,29 @@ export default async function NeighborFillsPage() {
                 {neighborDue > 0 ? (
                   <div className="mt-4 border-t border-border pt-4">
                     <p className="mb-2 text-sm text-muted-foreground">
-                      Return {formatCurrency(neighborDue)} to {row.neighborName}. Our profit stays in this shop.
+                      Remit {formatCurrency(neighborDue)} payable to {row.neighborName}. Retained margin remains in company accounts.
                     </p>
-                    <ActionForm action={payNeighborFill} submit="Send the money to the next door shop" className="grid gap-3 md:grid-cols-[1fr_160px_auto] md:items-end">
+                    <ActionForm action={payNeighborFill} submit="Remit Partner Disbursement" className="grid gap-3 md:grid-cols-[1fr_160px_auto] md:items-end">
                       <input type="hidden" name="id" value={row.id} />
                       <Input name="amount" type="number" defaultValue={neighborDue} required />
                       <Select name="method" defaultValue="CASH">
                         <option value="CASH">Cash</option>
-                        <option value="TRANSFER">Transfer</option>
-                        <option value="POS">POS</option>
+                        <option value="TRANSFER">Bank Transfer</option>
+                        <option value="POS">POS / Card</option>
                       </Select>
                     </ActionForm>
                   </div>
                 ) : row.status === "SETTLED" ? (
-                  <p className="mt-3 text-sm text-success">Next door paid. Profit {formatCurrency(row.profit)} stays with Abu Twins.</p>
+                  <p className="mt-3 text-sm text-success">Partner disbursement settled. Retained gross margin of {formatCurrency(row.profit)} recognized in revenue.</p>
                 ) : null}
               </div>
             )
           })}
         </div>
         <div className="surface-card p-5">
-          <h3 className="mb-2 font-semibold">Record a buy from next door</h3>
+          <h3 className="mb-2 font-semibold">Initiate Partner Cross-Fulfillment</h3>
           <p className="mb-4 text-sm text-muted-foreground">
-            The buyer stays in this shop. You go next door, bring the unit, sell it here, then send next door their cost.
+            Execute direct customer fulfillment by sourcing units from authorized external merchant partners.
           </p>
           <NeighborFillForm
             customers={lookups.customers}

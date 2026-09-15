@@ -104,15 +104,15 @@ export function StockCountView({
   function sheetRows() {
     return [
       [
-        "Item",
-        "Item code",
-        "Shop",
-        "Cost price",
-        "System says",
-        "We counted",
-        "Difference",
-        "What the difference is worth",
-        "Extra or missing",
+        "Product Name",
+        "SKU / Item Code",
+        "Branch",
+        "Unit Cost",
+        "Perpetual Ledger Qty",
+        "Physical Count Qty",
+        "Unit Variance",
+        "Variance Valuation",
+        "Variance Status",
       ],
       ...rows.map((row) => {
         const expected = row.quantity
@@ -128,17 +128,17 @@ export function StockCountView({
           String(counted),
           diff > 0 ? `+${diff}` : String(diff),
           (diff * cost).toFixed(2),
-          diff > 0 ? "Extra" : diff < 0 ? "Loss" : "Balanced",
+          diff > 0 ? "Surplus" : diff < 0 ? "Deficit / Shrinkage" : "Reconciled",
         ]
       }),
       [],
-      ["What the system says it is worth", summary.systemValue.toFixed(2)],
-      ["What you counted is worth", summary.countedValue.toFixed(2)],
-      ["Extra or missing in total", summary.netValue.toFixed(2)],
+      ["Perpetual Ledger Valuation", summary.systemValue.toFixed(2)],
+      ["Physical Count Valuation", summary.countedValue.toFixed(2)],
+      ["Net Inventory Variance", summary.netValue.toFixed(2)],
     ]
   }
 
-  const fileBase = `stock-count-${selectedBranch?.name?.replace(/\s+/g, "-").toLowerCase() ?? branchId}-${new Date()
+  const fileBase = `inventory-audit-${selectedBranch?.name?.replace(/\s+/g, "-").toLowerCase() ?? branchId}-${new Date()
     .toISOString()
     .slice(0, 10)}`
 
@@ -158,11 +158,11 @@ export function StockCountView({
         toast.error(result.error)
         return
       }
-      toast.success("Your count has gone to the manager to approve.")
+      toast.success("Cycle count audit submitted for management review and approval.")
       router.refresh()
     } catch {
       setBusy(false)
-      toast.error("That did not reach the shop system. Check your network and try again.")
+      toast.error("Failed to submit inventory audit. Please verify your connection and retry.")
     }
   }
 
@@ -170,29 +170,29 @@ export function StockCountView({
     <div className="space-y-5">
       <StatGrid className="print:hidden">
         <StatCard
-          label="System says"
+          label="Perpetual Ledger"
           value={`${summary.systemQty} units`}
-          hint={`Worth ${formatCurrency(summary.systemValue)} at cost`}
+          hint={`Valuation: ${formatCurrency(summary.systemValue)} at cost`}
           icon={<Scale className="h-4 w-4" />}
         />
         <StatCard
-          label="We counted"
+          label="Physical Count"
           value={`${summary.countedQty} units`}
-          hint={`Worth ${formatCurrency(summary.countedValue)} at cost`}
+          hint={`Valuation: ${formatCurrency(summary.countedValue)} at cost`}
           icon={<CheckCircle2 className="h-4 w-4" />}
           tone="primary"
         />
         <StatCard
-          label="Extra on the shelf"
+          label="Inventory Surplus"
           value={`+${summary.gainedUnits} units`}
-          hint={`More on the shelf than the system says · ${formatCurrency(summary.gainedValue)}`}
+          hint={`Physical count exceeds ledger · +${formatCurrency(summary.gainedValue)}`}
           icon={<TrendingUp className="h-4 w-4" />}
           tone={summary.gainedUnits > 0 ? "success" : "neutral"}
         />
         <StatCard
-          label="Missing from the shelf"
+          label="Inventory Shrinkage"
           value={`−${summary.lostUnits} units`}
-          hint={`Fewer on the shelf than the system says · ${formatCurrency(summary.lostValue)}`}
+          hint={`Physical count below ledger · −${formatCurrency(summary.lostValue)}`}
           icon={<TrendingDown className="h-4 w-4" />}
           tone={summary.lostUnits > 0 ? "danger" : "neutral"}
         />
@@ -200,23 +200,23 @@ export function StockCountView({
 
       {/* Only on paper: the approver reads this instead of the screen. */}
       <div className="mb-6 hidden border-b pb-4 print:block">
-        <h1 className="text-xl font-bold">Sheet for counting what is on the shelf</h1>
+        <h1 className="text-xl font-bold">Physical Inventory Reconciliation Worksheet</h1>
         <p className="text-sm">
-          Shop: <strong>{selectedBranch?.name}</strong> · Date:{" "}
+          Branch Location: <strong>{selectedBranch?.name}</strong> · Date:{" "}
           <strong>{new Date().toLocaleDateString("en-NG")}</strong>
         </p>
         <p className="mt-1 text-xs">
-          System says {formatCurrency(summary.systemValue)} · You counted {formatCurrency(summary.countedValue)} ·
-          Net {formatCurrency(summary.netValue)}
+          Perpetual Ledger: {formatCurrency(summary.systemValue)} · Physical Count: {formatCurrency(summary.countedValue)} ·
+          Net Variance: {formatCurrency(summary.netValue)}
         </p>
-        {notes.trim() ? <p className="mt-1 text-xs">Notes: {notes.trim()}</p> : null}
+        {notes.trim() ? <p className="mt-1 text-xs">Audit Remarks: {notes.trim()}</p> : null}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <Toolbar className="justify-between print:hidden">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             <label className="flex items-center gap-2 text-sm">
-              <span className="eyebrow shrink-0">Counting</span>
+              <span className="eyebrow shrink-0">Location</span>
               <Select value={branchId} onChange={(event) => setBranchId(event.target.value)} disabled={busy} className="h-9 w-52">
                 {branches.map((branch) => (
                   <option key={branch.id} value={branch.id}>
@@ -226,7 +226,7 @@ export function StockCountView({
               </Select>
             </label>
             <Input
-              placeholder="Who counted it, and anything you want to say"
+              placeholder="Audit remarks, counting notes, or variance explanations..."
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
               disabled={busy}
@@ -234,10 +234,6 @@ export function StockCountView({
             />
           </div>
 
-          {/*
-            "Let this be downloadable too once we are done ... whoever needs to
-            approve should be able to preview the paper and not the software."
-          */}
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" variant="outline" size="sm" onClick={() => downloadTable(sheetRows(), `${fileBase}.csv`, "csv")}>
               <FileSpreadsheet className="mr-1.5 h-4 w-4" /> CSV
@@ -253,12 +249,12 @@ export function StockCountView({
 
         <TableShell
           columns={[
-            { label: "Item" },
-            { label: "Cost price", align: "right" },
-            { label: "System says", align: "center" },
-            { label: "We counted", align: "center" },
-            { label: "Difference", align: "center" },
-            { label: "Extra or missing", align: "right" },
+            { label: "Product / Description" },
+            { label: "Cost Basis", align: "right" },
+            { label: "Perpetual Ledger", align: "center" },
+            { label: "Physical Count", align: "center" },
+            { label: "Variance", align: "center" },
+            { label: "Variance Valuation", align: "right" },
           ]}
           footer={
             <TablePager
@@ -270,7 +266,7 @@ export function StockCountView({
               end={pager.end}
               onPageChange={pager.setPage}
               onPageSizeChange={pager.setPageSize}
-              noun="stock lines"
+              noun="inventory items"
             />
           }
         >
@@ -313,22 +309,22 @@ export function StockCountView({
                 </td>
                 <td className="text-right">
                   {diff > 0 ? (
-                    <TonePill tone="success">Gain {formatCurrency(diffValue)}</TonePill>
+                    <TonePill tone="success">Surplus +{formatCurrency(diffValue)}</TonePill>
                   ) : diff < 0 ? (
-                    <TonePill tone="danger">Loss {formatCurrency(Math.abs(diffValue))}</TonePill>
+                    <TonePill tone="danger">Shrinkage -{formatCurrency(Math.abs(diffValue))}</TonePill>
                   ) : (
-                    <span className="text-xs text-muted-foreground">Balanced</span>
+                    <span className="text-xs text-muted-foreground">Reconciled</span>
                   )}
                 </td>
               </tr>
             )
           })}
-          {rows.length === 0 ? <TableEmpty colSpan={6}>There is nothing on the shelf in this shop yet.</TableEmpty> : null}
+          {rows.length === 0 ? <TableEmpty colSpan={6}>No inventory records recorded for this location.</TableEmpty> : null}
         </TableShell>
 
         {/* Only on paper: somewhere to sign. */}
         <div className="mt-12 hidden grid-cols-3 gap-8 border-t pt-8 print:grid">
-          {["Counted by (store keeper)", "Checked by (records checker)", "Approved by (shop manager)"].map((title) => (
+          {["Audited by (Inventory Auditor)", "Reviewed by (Internal Controller)", "Authorized by (Branch / Managing Director)"].map((title) => (
             <div key={title} className="space-y-6">
               <p className="text-xs font-semibold uppercase">{title}</p>
               <div className="h-8 w-48 border-b border-black" />
@@ -339,7 +335,7 @@ export function StockCountView({
 
         <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border pt-4 print:hidden">
           <p className="text-sm">
-            <span className="text-muted-foreground">Extra or missing on this count: </span>
+            <span className="text-muted-foreground">Net cycle count variance: </span>
             <strong className={summary.netValue >= 0 ? "text-success" : "text-danger"}>
               {summary.netValue > 0 ? `+${formatCurrency(summary.netValue)}` : formatCurrency(summary.netValue)}
             </strong>
@@ -348,11 +344,11 @@ export function StockCountView({
           <Button type="submit" size="lg" disabled={busy || rows.length === 0}>
             {busy ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending the count…
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting Audit…
               </>
             ) : (
               <>
-                <Send className="mr-2 h-4 w-4" /> Send this count for approval
+                <Send className="mr-2 h-4 w-4" /> Submit Audit for Approval
               </>
             )}
           </Button>

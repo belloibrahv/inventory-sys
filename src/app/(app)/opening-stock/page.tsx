@@ -22,8 +22,8 @@ export default async function OpeningStockBookPage({
   if (!shops.length) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Correct & close opening stock" />
-        <EmptyState title="No shop to show" hint="You can only see opening stock for shops you can reach." />
+        <PageHeader title="Opening Balance Reconciliation & Finalization" />
+        <EmptyState title="No accessible locations found" hint="You only have access to view opening balances for authorized branch locations." />
       </div>
     )
   }
@@ -38,11 +38,11 @@ export default async function OpeningStockBookPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Correct & close opening stock"
-        description="Count the shelf against what was loaded, fix the quantities, IMEIs and prices, then close it. Closed opening stock never changes again, and it is the figure Reports uses for what each shop opened with."
+        title="Opening Balance Reconciliation & Finalization"
+        description="Reconcile physical inventory counts against staged migration loads. Validate quantities, serialized IMEIs, and unit costs prior to balance sheet lock. Finalized opening balances serve as the immutable historical baseline."
       />
 
-      <nav className="flex flex-wrap gap-2" aria-label="Shops">
+      <nav className="flex flex-wrap gap-2" aria-label="Locations">
         {shops.map((shop) => (
           <Link
             key={shop.id}
@@ -53,7 +53,7 @@ export default async function OpeningStockBookPage({
           >
             {shop.name}
             <TonePill tone={shop.status === "CLOSED" ? "success" : shop.status === "OPEN" ? "warning" : "neutral"}>
-              {shop.status === "CLOSED" ? "Closed" : shop.status === "OPEN" ? "Open" : "Not loaded"}
+              {shop.status === "CLOSED" ? "Finalized" : shop.status === "OPEN" ? "In Review" : "Uninitialized"}
             </TonePill>
           </Link>
         ))}
@@ -63,8 +63,8 @@ export default async function OpeningStockBookPage({
         <OpeningStockBook key={`${selected.id}-${book.record.status}`} branchId={selected.id} book={book} />
       ) : (
         <EmptyState
-          title={`${selected.name} has no opening stock yet`}
-          hint="The person who loads stock puts it on the system from Upload stock → Opening stock sheet. It then shows here, open for counting."
+          title={`${selected.name} has no staged opening balances`}
+          hint="Import an initial inventory schedule via Batch Data Import. Once staged, initial inventory lines will appear here for audit verification."
         />
       )}
     </div>

@@ -37,49 +37,49 @@ function ShopCard({
           )}
         </div>
         <Badge variant={!branch.isActive ? "danger" : branch.isHq ? "info" : "success"}>
-          {!branch.isActive ? "Closed" : branch.isHq ? "HQ" : "Open"}
+          {!branch.isActive ? "Inactive" : branch.isHq ? "Headquarters (HQ)" : "Active"}
         </Badge>
       </div>
       <p className="mt-4 text-sm text-muted-foreground">
-        {branch._count.users} staff · {branch._count.sales} sales · {branch._count.imeiRecords} IMEIs
+        {branch._count.users} staff · {branch._count.sales} transactions · {branch._count.imeiRecords} serialized units
       </p>
       {canEdit ? (
         <div className="mt-3 space-y-3">
           <form action={toggle}>
             <input type="hidden" name="id" value={branch.id} />
             <Button size="sm" variant="outline">
-              {branch.isActive ? "Close shop" : "Open again"}
+              {branch.isActive ? "Deactivate Location" : "Activate Location"}
             </Button>
           </form>
           <details className="rounded-lg border border-border px-3 py-2">
-            <summary className="cursor-pointer text-sm font-medium">Edit shop details</summary>
+            <summary className="cursor-pointer text-sm font-medium">Configure Branch Metadata</summary>
             <ActionForm
               action={updateBranch}
               className="mt-3 space-y-2"
-              submit="Save shop"
-              successMessage="Shop details saved"
+              submit="Save Changes"
+              successMessage="Branch details updated"
               resetOnSuccess={false}
               buttonClassName="mt-2"
             >
               <input type="hidden" name="id" value={branch.id} />
               <label className="block text-xs text-muted-foreground">
-                Shop name
+                Location Name
                 <Input name="name" defaultValue={branch.name} required className="mt-1" />
               </label>
               <label className="block text-xs text-muted-foreground">
-                Short code
+                Location Code
                 <Input name="code" defaultValue={branch.code} required className="mt-1" />
               </label>
               <label className="block text-xs text-muted-foreground">
-                Address
+                Physical Address
                 <Input name="address" defaultValue={branch.address} required className="mt-1" />
               </label>
               <label className="block text-xs text-muted-foreground">
-                Phone
+                Telephone
                 <Input name="phone" defaultValue={branch.phone ?? ""} className="mt-1" />
               </label>
               <label className="block text-xs text-muted-foreground">
-                Email
+                Official Email
                 <Input name="email" defaultValue={branch.email ?? ""} className="mt-1" />
               </label>
             </ActionForm>
@@ -99,8 +99,8 @@ export default async function BranchesPage() {
     <div className="page-split">
       <div>
         <PageHeader
-          title="Shops"
-          description="Iwo Road is HQ. Challenge is the second Ibadan shop. The main admin can open more shops, and can edit name, address, phone, or email anytime."
+          title="Branch Locations & Warehouses"
+          description="Enterprise multi-site administration. Manage central distribution centers, retail branch stores, contact metadata, and active operational status."
         />
         <div className="grid gap-3 md:grid-cols-2">
           {open.map((branch) => (
@@ -109,10 +109,9 @@ export default async function BranchesPage() {
         </div>
         {admin && closed.length ? (
           <div className="mt-8">
-            <h3 className="mb-2 text-sm font-semibold text-muted-foreground">Closed. Not in use in Ibadan now</h3>
+            <h3 className="mb-2 text-sm font-semibold text-muted-foreground">Archived & Inactive Locations</h3>
             <p className="mb-3 text-sm text-muted-foreground">
-              The old Lagos, Abuja, and Port Harcourt records stay here so past sales are not lost. They do not show when
-              you receive goods or sell.
+              Archived locations retain all historical sales and inventory transactions for compliance audits, but are hidden from active point-of-sale and receiving workflows.
             </p>
             <div className="grid gap-3 md:grid-cols-2">
               {closed.map((branch) => (
@@ -124,18 +123,18 @@ export default async function BranchesPage() {
       </div>
       {isSuperAdmin(me.role) ? (
         <div className="surface-card p-5">
-          <h3 className="mb-4 font-semibold">Open a new shop</h3>
-          <p className="mb-3 text-sm text-muted-foreground">Use this when Abu Twins expands to another city in Nigeria.</p>
-          <ActionForm action={createBranch} className="space-y-3">
-            <Input name="name" placeholder="Shop name e.g. Bodija, Ibadan" required />
-            <Input name="code" placeholder="Code e.g. BDJ" required />
-            <Input name="address" placeholder="Address" required />
-            <Input name="phone" placeholder="Phone" />
-            <Input name="email" placeholder="Email" />
+          <h3 className="mb-4 font-semibold">Provision Branch Location</h3>
+          <p className="mb-3 text-sm text-muted-foreground">Register a new retail branch store or distribution warehouse location.</p>
+          <ActionForm action={createBranch} submit="Create Location" className="space-y-3">
+            <Input name="name" placeholder="Location Name e.g. Bodija Distribution Hub" required />
+            <Input name="code" placeholder="Branch Code e.g. BDJ" required />
+            <Input name="address" placeholder="Physical Address" required />
+            <Input name="phone" placeholder="Telephone" />
+            <Input name="email" placeholder="Official Email" />
           </ActionForm>
         </div>
       ) : (
-        <div className="surface-card p-5 text-sm text-muted-foreground">Only the main admin can open or close a shop.</div>
+        <div className="surface-card p-5 text-sm text-muted-foreground">System Administrator privileges required to manage branch locations.</div>
       )}
     </div>
   )

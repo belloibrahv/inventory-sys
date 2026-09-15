@@ -66,8 +66,8 @@ export function ApprovalsList({
           activeKey={status}
           onSelect={(key) => setStatus(key as ApprovalFilter)}
           chips={[
-            { key: "all", label: "All requests", count: counts.all },
-            { key: "PENDING", label: "Waiting", count: counts.PENDING, tone: "warning" },
+            { key: "all", label: "All Requests", count: counts.all },
+            { key: "PENDING", label: "Pending", count: counts.PENDING, tone: "warning" },
             { key: "APPROVED", label: "Approved", count: counts.APPROVED, tone: "success" },
             { key: "REJECTED", label: "Rejected", count: counts.REJECTED, tone: "danger" },
           ]}
@@ -92,14 +92,14 @@ export function ApprovalsList({
                 {row.reason} · {row.requester.name}
               </p>
               <p className="mt-1 text-xs font-medium tabular-nums text-muted-foreground">
-                Asked {formatShopWhen(row.requestedAt)}
+                Submitted {formatShopWhen(row.requestedAt)}
               </p>
             </div>
             <div className="flex items-center gap-2">
               <StatusBadge value={row.status} />
               {row.status === "PENDING" && canDecide ? (
                 <>
-                  <ActionForm action={approveRequest} submit="Approve" size="sm" buttonClassName="">
+                  <ActionForm action={approveRequest} submit="Authorize" size="sm" buttonClassName="">
                     <input type="hidden" name="id" value={row.id} />
                   </ActionForm>
                   <ActionForm action={rejectRequest} submit="Reject" size="sm" variant="outline" buttonClassName="">
@@ -113,8 +113,8 @@ export function ApprovalsList({
         {filtered.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
             {rows.length === 0
-              ? "Nothing is waiting for a yes or no."
-              : "No request matches this filter. Tap another chip above."}
+              ? "No authorization requests pending approval."
+              : "No requests match the selected status filter."}
           </p>
         ) : (
           <div className="surface-card overflow-hidden">

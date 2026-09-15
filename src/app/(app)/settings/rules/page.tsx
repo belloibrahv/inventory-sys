@@ -12,12 +12,12 @@ export default async function SettingsRulesPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Selling rules"
-        description="These change what staff are allowed to do at the counter and when the system starts warning you about stock. They apply to every shop."
+        title="Business Rules & Operating Policies"
+        description="Global operational governance policies, price floors, safety stock reorder thresholds, and warranty durations enforced across all branch operations."
       />
       {!canEdit ? (
         <div className="surface-card p-5 text-sm text-muted-foreground">
-          You can read these. Only staff allowed to change shop settings can edit them.
+          Displaying business rules in read-only mode. Administrative privileges required to modify operational policies.
         </div>
       ) : null}
       <SettingCards settings={settings.filter((row) => !isCompanySetting(row.key))} canEdit={canEdit} />

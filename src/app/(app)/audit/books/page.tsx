@@ -43,31 +43,31 @@ export default async function BooksCheckPage({
     <div className="audit-pack space-y-6">
       <div className="books-chrome space-y-6 print:hidden">
         <PageHeader
-          title="Check the books"
-          description="One money paper for the owner, the accountant, and the records checker. Open any past day, compare days, then print or download."
+          title="Financial Audit Pack & Daily Register"
+          description="Consolidated executive balance sheet, revenue verification, cash reconciliations, and discrepancy audits for internal controllers and executive leadership."
           actions={
             <div className="flex flex-wrap gap-2">
               <BooksPdfButton data={data} />
-              <PrintButton label="Print / Save PDF" />
+              <PrintButton label="Print / Export PDF" />
               <ExportCsv
                 filename={`${data.statementRef}.csv`}
-                label="Download CSV"
+                label="Export Ledger CSV"
                 rows={booksCsvRows(data)}
               />
             </div>
           }
         />
         <p className="text-sm">
-          <Link href="/audit" className="text-primary">Who did what</Link>
+          <Link href="/audit" className="text-primary">System Audit Trail</Link>
           {" · "}
-          <Link href="/finance/close" className="text-primary">Close the day</Link>
+          <Link href="/finance/close" className="text-primary">End of Day Register</Link>
           {" · "}
-          <Link href="/reports" className="text-primary">Reports</Link>
+          <Link href="/reports" className="text-primary">Financial Reports</Link>
         </p>
 
         <form className="surface-card grid gap-3 p-4 md:grid-cols-[1fr_150px_160px_160px_auto] md:items-end">
           <label className="text-sm">
-            <span className="mb-1 block text-muted-foreground">Shop</span>
+            <span className="mb-1 block text-muted-foreground">Branch Location</span>
             <Select name="shop" defaultValue={data.shopId}>
               {data.shops.map((row) => (
                 <option key={row.id} value={row.id}>{row.name}</option>
@@ -75,32 +75,32 @@ export default async function BooksCheckPage({
             </Select>
           </label>
           <label className="text-sm">
-            <span className="mb-1 block text-muted-foreground">How many days</span>
+            <span className="mb-1 block text-muted-foreground">Accounting Period</span>
             <Select name="range" defaultValue={data.range}>
-              <option value="day">Just one day</option>
-              <option value="week">Last 7 days</option>
-              <option value="month">This month so far</option>
+              <option value="day">Single Business Day</option>
+              <option value="week">Trailing 7 Days</option>
+              <option value="month">Month to Date (MTD)</option>
             </Select>
           </label>
           <label className="text-sm">
-            <span className="mb-1 block text-muted-foreground">Last day (Lagos time)</span>
+            <span className="mb-1 block text-muted-foreground">Period End Date</span>
             <Input name="date" type="date" defaultValue={data.businessDate} required />
           </label>
           <label className="text-sm">
-            <span className="mb-1 block text-muted-foreground">Put it beside</span>
+            <span className="mb-1 block text-muted-foreground">Comparative Period</span>
             <Input name="compare" type="date" defaultValue={compare && /^\d{4}-\d{2}-\d{2}$/.test(compare) ? compare : ""} />
           </label>
           <button type="submit" className="h-10 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-            Show me
+            Apply Filter
           </button>
         </form>
         <p className="text-xs text-muted-foreground">
-          Leave "Put it beside" empty and it will use the last {data.range === "day" ? "day" : data.range === "week" ? "7 days" : "month"}.
-          You are looking at {period} beside {compared}.
+          Leave comparative date blank to compare automatically against prior period ({data.range === "day" ? "prior day" : data.range === "week" ? "prior 7 days" : "prior month"}).
+          Currently analyzing {period} compared against {compared}.
         </p>
 
         <div>
-          <p className="mb-2 text-sm font-medium">Open a day that has passed</p>
+          <p className="mb-2 text-sm font-medium">Historical Accounting Days</p>
           <div className="flex flex-wrap gap-2">
             {data.recentDays.map((row) => {
               const active = data.range === "day" && data.businessDate === row.day
@@ -111,7 +111,7 @@ export default async function BooksCheckPage({
                   className={`rounded-full border px-3 py-1.5 text-xs ${active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card"}`}
                 >
                   <span className="font-medium">{formatWatLong(row.day)}</span>
-                  <span className="ml-1 opacity-80">{row.sales} sale{row.sales === 1 ? "" : "s"}{row.closed ? " · closed" : ""}</span>
+                  <span className="ml-1 opacity-80">{row.sales} transaction{row.sales === 1 ? "" : "s"}{row.closed ? " · Balanced & Closed" : ""}</span>
                 </Link>
               )
             })}
@@ -120,40 +120,40 @@ export default async function BooksCheckPage({
 
         <div className="flex flex-wrap gap-2 text-xs">
           <Link href={query({ compare: shiftWatDay(data.businessDate, -1) })} className="rounded-full border border-border px-3 py-1.5">
-            Compare with yesterday
+            Compare with preceding business day
           </Link>
           <Link href={query({ compare: shiftWatDay(data.businessDate, -7) })} className="rounded-full border border-border px-3 py-1.5">
-            Compare with same day last week
+            Compare with same day prior week
           </Link>
           <Link href={query({ date: shiftWatDay(data.businessDate, -1), range: "day" })} className="rounded-full border border-border px-3 py-1.5">
-            Open previous day
+            Open preceding day
           </Link>
         </div>
 
         <StatGrid>
           <StatCard
-            label="Money we collected"
+            label="Cash Collections"
             value={formatCurrency(data.collected)}
-            hint={`Last time it was ${formatCurrency(data.compare.priorCollected)} · ${data.compare.collected.value}`}
+            hint={`Prior period: ${formatCurrency(data.compare.priorCollected)} · ${data.compare.collected.value}`}
             tone="success"
           />
           <StatCard
-            label="Money from sales"
+            label="Gross Sales Revenue"
             value={formatCurrency(data.revenue)}
-            hint={`Last time it was ${formatCurrency(data.compare.priorRevenue)} · ${data.compare.revenue.value}`}
+            hint={`Prior period: ${formatCurrency(data.compare.priorRevenue)} · ${data.compare.revenue.value}`}
           />
           <StatCard
-            label="How many sales"
+            label="Transaction Volume"
             value={String(data.salesCount)}
-            hint={`Last time it was ${data.compare.priorCount} · ${data.compare.count.value}`}
+            hint={`Prior period: ${data.compare.priorCount} · ${data.compare.count.value}`}
           />
           <StatCard
-            label="Things you still have to fix"
+            label="Audit Exceptions"
             value={String(data.openCount)}
             hint={
               data.openCount
-                ? "Each one is listed below. Tap it to go and fix it"
-                : "Nothing is waiting for anybody"
+                ? "Unresolved variances requiring auditor attention"
+                : "Zero audit discrepancies detected"
             }
             tone={data.openCount ? "danger" : "success"}
           />

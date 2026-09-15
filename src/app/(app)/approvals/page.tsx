@@ -10,7 +10,10 @@ export default async function ApprovalsPage() {
   const pending = rows.filter((row) => row.status === "PENDING").length
   return (
     <div className="space-y-6">
-      <PageHeader title="Waiting for yes" description={`${pending} waiting for you. Say yes or no to swaps, refunds, expenses, and stock counts.`} />
+      <PageHeader
+        title="Approval Workflow Queue"
+        description={`${pending} pending authorization${pending === 1 ? "" : "s"}. Review and authorize or reject trade-in valuations, refunds, OPEX disbursements, inventory reconciliations, and receiving.`}
+      />
       <ApprovalsList rows={rows} canDecide={canDecide} />
     </div>
   )

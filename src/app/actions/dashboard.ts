@@ -328,26 +328,26 @@ export async function getDashboardData() {
       imeiGaps: imeiCheck.filter((row) => row.delta !== 0).length,
     },
     tasks: [
-      { href: "/finance/close", label: "Days you have not closed. Sell now stays locked until you count the till", count: unclosedCount },
-      { href: "/pos", label: "Waiting sales that have waited too long", count: parked.sitting },
-      { href: "/audit?risk=HIGH", label: "Waiting sales that disappeared from a phone", count: parked.vanished },
-      { href: "/incoming", label: "Goods on the way that are late", count: overdueIncoming },
+      { href: "/finance/close", label: "Unclosed register days pending reconciliation", count: unclosedCount },
+      { href: "/pos", label: "On-hold register transactions exceeding aging threshold", count: parked.sitting },
+      { href: "/audit?risk=HIGH", label: "High-risk drafts purged from offline devices", count: parked.vanished },
+      { href: "/incoming", label: "Inbound vendor shipments past estimated arrival", count: overdueIncoming },
       {
         href: "/incoming",
-        label: "Cartons that arrived short or with extras (last 30 days)",
+        label: "Inbound receiving variances and discrepancies (last 30 days)",
         count: receiveShortages.filter((row) => {
           const expected = row.expectedQuantity > 0 ? row.expectedQuantity : row.quantity
           return row.receivedQuantity != null && row.receivedQuantity !== expected
         }).length,
       },
-      { href: "/transfers", label: "Goods sent to another shop, waiting to be confirmed", count: pendingTransfers },
-      { href: "/sales", label: "Sales with no buyer name", count: walkIns },
+      { href: "/transfers", label: "Inter-branch stock transfers awaiting confirmation", count: pendingTransfers },
+      { href: "/sales", label: "Sales invoices without registered customer records", count: walkIns },
       {
         href: "/inventory",
-        label: "Items running low",
+        label: "SKUs below safety stock threshold",
         count: stock.filter((row) => row.quantity <= (row.minStock > 0 ? row.minStock : 3)).length,
       },
-      { href: "/approvals", label: "Things waiting for somebody to say yes", count: pendingApprovals },
+      { href: "/approvals", label: "Pending workflow authorization requests", count: pendingApprovals },
     ].filter((task) => task.count > 0),
   }
 }

@@ -100,28 +100,28 @@ export function InventoryClientView({
 
   const scopeLabel =
     selectedBranch === "ALL"
-      ? "all shops"
-      : branches.find((branch) => branch.id === selectedBranch)?.name ?? "this shop"
+      ? "all locations"
+      : branches.find((branch) => branch.id === selectedBranch)?.name ?? "this branch"
 
   /** Same rows, same order, same columns as the table on screen. */
   function tableRows() {
     return [
       [
-        "Item",
-        "Item code",
+        "Product Name",
+        "SKU / Item Code",
         "Brand",
         "Category",
         "Condition",
-        "Shop",
-        "Cost price",
-        "Selling price",
-        "Profit per unit",
+        "Branch",
+        "Cost Basis",
+        "Retail Price",
+        "Unit Margin",
         "Margin %",
-        "In shop",
-        "Coming",
-        "IMEIs on record",
-        "Value at cost",
-        "Value at selling",
+        "On Hand",
+        "In Transit",
+        "Serialized Units",
+        "Cost Valuation",
+        "Retail Valuation",
       ],
       ...filtered.map((row) => {
         const cost = money(row.product.costPrice)
@@ -140,7 +140,7 @@ export function InventoryClientView({
           `${marginPct(cost, selling).toFixed(1)}%`,
           String(row.quantity),
           String(row.incomingQty),
-          serialized.has(row.productId) ? String(imeis) : "Not a serial item",
+          serialized.has(row.productId) ? String(imeis) : "Standard SKU",
           (row.quantity * cost).toFixed(2),
           (row.quantity * selling).toFixed(2),
         ]
@@ -149,38 +149,38 @@ export function InventoryClientView({
   }
 
   const stamp = new Date().toISOString().slice(0, 10)
-  const fileBase = `shop-stock-${selectedBranch === "ALL" ? "all-shops" : selectedBranch}-${stamp}`
+  const fileBase = `inventory-ledger-${selectedBranch === "ALL" ? "all-branches" : selectedBranch}-${stamp}`
 
   return (
     <div className="space-y-5">
       <StatGrid className="print:hidden">
         <StatCard
-          label="Units on the shelf"
+          label="Total Units on Hand"
           value={totals.units.toLocaleString("en-NG")}
-          hint={`${filtered.length} item line${filtered.length === 1 ? "" : "s"} in ${scopeLabel}`}
+          hint={`${filtered.length} inventory SKU${filtered.length === 1 ? "" : "s"} in ${scopeLabel}`}
           icon={<Layers className="h-4 w-4" />}
         />
         <StatCard
-          label="Value at cost"
+          label="Inventory Valuation (Cost)"
           value={formatCurrency(totals.cost)}
-          hint="What this stock cost us. This is money sitting on the shelf."
+          hint="Total inventory capital invested at baseline purchase cost."
           icon={<Coins className="h-4 w-4" />}
           tone="primary"
         />
         <StatCard
-          label="Value at selling price"
+          label="Projected Retail Valuation"
           value={formatCurrency(totals.sales)}
-          hint={`Profit if it all sells: ${formatCurrency(totals.profit)}`}
+          hint={`Projected gross profit: ${formatCurrency(totals.profit)}`}
           icon={<TrendingUp className="h-4 w-4" />}
           tone="success"
         />
         <StatCard
-          label="Average profit margin"
+          label="Weighted Margin %"
           value={`${totals.margin.toFixed(1)}%`}
           hint={
             totals.lowLines > 0
-              ? `${totals.lowLines} item line${totals.lowLines === 1 ? "" : "s"} running low`
-              : "No item is running low"
+              ? `${totals.lowLines} SKU${totals.lowLines === 1 ? "" : "s"} below reorder threshold`
+              : "All SKUs above reorder point"
           }
           tone={totals.lowLines > 0 ? "warning" : "neutral"}
           icon={<AlertTriangle className="h-4 w-4" />}
@@ -192,19 +192,19 @@ export function InventoryClientView({
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <div className="min-w-0 flex-1">
             <p className="font-semibold">
-              {gaps.length} item line{gaps.length === 1 ? "" : "s"} where the shelf count and the IMEI list disagree
+              {gaps.length} SKU line${gaps.length === 1 ? "" : "s"} with serialized reconciliation variances
             </p>
             <ul className="mt-1 space-y-0.5 text-xs">
               {gaps.slice(0, 4).map((item) => (
                 <li key={item.row.id}>
-                  {item.row.product.name} · {item.row.branch.name}: shelf says {item.row.quantity}, IMEIs on record{" "}
+                  {item.row.product.name} · {item.row.branch.name}: Ledger Qty: {item.row.quantity}, Serialized Registry:{" "}
                   {item.imeis}
                 </li>
               ))}
               {gaps.length > 4 ? <li>and {gaps.length - 4} more</li> : null}
             </ul>
             <Link href="/reconciliation" className="mt-1.5 inline-block text-xs font-semibold underline">
-              Go and count this stock
+              Initiate Physical Inventory Audit & Cycle Count
             </Link>
           </div>
         </div>
@@ -218,7 +218,7 @@ export function InventoryClientView({
       <Toolbar className="justify-between print:hidden">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
           <Select value={selectedBranch} onChange={(event) => setSelectedBranch(event.target.value)} className="h-9 w-52">
-            <option value="ALL">All shops together</option>
+            <option value="ALL">All Branches</option>
             {branches.map((branch) => (
               <option key={branch.id} value={branch.id}>
                 {branch.name} ({branch.code})
@@ -228,18 +228,18 @@ export function InventoryClientView({
           <Select
             value={conditionFilter}
             onChange={(event) => setConditionFilter(event.target.value)}
-            className="h-9 w-40"
+            className="h-9 w-44"
           >
-            <option value="ALL">Any condition</option>
-            <option value="BRAND_NEW">Brand new</option>
-            <option value="UK_USED">UK used</option>
-            <option value="OPEN_BOX">Open box</option>
-            <option value="REFURBISHED">Refurbished</option>
+            <option value="ALL">All Conditions</option>
+            <option value="BRAND_NEW">Brand New</option>
+            <option value="UK_USED">Pre-Owned (Grade A / UK)</option>
+            <option value="OPEN_BOX">Open Box</option>
+            <option value="REFURBISHED">Refurbished / Certified</option>
           </Select>
           <div className="relative min-w-[200px] flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Find an item, a code, or a brand"
+              placeholder="Search by SKU, product name, or brand..."
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               className="h-9 pl-9"
@@ -262,15 +262,15 @@ export function InventoryClientView({
 
       <TableShell
         columns={[
-          { label: "Item" },
-          { label: "Shop" },
-          { label: "Cost price", align: "right" },
-          { label: "Selling price", align: "right" },
+          { label: "Product / Description" },
+          { label: "Branch" },
+          { label: "Cost Basis", align: "right" },
+          { label: "Retail Price", align: "right" },
           { label: "Margin", align: "right" },
-          { label: "In shop", align: "center" },
-          { label: "Coming", align: "center" },
-          { label: "IMEIs", align: "center" },
-          { label: "Value at cost", align: "right" },
+          { label: "On Hand", align: "center" },
+          { label: "In Transit", align: "center" },
+          { label: "Serialized", align: "center" },
+          { label: "Cost Valuation", align: "right" },
         ]}
         footer={
           <TablePager
@@ -282,7 +282,7 @@ export function InventoryClientView({
             end={pager.end}
             onPageChange={pager.setPage}
             onPageSizeChange={pager.setPageSize}
-            noun="stock lines"
+            noun="inventory records"
           />
         }
       >
@@ -317,7 +317,7 @@ export function InventoryClientView({
               </td>
               <td className="text-center">
                 <span className={`num font-semibold ${isLow ? "text-danger" : "text-foreground"}`}>{row.quantity}</span>
-                {isLow ? <p className="text-[11px] font-medium text-danger">Running low</p> : null}
+                {isLow ? <p className="text-[11px] font-medium text-danger">Below Min</p> : null}
               </td>
               <td className="text-center num text-muted-foreground">
                 {row.incomingQty > 0 ? `+${row.incomingQty}` : "—"}
@@ -328,10 +328,10 @@ export function InventoryClientView({
                     <span className={`num text-sm ${mismatch ? "font-semibold text-warning" : "text-muted-foreground"}`}>
                       {imeis}
                     </span>
-                    {mismatch ? <p className="text-[11px] font-medium text-warning">They do not agree</p> : null}
+                    {mismatch ? <p className="text-[11px] font-medium text-warning">Variance</p> : null}
                   </>
                 ) : (
-                  <span className="text-xs text-muted-foreground">Pieces</span>
+                  <span className="text-xs text-muted-foreground">Standard</span>
                 )}
               </td>
               <td className="text-right num font-semibold">{formatCurrency(row.quantity * cost)}</td>
@@ -339,7 +339,7 @@ export function InventoryClientView({
           )
         })}
         {filtered.length === 0 ? (
-          <TableEmpty colSpan={9}>Nothing matches that shop, that condition, or what you typed.</TableEmpty>
+          <TableEmpty colSpan={9}>No inventory records match the selected branch, condition, or search filter.</TableEmpty>
         ) : null}
       </TableShell>
     </div>

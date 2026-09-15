@@ -92,18 +92,17 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
     <div className="space-y-5">
       <Toolbar className="justify-between">
         <p className="text-sm text-muted-foreground">
-          Revenue is money earned from sales. Expenditure is what it costs to run the shops. Payments are what we send
-          to suppliers for stock.
+          Gross revenue reflects customer sales. Operating expenditures (OPEX) cover overhead and operations. Vendor disbursements reflect accounts payable settlements.
         </p>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline" size="sm">
             <Link href="/finance/close">
-              <ClipboardCheck className="mr-1.5 h-4 w-4" /> Close the day
+              <ClipboardCheck className="mr-1.5 h-4 w-4" /> End of Day Register
             </Link>
           </Button>
           <Button asChild variant="outline" size="sm">
             <Link href="/audit/books">
-              <Scale className="mr-1.5 h-4 w-4" /> Check the books
+              <Scale className="mr-1.5 h-4 w-4" /> Financial Audit Pack
             </Link>
           </Button>
         </div>
@@ -111,43 +110,37 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
 
       <StatGrid>
         <StatCard
-          label="Money in from sales"
+          label="Gross Revenue (Inflows)"
           value={formatCurrency(data.revenue)}
-          hint={`Cash ${formatCurrency(data.cashRevenue)} · Bank ${formatCurrency(data.bankRevenue)}`}
+          hint={`Cash Collections: ${formatCurrency(data.cashRevenue)} · Bank Deposits: ${formatCurrency(data.bankRevenue)}`}
           icon={<TrendingUp className="h-4 w-4" />}
           tone="success"
         />
         <StatCard
-          label="Money spent to run the shop"
+          label="Operating Expenses (OPEX)"
           value={formatCurrency(data.expenditure)}
-          hint="Rent, fuel, transport, salary, light bill and the rest"
+          hint="Facilities, payroll, transport, utilities, and general overhead"
           icon={<TrendingDown className="h-4 w-4" />}
           tone="danger"
           href="/expenses"
         />
         <StatCard
-          label="Money paid to suppliers"
+          label="Vendor Disbursements (AP)"
           value={formatCurrency(data.supplierPayments)}
-          hint="What we sent to suppliers for goods they gave us"
+          hint="Accounts payable disbursements for inventory procurement"
           icon={<Banknote className="h-4 w-4" />}
           tone="warning"
           href="/suppliers"
         />
         <StatCard
-          label={data.netCashFlow >= 0 ? "Money left over" : "Money short"}
+          label={data.netCashFlow >= 0 ? "Net Cash Flow (Surplus)" : "Net Cash Flow (Deficit)"}
           value={formatCurrency(data.netCashFlow)}
-          hint="Money in from sales, minus what we spent and what we paid suppliers"
+          hint="Gross collections minus operating expenses and vendor disbursements"
           icon={<Scale className="h-4 w-4" />}
           tone={data.netCashFlow >= 0 ? "success" : "danger"}
         />
       </StatGrid>
 
-      {/*
-        The client, as an accountant, did not want every movement listed on the
-        page: "let it be summarized. If there's a need for us to check through, we
-        click on it." So Cash and Bank each show one balance, and the day-by-day
-        build-up opens on click.
-      */}
       <div className="grid gap-4 md:grid-cols-2">
         <button type="button" onClick={() => setLedger("CASH")} className="surface-card-interactive group p-5">
           <div className="flex items-start justify-between gap-3">
@@ -156,18 +149,18 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
                 <Wallet className="h-5 w-5" />
               </span>
               <div className="text-left">
-                <p className="text-sm font-semibold">Cash (the till)</p>
-                <p className="text-xs text-muted-foreground">Notes collected and paid out at the counter</p>
+                <p className="text-sm font-semibold">Cash on Hand (Vault & Registers)</p>
+                <p className="text-xs text-muted-foreground">Physical currency collected and disbursed across branch registers</p>
               </div>
             </div>
             <span className="eyebrow">{cashDays.length} day{cashDays.length === 1 ? "" : "s"}</span>
           </div>
           <div className="mt-4 flex items-end justify-between border-t border-border pt-3">
-            <span className="text-xs text-muted-foreground">What the books say is left</span>
+            <span className="text-xs text-muted-foreground">Perpetual Ledger Balance</span>
             <span className="text-2xl font-semibold num">{formatCurrency(data.cashAccount.balance)}</span>
           </div>
           <p className="mt-1 text-right text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
-            See how it built up, day by day &rarr;
+            View daily transaction ledger &rarr;
           </p>
         </button>
 
@@ -178,18 +171,18 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
                 <Landmark className="h-5 w-5" />
               </span>
               <div className="text-left">
-                <p className="text-sm font-semibold">Bank (POS and transfers)</p>
-                <p className="text-xs text-muted-foreground">Money that passed through the bank, not the till</p>
+                <p className="text-sm font-semibold">Bank & Merchant Clearing Accounts</p>
+                <p className="text-xs text-muted-foreground">Electronic fund transfers, POS terminal settlements, and direct deposits</p>
               </div>
             </div>
             <span className="eyebrow">{bankDays.length} day{bankDays.length === 1 ? "" : "s"}</span>
           </div>
           <div className="mt-4 flex items-end justify-between border-t border-border pt-3">
-            <span className="text-xs text-muted-foreground">What the books say is left</span>
+            <span className="text-xs text-muted-foreground">Perpetual Ledger Balance</span>
             <span className="text-2xl font-semibold num">{formatCurrency(data.bankAccount.balance)}</span>
           </div>
           <p className="mt-1 text-right text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
-            See how it built up, day by day &rarr;
+            View daily transaction ledger &rarr;
           </p>
         </button>
       </div>
@@ -198,22 +191,22 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
         <TableShell
           caption={
             <>
-              <h2 className="text-sm font-semibold tracking-tight">Customers who still owe us</h2>
+              <h2 className="text-sm font-semibold tracking-tight">Accounts Receivable (Outstanding Balances)</h2>
               <div className="flex items-center gap-2">
                 <TableDownload
-                  filename="customers-owing"
+                  filename="accounts-receivable"
                   rows={() => [
-                    ["Customer", "Shop", "Still owed"],
+                    ["Customer", "Branch", "Outstanding Balance"],
                     ...data.debtors.map((row) => [row.name, row.branch.code, money(row.currentBalance)]),
                   ]}
                 />
                 <Button asChild variant="ghost" size="sm">
-                  <Link href="/customers">All customers</Link>
+                  <Link href="/customers">All Customers</Link>
                 </Button>
               </div>
             </>
           }
-          columns={[{ label: "Customer" }, { label: "Shop" }, { label: "Still owed", align: "right" }]}
+          columns={[{ label: "Customer / Account" }, { label: "Branch" }, { label: "Outstanding Balance", align: "right" }]}
           footer={
             <TablePager
               page={debtorsPager.page}
@@ -224,7 +217,7 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
               end={debtorsPager.end}
               onPageChange={debtorsPager.setPage}
               onPageSizeChange={debtorsPager.setPageSize}
-              noun="customers"
+              noun="accounts"
             />
           }
         >
@@ -244,26 +237,26 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
             </tr>
           ))}
           {data.debtors.length === 0 ? (
-            <TableEmpty colSpan={3}>No customer owes anything right now.</TableEmpty>
+            <TableEmpty colSpan={3}>No outstanding customer receivables.</TableEmpty>
           ) : null}
         </TableShell>
 
         <TableShell
           caption={
             <>
-              <h2 className="text-sm font-semibold tracking-tight">Suppliers we still owe</h2>
+              <h2 className="text-sm font-semibold tracking-tight">Accounts Payable (Vendor Balances)</h2>
               <div className="flex items-center gap-2">
                 <TableDownload
-                  filename="suppliers-owed"
-                  rows={() => [["Supplier", "Still owed"], ...data.creditors.map((row) => [row.name, row.owed])]}
+                  filename="accounts-payable"
+                  rows={() => [["Vendor", "Outstanding Balance"], ...data.creditors.map((row) => [row.name, row.owed])]}
                 />
                 <Button asChild variant="ghost" size="sm">
-                  <Link href="/suppliers">All suppliers</Link>
+                  <Link href="/suppliers">All Vendors</Link>
                 </Button>
               </div>
             </>
           }
-          columns={[{ label: "Supplier" }, { label: "Still owed", align: "right" }]}
+          columns={[{ label: "Vendor / Creditor" }, { label: "Outstanding Balance", align: "right" }]}
           footer={
             <TablePager
               page={creditorsPager.page}
@@ -274,7 +267,7 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
               end={creditorsPager.end}
               onPageChange={creditorsPager.setPage}
               onPageSizeChange={creditorsPager.setPageSize}
-              noun="suppliers"
+              noun="vendors"
             />
           }
         >
@@ -289,7 +282,7 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
             </tr>
           ))}
           {data.creditors.length === 0 ? (
-            <TableEmpty colSpan={2}>Every supplier bill is settled.</TableEmpty>
+            <TableEmpty colSpan={2}>All vendor accounts payable settled.</TableEmpty>
           ) : null}
         </TableShell>
       </div>
@@ -297,24 +290,24 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
       <DrilldownModal
         open={ledger !== null}
         onClose={() => setLedger(null)}
-        eyebrow="Day-by-day build-up"
-        title={ledger === "CASH" ? "Cash account (the till)" : "Bank account (POS and transfers)"}
+        eyebrow="General Ledger Activity"
+        title={ledger === "CASH" ? "Cash on Hand General Ledger" : "Bank & Clearing Accounts General Ledger"}
         download={
           account
             ? {
-                filename: `${ledger === "CASH" ? "cash" : "bank"}-account-${new Date().toISOString().slice(0, 10)}`,
+                filename: `${ledger === "CASH" ? "cash" : "bank"}-ledger-${new Date().toISOString().slice(0, 10)}`,
                 rows: () => [
-                  ["Date", "Shop", "Money in or out", "Category", "What it was", "Amount"],
+                  ["Date", "Branch", "Transaction Type", "Category", "Description", "Amount"],
                   ...account.entries.map((entry) => [
                     new Date(entry.date).toISOString().slice(0, 10),
                     entry.branch,
-                    entry.type === "IN" ? "In" : "Out",
+                    entry.type === "IN" ? "Credit" : "Debit",
                     entry.category,
                     entry.description,
                     entry.amount,
                   ]),
                   [],
-                  ["Balance", "", "", "", "", account.balance],
+                  ["Ending Ledger Balance", "", "", "", "", account.balance],
                 ],
               }
             : undefined
@@ -323,10 +316,10 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
           account ? (
             <>
               <span>
-                {account.entries.length} movement{account.entries.length === 1 ? "" : "s"} over {days.length} day
+                {account.entries.length} transaction{account.entries.length === 1 ? "" : "s"} across {days.length} business day
                 {days.length === 1 ? "" : "s"}
               </span>
-              <span className="font-semibold text-foreground">Balance {formatCurrency(account.balance)}</span>
+              <span className="font-semibold text-foreground">Ending Balance: {formatCurrency(account.balance)}</span>
             </>
           ) : null
         }
@@ -337,8 +330,8 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
               <div className="flex flex-wrap items-center justify-between gap-3 bg-muted/40 px-5 py-2">
                 <p className="text-sm font-semibold">{day.label}</p>
                 <div className="flex flex-wrap items-center gap-4 text-xs">
-                  <span className="text-success">Money in {formatCurrency(day.moneyIn)}</span>
-                  <span className="text-danger">Money out {formatCurrency(day.moneyOut)}</span>
+                  <span className="text-success">Credits {formatCurrency(day.moneyIn)}</span>
+                  <span className="text-danger">Debits {formatCurrency(day.moneyOut)}</span>
                   <span className="font-semibold text-foreground">Net {formatCurrency(day.net)}</span>
                 </div>
               </div>
@@ -365,10 +358,6 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
                       </div>
                     </div>
                     <div className="shrink-0 text-right">
-                      {/*
-                        The client wanted this unmistakable for someone without
-                        accounting training: say, in words, which way the money went.
-                      */}
                       <p
                         className={`num text-sm font-semibold ${
                           entry.type === "IN" ? "text-success" : "text-danger"
@@ -377,7 +366,7 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
                         {entry.type === "IN" ? "+" : "−"}
                         {formatCurrency(entry.amount)}
                       </p>
-                      <p className="eyebrow">{entry.type === "IN" ? "Money moved in" : "Money moved out"}</p>
+                      <p className="eyebrow">{entry.type === "IN" ? "Credit (Inflow)" : "Debit (Outflow)"}</p>
                     </div>
                   </li>
                 ))}
@@ -386,7 +375,7 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
           ))}
           {days.length === 0 ? (
             <p className="px-5 py-12 text-center text-sm text-muted-foreground">
-              Nothing has moved through this account yet.
+              No transaction activity recorded for this ledger account.
             </p>
           ) : null}
         </div>
