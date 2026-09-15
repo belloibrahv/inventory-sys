@@ -61,7 +61,7 @@ export function PosClient({
   const [newName, setNewName] = useState("")
   const [newPhone, setNewPhone] = useState("")
   const [savingCustomer, setSavingCustomer] = useState(false)
-  const [cart, setCart] = useState<Array<{ productId: string; imeiId?: string; name: string; imei?: string; unitPrice: number; minPrice: number; quantity: number }>>([])
+  const [cart, setCart] = useState<Array<{ productId: string; imeiId?: string; name: string; imei?: string; unitPrice: number; minPrice: number; quantity: number; warrantyDays?: number }>>([])
   const [busy, setBusy] = useState(false)
   const { confirm } = useDecision()
 
@@ -266,6 +266,7 @@ export function PosClient({
         unitPrice: price,
         minPrice: money(item.product.minimumPrice),
         quantity: 1,
+        warrantyDays: 0,
       },
     ])
     setPaidTo(total + price)
@@ -289,6 +290,7 @@ export function PosClient({
           unitPrice: price,
           minPrice: money(product.minimumPrice),
           quantity: 1,
+          warrantyDays: 0,
         },
       ]
     })
@@ -337,6 +339,7 @@ export function PosClient({
         imeiId: line.imeiId,
         quantity: line.quantity,
         unitPrice: line.unitPrice,
+        warrantyDays: line.warrantyDays ?? 0,
       })),
     }
     if (sellLock?.locked) {
@@ -463,6 +466,7 @@ export function PosClient({
               <tr>
                 <th className="px-4 py-3">Item</th>
                 <th className="px-4 py-3">IMEI</th>
+                <th className="px-4 py-3">Warranty</th>
                 <th className="px-4 py-3">Price</th>
                 <th className="px-4 py-3"></th>
               </tr>
@@ -480,6 +484,27 @@ export function PosClient({
                     ) : null}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{line.imei ?? "-"}</td>
+                  <td className="px-4 py-3">
+                    <Select
+                      value={String(line.warrantyDays ?? 0)}
+                      onChange={(event) => {
+                        const val = Math.max(0, Number(event.target.value) || 0)
+                        setCart((current) =>
+                          current.map((row, i) => (i === index ? { ...row, warrantyDays: val } : row))
+                        )
+                      }}
+                      className="h-8 text-xs w-32"
+                    >
+                      <option value="0">0 days (No warranty)</option>
+                      <option value="3">3 days testing</option>
+                      <option value="7">7 days (1 week)</option>
+                      <option value="14">14 days (2 weeks)</option>
+                      <option value="21">21 days (3 weeks)</option>
+                      <option value="30">30 days (1 month)</option>
+                      <option value="60">60 days (2 months)</option>
+                      <option value="90">90 days (3 months)</option>
+                    </Select>
+                  </td>
                   <td className="px-4 py-3">
                     <Input
                       type="number"
@@ -508,7 +533,7 @@ export function PosClient({
               ))}
               {cart.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">
+                  <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
                     Scan a phone IMEI. After you finish, this sale cannot be edited.
                   </td>
                 </tr>

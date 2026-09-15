@@ -62,7 +62,7 @@ export default async function NewProductPage() {
               <Input name="minimumPrice" type="number" placeholder="Lowest price" required />
               <Input name="sellingPrice" type="number" placeholder="Sell price" required />
             </div>
-            <Input name="warrantyDays" type="number" defaultValue={365} placeholder="How many days warranty" />
+            <Input name="warrantyDays" type="number" defaultValue={0} placeholder="Warranty days (0 = no warranty)" />
             <Textarea name="description" placeholder="Short note about this item" />
           </ActionForm>
         </SectionCard>

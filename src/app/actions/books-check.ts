@@ -88,11 +88,23 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
         _sum: { amount: true },
       }),
       prisma.purchase.aggregate({
-        where: { ...shopWhere, createdAt: { gte: window.start, lt: window.end } },
+        where: {
+          ...shopWhere,
+          createdAt: { gte: window.start, lt: window.end },
+          source: { not: "UPLOAD_STOCK" },
+          paymentMethod: { not: "OPENING_STOCK" },
+          invoiceNumber: { not: { startsWith: "OPEN-" } },
+        },
         _sum: { paidAmount: true },
       }),
       prisma.purchase.aggregate({
-        where: { ...shopWhere, createdAt: { gte: prior.start, lt: prior.end } },
+        where: {
+          ...shopWhere,
+          createdAt: { gte: prior.start, lt: prior.end },
+          source: { not: "UPLOAD_STOCK" },
+          paymentMethod: { not: "OPENING_STOCK" },
+          invoiceNumber: { not: { startsWith: "OPEN-" } },
+        },
         _sum: { paidAmount: true },
       }),
       shopId
@@ -113,7 +125,13 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
         _sum: { currentBalance: true },
       }),
       prisma.purchase.findMany({
-        where: { ...(shopId ? { branchId: shopId } : {}), status: { not: "CANCELLED" } },
+        where: {
+          ...(shopId ? { branchId: shopId } : {}),
+          status: { not: "CANCELLED" },
+          source: { not: "UPLOAD_STOCK" },
+          paymentMethod: { not: "OPENING_STOCK" },
+          invoiceNumber: { not: { startsWith: "OPEN-" } },
+        },
         select: { totalAmount: true, paidAmount: true },
       }),
       prisma.inventory.findMany({

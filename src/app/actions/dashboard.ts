@@ -75,7 +75,13 @@ export async function getDashboardData() {
       _sum: { amount: true },
     }),
     prisma.purchase.aggregate({
-      where: { ...(branchId ? { branchId } : {}), createdAt: { gte: monthStart } },
+      where: {
+        ...(branchId ? { branchId } : {}),
+        createdAt: { gte: monthStart },
+        source: { not: "UPLOAD_STOCK" },
+        paymentMethod: { not: "OPENING_STOCK" },
+        invoiceNumber: { not: { startsWith: "OPEN-" } },
+      },
       _sum: { paidAmount: true },
     }),
     prisma.customer.aggregate({
@@ -113,7 +119,13 @@ export async function getDashboardData() {
     prisma.approval.count({ where: { status: "PENDING" } }),
     prisma.sale.count({ where: { ...saleWhere, customerId: null } }),
     prisma.purchase.aggregate({
-      where: { ...(branchId ? { branchId } : {}), status: { not: "CANCELLED" } },
+      where: {
+        ...(branchId ? { branchId } : {}),
+        status: { not: "CANCELLED" },
+        source: { not: "UPLOAD_STOCK" },
+        paymentMethod: { not: "OPENING_STOCK" },
+        invoiceNumber: { not: { startsWith: "OPEN-" } },
+      },
       _sum: { totalAmount: true, paidAmount: true },
     }),
     prisma.imeiRecord.groupBy({
@@ -170,7 +182,13 @@ export async function getDashboardData() {
   const lastSent = money(
     (
       await prisma.purchase.aggregate({
-        where: { ...(branchId ? { branchId } : {}), createdAt: { gte: lastMonthStart, lte: lastMonthEnd } },
+        where: {
+          ...(branchId ? { branchId } : {}),
+          createdAt: { gte: lastMonthStart, lte: lastMonthEnd },
+          source: { not: "UPLOAD_STOCK" },
+          paymentMethod: { not: "OPENING_STOCK" },
+          invoiceNumber: { not: { startsWith: "OPEN-" } },
+        },
         _sum: { paidAmount: true },
       })
     )._sum.paidAmount
@@ -204,7 +222,13 @@ export async function getDashboardData() {
           _sum: { totalAmount: true },
         }),
         prisma.purchase.aggregate({
-          where: { ...(branchId ? { branchId } : {}), createdAt: { gte: month.start, lt: month.end } },
+          where: {
+            ...(branchId ? { branchId } : {}),
+            createdAt: { gte: month.start, lt: month.end },
+            source: { not: "UPLOAD_STOCK" },
+            paymentMethod: { not: "OPENING_STOCK" },
+            invoiceNumber: { not: { startsWith: "OPEN-" } },
+          },
           _sum: { totalAmount: true },
         }),
       ])

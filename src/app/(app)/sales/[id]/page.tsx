@@ -53,7 +53,7 @@ export default async function SaleDetailPage({
       imei: item.imei?.imei1,
       quantity: item.quantity,
       amount: money(item.totalPrice),
-      warranty: warrantyState(sale.saleDate, item.product.warrantyDays).label,
+      warranty: warrantyState(sale.saleDate, item.warrantyDays ?? item.product.warrantyDays).label,
     })),
     total: money(sale.totalAmount),
     paid: money(sale.paidAmount),
@@ -208,7 +208,7 @@ export default async function SaleDetailPage({
             imei: item.imei?.imei1,
             quantity: item.quantity,
             amount: money(item.totalPrice),
-            warranty: warrantyState(sale.saleDate, item.product.warrantyDays).label,
+            warranty: warrantyState(sale.saleDate, item.warrantyDays ?? item.product.warrantyDays).label,
           }))}
           total={money(sale.totalAmount)}
           paid={money(sale.paidAmount)}

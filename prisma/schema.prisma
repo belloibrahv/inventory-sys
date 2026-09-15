@@ -342,7 +342,7 @@ model Product {
   minimumPrice Decimal
   sellingPrice Decimal
   marketPrice  Decimal?
-  warrantyDays Int              @default(365)
+  warrantyDays Int              @default(0)
   tracking     ProductTracking  @default(IMEI)
   isActive     Boolean          @default(true)
   createdAt    DateTime         @default(now())
@@ -569,6 +569,7 @@ model SaleItem {
   unitPrice  Decimal
   discount   Decimal     @default(0)
   totalPrice Decimal
+  warrantyDays Int?      @default(0)
   createdAt  DateTime    @default(now())
 
   @@index([saleId])

@@ -33,10 +33,10 @@ export function formatDateTime(date: Date | string) {
   }).format(new Date(date))
 }
 
-export function money(value: unknown) {
+export function money(value: unknown): number {
   if (value == null || value === "") return 0
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : 0
+  const parsed = typeof value === "number" ? value : Number(value)
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) / 100 : 0
 }
 
 export function labelize(value: string) {

@@ -123,7 +123,7 @@ export async function checkoutSale(input: {
   wholesale?: boolean
   queuedAt?: string
   offlineId?: string
-  items: Array<{ productId: string; imeiId?: string; quantity: number; unitPrice: number }>
+  items: Array<{ productId: string; imeiId?: string; quantity: number; unitPrice: number; warrantyDays?: number }>
 }) {
   const user = await requireUser()
   if (!(await canSell(user.role))) return { error: "You are not allowed to sell. Ask the main admin." }
@@ -131,13 +131,6 @@ export async function checkoutSale(input: {
   if (!input.queuedAt || !input.offlineId) {
     const lock = await getSellLock(input.branchId)
     if (lock.locked) return { error: lock.message }
-  } else {
-    // A sale queued offline skips the till-count lock, but never the opening
-    // stock one: that count must not move while it is being checked.
-    const opening = await prisma.openingStock.findUnique({ where: { branchId: input.branchId }, select: { status: true } })
-    if (opening?.status === "OPEN") {
-      return { error: "This shop's opening stock is still being counted and corrected, so it cannot sell yet." }
-    }
   }
 
   const settings = await getAppSettings()
@@ -261,6 +254,7 @@ export async function checkoutSale(input: {
               quantity: item.quantity,
               unitPrice: item.unitPrice.toFixed(2),
               totalPrice: (item.unitPrice * item.quantity).toFixed(2),
+              warrantyDays: item.warrantyDays != null ? Math.max(0, Number(item.warrantyDays)) : 0,
             })),
           },
           payments:
@@ -429,8 +423,14 @@ export async function checkoutSale(input: {
   revalidatePath("/sales")
   revalidatePath("/pos")
   revalidatePath("/dashboard")
+  revalidatePath("/finance")
+  revalidatePath("/finance/close")
+  revalidatePath("/reports")
+  revalidatePath("/profits")
+  revalidatePath("/customers")
   revalidatePath("/imei")
   revalidatePath("/inventory")
+  revalidatePath("/audit/books")
   revalidatePath("/notifications")
   return { success: true, saleId: sale.id }
 }

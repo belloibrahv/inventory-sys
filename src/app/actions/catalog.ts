@@ -69,7 +69,7 @@ export async function createProduct(formData: FormData) {
       minimumPrice: minimumPrice.toFixed(2),
       sellingPrice: sellingPrice.toFixed(2),
       marketPrice: formData.get("marketPrice") ? Number(formData.get("marketPrice")).toFixed(2) : null,
-      warrantyDays: Number(formData.get("warrantyDays") || 365) || 365,
+      warrantyDays: Math.max(0, Number(formData.get("warrantyDays") || 0)),
       tracking: (String(formData.get("tracking") || "IMEI") as ProductTracking),
     },
   })
@@ -208,7 +208,7 @@ export async function updateProductWarranty(formData: FormData) {
   if (!(await canManageCatalog(user.role))) return { error: "You are not allowed to add or change items. Ask the main admin." }
   const id = String(formData.get("id") || "")
   const warrantyDays = Number(formData.get("warrantyDays") || 0)
-  if (!id || warrantyDays <= 0) return { error: "Type how many warranty days the item has." }
+  if (!id || warrantyDays < 0) return { error: "Enter valid warranty days (0 for no warranty)." }
   const product = await prisma.product.findUnique({ where: { id } })
   if (!product) return { error: "We could not find that item." }
   await prisma.product.update({ where: { id }, data: { warrantyDays } })
