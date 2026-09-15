@@ -7,9 +7,10 @@ import { can } from "@/lib/permissions"
 import { scopedBranchId } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { readWorkbookGrids } from "@/lib/table-file"
-import { makeOpeningSku } from "@/lib/opening-stock"
+import { makeOpeningSku, mapOpeningCondition } from "@/lib/opening-stock"
 import {
   checkScreenChanges,
+  cleanIdentity,
   planCorrection,
   type BookLine,
   type CorrectionPlan,
@@ -34,13 +35,28 @@ const MAX_BYTES = 4_000_000
 type Snapshot = { lines: BookLine[] }
 
 function canCloseRole(role: UserRole) {
-  return role === "CEO" || role === "SUPER_ADMIN"
+  return role === "CEO" || role === "SUPER_ADMIN" || role === "AUDITOR" || role === "ACCOUNTANT"
+}
+
+function canCorrectRole(role: UserRole) {
+  return (
+    role === "CEO" ||
+    role === "SUPER_ADMIN" ||
+    role === "AUDITOR" ||
+    role === "ACCOUNTANT" ||
+    role === "STOCK_UPLOADER"
+  )
 }
 
 async function viewer() {
   const user = await requireUser()
   const [uploads, reports] = await Promise.all([can(user.role, "view.uploads"), can(user.role, "view.reports")])
-  return { user, allowed: uploads || reports, canCorrect: await can(user.role, "action.upload") }
+  const canUpload = await can(user.role, "action.upload")
+  return {
+    user,
+    allowed: uploads || reports || canCorrectRole(user.role) || canCloseRole(user.role),
+    canCorrect: canCorrectRole(user.role) || canUpload,
+  }
 }
 
 function identityOf(row: { imei1: string; serialNumber: string | null }) {
@@ -168,8 +184,9 @@ type Gate =
 
 async function correctionGate(branchId: string): Promise<Gate> {
   const user = await requireUser()
-  if (!(await can(user.role, "action.upload"))) {
-    return { error: "Only the person who loads stock and the main admin can correct opening stock." }
+  const canUpload = await can(user.role, "action.upload")
+  if (!canCorrectRole(user.role) && !canUpload) {
+    return { error: "You do not have permission to correct opening stock. Super Admins, CEOs, Auditors, Accountants, and Stock Uploaders can correct opening stock." }
   }
   const record = await prisma.openingStock.findUnique({
     where: { branchId },
@@ -600,12 +617,86 @@ export async function saveOpeningEdits(formData: FormData): Promise<CorrectionRe
 }
 
 /**
+ * Add a new item found on the shop floor directly to opening stock on screen.
+ */
+export async function addOpeningStockItem(formData: FormData): Promise<CorrectionResult> {
+  const branchId = String(formData.get("branchId") || "")
+  const gate = await correctionGate(branchId)
+  if ("error" in gate) return { error: gate.error }
+
+  const name = String(formData.get("name") || "").trim()
+  const brand = String(formData.get("brand") || "").trim() || "Unbranded"
+  const category = String(formData.get("category") || "").trim() || "General"
+  const conditionRaw = String(formData.get("condition") || "BRAND_NEW").trim()
+  const storage = String(formData.get("storage") || "").trim() || null
+  const trackingRaw = String(formData.get("tracking") || "NONE").trim()
+  const quantity = Number(formData.get("quantity") || 0)
+  const costPrice = Number(formData.get("costPrice") || 0)
+  const minimumPrice = Number(formData.get("minimumPrice") || 0)
+  const sellingPrice = Number(formData.get("sellingPrice") || 0)
+  const rawIdentities = String(formData.get("identities") || "")
+
+  if (!name) return { error: "Product name is required." }
+  if (costPrice < 0 || minimumPrice <= 0 || sellingPrice <= 0) {
+    return { error: "Cost price must be 0 or more, and lowest/standard selling prices must be above 0." }
+  }
+  if (sellingPrice < minimumPrice) {
+    return { error: "Standard selling price cannot be below the lowest selling price." }
+  }
+
+  const condition = mapOpeningCondition(conditionRaw) || "BRAND_NEW"
+  const tracking = trackingRaw === "IMEI" || trackingRaw === "SERIAL" ? trackingRaw : "NONE"
+  const identities =
+    tracking === "NONE"
+      ? []
+      : [...new Set(rawIdentities.split(/[\n,]+/).map(cleanIdentity).filter(Boolean))]
+
+  if (tracking !== "NONE" && identities.length === 0) {
+    return { error: `Provide at least one ${tracking === "IMEI" ? "IMEI" : "Serial number"} for this item.` }
+  }
+  if (tracking === "NONE" && (quantity <= 0 || !Number.isInteger(quantity))) {
+    return { error: "Counted quantity must be a whole number greater than 0." }
+  }
+
+  const newItem: NewOpeningItem = {
+    name,
+    brand,
+    category,
+    condition,
+    storage,
+    tracking,
+    quantity: tracking === "NONE" ? quantity : identities.length,
+    costPrice,
+    minimumPrice,
+    sellingPrice,
+    identities,
+  }
+
+  const plan: CorrectionPlan = {
+    changes: [],
+    newItems: [newItem],
+    problems: [],
+  }
+
+  const problems = await databaseProblems(plan, gate.lines, gate.record.purchaseId)
+  if (problems.length) return { error: problems.slice(0, 4).join(" "), problems }
+
+  try {
+    await applyPlan(gate, plan, "screen")
+  } catch {
+    return { error: "We could not add the unlisted item. Try again." }
+  }
+
+  return { applied: true, preview: describe(plan, gate.lines) }
+}
+
+/**
  * Close a shop's opening stock. After this it can never change, and the shop
  * can start selling.
  */
 export async function closeOpeningStock(formData: FormData): Promise<{ error?: string; problems?: string[]; success?: boolean }> {
   const user = await requireUser()
-  if (!canCloseRole(user.role)) return { error: "Only the CEO or the main admin can close opening stock." }
+  if (!canCloseRole(user.role)) return { error: "Only the CEO, Auditor, Accountant, or Super Admin can close opening stock." }
   if (String(formData.get("confirm") || "") !== "yes") {
     return { error: "Tick the box to confirm the count is final." }
   }

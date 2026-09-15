@@ -662,8 +662,16 @@ export async function getReportData(requestedBranchId?: string) {
       where: { ...(branchId ? { branchId } : {}), approvedAt: { not: null } },
       include: { branch: true },
     }),
-    prisma.swap.findMany({ where: { status: "COMPLETED", ...(branchId ? { branchId } : {}) } }),
-    prisma.stockReturn.findMany({ where: branchId ? { branchId } : undefined }),
+    prisma.swap.findMany({
+      where: { status: "COMPLETED", ...(branchId ? { branchId } : {}) },
+      include: { branch: true, customer: true, newProduct: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.stockReturn.findMany({
+      where: branchId ? { branchId } : undefined,
+      include: { branch: true, customer: true, imei: { include: { product: true } } },
+      orderBy: { createdAt: "desc" },
+    }),
     prisma.inventory.findMany({
       where: branchId ? { branchId } : undefined,
       include: { product: true, branch: true },

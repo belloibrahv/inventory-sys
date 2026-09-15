@@ -4,8 +4,9 @@ import { useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { CheckCircle2, Download, Eye, Loader2, Lock, Save, Upload } from "lucide-react"
+import { CheckCircle2, Download, Eye, Loader2, Lock, Plus, Save, Upload } from "lucide-react"
 import {
+  addOpeningStockItem,
   closeOpeningStock,
   correctOpeningFromSheet,
   saveOpeningEdits,
@@ -39,6 +40,7 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
   const [saving, setSaving] = useState(false)
   const [unitsFor, setUnitsFor] = useState<BookLine | null>(null)
   const [newUnits, setNewUnits] = useState("")
+  const [showAddModal, setShowAddModal] = useState(false)
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -172,6 +174,11 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
                 <Download className="mr-1.5 h-4 w-4" /> {closed ? "Download (Excel)" : "Download count sheet (Excel)"}
               </Button>
               {book.canCorrect ? (
+                <Button type="button" variant="outline" size="sm" onClick={() => setShowAddModal(true)}>
+                  <Plus className="mr-1.5 h-4 w-4" /> Add unlisted item
+                </Button>
+              ) : null}
+              {book.canCorrect ? (
                 <Button type="button" size="sm" onClick={saveEdits} disabled={saving || dirty.length === 0}>
                   {saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
                   Save {dirty.length ? `${dirty.length} changed line${dirty.length === 1 ? "" : "s"}` : "changes"}
@@ -224,7 +231,19 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
                 ) : null}
               </td>
               <td className="text-right">
-                {line.tracking === "NONE" ? field(line, "quantity", line.openingQty) : <span className="num font-semibold">{qty}</span>}
+                {line.tracking === "NONE" ? (
+                  field(line, "quantity", line.openingQty)
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setUnitsFor(line)}
+                    className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
+                    title="Click to view and adjust IMEIs/serials"
+                  >
+                    <span className="num">{qty}</span>
+                    {book.canCorrect ? <span className="text-[11px] font-normal text-muted-foreground">(edit)</span> : null}
+                  </button>
+                )}
               </td>
               <td className="text-right">{field(line, "costPrice", line.costPrice)}</td>
               <td className="text-right">{field(line, "minimumPrice", line.minimumPrice)}</td>
@@ -327,7 +346,250 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
           </div>
         ) : null}
       </DrilldownModal>
+
+      {showAddModal ? (
+        <AddItemModal
+          branchId={branchId}
+          open={showAddModal}
+          onClose={() => setShowAddModal(false)}
+        />
+      ) : null}
     </div>
+  )
+}
+
+function AddItemModal({
+  branchId,
+  open,
+  onClose,
+}: {
+  branchId: string
+  open: boolean
+  onClose: () => void
+}) {
+  const router = useRouter()
+  const [busy, setBusy] = useState(false)
+  const [tracking, setTracking] = useState<"NONE" | "IMEI" | "SERIAL">("NONE")
+  const [form, setForm] = useState({
+    name: "",
+    brand: "",
+    category: "",
+    condition: "BRAND_NEW",
+    storage: "",
+    quantity: "1",
+    costPrice: "",
+    minimumPrice: "",
+    sellingPrice: "",
+    identities: "",
+  })
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault()
+    if (!form.name.trim()) {
+      toast.error("Enter the item name.")
+      return
+    }
+    const cost = Number(form.costPrice)
+    const min = Number(form.minimumPrice)
+    const sell = Number(form.sellingPrice)
+    if (cost < 0 || min <= 0 || sell <= 0) {
+      toast.error("Cost price must be 0+, lowest and standard selling prices must be > 0.")
+      return
+    }
+    if (sell < min) {
+      toast.error("Standard selling price cannot be below the lowest selling price.")
+      return
+    }
+    if (tracking === "NONE" && (Number(form.quantity) <= 0 || !Number.isInteger(Number(form.quantity)))) {
+      toast.error("Counted quantity must be a whole number greater than 0.")
+      return
+    }
+    if (tracking !== "NONE" && !form.identities.trim()) {
+      toast.error(`Enter at least one ${tracking === "IMEI" ? "IMEI" : "serial number"}.`)
+      return
+    }
+
+    const data = new FormData()
+    data.set("branchId", branchId)
+    data.set("name", form.name)
+    data.set("brand", form.brand || "Unbranded")
+    data.set("category", form.category || "General")
+    data.set("condition", form.condition)
+    data.set("storage", form.storage)
+    data.set("tracking", tracking)
+    data.set("quantity", form.quantity)
+    data.set("costPrice", form.costPrice)
+    data.set("minimumPrice", form.minimumPrice)
+    data.set("sellingPrice", form.sellingPrice)
+    data.set("identities", form.identities)
+
+    setBusy(true)
+    try {
+      const outcome = await addOpeningStockItem(data)
+      setBusy(false)
+      if (outcome.error) {
+        toast.error(outcome.error)
+        return
+      }
+      toast.success(`Added ${form.name} to opening stock.`)
+      onClose()
+      router.refresh()
+    } catch {
+      setBusy(false)
+      toast.error("Could not add item to opening stock. Please try again.")
+    }
+  }
+
+  return (
+    <DrilldownModal
+      open={open}
+      onClose={onClose}
+      eyebrow="Opening Stock Mop-Up"
+      title="Add Unlisted Item to Opening Stock"
+      width="narrow"
+    >
+      <form onSubmit={submit} className="space-y-4 p-5">
+        <p className="text-xs text-muted-foreground">
+          Found an item on the shelf that was not in the initial opening sheet? Register it here directly with its physical count, cost and selling prices.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-medium text-muted-foreground">Product Name *</label>
+            <Input
+              required
+              placeholder="e.g. iPhone 13 Pro Max"
+              value={form.name}
+              onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground">Brand</label>
+            <Input
+              placeholder="e.g. Apple"
+              value={form.brand}
+              onChange={(e) => setForm((prev) => ({ ...prev, brand: e.target.value }))}
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground">Category</label>
+            <Input
+              placeholder="e.g. Smartphones"
+              value={form.category}
+              onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value }))}
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground">Condition</label>
+            <select
+              value={form.condition}
+              onChange={(e) => setForm((prev) => ({ ...prev, condition: e.target.value }))}
+              className="mt-1 flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm shadow-sm"
+            >
+              <option value="BRAND_NEW">Brand New</option>
+              <option value="UK_USED">Foreign Used (UK Used)</option>
+              <option value="OPEN_BOX">Open Box</option>
+              <option value="REFURBISHED">Refurbished</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground">Storage / Spec</label>
+            <Input
+              placeholder="e.g. 128GB"
+              value={form.storage}
+              onChange={(e) => setForm((prev) => ({ ...prev, storage: e.target.value }))}
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground">Tracking Type</label>
+            <select
+              value={tracking}
+              onChange={(e) => setTracking(e.target.value as "NONE" | "IMEI" | "SERIAL")}
+              className="mt-1 flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm shadow-sm"
+            >
+              <option value="NONE">Pieces (Accessories / General)</option>
+              <option value="IMEI">IMEI Tracked (Phones / Tablets)</option>
+              <option value="SERIAL">Serial Tracked (Laptops / MacBooks)</option>
+            </select>
+          </div>
+          {tracking === "NONE" ? (
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground">Counted Quantity *</label>
+              <Input
+                type="number"
+                min={1}
+                required
+                value={form.quantity}
+                onChange={(e) => setForm((prev) => ({ ...prev, quantity: e.target.value }))}
+                className="mt-1"
+              />
+            </div>
+          ) : (
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-medium text-muted-foreground">
+                {tracking === "IMEI" ? "IMEI Numbers" : "Serial Numbers"} (One per line) *
+              </label>
+              <textarea
+                required
+                rows={3}
+                placeholder="Paste or scan one per line"
+                value={form.identities}
+                onChange={(e) => setForm((prev) => ({ ...prev, identities: e.target.value }))}
+                className="mt-1 w-full rounded-md border border-input bg-card p-2 font-mono text-sm"
+              />
+            </div>
+          )}
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground">Unit Cost Price (₦) *</label>
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              required
+              value={form.costPrice}
+              onChange={(e) => setForm((prev) => ({ ...prev, costPrice: e.target.value }))}
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground">Lowest Selling Price (₦) *</label>
+            <Input
+              type="number"
+              min={1}
+              step="0.01"
+              required
+              value={form.minimumPrice}
+              onChange={(e) => setForm((prev) => ({ ...prev, minimumPrice: e.target.value }))}
+              className="mt-1"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-medium text-muted-foreground">Standard Selling Price (₦) *</label>
+            <Input
+              type="number"
+              min={1}
+              step="0.01"
+              required
+              value={form.sellingPrice}
+              onChange={(e) => setForm((prev) => ({ ...prev, sellingPrice: e.target.value }))}
+              className="mt-1"
+            />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button type="submit" size="sm" disabled={busy}>
+            {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Plus className="mr-1.5 h-4 w-4" />}
+            Add to Opening Stock
+          </Button>
+        </div>
+      </form>
+    </DrilldownModal>
   )
 }
 

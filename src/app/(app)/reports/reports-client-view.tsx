@@ -53,9 +53,45 @@ type RawInventory = {
   branch: { name: string; code: string }
 }
 
+type RawSwap = {
+  id: string
+  swapNumber: string
+  tradeValue: unknown
+  balanceAmount: unknown
+  newProductPrice: unknown
+  createdAt: Date
+  customer: { name: string } | null
+  newProduct: { name: string } | null
+  branch: { name: string; code: string }
+}
+
+type RawReturn = {
+  id: string
+  returnNumber: string
+  reason: string
+  outcome: string
+  faultClass: string
+  status: string
+  refundAmount: unknown
+  createdAt: Date
+  customer: { name: string } | null
+  branch: { name: string; code: string }
+  imei?: { imei1: string; product: { name: string } } | null
+}
+
 type BranchOption = { id: string; name: string; code: string }
 
-type Drilldown = "REVENUE" | "RECEIVED" | "EXPENSES" | "STOCK" | "OPENING" | "BOUGHT"
+type Drilldown =
+  | "REVENUE"
+  | "RECEIVED"
+  | "EXPENSES"
+  | "STOCK"
+  | "OPENING"
+  | "BOUGHT"
+  | "DEBTORS"
+  | "CREDITORS"
+  | "SWAPS"
+  | "RETURNS"
 
 const DRILLDOWN_TITLE: Record<Drilldown, string> = {
   REVENUE: "Every sale that makes up this money",
@@ -64,6 +100,10 @@ const DRILLDOWN_TITLE: Record<Drilldown, string> = {
   STOCK: "Every item that makes up this stock value",
   OPENING: "Every item each shop opened the software with",
   BOUGHT: "Every supplier bill after opening stock",
+  DEBTORS: "Every customer who still owes money (Receivables)",
+  CREDITORS: "Every supplier bill we still owe (Payables)",
+  SWAPS: "Every completed device swap transaction",
+  RETURNS: "Every customer return and warranty RMA",
 }
 
 const day = (value: Date | string) => new Date(value).toISOString().slice(0, 10)
@@ -73,6 +113,8 @@ export function ReportsClientView({
   sales,
   expenses,
   inventory,
+  swaps = [],
+  returns = [],
   opening,
   branches,
   selectedBranchId,
@@ -81,6 +123,8 @@ export function ReportsClientView({
   sales: RawSale[]
   expenses: RawExpense[]
   inventory: RawInventory[]
+  swaps?: RawSwap[]
+  returns?: RawReturn[]
   opening: OpeningReport
   branches: BranchOption[]
   selectedBranchId?: string
@@ -105,6 +149,10 @@ export function ReportsClientView({
   const stockPager = usePagedRows(inventory, drilldown === "STOCK" ? "STOCK" : "idle")
   const openingPager = usePagedRows(opening.lines, drilldown === "OPENING" ? "OPENING" : "idle")
   const boughtPager = usePagedRows(opening.boughtSince, drilldown === "BOUGHT" ? "BOUGHT" : "idle")
+  const debtorsDrillPager = usePagedRows(pack.debtors, drilldown === "DEBTORS" ? "DEBTORS" : "idle")
+  const creditorsDrillPager = usePagedRows(pack.creditors, drilldown === "CREDITORS" ? "CREDITORS" : "idle")
+  const swapsPager = usePagedRows(swaps, drilldown === "SWAPS" ? "SWAPS" : "idle")
+  const returnsPager = usePagedRows(returns, drilldown === "RETURNS" ? "RETURNS" : "idle")
 
   /*
     "As much as it is clickable, let it be downloadable also ... the details
@@ -203,6 +251,48 @@ export function ReportsClientView({
       ...opening.boughtSince.map((bill) => [bill.invoiceNumber, bill.supplier, bill.shop, day(bill.date), bill.total, bill.paid, bill.owed]),
       [],
       ["Total", "", "", "", boughtValue],
+    ],
+    DEBTORS: () => [
+      ["Customer", "Shop", "Amount Owed (NGN)"],
+      ...pack.debtors.map((row) => [row.name, row.shop, row.amount]),
+      [],
+      ["Total Receivables", "", pack.totals.owing],
+    ],
+    CREDITORS: () => [
+      ["Bill / Invoice", "Supplier", "Shop", "Amount Owed (NGN)"],
+      ...pack.creditors.map((row) => [row.invoice, row.supplier, row.shop, row.owed]),
+      [],
+      ["Total Payables", "", "", supplierOwed],
+    ],
+    SWAPS: () => [
+      ["Swap Number", "Customer", "Shop", "Item Swapped For", "Trade-in Value", "Balance Paid", "Date"],
+      ...swaps.map((row) => [
+        row.swapNumber,
+        row.customer?.name ?? "Customer",
+        row.branch.code,
+        row.newProduct?.name ?? "Phone",
+        money(row.tradeValue),
+        money(row.balanceAmount),
+        day(row.createdAt),
+      ]),
+      [],
+      ["Total Swap Balance", "", "", "", "", pack.totals.swaps],
+    ],
+    RETURNS: () => [
+      ["Return Number", "Customer", "Shop", "Item / IMEI", "Reason", "Outcome", "Status", "Refund Amount", "Date"],
+      ...returns.map((row) => [
+        row.returnNumber,
+        row.customer?.name ?? "Customer",
+        row.branch.code,
+        row.imei ? `${row.imei.product.name} (${row.imei.imei1})` : "Item",
+        row.reason.replace(/_/g, " "),
+        row.outcome.replace(/_/g, " "),
+        row.status,
+        money(row.refundAmount),
+        day(row.createdAt),
+      ]),
+      [],
+      ["Total Returns Count", "", "", "", "", "", "", returns.length],
     ],
   }
 
@@ -333,13 +423,13 @@ export function ReportsClientView({
             label="Customers still owe us"
             value={formatCurrency(pack.totals.owing)}
             hint={`${pack.debtors.length} customer${pack.debtors.length === 1 ? "" : "s"} with a balance`}
-            href="/customers"
+            onClick={() => setDrilldown("DEBTORS")}
           />
           <StatCard
             label="We still owe suppliers"
             value={formatCurrency(supplierOwed)}
             hint={`${pack.creditors.length} supplier bill${pack.creditors.length === 1 ? "" : "s"} not yet paid`}
-            href="/suppliers"
+            onClick={() => setDrilldown("CREDITORS")}
           />
         </StatGrid>
 
@@ -348,13 +438,13 @@ export function ReportsClientView({
             label="Money from swaps"
             value={formatCurrency(pack.totals.swaps)}
             hint="The extra money customers added when they swapped an old phone"
-            href="/swaps"
+            onClick={() => setDrilldown("SWAPS")}
           />
           <StatCard
             label="Things brought back"
             value={String(pack.totals.returns)}
             hint="Items customers returned in this time"
-            href="/returns"
+            onClick={() => setDrilldown("RETURNS")}
           />
         </StatGrid>
 
@@ -605,6 +695,46 @@ export function ReportsClientView({
             <>
               <span>{opening.boughtSince.length} supplier bills</span>
               <span className="font-semibold text-foreground">{formatCurrency(boughtValue)}</span>
+            </>
+          ) : drilldown === "DEBTORS" ? (
+            <>
+              <span>
+                {pack.debtors.length} customers with outstanding balances ·{" "}
+                <Link href="/customers" className="text-primary hover:underline">
+                  Customer accounts
+                </Link>
+              </span>
+              <span className="font-semibold text-foreground">{formatCurrency(pack.totals.owing)}</span>
+            </>
+          ) : drilldown === "CREDITORS" ? (
+            <>
+              <span>
+                {pack.creditors.length} unpaid supplier invoices ·{" "}
+                <Link href="/suppliers" className="text-primary hover:underline">
+                  Supplier accounts
+                </Link>
+              </span>
+              <span className="font-semibold text-foreground">{formatCurrency(supplierOwed)}</span>
+            </>
+          ) : drilldown === "SWAPS" ? (
+            <>
+              <span>
+                {swaps.length} device swap transactions ·{" "}
+                <Link href="/swaps" className="text-primary hover:underline">
+                  Device swaps
+                </Link>
+              </span>
+              <span className="font-semibold text-foreground">{formatCurrency(pack.totals.swaps)}</span>
+            </>
+          ) : drilldown === "RETURNS" ? (
+            <>
+              <span>
+                {returns.length} customer returns ·{" "}
+                <Link href="/returns" className="text-primary hover:underline">
+                  Returns &amp; RMAs
+                </Link>
+              </span>
+              <span className="font-semibold text-foreground">{returns.length} return records</span>
             </>
           ) : (
             <>
@@ -896,6 +1026,196 @@ export function ReportsClientView({
               onPageChange={boughtPager.setPage}
               onPageSizeChange={boughtPager.setPageSize}
               noun="bills"
+            />
+          </div>
+        ) : null}
+
+        {drilldown === "DEBTORS" ? (
+          <div>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Customer</th>
+                  <th>Shop</th>
+                  <th className="text-right">Amount Owed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {debtorsDrillPager.pageRows.map((row) => (
+                  <tr key={row.id}>
+                    <td>
+                      <Link href={`/customers/${row.id}`} className="font-medium text-primary hover:underline">
+                        {row.name}
+                      </Link>
+                    </td>
+                    <td>
+                      <ShopTag>{row.shop}</ShopTag>
+                    </td>
+                    <td className="text-right num font-semibold text-warning">{formatCurrency(row.amount)}</td>
+                  </tr>
+                ))}
+                {pack.debtors.length === 0 ? <TableEmpty colSpan={3}>No customer owes money.</TableEmpty> : null}
+              </tbody>
+            </table>
+            <TablePager
+              page={debtorsDrillPager.page}
+              pageCount={debtorsDrillPager.pageCount}
+              pageSize={debtorsDrillPager.pageSize}
+              total={debtorsDrillPager.total}
+              start={debtorsDrillPager.start}
+              end={debtorsDrillPager.end}
+              onPageChange={debtorsDrillPager.setPage}
+              onPageSizeChange={debtorsDrillPager.setPageSize}
+              noun="customers"
+            />
+          </div>
+        ) : null}
+
+        {drilldown === "CREDITORS" ? (
+          <div>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Bill / Invoice</th>
+                  <th>Supplier</th>
+                  <th>Shop</th>
+                  <th className="text-right">Amount Owed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {creditorsDrillPager.pageRows.map((row) => (
+                  <tr key={row.id}>
+                    <td>
+                      <Link href={`/purchases/${row.id}`} className="font-medium text-primary hover:underline">
+                        {row.invoice}
+                      </Link>
+                    </td>
+                    <td>{row.supplier}</td>
+                    <td>
+                      <ShopTag>{row.shop}</ShopTag>
+                    </td>
+                    <td className="text-right num font-semibold text-warning">{formatCurrency(row.owed)}</td>
+                  </tr>
+                ))}
+                {pack.creditors.length === 0 ? <TableEmpty colSpan={4}>No unpaid supplier bills.</TableEmpty> : null}
+              </tbody>
+            </table>
+            <TablePager
+              page={creditorsDrillPager.page}
+              pageCount={creditorsDrillPager.pageCount}
+              pageSize={creditorsDrillPager.pageSize}
+              total={creditorsDrillPager.total}
+              start={creditorsDrillPager.start}
+              end={creditorsDrillPager.end}
+              onPageChange={creditorsDrillPager.setPage}
+              onPageSizeChange={creditorsDrillPager.setPageSize}
+              noun="bills"
+            />
+          </div>
+        ) : null}
+
+        {drilldown === "SWAPS" ? (
+          <div>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Swap Number</th>
+                  <th>Customer</th>
+                  <th>Shop</th>
+                  <th>New Item</th>
+                  <th>Date</th>
+                  <th className="text-right">Trade-in Value</th>
+                  <th className="text-right">Balance Paid</th>
+                </tr>
+              </thead>
+              <tbody>
+                {swapsPager.pageRows.map((swap) => (
+                  <tr key={swap.id}>
+                    <td>
+                      <Link href="/swaps" className="font-medium text-primary hover:underline">
+                        {swap.swapNumber}
+                      </Link>
+                    </td>
+                    <td>{swap.customer?.name ?? "Walk-in"}</td>
+                    <td>
+                      <ShopTag>{swap.branch.code}</ShopTag>
+                    </td>
+                    <td>{swap.newProduct?.name ?? "Phone"}</td>
+                    <td className="text-muted-foreground">{formatDate(swap.createdAt)}</td>
+                    <td className="text-right num">{formatCurrency(money(swap.tradeValue))}</td>
+                    <td className="text-right num font-semibold text-success">{formatCurrency(money(swap.balanceAmount))}</td>
+                  </tr>
+                ))}
+                {swaps.length === 0 ? <TableEmpty colSpan={7}>No swap transactions completed.</TableEmpty> : null}
+              </tbody>
+            </table>
+            <TablePager
+              page={swapsPager.page}
+              pageCount={swapsPager.pageCount}
+              pageSize={swapsPager.pageSize}
+              total={swapsPager.total}
+              start={swapsPager.start}
+              end={swapsPager.end}
+              onPageChange={swapsPager.setPage}
+              onPageSizeChange={swapsPager.setPageSize}
+              noun="swaps"
+            />
+          </div>
+        ) : null}
+
+        {drilldown === "RETURNS" ? (
+          <div>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Return Number</th>
+                  <th>Customer</th>
+                  <th>Shop</th>
+                  <th>Item / IMEI</th>
+                  <th>Reason</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                  <th className="text-right">Refund Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {returnsPager.pageRows.map((ret) => (
+                  <tr key={ret.id}>
+                    <td>
+                      <Link href="/returns" className="font-medium text-primary hover:underline">
+                        {ret.returnNumber}
+                      </Link>
+                    </td>
+                    <td>{ret.customer?.name ?? "Customer"}</td>
+                    <td>
+                      <ShopTag>{ret.branch.code}</ShopTag>
+                    </td>
+                    <td>{ret.imei ? `${ret.imei.product.name} (${ret.imei.imei1})` : "Item"}</td>
+                    <td>{ret.reason.replace(/_/g, " ")}</td>
+                    <td>
+                      <TonePill tone={ret.status === "RESOLVED" || ret.status === "COMPLETED" ? "success" : "warning"}>
+                        {ret.status}
+                      </TonePill>
+                    </td>
+                    <td className="text-muted-foreground">{formatDate(ret.createdAt)}</td>
+                    <td className="text-right num font-semibold text-danger">
+                      {money(ret.refundAmount) > 0 ? formatCurrency(money(ret.refundAmount)) : "—"}
+                    </td>
+                  </tr>
+                ))}
+                {returns.length === 0 ? <TableEmpty colSpan={8}>No customer return records.</TableEmpty> : null}
+              </tbody>
+            </table>
+            <TablePager
+              page={returnsPager.page}
+              pageCount={returnsPager.pageCount}
+              pageSize={returnsPager.pageSize}
+              total={returnsPager.total}
+              start={returnsPager.start}
+              end={returnsPager.end}
+              onPageChange={returnsPager.setPage}
+              onPageSizeChange={returnsPager.setPageSize}
+              noun="returns"
             />
           </div>
         ) : null}

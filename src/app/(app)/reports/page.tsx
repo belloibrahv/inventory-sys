@@ -103,6 +103,8 @@ export default async function ReportsPage({
         sales={data.sales}
         expenses={data.expenses}
         inventory={data.inventory}
+        swaps={data.swaps}
+        returns={data.returns}
         opening={opening}
         branches={branches}
         selectedBranchId={selectedBranchId}
