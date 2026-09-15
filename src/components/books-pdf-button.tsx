@@ -156,7 +156,7 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
 
       const boxes = [
         ["SALES", String(data.salesCount)],
-        ["COLLECTED", formatPdfMoney(data.collected)],
+        ["COLLECTED", formatPdfMoney(data.methodSum)],
         ["POSTED", formatPdfMoney(data.revenue)],
         ["MONEY OUT", formatPdfMoney(data.moneyOut)],
       ]

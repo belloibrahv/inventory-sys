@@ -334,6 +334,7 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
     compare: {
       revenue: change(now.revenue, then.revenue),
       collected: change(now.collected, then.collected),
+      methodSum: change(now.methodSum, then.methodSum),
       count: change(now.count, then.count),
       cash: change(now.cash, then.cash),
       transfer: change(now.transfer, then.transfer),
@@ -344,6 +345,7 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
       moneyOut: change(expenseNow + paidNow, expenseThen + paidThen),
       priorRevenue: then.revenue,
       priorCollected: then.collected,
+      priorMethodSum: then.methodSum,
       priorCount: then.count,
       priorCash: then.cash,
       priorTransfer: then.transfer,

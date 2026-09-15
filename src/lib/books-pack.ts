@@ -15,7 +15,9 @@ export function booksRangeTitle(range: BooksCheck["range"]) {
 export function booksCompareRows(data: BooksCheck) {
   return [
     { label: "Total sales", now: data.revenue, then: data.compare.priorRevenue, change: data.compare.revenue, money: true },
-    { label: "Total payments received", now: data.collected, then: data.compare.priorCollected, change: data.compare.collected, money: true },
+    // "Total payments received" = cash + transfer + POS only (money physically in hand)
+    // Does NOT include credit-sale deposits counted under paidAmount — those appear under Credit sales / Receivables
+    { label: "Total payments received", now: data.methodSum, then: data.compare.priorMethodSum, change: data.compare.methodSum, money: true },
     { label: "Cash received", now: data.cash, then: data.compare.priorCash, change: data.compare.cash, money: true },
     { label: "Transfer received", now: data.transfer, then: data.compare.priorTransfer, change: data.compare.transfer, money: true },
     { label: "POS received", now: data.pos, then: data.compare.priorPos, change: data.compare.pos, money: true },
@@ -26,6 +28,7 @@ export function booksCompareRows(data: BooksCheck) {
     { label: "Sales volume", now: data.salesCount, then: data.compare.priorCount, change: data.compare.count, money: false },
   ]
 }
+
 
 export function formatPdfMoney(value: number) {
   const n = Math.round(Number.isFinite(value) ? value : 0)

@@ -89,7 +89,7 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
       <div className="grid grid-cols-4 divide-x divide-slate-200 border-b border-slate-200">
         {[
           ["Sales volume", String(data.salesCount)],
-          ["Payment received", formatCurrency(data.collected)],
+          ["Payment received", formatCurrency(data.methodSum)],
           ["Total sales", formatCurrency(data.revenue)],
           ["Total expenditure", formatCurrency(data.moneyOut)],
         ].map(([label, value]) => (
