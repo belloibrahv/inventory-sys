@@ -149,39 +149,47 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
         <div className="px-6 py-5">
           <div className="flex items-center justify-between mb-1">
             <h3 className="text-sm font-semibold">Internal Audit Controls & Verifications</h3>
-            <span className="text-[10px] text-slate-500 font-medium">Click any discrepancy to inspect</span>
+            <span className="text-[10px] text-slate-500 font-medium">Flags clear automatically when resolved</span>
           </div>
-          <p className="mb-3 text-[11px] text-slate-500">Each control links directly to the audit log or ledger view.</p>
+          <p className="mb-3 text-[11px] text-slate-500">Click any flagged item to open the relevant page. Follow the &ldquo;How to resolve&rdquo; steps below each flag — the red icon turns green automatically once the system detects the issue is fixed.</p>
           <div className="space-y-2">
             {data.papers.map((row, index) => {
               const content = (
                 <div
-                  className={`flex items-center justify-between gap-3 rounded-lg border p-2 text-[12px] transition-colors ${
+                  className={`rounded-lg border text-[12px] transition-colors ${
                     row.ok
                       ? "border-emerald-200/80 bg-emerald-50/40 hover:bg-emerald-50"
                       : "border-rose-300 bg-rose-50/80 hover:bg-rose-100/80 cursor-pointer"
                   }`}
                 >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-1.5">
-                      {row.ok ? (
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                      ) : (
-                        <AlertCircle className="h-3.5 w-3.5 text-rose-600 shrink-0" />
-                      )}
-                      <p className={`font-semibold ${row.ok ? "text-emerald-950" : "text-rose-950 underline decoration-rose-400 underline-offset-2"}`}>
-                        {index + 1}. {row.label}
-                      </p>
+                  <div className="flex items-center justify-between gap-3 p-2">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-1.5">
+                        {row.ok ? (
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                        ) : (
+                          <AlertCircle className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+                        )}
+                        <p className={`font-semibold ${row.ok ? "text-emerald-950" : "text-rose-950 underline decoration-rose-400 underline-offset-2"}`}>
+                          {index + 1}. {row.label}
+                        </p>
+                      </div>
+                      <p className={`text-[11px] mt-0.5 ${row.ok ? "text-slate-600" : "text-rose-900"}`}>{row.detail}</p>
                     </div>
-                    <p className={`text-[11px] mt-0.5 ${row.ok ? "text-slate-600" : "text-rose-900"}`}>{row.detail}</p>
-                  </div>
                     <span
-                      className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+                      className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
                         row.ok ? "bg-emerald-100 text-emerald-800" : "bg-rose-600 text-white shadow-xs"
                       }`}
                     >
                       {row.ok ? "Verified" : "Action Required →"}
                     </span>
+                  </div>
+                  {!row.ok && row.fix ? (
+                    <div className="mx-2 mb-2 rounded-md border border-rose-200 bg-white px-3 py-2">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-rose-700 mb-1">How to resolve this flag</p>
+                      <p className="text-[11px] text-slate-700 leading-relaxed">{row.fix}</p>
+                    </div>
+                  ) : null}
                 </div>
               )
 

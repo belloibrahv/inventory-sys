@@ -232,13 +232,23 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
     {
       ok: integrity.ok,
       label: "The trail of who did what",
-      detail: integrity.ok ? `We checked ${integrity.checked} locked rows. Nobody changed a past action.` : "A locked row has changed. Keep a backup and treat it like somebody broke in.",
+      detail: integrity.ok
+        ? `Audit chain verified — ${integrity.checked} locked records checked. No tampering detected.`
+        : "A locked audit record has been altered. This is a critical integrity alert.",
+      fix: integrity.ok
+        ? null
+        : "Go to Audit Trail → look for rows flagged as changed. Identify who made the change and when. If data was tampered with, restore from the last backup. This flag clears automatically once the audit chain is re-verified.",
       href: "/audit",
     },
     {
       ok: unclosed.length === 0,
       label: "Till counted every day",
-      detail: unclosed.length ? `${unclosed.length} old day(s) with sales are still not closed. Sell now stays locked until you close them.` : "Every old day with sales has been counted.",
+      detail: unclosed.length
+        ? `${unclosed.length} previous business day(s) with sales have not been closed yet.`
+        : "All previous days with sales have been closed and counted.",
+      fix: unclosed.length
+        ? `Go to Finance → Close Day → select each of the ${unclosed.length} open day(s) → enter the physical cash counted in the till → click "Close Day". This flag clears once every past day is closed.`
+        : null,
       href: "/finance/close",
     },
     {
@@ -248,22 +258,36 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
         span !== "day"
           ? `${closes.length} day(s) closed in this period.`
           : closeForDay
-            ? `Remitted ${money(closeForDay.countedCash).toFixed(0)}. Expected cash was ${expectedCash.toFixed(0)}.`
+            ? `Day closed — ₦${money(closeForDay.countedCash).toFixed(0)} remitted. Expected cash: ₦${expectedCash.toFixed(0)}.`
             : now.count
-              ? "Transactions recorded for this date, pending end-of-day register close."
+              ? "Today has transactions but the end-of-day register has not been closed yet."
               : "No transactions recorded for this business day.",
+      fix:
+        span === "day" && !closeForDay && now.count
+          ? `Go to Finance → Close Day → select today's date → count the physical cash in the till, enter the amount → click "Close Day". This flag clears once today's register is closed.`
+          : null,
       href: `/finance/close?date=${day}`,
     },
     {
       ok: closeVariances.length === 0,
       label: "Cash drawer reconciled with cash sales",
-      detail: closeVariances.length ? `${closeVariances.length} day(s) recorded till cash variances (shortage/overage).` : "All closed day registers reconciled with zero cash discrepancies.",
+      detail: closeVariances.length
+        ? `${closeVariances.length} closed day(s) show a cash shortage or overage between the till count and expected cash sales.`
+        : "All closed day registers match expected cash with zero variance.",
+      fix: closeVariances.length
+        ? "Go to Finance → Close Day → review the days showing a variance. Recount the physical cash for those days and update the remittance amount. If there is a genuine shortage, record it as an approved expense. This flag clears once all closed days show zero variance."
+        : null,
       href: "/finance/close",
     },
     {
       ok: imeiGaps.length === 0,
       label: "Serialized devices match IMEI registry",
-      detail: imeiGaps.length ? `${imeiGaps.length} item(s) have physical inventory variances against serialized tracking.` : "Physical serialized inventory perfectly reconciled with IMEI records.",
+      detail: imeiGaps.length
+        ? `${imeiGaps.length} product(s) have a mismatch between physical stock count and the IMEI records on the system.`
+        : "Physical serialized inventory matches all IMEI records perfectly.",
+      fix: imeiGaps.length
+        ? "Go to Inventory → IMEI Records → compare the physical device count on the shelf against the system count. For missing devices, mark them as sold or lost. For extra devices, register the new IMEIs. This flag clears once all counts match."
+        : null,
       href: "/dashboard#imei-check",
     },
     {
@@ -271,26 +295,45 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
       label: "Held / Draft transactions",
       detail:
         parked.sitting || parked.vanished
-          ? `${parked.sitting} active hold(s). ${parked.vanished} purged draft(s).`
-          : "Zero stale or discarded hold transactions.",
+          ? `${parked.sitting} active hold(s) on the POS. ${parked.vanished} draft(s) were discarded without completing.`
+          : "No stale or abandoned hold transactions on the POS.",
+      fix:
+        parked.sitting || parked.vanished
+          ? "Go to POS → review any held (parked) sales → either complete the transaction or cancel it. For discarded drafts, check the Audit Trail for the HIGH-risk events. This flag clears once all holds are resolved."
+          : null,
       href: parked.vanished ? "/audit?risk=HIGH" : "/pos",
     },
     {
       ok: walkIns === 0,
       label: "Customer identity KYC on transactions",
-      detail: walkIns ? `${walkIns} transaction(s) recorded without buyer customer KYC.` : "All transactions assigned to verified customer accounts.",
+      detail: walkIns
+        ? `${walkIns} transaction(s) were recorded without a registered customer (walk-in / unidentified buyer).`
+        : "All transactions in this period are assigned to registered customer accounts.",
+      fix: walkIns
+        ? "Go to Sales → filter by 'Walk-in' customer → for each unidentified sale, open the invoice and update the customer field with the correct registered customer. This flag clears once all transactions have a known customer assigned."
+        : null,
       href: "/sales",
     },
     {
       ok: failedLogins === 0,
       label: "User authentication security",
-      detail: failedLogins ? `${failedLogins} failed authentication attempt(s) recorded.` : "Zero authentication security failures.",
+      detail: failedLogins
+        ? `${failedLogins} failed login attempt(s) recorded in this period.`
+        : "No failed authentication attempts detected.",
+      fix: failedLogins
+        ? "Go to Audit Trail → filter by Action: LOGIN and Result: Failed → check if the attempts are from a known staff member who forgot their password (reset it via Staff settings) or from an unknown source (change the affected account's password immediately and review access). This flag clears when no new failed logins occur in the next report period."
+        : null,
       href: "/audit?result=failed&action=LOGIN",
     },
     {
       ok: highRisk === 0,
       label: "High-severity audit events",
-      detail: highRisk ? `${highRisk} high-severity operational audit event(s) logged.` : "Zero high-severity audit anomalies detected.",
+      detail: highRisk
+        ? `${highRisk} high-severity operational event(s) logged in this period.`
+        : "No high-severity audit anomalies detected.",
+      fix: highRisk
+        ? "Go to Audit Trail → filter by Risk: HIGH → review each flagged event and confirm whether it was an authorised action. If unauthorised, escalate to the Managing Director and consider a security review. This flag clears when no HIGH-risk events are logged in the next report period."
+        : null,
       href: "/audit?risk=HIGH",
     },
   ]
