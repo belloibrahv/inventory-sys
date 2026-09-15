@@ -71,6 +71,12 @@ export function IncomingList({
         steps={[
           { key: "all", label: "All cartons", count: counts.all, hint: "Everything booked" },
           { key: "COMING", label: "Still coming", count: counts.COMING ?? 0, hint: "Not landed yet" },
+          {
+            key: "PENDING_APPROVAL",
+            label: "Waiting for yes",
+            count: counts.PENDING_APPROVAL ?? 0,
+            hint: "Checked; needs second person",
+          },
           { key: "ARRIVED", label: "In shop", count: counts.ARRIVED ?? 0, hint: "Checked in" },
           { key: "CANCELLED", label: "Cancelled", count: counts.CANCELLED ?? 0, hint: "Not coming" },
         ]}
@@ -137,6 +143,12 @@ export function IncomingList({
                 )
               })}
             </ul>
+            {lot.status === "PENDING_APPROVAL" ? (
+              <p className="mt-2 rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-warning">
+                Count and cost are checked. Open Waiting for yes — a second person must approve before these units can be
+                sold.
+              </p>
+            ) : null}
             {lot.status === "ARRIVED" &&
             lot.items.some((item) => {
               const expected = item.expectedQuantity && item.expectedQuantity > 0 ? item.expectedQuantity : item.quantity

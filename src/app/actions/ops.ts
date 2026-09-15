@@ -22,6 +22,7 @@ import { warrantyState } from "@/lib/warranty"
 import { cell, readTableFile } from "@/lib/table-file"
 import { buildBillTrace, type SupplierBillTrace } from "@/lib/supplier-trace"
 import { watBounds, watDayKey } from "@/lib/lagos-day"
+import { getAppSettings } from "@/lib/settings"
 
 function parseImeis(raw: string) {
   return [...new Set(raw.split(/[\s,;]+/).map((item) => item.trim()).filter((item) => item.length >= 14))]
@@ -343,6 +344,14 @@ export async function receivePurchaseImeis(formData: FormData) {
       where: { id: purchase!.id },
       data: { totalAmount: lineTotal },
     })
+  }
+
+  const settings = await getAppSettings()
+  if (settings.dualControlIncoming) {
+    return {
+      error:
+        "A second person must say yes before goods enter the shop. Book this bill as Coming, then use Preview and receive on Goods on the way.",
+    }
   }
 
   const imeis = parseImeis(String(formData.get("imeis") || ""))

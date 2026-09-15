@@ -165,7 +165,11 @@ export function PreviewIncomingModal({ lot }: { lot: IncomingLot }) {
       return
     }
 
-    if (result && "variance" in result && result.variance) {
+    if (result && "pendingApproval" in result && result.pendingApproval) {
+      toast.success(
+        `Checked ${lot.lotNumber}. Waiting for a second person on Waiting for yes before stock can be sold.`
+      )
+    } else if (result && "variance" in result && result.variance) {
       toast.warning(
         `Arrival recorded with a shortage/extra. The records checker has been alerted (${result.shortUnits ?? 0} short).`
       )

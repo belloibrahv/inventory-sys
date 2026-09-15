@@ -40,6 +40,11 @@ const SETTINGS = [
   { key: "company.email", value: "hello@abutwins.com", description: "Email on invoices" },
   { key: "company.currency", value: "NGN", description: "Default currency" },
   { key: "sales.allow_below_minimum", value: "false", description: "Require approval below min price" },
+  {
+    key: "incoming.dual_control",
+    value: "true",
+    description: "Second person must say yes before received goods become sellable",
+  },
   { key: "inventory.low_stock_threshold", value: "3", description: "Default low stock" },
 ] as const
 

@@ -20,7 +20,7 @@ Honest status after codebase audit. Screens are largely built; these items close
 | P1-2 | Reassign staff to another shop | **Done** — Staff → Edit job or move shop (audit logged) |
 | P1-3 | Brand & category admin screens | **Done** — Phones & items → Brands & categories (add / rename / remove when unused) |
 | P1-4 | Cost re-check at goods receipt | **Done** — Preview & receive + direct receive confirm unit cost; updates catalogue + bill; note required when cost changes |
-| P1-5 | Dual-control on incoming arrival | Optional second yes before sellable |
+| P1-5 | Dual-control on incoming arrival | **Done** — Preview stages carton; Waiting for yes finalises stock (setting `incoming.dual_control`, on by default). Requester cannot approve own check |
 | P1-6 | Below-min price → approval queue | Today hard block / override only |
 | P1-7 | Distinct “Under repair” IMEI status | Repair job exists; IMEI status map is fuzzy |
 | P1-8 | Reports period filter + Excel export parity | Books have day/week/month; reports pack weaker on Excel |

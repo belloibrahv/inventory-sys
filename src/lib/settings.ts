@@ -13,6 +13,8 @@ export async function getAppSettings() {
     companyEmail: map["company.email"] || "hello@abutwins.com",
     currency: map["company.currency"] || "NGN",
     allowBelowMinimum: map["sales.allow_below_minimum"] === "true",
+    /** Second person must say yes before received goods become sellable. */
+    dualControlIncoming: map["incoming.dual_control"] !== "false",
     lowStockThreshold: Number(map["inventory.low_stock_threshold"] || 3) || 3,
     warrantyDays: Number(map["sales.warranty_days"] || 365) || 365,
   }

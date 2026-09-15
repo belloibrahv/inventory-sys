@@ -16,6 +16,7 @@ function entityHref(type: string) {
   if (type === "Return") return "/returns"
   if (type === "Expense") return "/expenses"
   if (type === "Reconciliation") return "/reconciliation"
+  if (type === "IncomingLot") return "/incoming"
   return "/approvals"
 }
 

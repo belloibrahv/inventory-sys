@@ -52,6 +52,7 @@ enum ProductTracking {
 
 enum IncomingStatus {
   COMING
+  PENDING_APPROVAL
   ARRIVED
   CANCELLED
 }
@@ -181,6 +182,7 @@ enum ApprovalType {
   TRANSFER
   SWAP
   RETURN
+  INCOMING_RECEIVE
 }
 
 enum ApprovalStatus {
@@ -981,8 +983,10 @@ model IncomingItem {
   product          Product          @relation(fields: [productId], references: [id])
   /// How many the carton / bill said were coming. Never overwritten on receive.
   expectedQuantity Int              @default(0)
-  /// How many actually entered the shop. Null while still Coming.
+  /// How many actually entered the shop. Null while still Coming / waiting for yes.
   receivedQuantity Int?
+  /// Unit cost confirmed on the carton (used when dual-control finalises the receive).
+  receivedUnitCost Decimal?
   /// Kept in sync with expectedQuantity (Coming) or receivedQuantity (Arrived)
   /// so older screens that only read quantity stay correct.
   quantity         Int

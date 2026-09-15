@@ -221,6 +221,19 @@ export async function decideApproval(id: string, status: "APPROVED" | "REJECTED"
   const approval = await prisma.approval.findUnique({ where: { id } })
   if (!approval || approval.status !== "PENDING") return { error: "Somebody has already decided on this one." }
 
+  if (approval.type === "INCOMING_RECEIVE" && approval.requestedBy === user.id) {
+    return { error: "Someone else must say yes. You already checked this carton." }
+  }
+
+  if (approval.type === "INCOMING_RECEIVE" || approval.entityType === "IncomingLot") {
+    const { completeIncomingReceiveApproval, rejectIncomingReceiveApproval } = await import("@/app/actions/incoming")
+    const result =
+      status === "APPROVED"
+        ? await completeIncomingReceiveApproval(approval.entityId, user.id)
+        : await rejectIncomingReceiveApproval(approval.entityId, user.id)
+    if (result && "error" in result && result.error) return result
+  }
+
   await prisma.approval.update({
     where: { id },
     data: { status, approvedBy: user.id, approvedAt: new Date() },
@@ -336,6 +349,8 @@ export async function decideApproval(id: string, status: "APPROVED" | "REJECTED"
   revalidatePath("/inventory")
   revalidatePath("/finance")
   revalidatePath("/imei")
+  revalidatePath("/incoming")
+  revalidatePath("/purchases")
   revalidatePath("/dashboard")
   return { success: true }
 }
@@ -604,6 +619,15 @@ export async function getSettings() {
       description: "Warranty days to use when an item has none of its own",
     },
   })
+  await prisma.setting.upsert({
+    where: { key: "incoming.dual_control" },
+    update: {},
+    create: {
+      key: "incoming.dual_control",
+      value: "true",
+      description: "Second person must say yes before received goods become sellable",
+    },
+  })
   return prisma.setting.findMany({ orderBy: { key: "asc" } })
 }
 
@@ -614,9 +638,11 @@ export async function saveSetting(formData: FormData) {
   const value = String(formData.get("value"))
   await prisma.setting.update({ where: { key }, data: { value } })
   revalidatePath("/settings")
+  revalidatePath("/settings/rules")
   revalidatePath("/pos")
   revalidatePath("/inventory")
   revalidatePath("/sales")
+  revalidatePath("/incoming")
   return { success: true }
 }
 

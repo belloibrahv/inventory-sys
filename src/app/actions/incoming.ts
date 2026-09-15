@@ -8,6 +8,7 @@ import { scopedBranchId } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { generateDocNumber, money } from "@/lib/utils"
 import { shopError } from "@/lib/shop-speak"
+import { getAppSettings } from "@/lib/settings"
 
 type Tx = Prisma.TransactionClient
 
@@ -329,176 +330,109 @@ export async function previewAndReceiveIncoming(payload: PreviewAndReceivePayloa
     }
   }
 
+  const settings = await getAppSettings()
+  const dualControl = settings.dualControlIncoming
+
+  const varianceSummary =
+    variances.length === 0
+      ? null
+      : variances
+          .map((row) =>
+            row.short > 0
+              ? `${row.productName}: expected ${row.expected}, got ${row.received} (short ${row.short})`
+              : `${row.productName}: expected ${row.expected}, got ${row.received} (extra ${-row.short})`
+          )
+          .join(" · ")
+
+  const nextNotes = [lot.notes, note || null, varianceSummary ? `Variance: ${varianceSummary}` : null]
+    .filter(Boolean)
+    .join(" · ")
+
   try {
     await prisma.$transaction(async (tx) => {
+      // Stage the clerk's count, cost, and ticked IMEIs on the carton lines.
+      // Stock only becomes sellable after finalize (immediate, or after a second yes).
       for (const item of lot.items) {
         const adjustment = itemMap.get(item.id)!
         const expected = item.expectedQuantity > 0 ? item.expectedQuantity : item.quantity
         const confirmedIds = (adjustment.confirmedIdentities || []).map((id) => id.trim()).filter(Boolean)
         let receivedQty = Math.max(0, adjustment.receivedQuantity)
+        if (item.identity !== "NONE" && confirmedIds.length > 0) {
+          receivedQty = confirmedIds.length
+        }
         const unitCost = Number(adjustment.unitCost)
 
-        if (item.identity === "NONE") {
-          // Decrement all incoming, increment only actually received quantity
-          await tx.inventory.upsert({
-            where: { productId_branchId: { productId: item.productId, branchId: lot.branchId } },
-            update: {
-              incomingQty: { decrement: expected },
-              quantity: { increment: receivedQty },
-            },
-            create: { productId: item.productId, branchId: lot.branchId, quantity: receivedQty, incomingQty: 0 },
-          })
-          await tx.incomingItem.update({
-            where: { id: item.id },
-            data: {
-              expectedQuantity: expected,
-              receivedQuantity: receivedQty,
-              quantity: receivedQty,
-            },
-          })
-        } else {
-          // For IMEI / Serial:
-          // Fetch existing incoming IMEIs for this lot item
-          const existingImeis = await tx.imeiRecord.findMany({
-            where: {
-              branchId: lot.branchId,
-              productId: item.productId,
-              status: "INCOMING",
-              notes: { contains: lot.lotNumber },
-            },
-          })
-
-          const confirmedSet = new Set(confirmedIds.length ? confirmedIds : existingImeis.map((r) => r.imei1))
-
-          // Move confirmed IMEIs to IN_STOCK
-          for (const imeiRec of existingImeis) {
-            if (confirmedSet.has(imeiRec.imei1) || (imeiRec.serialNumber && confirmedSet.has(imeiRec.serialNumber))) {
-              await tx.imeiRecord.update({
-                where: { id: imeiRec.id },
-                data: {
-                  status: "IN_STOCK",
-                  notes: `Arrived from ${lot.lotNumber}`,
-                  ...(lot.purchaseId ? { purchaseId: lot.purchaseId } : {}),
-                },
-              })
-            } else {
-              // Unconfirmed / missing units removed from incoming
-              await tx.imeiRecord.delete({
-                where: { id: imeiRec.id },
-              })
-            }
-          }
-
-          const actualReceived = confirmedIds.length > 0 ? confirmedIds.length : receivedQty
-          receivedQty = actualReceived
-
-          await tx.inventory.upsert({
-            where: { productId_branchId: { productId: item.productId, branchId: lot.branchId } },
-            update: {
-              incomingQty: { decrement: expected },
-              quantity: { increment: actualReceived },
-            },
-            create: { productId: item.productId, branchId: lot.branchId, quantity: actualReceived, incomingQty: 0 },
-          })
-
-          await tx.incomingItem.update({
-            where: { id: item.id },
-            data: {
-              expectedQuantity: expected,
-              receivedQuantity: actualReceived,
-              quantity: actualReceived,
-              identifiers: confirmedIds.length ? confirmedIds.join("\n") : item.identifiers,
-            },
-          })
-        }
-
-        await applyConfirmedUnitCost(tx, {
-          productId: item.productId,
-          productName: item.product.name,
-          unitCost,
-          userId: user.id,
-          lotNumber: lot.lotNumber,
-          purchaseId: lot.purchaseId,
+        await tx.incomingItem.update({
+          where: { id: item.id },
+          data: {
+            expectedQuantity: expected,
+            receivedQuantity: receivedQty,
+            receivedUnitCost: unitCost.toFixed(2),
+            // Keep quantity as expected while waiting for yes so Coming math stays honest.
+            quantity: dualControl ? expected : receivedQty,
+            identifiers:
+              item.identity !== "NONE" && confirmedIds.length
+                ? confirmedIds.join("\n")
+                : item.identifiers,
+          },
         })
-
-        // Keep purchase receivedQty in sync with what really entered the shop.
-        if (lot.purchaseId) {
-          const purchase = await tx.purchase.findUnique({
-            where: { id: lot.purchaseId },
-            include: { items: true },
-          })
-          if (purchase) {
-            const line = purchase.items.find((it) => it.productId === item.productId) ?? purchase.items[0]
-            if (line) {
-              const newReceived = Math.min(line.quantity, line.receivedQty + receivedQty)
-              await tx.purchaseItem.update({ where: { id: line.id }, data: { receivedQty: newReceived } })
-            }
-          }
-        }
       }
 
-      const varianceSummary =
-        variances.length === 0
-          ? null
-          : variances
-              .map((row) =>
-                row.short > 0
-                  ? `${row.productName}: expected ${row.expected}, got ${row.received} (short ${row.short})`
-                  : `${row.productName}: expected ${row.expected}, got ${row.received} (extra ${-row.short})`
-              )
-              .join(" · ")
-
-      const nextNotes = [
-        lot.notes,
-        note || null,
-        varianceSummary ? `Variance: ${varianceSummary}` : null,
-      ]
-        .filter(Boolean)
-        .join(" · ")
-
-      await tx.incomingLot.update({
-        where: { id: lot.id },
-        data: {
-          status: IncomingStatus.ARRIVED,
+      if (dualControl) {
+        await tx.incomingLot.update({
+          where: { id: lot.id },
+          data: {
+            status: IncomingStatus.PENDING_APPROVAL,
+            notes: nextNotes || null,
+          },
+        })
+        await tx.approval.create({
+          data: {
+            type: "INCOMING_RECEIVE",
+            entityType: "IncomingLot",
+            entityId: lot.lotNumber,
+            requestedBy: user.id,
+            reason: `Checked carton ${lot.lotNumber} for ${lot.branch.name}. Waiting for a second person before stock is sellable.`,
+            notes: note || varianceSummary || null,
+          },
+        })
+        await tx.auditLog.create({
+          data: {
+            userId: user.id,
+            action: "UPDATE",
+            entityType: "IncomingLot",
+            entityId: lot.lotNumber,
+            newValue: JSON.stringify({
+              status: "PENDING_APPROVAL",
+              variance: variances,
+              costChanges,
+              note: note || null,
+            }),
+            branchId: lot.branchId,
+          },
+        })
+      } else {
+        await finalizeStagedIncomingLot(tx, {
+          lotId: lot.id,
+          userId: user.id,
           notes: nextNotes || null,
-        },
-      })
-
-      if (lot.purchaseId) {
-        const purchase = await tx.purchase.findUnique({
-          where: { id: lot.purchaseId },
-          include: { items: true },
+          variance: variances,
+          costChanges,
+          note: note || null,
         })
-        if (purchase) {
-          const done = purchase.items.every((it) => it.receivedQty >= it.quantity)
-          await tx.purchase.update({
-            where: { id: purchase.id },
-            data: {
-              status: done ? "RECEIVED" : "PARTIAL_RECEIVED",
-              receivedDate: done ? new Date() : purchase.receivedDate,
-            },
-          })
-        }
       }
-
-      await tx.auditLog.create({
-        data: {
-          userId: user.id,
-          action: "UPDATE",
-          entityType: "IncomingLot",
-          entityId: lot.lotNumber,
-          newValue: JSON.stringify({
-            status: "ARRIVED",
-            variance: variances,
-            costChanges,
-            note: note || null,
-          }),
-          branchId: lot.branchId,
-        },
-      })
     })
   } catch (error) {
     return { error: shopError(error, "Could not confirm arrival of these goods.") }
+  }
+
+  if (dualControl) {
+    await notifyIncomingApprovers({
+      lotNumber: lot.lotNumber,
+      branchId: lot.branchId,
+      branchName: lot.branch.name,
+      requesterName: user.name || user.email,
+    })
   }
 
   if (variances.length > 0) {
@@ -521,12 +455,267 @@ export async function previewAndReceiveIncoming(payload: PreviewAndReceivePayloa
   revalidatePath("/products")
   revalidatePath("/dashboard")
   revalidatePath("/notifications")
+  revalidatePath("/approvals")
   return {
     success: true,
+    pendingApproval: dualControl,
     variance: variances.length > 0,
     costChanged: costChanges.length > 0,
     shortUnits: variances.reduce((sum, row) => sum + Math.max(0, row.short), 0),
   }
+}
+
+/**
+ * Move a staged carton into sellable shop stock. Used when dual-control is off
+ * (same clerk finishes immediately) or when a second person says yes.
+ */
+async function finalizeStagedIncomingLot(
+  tx: Tx,
+  input: {
+    lotId: string
+    userId: string
+    notes?: string | null
+    variance?: unknown
+    costChanges?: unknown
+    note?: string | null
+  }
+) {
+  const lot = await tx.incomingLot.findUnique({
+    where: { id: input.lotId },
+    include: { items: { include: { product: true } } },
+  })
+  if (!lot) throw new Error("We could not find that carton.")
+  if (lot.status !== "COMING" && lot.status !== "PENDING_APPROVAL") {
+    throw new Error("These goods are not waiting to enter the shop.")
+  }
+
+  for (const item of lot.items) {
+    const expected = item.expectedQuantity > 0 ? item.expectedQuantity : item.quantity
+    const receivedQty = item.receivedQuantity ?? expected
+    const unitCost =
+      item.receivedUnitCost != null ? money(item.receivedUnitCost) : money(item.product.costPrice)
+
+    if (item.identity === "NONE") {
+      await tx.inventory.upsert({
+        where: { productId_branchId: { productId: item.productId, branchId: lot.branchId } },
+        update: {
+          incomingQty: { decrement: expected },
+          quantity: { increment: receivedQty },
+        },
+        create: { productId: item.productId, branchId: lot.branchId, quantity: receivedQty, incomingQty: 0 },
+      })
+    } else {
+      const confirmedIds = (item.identifiers || "")
+        .split(/[\r\n,]+/)
+        .map((id) => id.trim())
+        .filter(Boolean)
+      const existingImeis = await tx.imeiRecord.findMany({
+        where: {
+          branchId: lot.branchId,
+          productId: item.productId,
+          status: "INCOMING",
+          notes: { contains: lot.lotNumber },
+        },
+      })
+      const confirmedSet = new Set(confirmedIds.length ? confirmedIds : existingImeis.map((row) => row.imei1))
+
+      for (const imeiRec of existingImeis) {
+        if (confirmedSet.has(imeiRec.imei1) || (imeiRec.serialNumber && confirmedSet.has(imeiRec.serialNumber))) {
+          await tx.imeiRecord.update({
+            where: { id: imeiRec.id },
+            data: {
+              status: "IN_STOCK",
+              notes: `Arrived from ${lot.lotNumber}`,
+              ...(lot.purchaseId ? { purchaseId: lot.purchaseId } : {}),
+            },
+          })
+        } else {
+          await tx.imeiRecord.delete({ where: { id: imeiRec.id } })
+        }
+      }
+
+      await tx.inventory.upsert({
+        where: { productId_branchId: { productId: item.productId, branchId: lot.branchId } },
+        update: {
+          incomingQty: { decrement: expected },
+          quantity: { increment: receivedQty },
+        },
+        create: { productId: item.productId, branchId: lot.branchId, quantity: receivedQty, incomingQty: 0 },
+      })
+    }
+
+    await tx.incomingItem.update({
+      where: { id: item.id },
+      data: {
+        expectedQuantity: expected,
+        receivedQuantity: receivedQty,
+        quantity: receivedQty,
+        receivedUnitCost: unitCost.toFixed(2),
+      },
+    })
+
+    await applyConfirmedUnitCost(tx, {
+      productId: item.productId,
+      productName: item.product.name,
+      unitCost,
+      userId: input.userId,
+      lotNumber: lot.lotNumber,
+      purchaseId: lot.purchaseId,
+    })
+
+    if (lot.purchaseId) {
+      const purchase = await tx.purchase.findUnique({
+        where: { id: lot.purchaseId },
+        include: { items: true },
+      })
+      if (purchase) {
+        const line = purchase.items.find((row) => row.productId === item.productId) ?? purchase.items[0]
+        if (line) {
+          const newReceived = Math.min(line.quantity, line.receivedQty + receivedQty)
+          await tx.purchaseItem.update({ where: { id: line.id }, data: { receivedQty: newReceived } })
+        }
+      }
+    }
+  }
+
+  await tx.incomingLot.update({
+    where: { id: lot.id },
+    data: {
+      status: IncomingStatus.ARRIVED,
+      ...(input.notes != null ? { notes: input.notes } : {}),
+    },
+  })
+
+  if (lot.purchaseId) {
+    const purchase = await tx.purchase.findUnique({
+      where: { id: lot.purchaseId },
+      include: { items: true },
+    })
+    if (purchase) {
+      const done = purchase.items.every((row) => row.receivedQty >= row.quantity)
+      await tx.purchase.update({
+        where: { id: purchase.id },
+        data: {
+          status: done ? "RECEIVED" : "PARTIAL_RECEIVED",
+          receivedDate: done ? new Date() : purchase.receivedDate,
+        },
+      })
+    }
+  }
+
+  await tx.auditLog.create({
+    data: {
+      userId: input.userId,
+      action: "UPDATE",
+      entityType: "IncomingLot",
+      entityId: lot.lotNumber,
+      newValue: JSON.stringify({
+        status: "ARRIVED",
+        variance: input.variance ?? null,
+        costChanges: input.costChanges ?? null,
+        note: input.note ?? null,
+      }),
+      branchId: lot.branchId,
+    },
+  })
+}
+
+export async function completeIncomingReceiveApproval(lotNumber: string, deciderId: string) {
+  const lot = await prisma.incomingLot.findFirst({
+    where: { lotNumber, status: "PENDING_APPROVAL" },
+  })
+  if (!lot) return { error: "That carton is not waiting for a second yes." }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await finalizeStagedIncomingLot(tx, { lotId: lot.id, userId: deciderId })
+    })
+  } catch (error) {
+    return { error: shopError(error, "Could not finish receiving this carton.") }
+  }
+
+  revalidatePath("/incoming")
+  revalidatePath("/inventory")
+  revalidatePath("/imei")
+  revalidatePath("/pos")
+  revalidatePath("/purchases")
+  revalidatePath("/products")
+  revalidatePath("/approvals")
+  revalidatePath("/dashboard")
+  return { success: true }
+}
+
+export async function rejectIncomingReceiveApproval(lotNumber: string, deciderId: string) {
+  const lot = await prisma.incomingLot.findFirst({
+    where: { lotNumber, status: "PENDING_APPROVAL" },
+    include: { items: true },
+  })
+  if (!lot) return { error: "That carton is not waiting for a second yes." }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      for (const item of lot.items) {
+        const expected = item.expectedQuantity > 0 ? item.expectedQuantity : item.quantity
+        await tx.incomingItem.update({
+          where: { id: item.id },
+          data: {
+            receivedQuantity: null,
+            receivedUnitCost: null,
+            quantity: expected,
+          },
+        })
+      }
+      await tx.incomingLot.update({
+        where: { id: lot.id },
+        data: { status: IncomingStatus.COMING },
+      })
+      await tx.auditLog.create({
+        data: {
+          userId: deciderId,
+          action: "REJECT",
+          entityType: "IncomingLot",
+          entityId: lot.lotNumber,
+          newValue: JSON.stringify({ status: "COMING", rejected: true }),
+          branchId: lot.branchId,
+        },
+      })
+    })
+  } catch (error) {
+    return { error: shopError(error, "Could not send this carton back to Coming.") }
+  }
+
+  revalidatePath("/incoming")
+  revalidatePath("/approvals")
+  revalidatePath("/dashboard")
+  return { success: true }
+}
+
+async function notifyIncomingApprovers(input: {
+  lotNumber: string
+  branchId: string
+  branchName: string
+  requesterName: string
+}) {
+  const watchers = await prisma.user.findMany({
+    where: {
+      isActive: true,
+      OR: [
+        { role: { in: ["SUPER_ADMIN", "CEO", "AUDITOR", "ACCOUNTANT", "VAULT_MANAGER"] } },
+        { role: "BRANCH_MANAGER", branchId: input.branchId },
+      ],
+    },
+    select: { id: true },
+  })
+  if (!watchers.length) return
+  await prisma.notification.createMany({
+    data: watchers.map((watcher) => ({
+      userId: watcher.id,
+      type: "APPROVAL_REQUEST" as const,
+      title: `Second yes needed: ${input.lotNumber}`,
+      message: `${input.requesterName} checked a carton for ${input.branchName}. Say yes on Waiting for yes before the goods can be sold.`,
+      actionUrl: "/approvals",
+    })),
+  })
 }
 
 async function alertReceiveShortage(input: {

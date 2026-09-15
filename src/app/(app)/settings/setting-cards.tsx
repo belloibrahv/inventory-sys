@@ -13,6 +13,7 @@ export const settingLabels: Record<string, string> = {
   "company.email": "Email on invoices",
   "company.currency": "Currency",
   "sales.allow_below_minimum": "Can cashiers sell under the lowest price?",
+  "incoming.dual_control": "Need a second person before received goods can be sold?",
   "inventory.low_stock_threshold": "Warn me when an item drops to this many",
   "sales.warranty_days": "Warranty days for a new item",
 }
@@ -35,10 +36,19 @@ export function SettingCards({ settings, canEdit }: { settings: SettingRow[]; ca
           {canEdit ? (
             <ActionForm action={saveSetting} submit="Update" className="space-y-3">
               <input type="hidden" name="key" value={setting.key} />
-              {setting.key === "sales.allow_below_minimum" ? (
+              {setting.key === "sales.allow_below_minimum" || setting.key === "incoming.dual_control" ? (
                 <Select name="value" defaultValue={setting.value}>
-                  <option value="false">No. Only the main admin can sell under the lowest price</option>
-                  <option value="true">Yes. Cashiers can sell under the lowest price</option>
+                  {setting.key === "sales.allow_below_minimum" ? (
+                    <>
+                      <option value="false">No. Only the main admin can sell under the lowest price</option>
+                      <option value="true">Yes. Cashiers can sell under the lowest price</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="true">Yes. First person checks; second person must say yes</option>
+                      <option value="false">No. One person can put goods on the shelf alone</option>
+                    </>
+                  )}
                 </Select>
               ) : (
                 <Input name="value" defaultValue={setting.value} />
