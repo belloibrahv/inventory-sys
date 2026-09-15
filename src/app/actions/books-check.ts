@@ -38,11 +38,16 @@ function sumSales(rows: Array<{ paymentMethod: string; totalAmount: unknown; pai
   const cash = rows.filter((row) => row.paymentMethod === "CASH").reduce((sum, row) => sum + money(row.paidAmount), 0)
   const transfer = rows.filter((row) => row.paymentMethod === "TRANSFER").reduce((sum, row) => sum + money(row.paidAmount), 0)
   const pos = rows.filter((row) => row.paymentMethod === "POS").reduce((sum, row) => sum + money(row.paidAmount), 0)
-  const credit = rows.filter((row) => row.paymentMethod === "CREDIT").reduce((sum, row) => sum + money(row.totalAmount), 0)
+  // Credit sales = outstanding balance only (total invoice minus whatever has already been paid)
+  // e.g. sale of ₦180k with ₦120k deposit → credit outstanding = ₦60k, NOT ₦180k
+  const credit = rows
+    .filter((row) => row.paymentMethod === "CREDIT")
+    .reduce((sum, row) => sum + Math.max(0, money(row.totalAmount) - money(row.paidAmount)), 0)
   const revenue = rows.reduce((sum, row) => sum + money(row.totalAmount), 0)
   const collected = rows.reduce((sum, row) => sum + money(row.paidAmount), 0)
   return { cash, transfer, pos, credit, revenue, collected, due: revenue - collected, methodSum: cash + transfer + pos, count: rows.length }
 }
+
 
 export async function getBooksCheck(branchId?: string, businessDate?: string, range: BooksRange = "day", compareDate?: string) {
   const user = await requireUser()
