@@ -1,6 +1,8 @@
 import { getProfitData } from "@/app/actions/finance"
 import { PageHeader, StatusBadge } from "@/components/shared"
+import { ExportCsv } from "@/components/export-csv"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import { formatCondition } from "@/lib/status"
 
 export default async function ProfitsPage() {
   const data = await getProfitData()
@@ -8,11 +10,51 @@ export default async function ProfitsPage() {
   const neighborProfit = data.neighborLines.reduce((sum, row) => sum + row.profit, 0)
   const net = shopProfit + neighborProfit - data.expenses
 
+  const csvRows = [
+    ["Direct Inventory Sales Margins"],
+    ["Invoice", "Shop", "Date", "Product", "Storage", "Condition", "Color", "Quantity", "Cost Price", "Revenue", "Gross Margin"],
+    ...data.shopLines.map((row) => [
+      row.invoice,
+      row.shop,
+      formatDate(row.date),
+      row.item,
+      row.storage ?? "",
+      row.condition ? formatCondition(row.condition) : "",
+      row.color ?? "",
+      String(row.quantity),
+      String(row.cost),
+      String(row.sell),
+      String(row.profit),
+    ]),
+    [],
+    ["External Partner Fulfillment Margins"],
+    ["Order Ref", "Shop", "Date", "Partner", "Customer", "Item", "Cost", "Revenue", "Retained Margin", "Status"],
+    ...data.neighborLines.map((row) => [
+      row.fillNumber,
+      row.shop,
+      formatDate(row.date),
+      row.neighbor,
+      row.customer,
+      row.item,
+      String(row.cost),
+      String(row.sell),
+      String(row.profit),
+      row.status,
+    ]),
+  ]
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Gross & Net Profit Analytics"
         description="Gross margin realized on warehouse sales, retained margin on external partner fulfillment, and net operating income after OPEX deductions."
+        actions={
+          <ExportCsv
+            filename={`profit-analytics-${new Date().toISOString().slice(0, 10)}.csv`}
+            label="Export Profit Ledger (CSV)"
+            rows={csvRows}
+          />
+        }
       />
       <div className="grid gap-4 md:grid-cols-4">
         <div className="surface-card p-5">
@@ -69,7 +111,8 @@ export default async function ProfitsPage() {
               <thead className="text-left text-muted-foreground">
                 <tr className="border-b border-border">
                   <th className="px-5 py-3">Invoice Ref</th>
-                  <th className="px-3 py-3">Product</th>
+                  <th className="px-3 py-3">Product & Specifications</th>
+                  <th className="px-3 py-3">Cost Price</th>
                   <th className="px-3 py-3">Revenue</th>
                   <th className="px-5 py-3">Gross Margin</th>
                 </tr>
@@ -81,9 +124,23 @@ export default async function ProfitsPage() {
                       {row.invoice}
                       <p className="text-muted-foreground">{row.shop} · {formatDate(row.date)}</p>
                     </td>
-                    <td className="px-3 py-3">{row.item}</td>
-                    <td className="px-3 py-3">{formatCurrency(row.sell)}</td>
-                    <td className="px-5 py-3">{formatCurrency(row.profit)}</td>
+                    <td className="px-3 py-3">
+                      <p className="font-semibold text-foreground">{row.item}</p>
+                      <div className="mt-0.5 flex flex-wrap gap-1 text-[11px] text-muted-foreground">
+                        {row.storage ? (
+                          <span className="rounded bg-muted px-1.5 py-0.5 font-medium">{row.storage}</span>
+                        ) : null}
+                        {row.condition ? (
+                          <span className="rounded bg-muted px-1.5 py-0.5 font-medium">{formatCondition(row.condition)}</span>
+                        ) : null}
+                        {row.color ? (
+                          <span className="rounded bg-muted px-1.5 py-0.5 font-medium">{row.color}</span>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 tabular-nums text-muted-foreground">{formatCurrency(row.cost)}</td>
+                    <td className="px-3 py-3 tabular-nums">{formatCurrency(row.sell)}</td>
+                    <td className="px-5 py-3 tabular-nums font-semibold text-success">{formatCurrency(row.profit)}</td>
                   </tr>
                 ))}
               </tbody>

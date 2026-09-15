@@ -61,6 +61,7 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
   return (
     <div className="space-y-6">
       <PageHeader
+        backHref="/purchases"
         title={purchase.invoiceNumber}
         description={
           isOpening

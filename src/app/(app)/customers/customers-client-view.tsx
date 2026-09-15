@@ -110,19 +110,19 @@ export function CustomersClientView({
       </StatGrid>
 
       <Toolbar className="justify-between">
-        <div className="inline-flex rounded-lg bg-muted p-0.5">
+        <div className="inline-flex rounded-xl border border-border bg-card p-1 shadow-2xs">
           {tabs.map((item) => (
             <button
               key={item.key}
               type="button"
               onClick={() => setTab(item.key)}
-              className={`rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
+              className={`rounded-lg px-3.5 py-1.5 text-[13px] font-semibold transition-all ${
                 tab === item.key
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "bg-primary text-primary-foreground shadow-xs"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
               }`}
             >
-              {item.label} <span className="num text-xs opacity-70">({item.count})</span>
+              {item.label} <span className={`num text-xs ${tab === item.key ? "text-primary-foreground/90 font-bold" : "opacity-75"}`}>({item.count})</span>
             </button>
           ))}
         </div>

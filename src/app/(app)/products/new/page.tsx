@@ -21,6 +21,7 @@ export default async function NewProductPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        backHref="/products"
         title="Add one item"
         description="A new model the shop has started selling. The lowest price is the line staff must not go under, so set it carefully."
       />

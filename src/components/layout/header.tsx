@@ -3,7 +3,8 @@
 import { signOut } from "next-auth/react"
 import type { UserRole } from "@prisma/client"
 import { useTheme } from "@/components/theme-provider"
-import { Bell, BookOpen, ChevronDown, LogOut, Menu, Moon, Search, Sun, UserRound } from "lucide-react"
+import { useRouter, usePathname } from "next/navigation"
+import { ArrowLeft, Bell, BookOpen, ChevronDown, LogOut, Menu, Moon, Search, Sun, UserRound } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -44,6 +45,10 @@ export function Header({
   const navShown = desktopSidebar || sidebarOpen
   const initials = (user?.name ?? "AT").slice(0, 2).toUpperCase()
 
+  const router = useRouter()
+  const pathname = usePathname()
+  const isHome = pathname === "/" || pathname === "/dashboard"
+
   return (
     <header className="sticky top-0 z-30 flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-border bg-background/85 px-4 py-2 backdrop-blur-xl md:px-6">
       <div className="flex min-w-0 items-center gap-2">
@@ -56,6 +61,24 @@ export function Header({
         >
           <Menu className="h-5 w-5" />
         </Button>
+        {!isHome ? (
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== "undefined" && window.history.length > 1) {
+                router.back()
+              } else {
+                router.push("/dashboard")
+              }
+            }}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold text-foreground shadow-2xs transition-all hover:border-primary/40 hover:bg-accent hover:text-primary active:scale-95"
+            aria-label="Back to previous page"
+            title="Go back to previous page"
+          >
+            <ArrowLeft className="h-3.5 w-3.5 text-primary" />
+            <span>Back</span>
+          </button>
+        ) : null}
         <h1 className="truncate text-base font-semibold tracking-tight">{title}</h1>
       </div>
 

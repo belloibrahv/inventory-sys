@@ -135,12 +135,12 @@ const DEFAULTS: Record<UserRole, string[]> = {
     "action.upload", "action.catalog", "action.all_branches"
   ),
   CASHIER: V(
-    "view.dashboard", "view.pos", "view.sales", "view.customers", "view.neighbor-fills", "view.returns", "view.notifications",
-    "action.sell", "action.neighbor", "action.return"
+    "view.dashboard", "view.pos", "view.sales", "view.customers", "view.expenses", "view.neighbor-fills", "view.returns", "view.notifications",
+    "action.sell", "action.neighbor", "action.return", "action.finance"
   ),
   SALES_EXECUTIVE: V(
-    "view.dashboard", "view.pos", "view.sales", "view.customers", "view.products", "view.neighbor-fills", "view.notifications",
-    "action.sell", "action.neighbor"
+    "view.dashboard", "view.pos", "view.sales", "view.customers", "view.products", "view.expenses", "view.neighbor-fills", "view.notifications",
+    "action.sell", "action.neighbor", "action.finance"
   ),
   ENGINEER: V(
     "view.dashboard", "view.imei", "view.repairs", "view.returns", "view.customers", "view.notifications",

@@ -16,6 +16,7 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
   return (
     <div className="space-y-6">
       <PageHeader
+        backHref="/suppliers"
         title={supplier.name}
         description={`${supplier.kind === "NEIGHBOR" ? "Neighboring shop" : "Supplier"} · ${[supplier.city, supplier.country].filter(Boolean).join(", ") || "Where they are is not set"} · ${supplier.phone}${supplier.contactPerson ? ` · ${supplier.contactPerson}` : ""}`}
       />

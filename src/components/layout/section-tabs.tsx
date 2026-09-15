@@ -27,9 +27,9 @@ export function SectionTabs({ allowedHrefs }: { allowedHrefs: string[] }) {
   const active = children.find((child) => child.href === activeHref)
 
   return (
-    <div className="-mx-4 border-b border-border px-4 md:-mx-6 md:px-6">
+    <div className="py-2.5">
       <div
-        className="flex gap-1 overflow-x-auto pb-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex items-center gap-1.5 overflow-x-auto rounded-xl border border-border bg-card p-1.5 shadow-2xs [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         role="tablist"
         aria-label={`${area.parent.name} sections`}
       >
@@ -43,19 +43,26 @@ export function SectionTabs({ allowedHrefs }: { allowedHrefs: string[] }) {
               role="tab"
               aria-selected={isActive}
               className={cn(
-                "flex shrink-0 items-center gap-2 border-b-2 px-3 py-2.5 text-[13px] transition-colors",
+                "flex shrink-0 items-center gap-2 rounded-lg px-3.5 py-2 text-xs sm:text-[13px] font-semibold transition-all",
                 isActive
-                  ? "border-brand font-semibold text-foreground"
-                  : "border-transparent font-medium text-muted-foreground hover:border-border hover:text-foreground"
+                  ? "bg-primary text-primary-foreground shadow-xs ring-1 ring-primary/30"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
-              {Icon ? <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-brand" : "")} /> : null}
+              {Icon ? (
+                <Icon
+                  className={cn(
+                    "h-4 w-4 shrink-0",
+                    isActive ? "text-primary-foreground" : "text-muted-foreground"
+                  )}
+                />
+              ) : null}
               <span className="whitespace-nowrap">{child.name}</span>
             </Link>
           )
         })}
       </div>
-      {active?.hint ? <p className="pb-2.5 pt-1 text-xs text-muted-foreground">{active.hint}</p> : null}
+      {active?.hint ? <p className="mt-1.5 px-1 text-xs text-muted-foreground">{active.hint}</p> : null}
     </div>
   )
 }

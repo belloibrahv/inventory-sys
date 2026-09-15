@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react"
 import Link from "next/link"
+import { ArrowLeft } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { statusLabel, statusTone } from "@/lib/status"
 import { cn } from "@/lib/utils"
@@ -41,15 +42,29 @@ export function PageHeader({
   title,
   description,
   actions,
+  backHref,
 }: {
   title: string
   description?: string
   actions?: ReactNode
+  backHref?: string
 }) {
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
-        <h1 className="text-xl font-semibold tracking-tight md:text-2xl">{title}</h1>
+        <div className="flex items-center gap-2.5">
+          {backHref ? (
+            <Link
+              href={backHref}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-semibold text-foreground shadow-2xs transition-all hover:bg-accent hover:text-primary active:scale-95 shrink-0"
+              title="Go back"
+            >
+              <ArrowLeft className="h-3.5 w-3.5 text-primary" />
+              <span>Back</span>
+            </Link>
+          ) : null}
+          <h1 className="text-xl font-semibold tracking-tight md:text-2xl">{title}</h1>
+        </div>
         {description ? (
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">{description}</p>
         ) : null}

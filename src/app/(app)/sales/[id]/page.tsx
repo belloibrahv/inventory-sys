@@ -69,6 +69,7 @@ export default async function SaleDetailPage({
       <AutoPrint when={receipt === "1"} />
     <div className="space-y-6">
       <PageHeader
+        backHref="/sales"
         title={sale.invoiceNumber}
         description={`${sale.branch.name} · ${formatDateTime(sale.saleDate)} · posted by ${sale.user.name}`}
         actions={
