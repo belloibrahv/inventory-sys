@@ -238,54 +238,54 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
     },
     {
       ok: span !== "day" || now.count === 0 || Boolean(closeForDay),
-      label: "This day is closed",
+      label: "Business day closed",
       detail:
         span !== "day"
-          ? `${closes.length} day(s) were closed in this time.`
+          ? `${closes.length} day(s) closed in this period.`
           : closeForDay
-            ? `We counted ${money(closeForDay.countedCash).toFixed(0)}. It should have been ${expectedCash.toFixed(0)}.`
+            ? `Remitted ${money(closeForDay.countedCash).toFixed(0)}. Expected cash was ${expectedCash.toFixed(0)}.`
             : now.count
-              ? "This day has sales but nobody has closed it."
-              : "No sale happened this day, so there is nothing to close.",
+              ? "Transactions recorded for this date, pending end-of-day register close."
+              : "No transactions recorded for this business day.",
       href: `/finance/close?date=${day}`,
     },
     {
       ok: closeVariances.length === 0,
-      label: "Till money matches cash sales",
-      detail: closeVariances.length ? `On ${closeVariances.length} day(s) the money was short or plenty.` : "The days we closed have the right cash, or no day has been closed yet.",
+      label: "Cash drawer reconciled with cash sales",
+      detail: closeVariances.length ? `${closeVariances.length} day(s) recorded till cash variances (shortage/overage).` : "All closed day registers reconciled with zero cash discrepancies.",
       href: "/finance/close",
     },
     {
       ok: imeiGaps.length === 0,
-      label: "Phones match the IMEI list",
-      detail: imeiGaps.length ? `${imeiGaps.length} item(s) do not agree.` : "The shop count and the IMEI count agree for every phone and laptop.",
+      label: "Serialized devices match IMEI registry",
+      detail: imeiGaps.length ? `${imeiGaps.length} item(s) have physical inventory variances against serialized tracking.` : "Physical serialized inventory perfectly reconciled with IMEI records.",
       href: "/dashboard#imei-check",
     },
     {
       ok: parked.sitting === 0 && parked.vanished === 0,
-      label: "Waiting sales",
+      label: "Held / Draft transactions",
       detail:
         parked.sitting || parked.vanished
-          ? `${parked.sitting} has been waiting too long. ${parked.vanished} disappeared from a phone.`
-          : "No waiting sale is waiting too long or missing.",
+          ? `${parked.sitting} active hold(s). ${parked.vanished} purged draft(s).`
+          : "Zero stale or discarded hold transactions.",
       href: parked.vanished ? "/audit?risk=HIGH" : "/pos",
     },
     {
       ok: walkIns === 0,
-      label: "Every sale has a buyer name",
-      detail: walkIns ? `${walkIns} sale(s) have no buyer name. Nobody can bring those things back until you add a name.` : "Every sale has a buyer name.",
+      label: "Customer identity KYC on transactions",
+      detail: walkIns ? `${walkIns} transaction(s) recorded without buyer customer KYC.` : "All transactions assigned to verified customer accounts.",
       href: "/sales",
     },
     {
       ok: failedLogins === 0,
-      label: "People signing in",
-      detail: failedLogins ? `${failedLogins} person(s) tried to sign in and failed.` : "Nobody failed to sign in.",
+      label: "User authentication security",
+      detail: failedLogins ? `${failedLogins} failed authentication attempt(s) recorded.` : "Zero authentication security failures.",
       href: "/audit?result=failed&action=LOGIN",
     },
     {
       ok: highRisk === 0,
-      label: "Risky actions",
-      detail: highRisk ? `${highRisk} risky action(s) are on Who did what. Go and look at them.` : "Nobody did anything risky.",
+      label: "High-severity audit events",
+      detail: highRisk ? `${highRisk} high-severity operational audit event(s) logged.` : "Zero high-severity audit anomalies detected.",
       href: "/audit?risk=HIGH",
     },
   ]
@@ -329,8 +329,8 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
     papers,
     openCount: openPapers.length,
     verdict: openPapers.length
-      ? `${openPapers.length} thing${openPapers.length === 1 ? "" : "s"} must be fixed before you can say the books are clean.`
-      : "The books are clean for this shop. The money, the phones, and the trail all agree.",
+      ? `${openPapers.length} exception(s) require auditor resolution before certifying ledger.`
+      : "All accounts, physical inventory, and audit controls are reconciled and certified.",
     compare: {
       revenue: change(now.revenue, then.revenue),
       collected: change(now.collected, then.collected),

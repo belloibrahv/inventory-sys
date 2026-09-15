@@ -8,7 +8,8 @@ import { requireUser } from "@/lib/session"
 import { viewBranchFilter } from "@/lib/branch-scope"
 import { watDayKey } from "@/lib/lagos-day"
 import { formatCurrency, formatDate } from "@/lib/utils"
-import { Store, CheckCircle2, AlertTriangle, ArrowLeft, ArrowRight, Calendar } from "lucide-react"
+import { formatCondition } from "@/lib/status"
+import { Store, CheckCircle2, AlertTriangle, ArrowLeft, ArrowRight, Calendar, Download } from "lucide-react"
 
 export default async function DayClosePage({
   searchParams,
@@ -29,19 +30,20 @@ export default async function DayClosePage({
   ])
 
   const isViewingToday = preview.businessDate === today
+  const totalReceived = preview.expectedCash + preview.transferTotal + preview.posTotal
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <PageHeader
           title="Close the day"
-          description="Total sales for the day, money sent to the bank, and cash remittance reconciliation."
+          description="Total sales for the day, cash received, bank transfer, POS, and cash remittance reconciliation."
         />
         <Link
           href="/finance"
           className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="h-4 w-4" /> Back to Money in & out
+          <ArrowLeft className="h-4 w-4" /> Back to Financial Ledger
         </Link>
       </div>
 
@@ -141,20 +143,29 @@ export default async function DayClosePage({
           </p>
         </div>
         <div className="surface-card p-5 border-l-4 border-l-emerald-500">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cash sales (Expected in till)</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cash received (Expected in till)</p>
           <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">{formatCurrency(preview.expectedCash)}</p>
           <p className="text-xs text-muted-foreground mt-1">Physical cash taken in today</p>
         </div>
         <div className="surface-card p-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Money sent to the bank</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Transfer received</p>
           <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">{formatCurrency(preview.transferTotal)}</p>
           <p className="text-xs text-muted-foreground mt-1">Customers who paid by Bank Transfer</p>
         </div>
         <div className="surface-card p-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">POS machine</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">POS received</p>
           <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">{formatCurrency(preview.posTotal)}</p>
           <p className="text-xs text-muted-foreground mt-1">Customers who paid with card on POS</p>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-xs">
+        <span className="font-semibold text-foreground">
+          Total payments received today (Cash + Transfer + POS):
+        </span>
+        <span className="font-bold tabular-nums text-sm text-primary">
+          {formatCurrency(totalReceived)}
+        </span>
       </div>
 
       {preview.creditTotal > 0 ? (
@@ -272,21 +283,56 @@ export default async function DayClosePage({
         </div>
       )}
 
-      {/* Sales Made On This Day */}
+      {/* Sales Made On This Day - Detailed Itemized Breakdown */}
       <div className="surface-card overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-border">
           <div>
             <h3 className="font-bold text-base">Sales made on this day ({preview.sales.length})</h3>
             <p className="text-xs text-muted-foreground">
-              Every completed sale making up the {formatCurrency(preview.totalSales)} total on {preview.businessDate}
+              Itemized sales ledger making up the {formatCurrency(preview.totalSales)} total on {preview.businessDate}
             </p>
           </div>
-          <Link
-            href="/sales"
-            className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
-          >
-            All sales <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
+          <div className="flex items-center gap-2">
+            {preview.sales.length > 0 && (
+              <a
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-primary hover:bg-muted transition-colors"
+                href={`data:text/csv;charset=utf-8,${encodeURIComponent(
+                  [
+                    "Invoice,Time,Customer,Device / Item,Storage,Condition,Color,IMEI / Serial,Qty,Unit Price,Total Price,Payment Method,Paid,Cashier",
+                    ...preview.sales.flatMap((sale) =>
+                      sale.items.map((it) =>
+                        [
+                          sale.invoiceNumber,
+                          new Date(sale.saleDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                          `"${sale.customer.replace(/"/g, '""')}"`,
+                          `"${it.name.replace(/"/g, '""')}"`,
+                          it.storage || "",
+                          it.condition ? formatCondition(it.condition) : "",
+                          it.color || "",
+                          it.imei || it.serialNumber || "",
+                          it.quantity,
+                          it.unitPrice,
+                          it.totalPrice,
+                          sale.method,
+                          sale.paid,
+                          `"${sale.staff.replace(/"/g, '""')}"`,
+                        ].join(",")
+                      )
+                    ),
+                  ].join("\n")
+                )}`}
+                download={`sales-ledger-${preview.branchName || "shop"}-${preview.businessDate}.csv`}
+              >
+                <Download className="h-3.5 w-3.5" /> Download Sales Ledger (CSV)
+              </a>
+            )}
+            <Link
+              href="/sales"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+            >
+              All sales <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -294,8 +340,8 @@ export default async function DayClosePage({
               <tr className="border-b border-border">
                 <th className="px-5 py-3">Invoice</th>
                 <th className="px-4 py-3">Customer</th>
-                <th className="px-4 py-3">Items</th>
-                <th className="px-4 py-3">Staff</th>
+                <th className="px-4 py-3">Itemized Devices & Products</th>
+                <th className="px-4 py-3">Cashier</th>
                 <th className="px-4 py-3">Paid by</th>
                 <th className="px-4 py-3 text-right">Total amount</th>
                 <th className="px-5 py-3 text-right">Paid</th>
@@ -304,20 +350,59 @@ export default async function DayClosePage({
             <tbody className="divide-y divide-border/60">
               {preview.sales.map((sale) => (
                 <tr key={sale.id} className="hover:bg-muted/30">
-                  <td className="px-5 py-3">
+                  <td className="px-5 py-3 align-top">
                     <Link
                       href={`/sales/${sale.id}`}
                       className="font-mono font-bold text-primary hover:underline"
                     >
                       {sale.invoiceNumber}
                     </Link>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      {new Date(sale.saleDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </p>
                   </td>
-                  <td className="px-4 py-3 font-medium">{sale.customer}</td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground max-w-xs truncate" title={sale.itemsSummary}>
-                    {sale.itemsSummary || `${sale.itemCount} items`}
+                  <td className="px-4 py-3 font-medium align-top">{sale.customer}</td>
+                  <td className="px-4 py-3 align-top">
+                    <div className="space-y-1.5">
+                      {sale.items.map((it) => (
+                        <div key={it.id} className="text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-foreground">{it.name}</span>
+                            {it.quantity > 1 ? (
+                              <span className="text-muted-foreground font-mono"> × {it.quantity}</span>
+                            ) : null}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground mt-0.5">
+                            {it.imei ? (
+                              <span className="font-mono text-primary font-medium bg-primary/5 px-1 py-0.2 rounded border border-primary/15">
+                                IMEI: {it.imei}
+                              </span>
+                            ) : it.serialNumber ? (
+                              <span className="font-mono text-muted-foreground bg-muted px-1 py-0.2 rounded">
+                                SN: {it.serialNumber}
+                              </span>
+                            ) : null}
+                            {it.storage ? (
+                              <span className="inline-flex items-center px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200 font-semibold text-[10px]">
+                                {it.storage}
+                              </span>
+                            ) : null}
+                            {it.condition ? (
+                              <span className="inline-flex items-center px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 font-medium text-[10px]">
+                                {formatCondition(it.condition)}
+                              </span>
+                            ) : null}
+                            {it.color ? <span className="text-muted-foreground">· {it.color}</span> : null}
+                          </div>
+                        </div>
+                      ))}
+                      {sale.items.length === 0 && (
+                        <span className="text-xs text-muted-foreground">{sale.itemsSummary || `${sale.itemCount} items`}</span>
+                      )}
+                    </div>
                   </td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">{sale.staff}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-xs text-muted-foreground align-top">{sale.staff}</td>
+                  <td className="px-4 py-3 align-top">
                     <span
                       className={`inline-block rounded-md px-2 py-0.5 text-xs font-bold ${
                         sale.method === "CASH"
@@ -332,8 +417,8 @@ export default async function DayClosePage({
                       {sale.method}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right font-mono font-semibold">{formatCurrency(sale.total)}</td>
-                  <td className="px-5 py-3 text-right font-mono font-bold text-foreground">{formatCurrency(sale.paid)}</td>
+                  <td className="px-4 py-3 text-right font-mono font-semibold align-top">{formatCurrency(sale.total)}</td>
+                  <td className="px-5 py-3 text-right font-mono font-bold text-foreground align-top">{formatCurrency(sale.paid)}</td>
                 </tr>
               ))}
               {preview.sales.length === 0 ? (

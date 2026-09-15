@@ -651,7 +651,7 @@ export async function completeReturn(formData: FormData) {
   if (!record) return { error: "We could not find that return." }
   if (record.status === "COMPLETED") return { error: "That return is already finished." }
   if (record.status !== "APPROVED" && !(await canApprove(user.role))) {
-    return { error: "The boss has not approved this return yet." }
+    return { error: "Management has not approved this return yet." }
   }
   const sale = record.saleId
     ? await prisma.sale.findUnique({ where: { id: record.saleId } })
@@ -910,7 +910,7 @@ export async function completeSwap(formData: FormData) {
     return { error: "This shop's opening stock is still being counted. Finish the swap once it is closed." }
   }
   if (swap.status !== "APPROVED" && !(await canApprove(user.role))) {
-    return { error: "Wait for the boss to approve the trade-in value before you collect the difference." }
+    return { error: "Wait for management to approve the trade-in valuation before collecting the balance." }
   }
 
   const invoiceNumber = generateDocNumber("INV")

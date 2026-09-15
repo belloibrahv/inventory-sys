@@ -11,7 +11,7 @@ export default async function ReturnsPage() {
       <div>
         <PageHeader
           title="Returns"
-          description="A buyer brings a phone back. The old bill stays as it was. After the boss says yes, you can refund, give credit, repair, replace, or send it to the supplier."
+          description="Customer return intake and warranty processing. Following management approval, refund, store credit, repair, replacement, or return to vendor (RTV) can be executed."
         />
         <ReturnsList rows={rows} />
       </div>

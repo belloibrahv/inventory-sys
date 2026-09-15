@@ -95,9 +95,9 @@ const labels: Record<string, string> = {
   REPAIRED: "Repaired",
   BRAND_NEW: "Brand New",
   OPEN_BOX: "Open Box",
-  UK_USED: "Pre-Owned (Tier A)",
+  UK_USED: "UK Used",
   REFURBISHED: "Refurbished",
-  SWAP_DEVICE: "Trade-In Asset",
+  SWAP_DEVICE: "Trade-In",
   REPAIR_DEVICE: "Service Asset",
   LOGIN: "Sign In",
   LOGOUT: "Sign Out",
@@ -143,3 +143,8 @@ export function statusLabel(status: string) {
 }
 
 export type BadgeTone = Tone
+
+export function formatCondition(condition?: string | null): string {
+  if (!condition) return ""
+  return labels[condition] ?? statusLabel(condition)
+}

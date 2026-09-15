@@ -73,6 +73,9 @@ export async function getPosLookups() {
       serialized: product.tracking !== "NONE",
       brand: { name: product.brand.name },
       stock: product.inventory.map((row) => ({ branchId: row.branchId, quantity: row.quantity })),
+      storage: product.storage,
+      condition: product.condition,
+      color: product.color,
     })),
     customers: customers.map((customer) => ({
       id: customer.id,
@@ -92,6 +95,9 @@ export async function getPosLookups() {
         name: item.product.name,
         sellingPrice: money(item.product.sellingPrice),
         minimumPrice: money(item.product.minimumPrice),
+        storage: item.product.storage,
+        condition: item.product.condition,
+        color: item.product.color,
       },
     })),
     branches: branches.map((branch) => ({

@@ -357,35 +357,36 @@ export function ReportsClientView({
         </Toolbar>
 
         {/* Every headline figure opens the rows that add up to it. */}
+        {/* Every headline figure opens the rows that add up to it. */}
         <StatGrid>
           <StatCard
-            label="Money from sales"
+            label="Total sales"
             value={formatCurrency(pack.totals.revenue)}
-            hint={`${sales.length} sale${sales.length === 1 ? "" : "s"} in this time`}
+            hint={`${sales.length} transaction${sales.length === 1 ? "" : "s"} in this period`}
             icon={<TrendingUp className="h-4 w-4" />}
             tone="neutral"
             onClick={() => setDrilldown("REVENUE")}
           />
           <StatCard
-            label="Money we collected"
+            label="Total payments received"
             value={formatCurrency(pack.totals.collected)}
-            hint="Money that truly entered our hand: cash, transfer or POS"
+            hint="Gross receipts: cash received, bank transfer, and POS"
             icon={<Banknote className="h-4 w-4" />}
             tone="success"
             onClick={() => setDrilldown("RECEIVED")}
           />
           <StatCard
-            label="Money we spent"
+            label="Approved expenses"
             value={formatCurrency(pack.totals.expenses)}
-            hint={`${expenses.length} bill${expenses.length === 1 ? "" : "s"} recorded`}
+            hint={`${expenses.length} approved expense${expenses.length === 1 ? "" : "s"}`}
             icon={<TrendingDown className="h-4 w-4" />}
             tone="danger"
             onClick={() => setDrilldown("EXPENSES")}
           />
           <StatCard
-            label="What the stock cost us"
+            label="Inventory valuation (Cost)"
             value={formatCurrency(pack.totals.stock)}
-            hint={`${inventory.length} item${inventory.length === 1 ? "" : "s"} on the shelf`}
+            hint={`${inventory.length} unit${inventory.length === 1 ? "" : "s"} currently in stock`}
             icon={<Package className="h-4 w-4" />}
             tone="warning"
             onClick={() => setDrilldown("STOCK")}
@@ -413,37 +414,37 @@ export function ReportsClientView({
             onClick={() => setDrilldown("OPENING")}
           />
           <StatCard
-            label="Goods bought after opening stock"
+            label="Procurement after opening stock"
             value={formatCurrency(boughtValue)}
-            hint={`${opening.boughtSince.length} supplier bill${opening.boughtSince.length === 1 ? "" : "s"}, not counting opening stock`}
+            hint={`${opening.boughtSince.length} supplier bill${opening.boughtSince.length === 1 ? "" : "s"}, excluding opening stock`}
             icon={<PackagePlus className="h-4 w-4" />}
             onClick={() => setDrilldown("BOUGHT")}
           />
           <StatCard
-            label="Customers still owe us"
+            label="Receivables"
             value={formatCurrency(pack.totals.owing)}
-            hint={`${pack.debtors.length} customer${pack.debtors.length === 1 ? "" : "s"} with a balance`}
+            hint={`${pack.debtors.length} customer${pack.debtors.length === 1 ? "" : "s"} with outstanding balance`}
             onClick={() => setDrilldown("DEBTORS")}
           />
           <StatCard
-            label="We still owe suppliers"
+            label="Suppliers payment (Payables)"
             value={formatCurrency(supplierOwed)}
-            hint={`${pack.creditors.length} supplier bill${pack.creditors.length === 1 ? "" : "s"} not yet paid`}
+            hint={`${pack.creditors.length} vendor bill${pack.creditors.length === 1 ? "" : "s"} pending settlement`}
             onClick={() => setDrilldown("CREDITORS")}
           />
         </StatGrid>
 
         <StatGrid>
           <StatCard
-            label="Money from swaps"
+            label="Trade-in value"
             value={formatCurrency(pack.totals.swaps)}
-            hint="The extra money customers added when they swapped an old phone"
+            hint="Total cash differentials collected on trade-in transactions"
             onClick={() => setDrilldown("SWAPS")}
           />
           <StatCard
-            label="Things brought back"
+            label="Returned products"
             value={String(pack.totals.returns)}
-            hint="Items customers returned in this time"
+            hint="Products returned within this accounting period"
             onClick={() => setDrilldown("RETURNS")}
           />
         </StatGrid>
@@ -452,15 +453,15 @@ export function ReportsClientView({
           <TableShell
             caption={
               <>
-                <h2 className="text-sm font-semibold tracking-tight">Shop by shop</h2>
+                <h2 className="text-sm font-semibold tracking-tight">Branch Performance Breakdown</h2>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">
-                    {pack.byShop.length} shop{pack.byShop.length === 1 ? "" : "s"} with sales
+                    {pack.byShop.length} branch location{pack.byShop.length === 1 ? "" : "s"}
                   </span>
                   <TableDownload
-                    filename={`${fileScope}-shop-by-shop`}
+                    filename={`${fileScope}-branch-breakdown`}
                     rows={() => [
-                      ["Shop", "How many sales", "Money from sales", "Money we collected"],
+                      ["Branch", "Sales Volume", "Total Sales", "Payments Received"],
                       ...pack.byShop.map((row) => [row.name, row.tickets, row.revenue, row.collected]),
                     ]}
                   />
@@ -468,10 +469,10 @@ export function ReportsClientView({
               </>
             }
             columns={[
-              { label: "Shop" },
-              { label: "How many sales", align: "right" },
-              { label: "Money from sales", align: "right" },
-              { label: "Money we collected", align: "right" },
+              { label: "Branch" },
+              { label: "Sales Volume", align: "right" },
+              { label: "Total Sales", align: "right" },
+              { label: "Payments Received", align: "right" },
             ]}
             footer={
               <TablePager
@@ -503,11 +504,11 @@ export function ReportsClientView({
           <TableShell
             caption={
               <>
-                <h2 className="text-sm font-semibold tracking-tight">Customers who still owe us</h2>
+                <h2 className="text-sm font-semibold tracking-tight">Accounts Receivable (Customer Balances)</h2>
                 <div className="flex items-center gap-2">
                   <TableDownload
-                    filename={`${fileScope}-customers-owing`}
-                    rows={() => [["Customer", "Shop", "Still owed"], ...pack.debtors.map((row) => [row.name, row.shop, row.amount])]}
+                    filename={`${fileScope}-receivables`}
+                    rows={() => [["Customer", "Shop", "Balance Due"], ...pack.debtors.map((row) => [row.name, row.shop, row.amount])]}
                   />
                   <Button asChild variant="ghost" size="sm">
                     <Link href="/customers">All customers</Link>
@@ -515,7 +516,7 @@ export function ReportsClientView({
                 </div>
               </>
             }
-            columns={[{ label: "Customer" }, { label: "Shop" }, { label: "Still owed", align: "right" }]}
+            columns={[{ label: "Customer" }, { label: "Shop" }, { label: "Balance Due", align: "right" }]}
             footer={
               <TablePager
                 page={debtorsPager.page}
@@ -553,12 +554,12 @@ export function ReportsClientView({
           <TableShell
             caption={
               <>
-                <h2 className="text-sm font-semibold tracking-tight">Supplier bills we have not paid</h2>
+                <h2 className="text-sm font-semibold tracking-tight">Accounts Payable (Pending Vendor Bills)</h2>
                 <div className="flex items-center gap-2">
                   <TableDownload
                     filename={`${fileScope}-supplier-bills-unpaid`}
                     rows={() => [
-                      ["Bill", "Supplier", "Shop", "Still owed"],
+                      ["Bill", "Supplier", "Shop", "Payable Balance"],
                       ...pack.creditors.map((row) => [row.invoice, row.supplier, row.shop, row.owed]),
                     ]}
                   />
@@ -568,7 +569,7 @@ export function ReportsClientView({
                 </div>
               </>
             }
-            columns={[{ label: "Bill" }, { label: "Shop" }, { label: "Still owed", align: "right" }]}
+            columns={[{ label: "Bill" }, { label: "Shop" }, { label: "Payable Balance", align: "right" }]}
             footer={
               <TablePager
                 page={creditorsPager.page}

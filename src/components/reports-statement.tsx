@@ -21,24 +21,24 @@ export function ReportsStatement({ data }: { data: ReportsPack }) {
             </div>
           </div>
           <div className="text-right">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#7CFF86]">Report for the boss</p>
-            <p className="mt-1 text-xl font-semibold">How the shops are doing</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#7CFF86]">Executive Summary</p>
+            <p className="mt-1 text-xl font-semibold">Consolidated Branch Performance</p>
             <p className="font-mono text-xs text-white/80">{data.statementRef}</p>
             <p className="text-[11px] text-white/70">Lagos time {formatLagosStamp(new Date(data.preparedAt))}</p>
           </div>
         </div>
         <div className="relative mt-4 grid gap-3 border-t border-white/15 pt-3 text-[12px] sm:grid-cols-3">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">Which shops</p>
+            <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">Branch Scope</p>
             <p className="font-semibold">{data.scope}</p>
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">Written by</p>
+            <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">Prepared By</p>
             <p className="font-semibold">{data.preparedBy}</p>
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">What is inside</p>
-            <p className="font-semibold">Every finished record you are allowed to see</p>
+            <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">Report Scope</p>
+            <p className="font-semibold">Consolidated audit & transaction records</p>
           </div>
         </div>
       </header>
@@ -55,14 +55,14 @@ export function ReportsStatement({ data }: { data: ReportsPack }) {
       </div>
 
       <div className="px-6 py-4">
-        <h3 className="text-sm font-semibold">Shop by shop</h3>
+        <h3 className="text-sm font-semibold">Branch Performance Breakdown</h3>
         <table className="mt-2 w-full text-[11px]">
           <thead>
             <tr className="border-y border-slate-200 bg-slate-50 text-left text-[10px] uppercase tracking-wider text-slate-500">
-              <th className="py-1.5 pr-2">Shop</th>
-              <th className="py-1.5 pr-2 text-right">Sales</th>
-              <th className="py-1.5 pr-2 text-right">Revenue</th>
-              <th className="py-1.5 text-right">Collected</th>
+              <th className="py-1.5 pr-2">Branch</th>
+              <th className="py-1.5 pr-2 text-right">Sales Volume</th>
+              <th className="py-1.5 pr-2 text-right">Total Sales</th>
+              <th className="py-1.5 text-right">Payments Received</th>
             </tr>
           </thead>
           <tbody>
@@ -83,7 +83,7 @@ export function ReportsStatement({ data }: { data: ReportsPack }) {
 
       <div className="grid border-t border-slate-200 md:grid-cols-2">
         <div className="border-b border-slate-200 px-6 py-4 md:border-b-0 md:border-r">
-          <h3 className="text-sm font-semibold">Customers still owe us</h3>
+          <h3 className="text-sm font-semibold">Accounts Receivable (Receivables)</h3>
           <table className="mt-2 w-full text-[11px]">
             <tbody>
               {data.debtors.map((row) => (
@@ -93,13 +93,13 @@ export function ReportsStatement({ data }: { data: ReportsPack }) {
                 </tr>
               ))}
               {data.debtors.length === 0 ? (
-                <tr><td colSpan={2} className="py-3 text-slate-500">No customer owes us anything.</td></tr>
+                <tr><td colSpan={2} className="py-3 text-slate-500">No outstanding receivables.</td></tr>
               ) : null}
             </tbody>
           </table>
         </div>
         <div className="px-6 py-4">
-          <h3 className="text-sm font-semibold">Supplier bills we have not paid</h3>
+          <h3 className="text-sm font-semibold">Accounts Payable (Suppliers Payment)</h3>
           <table className="mt-2 w-full text-[11px]">
             <tbody>
               {data.creditors.map((row) => (
@@ -109,7 +109,7 @@ export function ReportsStatement({ data }: { data: ReportsPack }) {
                 </tr>
               ))}
               {data.creditors.length === 0 ? (
-                <tr><td colSpan={2} className="py-3 text-slate-500">We have paid every supplier bill.</td></tr>
+                <tr><td colSpan={2} className="py-3 text-slate-500">All vendor accounts settled.</td></tr>
               ) : null}
             </tbody>
           </table>
@@ -117,7 +117,7 @@ export function ReportsStatement({ data }: { data: ReportsPack }) {
       </div>
 
       <div className="border-t border-slate-200 px-6 py-4">
-        <h3 className="text-sm font-semibold">Items running low</h3>
+        <h3 className="text-sm font-semibold">Inventory Threshold Alerts</h3>
         <table className="mt-2 w-full text-[11px]">
           <thead>
             <tr className="border-y border-slate-200 bg-slate-50 text-left text-[10px] uppercase tracking-wider text-slate-500">

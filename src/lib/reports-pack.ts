@@ -28,13 +28,13 @@ export type ReportsPack = {
 
 export function reportsKpis(data: ReportsPack) {
   return [
-    { label: "Money from sales", value: data.totals.revenue, money: true },
-    { label: "Money we collected", value: data.totals.collected, money: true },
-    { label: "Bills the boss approved", value: data.totals.expenses, money: true },
-    { label: "What the stock cost us", value: data.totals.stock, money: true },
-    { label: "How many sales", value: data.totals.invoices, money: false },
-    { label: "Customers still owe us", value: data.totals.owing, money: true },
-    { label: "Money from swaps", value: data.totals.swaps, money: true },
-    { label: "Things brought back", value: data.totals.returns, money: false },
+    { label: "Total sales", value: data.totals.revenue, money: true },
+    { label: "Total payments received", value: data.totals.collected, money: true },
+    { label: "Approved expenses", value: data.totals.expenses, money: true },
+    { label: "Inventory valuation (Cost)", value: data.totals.stock, money: true },
+    { label: "Sales volume", value: data.totals.invoices, money: false },
+    { label: "Receivables", value: data.totals.owing, money: true },
+    { label: "Trade-in value", value: data.totals.swaps, money: true },
+    { label: "Returned products", value: data.totals.returns, money: false },
   ]
 }

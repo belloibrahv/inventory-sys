@@ -37,7 +37,7 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
             </div>
           </div>
           <div className="text-right">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#7CFF86]">Money report</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#7CFF86]">Financial Audit Statement</p>
             <p className="mt-1 text-xl font-semibold">{booksRangeTitle(data.range)}</p>
             <p className="font-mono text-xs text-white/80">{data.statementRef}</p>
             <p className="text-[11px] text-white/70">Lagos time {formatLagosStamp(new Date(data.preparedAt))}</p>
@@ -45,54 +45,32 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
         </div>
         <div className="relative mt-5 grid gap-3 border-t border-white/15 pt-4 text-[12px] sm:grid-cols-3">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">Shop</p>
+            <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">Shop Location</p>
             <p className="font-semibold">{data.shopName}</p>
             <p className="text-white/70">{data.shopCode}</p>
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">This period</p>
+            <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">Period Covered</p>
             <p className="font-semibold">{period}</p>
-            {data.range !== "day" ? <p className="text-white/70">{data.from} to {data.to}</p> : null}
+            <p className="text-white/70">Compared with {compared}</p>
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">
-              {data.comparePicked ? "Compared with (picked)" : "Compared with (previous)"}
-            </p>
-            <p className="font-semibold">{compared}</p>
+            <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">Prepared By</p>
+            <p className="font-semibold">{data.preparedBy}</p>
+            <p className="text-white/70">{data.openCount === 0 ? "Books clean & balanced" : `${data.openCount} open issue(s)`}</p>
           </div>
-        </div>
-      </header>
-
-      {/*
-        The client, reading the verdict as an auditor, could not act on it: "it has
-        been stated clearly, but there's no way we can maneuver and do all this ...
-        all these angle that is showing that there is a need for rectification
-        should be clickable and take us to where the problem is so that we can
-        resolve it at a go." So each open item is named here and goes straight to
-        the screen where it is fixed.
-      */}
-      <div className={`border-b px-6 py-4 ${data.openCount ? "border-rose-200 bg-rose-50" : "border-emerald-200 bg-emerald-50"}`}>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">What the books are saying</p>
-            <p className="mt-1 text-sm font-medium text-slate-900">{data.verdict}</p>
-          </div>
-          <p className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${data.openCount ? "bg-rose-600 text-white" : "bg-[#18C020] text-white"}`}>
-            {data.openCount ? `${data.openCount} to fix` : "All clear"}
-          </p>
         </div>
         {openPapers.length ? (
-          <div className="mt-3 flex flex-wrap gap-2 print:hidden">
+          <div className="relative mt-4 flex flex-wrap gap-2 border-t border-white/15 pt-3">
             {openPapers.map((row) =>
               row.href ? (
                 <Link
                   key={row.label}
                   href={row.href}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-rose-300 bg-white px-3 py-1 text-[11px] font-semibold text-rose-800 transition-colors hover:bg-rose-100"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-rose-300 bg-white px-3 py-1 text-[11px] font-semibold text-rose-800 shadow-xs hover:bg-rose-50 transition-colors"
                 >
                   <AlertCircle className="h-3 w-3" />
-                  Go and fix: {row.label}
-                  <ArrowRight className="h-3 w-3" />
+                  {row.label} &rarr;
                 </Link>
               ) : (
                 <span
@@ -106,14 +84,14 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
             )}
           </div>
         ) : null}
-      </div>
+      </header>
 
       <div className="grid grid-cols-4 divide-x divide-slate-200 border-b border-slate-200">
         {[
-          ["How many sales", String(data.salesCount)],
-          ["Money we collected", formatCurrency(data.collected)],
-          ["Money from sales", formatCurrency(data.revenue)],
-          ["Money we spent", formatCurrency(data.moneyOut)],
+          ["Sales volume", String(data.salesCount)],
+          ["Payment received", formatCurrency(data.collected)],
+          ["Total sales", formatCurrency(data.revenue)],
+          ["Total expenditure", formatCurrency(data.moneyOut)],
         ].map(([label, value]) => (
           <div key={label} className="px-4 py-3">
             <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">{label}</p>
@@ -125,18 +103,18 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
       <div className="px-6 py-5">
         <div className="mb-3 flex items-end justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold">This time against last time</h3>
-            <p className="text-[11px] text-slate-500">How this time compares with {compared}.</p>
+            <h3 className="text-sm font-semibold">Comparative Performance Analysis</h3>
+            <p className="text-[11px] text-slate-500">Performance variance against {compared}.</p>
           </div>
-          <p className="text-[10px] uppercase tracking-[0.16em] text-[#001BCE]">Like a bank statement</p>
+          <p className="text-[10px] uppercase tracking-[0.16em] text-[#001BCE]">Executive Audit Pack</p>
         </div>
         <table className="w-full text-[12px]">
           <thead>
             <tr className="border-y border-slate-200 bg-slate-50 text-left text-[10px] uppercase tracking-wider text-slate-500">
-              <th className="py-2 pr-2">Line</th>
-              <th className="py-2 pr-2 text-right">This period</th>
-              <th className="py-2 pr-2 text-right">Compared</th>
-              <th className="py-2 text-right">Up or down</th>
+              <th className="py-2 pr-2">Line Item</th>
+              <th className="py-2 pr-2 text-right">Current Period</th>
+              <th className="py-2 pr-2 text-right">Comparative</th>
+              <th className="py-2 text-right">Variance</th>
             </tr>
           </thead>
           <tbody>
@@ -157,8 +135,8 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
 
       <div className="grid border-t border-slate-200 md:grid-cols-2">
         <div className="border-b border-slate-200 px-6 py-5 md:border-b-0 md:border-r">
-          <h3 className="text-sm font-semibold">How the money adds up</h3>
-          <p className="mb-3 text-[11px] text-slate-500">Read it from top to bottom. The system checked that these numbers balance.</p>
+          <h3 className="text-sm font-semibold">Financial Reconciliation Summary</h3>
+          <p className="mb-3 text-[11px] text-slate-500">Structured accounting breakdown. All figures verified to balance.</p>
           <div className="space-y-1.5 text-[12px]">
             {moneyLines.map((row) => (
               <div key={row.label} className={`flex justify-between gap-3 ${row.total ? "border-t border-slate-200 pt-1.5 font-semibold text-slate-900" : "text-slate-600"}`}>
@@ -170,10 +148,10 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
         </div>
         <div className="px-6 py-5">
           <div className="flex items-center justify-between mb-1">
-            <h3 className="text-sm font-semibold">Checks on the books</h3>
-            <span className="text-[10px] text-slate-500 font-medium">Tap a red one to go and fix it</span>
+            <h3 className="text-sm font-semibold">Internal Audit Controls & Verifications</h3>
+            <span className="text-[10px] text-slate-500 font-medium">Click any discrepancy to inspect</span>
           </div>
-          <p className="mb-3 text-[11px] text-slate-500">Each check takes you straight to the page where you fix it.</p>
+          <p className="mb-3 text-[11px] text-slate-500">Each control links directly to the audit log or ledger view.</p>
           <div className="space-y-2">
             {data.papers.map((row, index) => {
               const content = (
@@ -223,7 +201,7 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
 
       <div className="grid border-t border-slate-200 md:grid-cols-2">
         <div className="border-b border-slate-200 px-6 py-5 md:border-b-0 md:border-r">
-          <h3 className="text-sm font-semibold">Money collected by each staff</h3>
+          <h3 className="text-sm font-semibold">Payments received by staff</h3>
           <div className="mt-3 space-y-1.5 text-[12px]">
             {data.byStaff.map((row) => (
               <p key={row.name} className="flex justify-between gap-3">
@@ -235,34 +213,34 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
           </div>
         </div>
         <div className="px-6 py-5">
-          <h3 className="text-sm font-semibold">What is still owed, and the till</h3>
+          <h3 className="text-sm font-semibold">Receivables, payables, and cash drawer</h3>
           <div className="mt-3 space-y-1.5 text-[12px]">
             <p className="flex justify-between gap-3">
-              <span className="text-slate-500">Customers still owe us</span>
+              <span className="text-slate-500">Receivables</span>
               <Link href="/customers" className="tabular-nums font-semibold text-primary hover:underline">
                 {formatCurrency(data.customersOwe)}
               </Link>
             </p>
             <p className="flex justify-between gap-3">
-              <span className="text-slate-500">We still owe suppliers</span>
+              <span className="text-slate-500">Suppliers payment (Payables)</span>
               <Link href="/suppliers" className="tabular-nums font-semibold text-primary hover:underline">
                 {formatCurrency(data.supplierOwed)}
               </Link>
             </p>
             <p className="flex justify-between gap-3">
-              <span className="text-slate-500">Sales with no buyer name</span>
+              <span className="text-slate-500">Walk-in transactions</span>
               <span>{data.walkIns}</span>
             </p>
             <p className="flex justify-between gap-3">
-              <span className="text-slate-500">Cash the till should have</span>
+              <span className="text-slate-500">Expected cash in till</span>
               <span className="tabular-nums font-medium">{formatCurrency(data.expectedCash)}</span>
             </p>
             <p className="flex justify-between gap-3">
-              <span className="text-slate-500">Cash we counted (Cash remitted)</span>
+              <span className="text-slate-500">Cash remitted</span>
               <span className="tabular-nums">{data.countedCash == null ? "Not closed" : formatCurrency(data.countedCash)}</span>
             </p>
             <p className="flex justify-between gap-3 font-semibold">
-              <span>Shortage / Overage (Short or plenty)</span>
+              <span>Shortage / Overage</span>
               <span className={`tabular-nums ${data.variance && data.variance !== 0 ? "text-rose-600" : "text-emerald-700"}`}>
                 {data.variance == null ? "Not closed" : formatCurrency(data.variance)}
               </span>

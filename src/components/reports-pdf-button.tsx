@@ -147,16 +147,16 @@ export function ReportsPdfButton({ data }: { data: ReportsPack }) {
       })
       y += 34
 
-      section("Shop by shop")
+      section("Branch Performance Breakdown")
       doc.setTextColor(...MUTED)
       doc.setFontSize(7)
-      doc.text("Shop", left + 1, y)
+      doc.text("Branch", left + 1, y)
       doc.text("Sales", left + 92, y, { align: "right" })
-      doc.text("Money from sales", left + 138, y, { align: "right" })
-      doc.text("Collected", right - 1, y, { align: "right" })
+      doc.text("Total Sales", left + 138, y, { align: "right" })
+      doc.text("Payments Received", right - 1, y, { align: "right" })
       y += 5
       if (data.byShop.length === 0) {
-        row("No finished sale here", "")
+        row("No completed sales in this period", "")
       } else {
         data.byShop.forEach((item, index) => {
           ensure(6.5)
@@ -176,27 +176,27 @@ export function ReportsPdfButton({ data }: { data: ReportsPack }) {
         })
       }
 
-      section("Customers still owe us")
+      section("Accounts Receivable (Customer Balances)")
       if (data.debtors.length === 0) {
-        row("No customer owes us anything", "")
+        row("No outstanding receivables", "")
       } else {
         data.debtors.forEach((item, index) => {
           row(`${item.name}  ·  ${item.shop}`, formatPdfMoney(item.amount), index % 2 ? PAPER : undefined)
         })
       }
 
-      section("Supplier bills we have not paid")
+      section("Accounts Payable (Pending Vendor Bills)")
       if (data.creditors.length === 0) {
-        row("We have paid every supplier bill", "")
+        row("All vendor accounts settled", "")
       } else {
         data.creditors.forEach((item, index) => {
           row(`${item.invoice}  ·  ${item.supplier}  ·  ${item.shop}`, formatPdfMoney(item.owed), index % 2 ? PAPER : undefined)
         })
       }
 
-      section("Items running low")
+      section("Inventory Threshold Alerts")
       if (data.lowStock.length === 0) {
-        row("No item is running low", "")
+        row("No items below minimum threshold", "")
       } else {
         data.lowStock.forEach((item, index) => {
           row(`${item.product}  ·  ${item.shop}`, `${item.quantity} / min ${item.min}`, index % 2 ? PAPER : undefined)

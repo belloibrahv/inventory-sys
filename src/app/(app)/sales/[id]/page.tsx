@@ -69,10 +69,16 @@ export default async function SaleDetailPage({
         title={sale.invoiceNumber}
         description={`${sale.branch.name} · ${formatDateTime(sale.saleDate)} · posted by ${sale.user.name}`}
         actions={
-          <>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/pos"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 transition-colors"
+            >
+              + Next Customer / New Sale
+            </Link>
             <ReceiptPdfButton data={receiptData} />
             <PrintButton label="Print invoice" />
-          </>
+          </div>
         }
       />
       <div className="rounded-lg border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-warning print:hidden">

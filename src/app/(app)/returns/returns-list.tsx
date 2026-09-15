@@ -102,7 +102,7 @@ export function ReturnsList({ rows }: { rows: ReturnRow[] }) {
               <p className="mt-2 text-xs text-muted-foreground">Fault class: {row.faultClass}</p>
               {row.status === "PENDING" ? (
                 <p className="mt-3 text-xs text-warning">
-                  Waiting for the boss to say yes. Nobody can sell this IMEI until then.
+                  Awaiting management approval. Item is locked from point of sale until resolved.
                 </p>
               ) : null}
               {row.status === "APPROVED" ? (

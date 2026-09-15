@@ -12,7 +12,8 @@ import { Select } from "@/components/ui/select"
 import { pushSaleQueue } from "@/lib/offline-sales"
 import { applyParkedToTillSnapshot, readTillSnapshot, saveTillSnapshot, type TillBranch, type TillCustomer, type TillImei, type TillProduct, type TillSellLock, type TillSnapshot } from "@/lib/till-catalog"
 import { formatCurrency, money } from "@/lib/utils"
-import { Trash2, RotateCcw } from "lucide-react"
+import { formatCondition } from "@/lib/status"
+import { Trash2, RotateCcw, PlusCircle } from "lucide-react"
 import { useDecision } from "@/hooks/use-decision"
 
 export function PosClient({
@@ -61,17 +62,44 @@ export function PosClient({
   const [newName, setNewName] = useState("")
   const [newPhone, setNewPhone] = useState("")
   const [savingCustomer, setSavingCustomer] = useState(false)
-  const [cart, setCart] = useState<Array<{ productId: string; imeiId?: string; name: string; imei?: string; unitPrice: number; minPrice: number; quantity: number; warrantyDays?: number }>>([])
+  const [cart, setCart] = useState<
+    Array<{
+      productId: string
+      imeiId?: string
+      name: string
+      imei?: string
+      unitPrice: number
+      minPrice: number
+      quantity: number
+      warrantyDays?: number
+      storage?: string | null
+      condition?: string | null
+      color?: string | null
+    }>
+  >([])
   const [busy, setBusy] = useState(false)
   const { confirm } = useDecision()
 
+  function resetSale() {
+    setCart([])
+    setPaid(0)
+    setCustomerId("")
+    setNotes("")
+    setWholesale(false)
+    setQuery("")
+  }
+
   const handleClearCart = async () => {
-    if (cart.length === 0) return
+    if (cart.length === 0) {
+      resetSale()
+      toast.info("Register cleared. Ready for next transaction.")
+      return
+    }
     const ok = await confirm({
-      title: "Discard Active Sale?",
-      description: `You currently have ${cart.length} item(s) scanned in this transaction. Discarding will clear the active register and release scanned devices back to inventory.`,
+      title: "Start New Transaction / Discard Cart?",
+      description: `You currently have ${cart.length} item(s) scanned in this transaction. Starting a new transaction will clear the active register and release scanned devices back to inventory.`,
       tone: "danger",
-      confirmLabel: "Yes, Discard Cart",
+      confirmLabel: "Yes, Start New Transaction",
       cancelLabel: "Keep Cart",
       impactItems: [
         `${cart.length} item(s) will be cleared immediately`,
@@ -79,8 +107,8 @@ export function PosClient({
       ],
     })
     if (ok) {
-      setCart([])
-      setPaid(0)
+      resetSale()
+      toast.info("Register cleared. Ready for next customer.")
     }
   }
 
@@ -267,6 +295,9 @@ export function PosClient({
         minPrice: money(item.product.minimumPrice),
         quantity: 1,
         warrantyDays: 0,
+        storage: item.product.storage,
+        condition: item.product.condition,
+        color: item.product.color,
       },
     ])
     setPaidTo(total + price)
@@ -291,6 +322,9 @@ export function PosClient({
           minPrice: money(product.minimumPrice),
           quantity: 1,
           warrantyDays: 0,
+          storage: product.storage,
+          condition: product.condition,
+          color: product.color,
         },
       ]
     })
@@ -374,6 +408,7 @@ export function PosClient({
       return
     }
     toast.success("Sale saved. Nobody can change this invoice.")
+    resetSale()
     // Straight to the receipt, printing itself, so the customer is handed it
     // before they leave the counter.
     router.push(`/sales/${result.saleId}?receipt=1`)
@@ -397,6 +432,18 @@ export function PosClient({
       ) : null}
       <div className="space-y-4">
         <div className="surface-card space-y-3 p-4">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Scan or Search Product
+            </span>
+            <button
+              type="button"
+              onClick={handleClearCart}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+            >
+              <PlusCircle className="h-3.5 w-3.5" /> Start New Sale / Reset
+            </button>
+          </div>
           <ScanField onScan={takeScan} placeholder="Scan IMEI to sell, then Enter" />
           <Input
             value={query}
@@ -407,7 +454,7 @@ export function PosClient({
                 takeScan(query)
               }
             }}
-            placeholder="Or type an accessory name"
+            placeholder="Or type an accessory name or device model"
           />
           {query ? (
             <div className="mt-3 space-y-2">
@@ -417,11 +464,27 @@ export function PosClient({
                   onClick={() => addImei(item)}
                   className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left hover:bg-muted"
                 >
-                  <span>
+                  <div>
                     <span className="block text-sm font-medium">{item.product.name}</span>
-                    <span className="text-xs text-muted-foreground">{item.imei1}{item.serialNumber ? ` · ${item.serialNumber}` : ""}</span>
-                  </span>
-                  <span className="text-sm">{formatCurrency(money(item.product.sellingPrice))}</span>
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
+                      <span className="font-mono text-foreground font-semibold">{item.imei1}</span>
+                      {item.serialNumber ? <span>· {item.serialNumber}</span> : null}
+                      {item.product.storage ? (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200 font-semibold text-[10px]">
+                          {item.product.storage}
+                        </span>
+                      ) : null}
+                      {item.product.condition ? (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 font-medium text-[10px]">
+                          {formatCondition(item.product.condition)}
+                        </span>
+                      ) : null}
+                      {item.product.color ? (
+                        <span className="text-[11px] text-muted-foreground">· {item.product.color}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <span className="text-sm font-semibold">{formatCurrency(money(item.product.sellingPrice))}</span>
                 </button>
               ))}
               {accessoryHits.slice(0, 4).map((product) => (
@@ -430,13 +493,24 @@ export function PosClient({
                   onClick={() => addAccessory(product)}
                   className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left hover:bg-muted"
                 >
-                  <span>
-                    <span className="block text-sm">{product.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      Accessory · {product.stock.find((row) => row.branchId === branchId)?.quantity ?? 0} on hand
-                    </span>
-                  </span>
-                  <span className="text-sm">{formatCurrency(money(product.sellingPrice))}</span>
+                  <div>
+                    <span className="block text-sm font-medium">{product.name}</span>
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
+                      <span>Accessory · {product.stock.find((row) => row.branchId === branchId)?.quantity ?? 0} on hand</span>
+                      {product.storage ? (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200 font-semibold text-[10px]">
+                          {product.storage}
+                        </span>
+                      ) : null}
+                      {product.condition ? (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 font-medium text-[10px]">
+                          {formatCondition(product.condition)}
+                        </span>
+                      ) : null}
+                      {product.color ? <span className="text-[11px] text-muted-foreground">· {product.color}</span> : null}
+                    </div>
+                  </div>
+                  <span className="text-sm font-semibold">{formatCurrency(money(product.sellingPrice))}</span>
                 </button>
               ))}
               {filtered.length === 0 && accessoryHits.length === 0 ? (
@@ -450,22 +524,22 @@ export function PosClient({
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Current Transaction Items ({cart.length})
             </span>
-            {cart.length > 0 ? (
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={handleClearCart}
                 className="inline-flex items-center gap-1.5 text-xs font-semibold text-destructive hover:underline"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
-                Clear Cart
+                {cart.length > 0 ? "Clear Cart / New Sale" : "New Sale"}
               </button>
-            ) : null}
+            </div>
           </div>
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left text-muted-foreground">
               <tr>
-                <th className="px-4 py-3">Item</th>
-                <th className="px-4 py-3">IMEI</th>
+                <th className="px-4 py-3">Device / Item</th>
+                <th className="px-4 py-3">IMEI / Serial</th>
                 <th className="px-4 py-3">Warranty</th>
                 <th className="px-4 py-3">Price</th>
                 <th className="px-4 py-3"></th>
@@ -476,6 +550,25 @@ export function PosClient({
                 <tr key={`${line.imeiId ?? line.productId}-${index}`} className="border-t border-border">
                   <td className="px-4 py-3">
                     <p className="font-medium">{line.name}{line.quantity > 1 ? ` × ${line.quantity}` : ""}</p>
+                    {(line.storage || line.condition || line.color) ? (
+                      <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                        {line.storage ? (
+                          <span className="inline-flex items-center px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200 font-semibold text-[10px]">
+                            {line.storage}
+                          </span>
+                        ) : null}
+                        {line.condition ? (
+                          <span className="inline-flex items-center px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 font-medium text-[10px]">
+                            {formatCondition(line.condition)}
+                          </span>
+                        ) : null}
+                        {line.color ? (
+                          <span className="text-[11px] text-muted-foreground">
+                            · {line.color}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {line.unitPrice < line.minPrice ? (
                       <p className="text-xs text-danger">
                         Below lowest price {formatCurrency(line.minPrice)}

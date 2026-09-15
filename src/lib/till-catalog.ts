@@ -6,7 +6,14 @@ export type TillImei = {
   serialNumber: string | null
   productId: string
   branchId: string
-  product: { name: string; sellingPrice: number; minimumPrice: number }
+  product: {
+    name: string
+    sellingPrice: number
+    minimumPrice: number
+    storage?: string | null
+    condition?: string | null
+    color?: string | null
+  }
 }
 
 export type TillProduct = {
@@ -18,6 +25,9 @@ export type TillProduct = {
   serialized: boolean
   brand: { name: string }
   stock: Array<{ branchId: string; quantity: number }>
+  storage?: string | null
+  condition?: string | null
+  color?: string | null
 }
 
 export type TillCustomer = {
