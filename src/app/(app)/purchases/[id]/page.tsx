@@ -4,6 +4,7 @@ import { reverseSupplierPayment } from "@/app/actions/access"
 import { bookPurchaseAsComing } from "@/app/actions/incoming"
 import { getPurchase, payPurchase, receivePurchaseImeis } from "@/app/actions/ops"
 import { ExportCsv } from "@/components/export-csv"
+import { prisma } from "@/lib/prisma"
 import { isSuperAdmin } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { ActionForm } from "@/components/action-form"
@@ -19,6 +20,10 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
   const { id } = await params
   const [me, purchase] = await Promise.all([requireUser(), getPurchase(id)])
   if (!purchase) notFound()
+  const opening = await prisma.openingStock.findUnique({
+    where: { purchaseId: purchase.id },
+    select: { status: true, branchId: true },
+  })
   const item = purchase.items[0]
   const remaining = item ? item.quantity - item.receivedQty : 0
   const due = money(purchase.totalAmount) - money(purchase.paidAmount)
@@ -86,6 +91,14 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
             </div>
           </div>
           {purchase.notes ? <p className="text-muted-foreground">{purchase.notes}</p> : null}
+          {opening ? (
+            <p>
+              This is {purchase.branch.name}&apos;s opening stock ({opening.status === "OPEN" ? "open for counting" : "closed"}).{" "}
+              <Link href={`/opening-stock?branchId=${opening.branchId}`} className="font-medium text-primary hover:underline">
+                {opening.status === "OPEN" ? "Correct & close it" : "See the closed opening stock"}
+              </Link>
+            </p>
+          ) : null}
         </div>
       ) : null}
       <WorkflowSteps

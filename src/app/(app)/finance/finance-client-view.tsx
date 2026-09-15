@@ -16,6 +16,7 @@ import {
 import { formatCurrency, formatDate, money } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { DrilldownModal } from "@/components/drilldown-modal"
+import { TableDownload } from "@/components/table-download"
 import {
   ShopTag,
   StatCard,
@@ -198,9 +199,18 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
           caption={
             <>
               <h2 className="text-sm font-semibold tracking-tight">Customers who still owe us</h2>
-              <Button asChild variant="ghost" size="sm">
-                <Link href="/customers">All customers</Link>
-              </Button>
+              <div className="flex items-center gap-2">
+                <TableDownload
+                  filename="customers-owing"
+                  rows={() => [
+                    ["Customer", "Shop", "Still owed"],
+                    ...data.debtors.map((row) => [row.name, row.branch.code, money(row.currentBalance)]),
+                  ]}
+                />
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/customers">All customers</Link>
+                </Button>
+              </div>
             </>
           }
           columns={[{ label: "Customer" }, { label: "Shop" }, { label: "Still owed", align: "right" }]}
@@ -242,9 +252,15 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
           caption={
             <>
               <h2 className="text-sm font-semibold tracking-tight">Suppliers we still owe</h2>
-              <Button asChild variant="ghost" size="sm">
-                <Link href="/suppliers">All suppliers</Link>
-              </Button>
+              <div className="flex items-center gap-2">
+                <TableDownload
+                  filename="suppliers-owed"
+                  rows={() => [["Supplier", "Still owed"], ...data.creditors.map((row) => [row.name, row.owed])]}
+                />
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/suppliers">All suppliers</Link>
+                </Button>
+              </div>
             </>
           }
           columns={[{ label: "Supplier" }, { label: "Still owed", align: "right" }]}
@@ -283,6 +299,26 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
         onClose={() => setLedger(null)}
         eyebrow="Day-by-day build-up"
         title={ledger === "CASH" ? "Cash account (the till)" : "Bank account (POS and transfers)"}
+        download={
+          account
+            ? {
+                filename: `${ledger === "CASH" ? "cash" : "bank"}-account-${new Date().toISOString().slice(0, 10)}`,
+                rows: () => [
+                  ["Date", "Shop", "Money in or out", "Category", "What it was", "Amount"],
+                  ...account.entries.map((entry) => [
+                    new Date(entry.date).toISOString().slice(0, 10),
+                    entry.branch,
+                    entry.type === "IN" ? "In" : "Out",
+                    entry.category,
+                    entry.description,
+                    entry.amount,
+                  ]),
+                  [],
+                  ["Balance", "", "", "", "", account.balance],
+                ],
+              }
+            : undefined
+        }
         summary={
           account ? (
             <>

@@ -132,6 +132,18 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
   const shop = await prisma.branch.findFirst({ where: { id: branchId, isActive: true } })
   if (!shop) return { error: "Pick the shop this file belongs to: Iwo Road, Bodija, or Challenge." }
 
+  // One opening stock per shop. Once it exists, the count sheet on Correct &
+  // close opening stock is how it changes, so a second workbook cannot double it.
+  const opening = await prisma.openingStock.findUnique({ where: { branchId: shop.id }, select: { status: true } })
+  if (opening) {
+    return {
+      error:
+        opening.status === "OPEN"
+          ? `${shop.name} already has opening stock. Correct it with the count sheet on Correct & close opening stock.`
+          : `${shop.name}'s opening stock is closed. New goods go on a Supplier bill.`,
+    }
+  }
+
   const supplierId = String(formData.get("supplierId") || "")
   const supplier = await prisma.supplier.findFirst({ where: { id: supplierId, isActive: true } })
   if (!supplier) return { error: "Pick the supplier these goods were bought from." }
@@ -267,6 +279,8 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
     },
   })
 
+  await prisma.openingStock.create({ data: { branchId: shop.id, purchaseId: purchase.id } })
+
   const unitPayload = plan.units.map((row) => {
     const productId = productIdByKey.get(row.productKey)
     if (!productId) throw new Error("Something went wrong while saving that item. Try the upload again.")
@@ -364,6 +378,7 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
   })
 
   if (phonesAdded === 0 && pieceLines === 0) {
+    await prisma.openingStock.deleteMany({ where: { purchaseId: purchase.id } })
     await prisma.purchase.delete({ where: { id: purchase.id } })
     await trail(
       user.id,

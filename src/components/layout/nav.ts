@@ -14,6 +14,7 @@ import {
   Handshake,
   LayoutDashboard,
   ListOrdered,
+  Lock,
   Package,
   PackagePlus,
   PlusCircle,
@@ -105,6 +106,7 @@ export const navGroups: NavGroup[] = [
           },
         ],
       },
+      { name: "Opening stock", href: "/opening-stock", icon: Lock },
       {
         name: "Phones & items",
         href: "/products",

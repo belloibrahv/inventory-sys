@@ -50,6 +50,11 @@ enum ProductTracking {
   NONE
 }
 
+enum OpeningStockStatus {
+  OPEN
+  CLOSED
+}
+
 enum IncomingStatus {
   COMING
   PENDING_APPROVAL
@@ -229,33 +234,33 @@ enum NotificationStatus {
 }
 
 model User {
-  id               String    @id @default(cuid())
-  name             String?
-  email            String    @unique
-  password         String
-  role             UserRole  @default(SALES_EXECUTIVE)
-  branchId         String?
-  branch           Branch?   @relation(fields: [branchId], references: [id])
+  id                 String    @id @default(cuid())
+  name               String?
+  email              String    @unique
+  password           String
+  role               UserRole  @default(SALES_EXECUTIVE)
+  branchId           String?
+  branch             Branch?   @relation(fields: [branchId], references: [id])
   isActive           Boolean   @default(true)
   twoFactorEnabled   Boolean   @default(false)
   totpSecret         String?
   mustChangePassword Boolean   @default(false)
   lastLoginAt        DateTime?
-  lastLoginIp      String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  lastLoginIp        String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  auditLogs     AuditLog[]
-  sales         Sale[]
-  purchases     Purchase[]
-  expenses      Expense[]
-  notifications Notification[]
-  transfers     StockTransfer[]
-  swaps         Swap[]
-  repairs       Repair[]
-  returns       StockReturn[]
-  approvalsReq  Approval[]       @relation("ApprovalRequester")
-  approvalsDec  Approval[]       @relation("ApprovalDecider")
+  auditLogs       AuditLog[]
+  sales           Sale[]
+  purchases       Purchase[]
+  expenses        Expense[]
+  notifications   Notification[]
+  transfers       StockTransfer[]
+  swaps           Swap[]
+  repairs         Repair[]
+  returns         StockReturn[]
+  approvalsReq    Approval[]       @relation("ApprovalRequester")
+  approvalsDec    Approval[]       @relation("ApprovalDecider")
   reconciliations Reconciliation[]
   incomingLots    IncomingLot[]
   dayCloses       DayClose[]
@@ -284,8 +289,8 @@ model Branch {
   sales           Sale[]
   purchases       Purchase[]
   expenses        Expense[]
-  transfersOut    StockTransfer[]   @relation("TransferFrom")
-  transfersIn     StockTransfer[]   @relation("TransferTo")
+  transfersOut    StockTransfer[]  @relation("TransferFrom")
+  transfersIn     StockTransfer[]  @relation("TransferTo")
   reconciliations Reconciliation[]
   customers       Customer[]
   imeiRecords     ImeiRecord[]
@@ -297,6 +302,7 @@ model Branch {
   dayCloses       DayClose[]
   parkedSales     ParkedSale[]
   neighborFills   NeighborFill[]
+  openingStock    OpeningStock?
 
   @@index([code])
   @@index([isActive])
@@ -375,21 +381,21 @@ model PriceHistory {
 }
 
 model ImeiRecord {
-  id           String     @id @default(cuid())
-  imei1        String     @unique
-  imei2        String?
-  serialNumber String?
-  productId    String
-  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
-  supplierId   String?
-  supplier     Supplier?  @relation(fields: [supplierId], references: [id])
-  branchId     String
-  branch       Branch     @relation(fields: [branchId], references: [id])
-  status       IMEIStatus @default(RECEIVED)
-  customerId   String?
-  customer     Customer?  @relation(fields: [customerId], references: [id])
-  saleId       String?
-  sale         Sale?      @relation(fields: [saleId], references: [id])
+  id             String     @id @default(cuid())
+  imei1          String     @unique
+  imei2          String?
+  serialNumber   String?
+  productId      String
+  product        Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplierId     String?
+  supplier       Supplier?  @relation(fields: [supplierId], references: [id])
+  branchId       String
+  branch         Branch     @relation(fields: [branchId], references: [id])
+  status         IMEIStatus @default(RECEIVED)
+  customerId     String?
+  customer       Customer?  @relation(fields: [customerId], references: [id])
+  saleId         String?
+  sale           Sale?      @relation(fields: [saleId], references: [id])
   purchaseId     String?
   purchase       Purchase?  @relation(fields: [purchaseId], references: [id])
   notes          String?
@@ -419,18 +425,18 @@ model ImeiRecord {
 }
 
 model Inventory {
-  id            String    @id @default(cuid())
-  productId     String
-  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
-  branchId      String
-  branch        Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  quantity      Int       @default(0)
-  incomingQty   Int       @default(0)
-  reserved      Int       @default(0)
-  minStock      Int       @default(3)
+  id             String    @id @default(cuid())
+  productId      String
+  product        Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  branchId       String
+  branch         Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  quantity       Int       @default(0)
+  incomingQty    Int       @default(0)
+  reserved       Int       @default(0)
+  minStock       Int       @default(3)
   lastStockCheck DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@unique([productId, branchId])
   @@index([branchId])
@@ -488,6 +494,7 @@ model Purchase {
   items        PurchaseItem[]
   incomingLots IncomingLot[]
   imeiRecords  ImeiRecord[]
+  openingStock OpeningStock?
 
   @@index([invoiceNumber])
   @@index([supplierId])
@@ -623,22 +630,22 @@ model LedgerEntry {
 }
 
 model StockReturn {
-  id           String        @id @default(cuid())
-  returnNumber String        @unique
-  customerId   String
-  customer     Customer      @relation(fields: [customerId], references: [id])
-  saleId       String?
-  imeiId       String?
-  imei         ImeiRecord?   @relation(fields: [imeiId], references: [id])
-  branchId     String
-  branch       Branch        @relation(fields: [branchId], references: [id])
-  userId       String
-  user         User          @relation(fields: [userId], references: [id])
-  reason       ReturnReason
-  outcome      ReturnOutcome
-  faultClass   FaultClass    @default(FAULTY_STOCK)
-  status       ReturnStatus  @default(PENDING)
-  refundAmount Decimal?
+  id               String        @id @default(cuid())
+  returnNumber     String        @unique
+  customerId       String
+  customer         Customer      @relation(fields: [customerId], references: [id])
+  saleId           String?
+  imeiId           String?
+  imei             ImeiRecord?   @relation(fields: [imeiId], references: [id])
+  branchId         String
+  branch           Branch        @relation(fields: [branchId], references: [id])
+  userId           String
+  user             User          @relation(fields: [userId], references: [id])
+  reason           ReturnReason
+  outcome          ReturnOutcome
+  faultClass       FaultClass    @default(FAULTY_STOCK)
+  status           ReturnStatus  @default(PENDING)
+  refundAmount     Decimal?
   notes            String?
   supplierId       String?
   supplier         Supplier?     @relation(fields: [supplierId], references: [id])
@@ -1045,4 +1052,31 @@ model RolePermission {
 
   @@unique([role, permKey])
   @@index([role])
+}
+
+/// What one shop opened the software with. Open while it is corrected against a
+/// physical count; Closed once the CEO or main admin says it is final, after
+/// which nothing about it can change and the closing figures below are the
+/// shop's opening position for financial reporting.
+model OpeningStock {
+  id             String             @id @default(cuid())
+  branchId       String             @unique
+  branch         Branch             @relation(fields: [branchId], references: [id])
+  /// The opening bill whose lines are the opening quantities and costs.
+  purchaseId     String             @unique
+  purchase       Purchase           @relation(fields: [purchaseId], references: [id])
+  status         OpeningStockStatus @default(OPEN)
+  closedAt       DateTime?
+  closedBy       String?
+  /// Value at cost, units, and item lines on the day it was closed.
+  closedValue    Decimal?
+  closedQuantity Int?
+  closedLines    Int?
+  /// JSON copy of every line (code, name, qty, cost, lowest and standard price,
+  /// IMEIs) as closed, so later price changes never rewrite the opening.
+  snapshot       String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([status])
 }

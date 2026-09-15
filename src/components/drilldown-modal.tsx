@@ -2,6 +2,7 @@
 
 import { useEffect, type ReactNode } from "react"
 import { X } from "lucide-react"
+import { TableDownload } from "@/components/table-download"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -21,6 +22,7 @@ export function DrilldownModal({
   summary,
   children,
   width = "wide",
+  download,
 }: {
   open: boolean
   onClose: () => void
@@ -29,6 +31,8 @@ export function DrilldownModal({
   summary?: ReactNode
   children: ReactNode
   width?: "wide" | "narrow"
+  /** Every row behind the figure, header first, for the Excel and CSV buttons. */
+  download?: { filename: string; rows: () => Array<Array<string | number>> }
 }) {
   useEffect(() => {
     if (!open) return
@@ -58,14 +62,17 @@ export function DrilldownModal({
             {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
             <h2 className="truncate text-base font-semibold tracking-tight">{title}</h2>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="-mr-1 shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {download ? <TableDownload filename={download.filename} rows={download.rows} /> : null}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="-mr-1 shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         {summary ? (

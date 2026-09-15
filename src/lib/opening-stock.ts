@@ -151,6 +151,9 @@ function mapCondition(raw: string): ProductCondition | null {
   return null
 }
 
+/** The same reading of a hand-written condition, for the opening stock count sheet. */
+export const mapOpeningCondition = mapCondition
+
 function sheetHint(sheet: string): "phone" | "laptop" | "pieces" {
   const key = keyName(sheet)
   if (key.includes("phone") || key.includes("tablet")) return "phone"

@@ -48,6 +48,19 @@ export async function getSellLock(branchId?: string) {
   const user = await requireUser()
   const shopId = await resolveShop(user, branchId)
   if (!shopId) return { locked: false, dates: [] as string[], href: "/finance/close", message: "", branchId: "" }
+  // A shop does not sell while its opening stock is still being counted and
+  // corrected: every sale would move the figures the count is checking.
+  const opening = await prisma.openingStock.findUnique({ where: { branchId: shopId }, select: { status: true } })
+  if (opening?.status === "OPEN") {
+    return {
+      locked: true,
+      dates: [] as string[],
+      href: `/opening-stock?branchId=${shopId}`,
+      message:
+        "This shop's opening stock is still being counted and corrected. Selling starts once the CEO or main admin closes it.",
+      branchId: shopId,
+    }
+  }
   const dates = await getUnclosedBusinessDays(shopId)
   if (!dates.length) return { locked: false, dates, href: "/finance/close", message: "", branchId: shopId }
   return {

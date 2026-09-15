@@ -79,6 +79,9 @@ async function main() {
   }
 
   if (plan.problems.length) throw new Error("Fix the problems above first. Nothing was loaded.")
+  if (await prisma.openingStock.findUnique({ where: { branchId: shop.id } })) {
+    throw new Error(`${shop.name} already has opening stock. Correct it on Correct & close opening stock instead.`)
+  }
   if (!APPLY) {
     console.log("\nDRY RUN - nothing written. Re-run with --apply.")
     return
@@ -150,6 +153,8 @@ async function main() {
       notes: `Opening stock for ${shop.name}, loaded from ${file.split("/").pop()}. Already owned, so the bill is settled.`,
     },
   })
+  // Open until the count is final. The shop does not sell while it is open.
+  await prisma.openingStock.create({ data: { branchId: shop.id, purchaseId: purchase.id } })
 
   // Serialised units: one IMEI or serial row each, and the shelf count follows.
   let phones = 0

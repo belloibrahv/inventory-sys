@@ -897,6 +897,10 @@ export async function completeSwap(formData: FormData) {
   })
   if (!swap || !swap.newImeiId) return { error: "We could not find that swap." }
   if (swap.status === "COMPLETED") return { error: "That swap is already finished." }
+  const opening = await prisma.openingStock.findUnique({ where: { branchId: swap.branchId }, select: { status: true } })
+  if (opening?.status === "OPEN") {
+    return { error: "This shop's opening stock is still being counted. Finish the swap once it is closed." }
+  }
   if (swap.status !== "APPROVED" && !(await canApprove(user.role))) {
     return { error: "Wait for the boss to approve the trade-in value before you collect the difference." }
   }

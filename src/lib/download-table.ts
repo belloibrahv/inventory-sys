@@ -23,6 +23,20 @@ function saveBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
+/** One Excel file with a tab per table, for sheets that belong together. */
+export async function downloadWorkbook(
+  sheets: Array<{ name: string; rows: Array<Array<string | number>> }>,
+  filename: string
+) {
+  const XLSX = await import("xlsx")
+  const book = XLSX.utils.book_new()
+  for (const sheet of sheets) {
+    XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(sheet.rows), sheet.name.slice(0, 31))
+  }
+  const buffer = XLSX.write(book, { bookType: "xlsx", type: "array" }) as ArrayBuffer
+  saveBlob(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), filename)
+}
+
 export async function downloadTable(rows: Array<Array<string | number>>, filename: string, format: TableFormat = "csv") {
   if (format === "xlsx") {
     const XLSX = await import("xlsx")

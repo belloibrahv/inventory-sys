@@ -2,6 +2,7 @@ export const pageTitles: Record<string, string> = {
   "/dashboard": "Home",
   "/uploads": "Upload stock",
   "/uploads/opening-stock": "Opening stock sheet",
+  "/opening-stock": "Correct & close opening stock",
   "/uploads/sheets": "Old Excel & CSV sheets",
   "/products": "Phones & items",
   "/products/new": "Add one item",

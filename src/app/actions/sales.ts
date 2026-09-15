@@ -130,6 +130,13 @@ export async function checkoutSale(input: {
   if (!input.queuedAt || !input.offlineId) {
     const lock = await getSellLock(input.branchId)
     if (lock.locked) return { error: lock.message }
+  } else {
+    // A sale queued offline skips the till-count lock, but never the opening
+    // stock one: that count must not move while it is being checked.
+    const opening = await prisma.openingStock.findUnique({ where: { branchId: input.branchId }, select: { status: true } })
+    if (opening?.status === "OPEN") {
+      return { error: "This shop's opening stock is still being counted and corrected, so it cannot sell yet." }
+    }
   }
 
   const settings = await getAppSettings()

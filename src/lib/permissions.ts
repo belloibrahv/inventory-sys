@@ -255,6 +255,9 @@ export function hrefsForKeys(keys: Set<string>) {
   if ((keys.has("view.audit") || keys.has("view.finance") || keys.has("view.reports")) && !hrefs.includes("/audit/books")) {
     hrefs.push("/audit/books")
   }
+  if ((keys.has("view.uploads") || keys.has("view.reports")) && !hrefs.includes("/opening-stock")) {
+    hrefs.push("/opening-stock")
+  }
   if (!hrefs.includes("/help")) hrefs.push("/help")
   return hrefs
 }

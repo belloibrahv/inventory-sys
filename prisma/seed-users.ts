@@ -171,6 +171,21 @@ async function main() {
     })
   }
 
+  // Opening stock loaded before shops could correct and close it (the OPEN-...
+  // bills from scripts/import-opening-stock.ts) starts Open, so it can be
+  // counted and corrected before the shop sells. Runs once per bill.
+  const openingBills = await prisma.purchase.findMany({
+    where: { paymentMethod: "OPENING_STOCK", openingStock: null },
+    select: { id: true, branchId: true, invoiceNumber: true },
+    orderBy: { createdAt: "asc" },
+  })
+  for (const bill of openingBills) {
+    const taken = await prisma.openingStock.findUnique({ where: { branchId: bill.branchId } })
+    if (taken) continue
+    await prisma.openingStock.create({ data: { branchId: bill.branchId, purchaseId: bill.id } })
+    console.log(`opening stock ${bill.invoiceNumber} is open for counting`)
+  }
+
   const { ensureRolePermissions } = await import("../src/lib/permissions")
   await ensureRolePermissions()
 

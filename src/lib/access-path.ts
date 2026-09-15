@@ -43,6 +43,11 @@ export function pathIsAllowed(pathname: string, allowedHrefs: string[]) {
       allowedHrefs.includes("/audit/books")
     )
   }
+  // The stock uploader corrects opening stock; the CEO, who has Reports but not
+  // Upload stock, reads it and closes it.
+  if (pathname === "/opening-stock" || pathname.startsWith("/opening-stock/")) {
+    return allowedHrefs.includes("/uploads") || allowedHrefs.includes("/reports") || allowedHrefs.includes("/opening-stock")
+  }
   const view = VIEW_HREFS
     .slice()
     .sort((a, b) => b.length - a.length)

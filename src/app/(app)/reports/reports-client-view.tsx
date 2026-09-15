@@ -3,7 +3,8 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Banknote, Package, TrendingDown, TrendingUp } from "lucide-react"
+import { Banknote, Lock, Package, PackagePlus, TrendingDown, TrendingUp } from "lucide-react"
+import type { OpeningReport } from "@/app/actions/opening-stock"
 import { formatCurrency, formatDate, money } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Select } from "@/components/ui/select"
@@ -12,6 +13,7 @@ import { ReportsPdfButton } from "@/components/reports-pdf-button"
 import { PrintButton } from "@/components/print-button"
 import { ExportCsv } from "@/components/export-csv"
 import { DrilldownModal } from "@/components/drilldown-modal"
+import { TableDownload } from "@/components/table-download"
 import {
   ShopTag,
   StatCard,
@@ -53,20 +55,25 @@ type RawInventory = {
 
 type BranchOption = { id: string; name: string; code: string }
 
-type Drilldown = "REVENUE" | "RECEIVED" | "EXPENSES" | "STOCK"
+type Drilldown = "REVENUE" | "RECEIVED" | "EXPENSES" | "STOCK" | "OPENING" | "BOUGHT"
 
 const DRILLDOWN_TITLE: Record<Drilldown, string> = {
   REVENUE: "Every sale that makes up this money",
   RECEIVED: "Every payment we collected in this time",
   EXPENSES: "Every bill we paid in this time",
   STOCK: "Every item that makes up this stock value",
+  OPENING: "Every item each shop opened the software with",
+  BOUGHT: "Every supplier bill after opening stock",
 }
+
+const day = (value: Date | string) => new Date(value).toISOString().slice(0, 10)
 
 export function ReportsClientView({
   pack,
   sales,
   expenses,
   inventory,
+  opening,
   branches,
   selectedBranchId,
 }: {
@@ -74,6 +81,7 @@ export function ReportsClientView({
   sales: RawSale[]
   expenses: RawExpense[]
   inventory: RawInventory[]
+  opening: OpeningReport
   branches: BranchOption[]
   selectedBranchId?: string
 }) {
@@ -82,6 +90,10 @@ export function ReportsClientView({
   const paidSales = sales.filter((sale) => money(sale.paidAmount) > 0)
   const supplierOwed = pack.creditors.reduce((sum, row) => sum + row.owed, 0)
   const scopeKey = selectedBranchId ?? "all"
+  const openingValue = opening.shops.reduce((sum, row) => sum + row.value, 0)
+  const boughtValue = opening.boughtSince.reduce((sum, row) => sum + row.total, 0)
+  const stillOpen = opening.shops.filter((row) => row.status === "OPEN")
+  const fileScope = `${pack.statementRef}`
 
   const byShopPager = usePagedRows(pack.byShop, scopeKey)
   const debtorsPager = usePagedRows(pack.debtors, scopeKey)
@@ -91,6 +103,108 @@ export function ReportsClientView({
   const receivedPager = usePagedRows(paidSales, drilldown === "RECEIVED" ? "RECEIVED" : "idle")
   const expensesPager = usePagedRows(expenses, drilldown === "EXPENSES" ? "EXPENSES" : "idle")
   const stockPager = usePagedRows(inventory, drilldown === "STOCK" ? "STOCK" : "idle")
+  const openingPager = usePagedRows(opening.lines, drilldown === "OPENING" ? "OPENING" : "idle")
+  const boughtPager = usePagedRows(opening.boughtSince, drilldown === "BOUGHT" ? "BOUGHT" : "idle")
+
+  /*
+    "As much as it is clickable, let it be downloadable also ... the details
+    thereat should be downloadable or exportable to an Excel file." Each figure's
+    rows, every one of them, not only the page on screen.
+  */
+  const drillRows: Record<Drilldown, () => Array<Array<string | number>>> = {
+    REVENUE: () => [
+      ["Invoice", "Customer", "Shop", "Date", "Invoice total", "Paid", "Still owed"],
+      ...sales.map((sale) => [
+        sale.invoiceNumber,
+        sale.customer?.name ?? "Walk-in",
+        sale.branch.code,
+        day(sale.saleDate),
+        money(sale.totalAmount),
+        money(sale.paidAmount),
+        money(sale.totalAmount) - money(sale.paidAmount),
+      ]),
+      [],
+      ["Total", "", "", "", pack.totals.revenue],
+    ],
+    RECEIVED: () => [
+      ["Invoice", "Customer", "Shop", "Date", "Amount received"],
+      ...paidSales.map((sale) => [
+        sale.invoiceNumber,
+        sale.customer?.name ?? "Walk-in",
+        sale.branch.code,
+        day(sale.saleDate),
+        money(sale.paidAmount),
+      ]),
+      [],
+      ["Total", "", "", "", pack.totals.collected],
+    ],
+    EXPENSES: () => [
+      ["Voucher", "Category", "What it was for", "Shop", "Date", "Amount"],
+      ...expenses.map((expense) => [
+        expense.expenseNumber,
+        expense.category.replace(/_/g, " ").toLowerCase(),
+        expense.description,
+        expense.branch.code,
+        day(expense.date),
+        money(expense.amount),
+      ]),
+      [],
+      ["Total", "", "", "", "", pack.totals.expenses],
+    ],
+    STOCK: () => [
+      ["Item", "Shop", "Quantity", "Cost price", "Selling price", "Value at cost"],
+      ...inventory.map((row) => [
+        row.product.name,
+        row.branch.code,
+        row.quantity,
+        money(row.product.costPrice),
+        money(row.product.sellingPrice),
+        row.quantity * money(row.product.costPrice),
+      ]),
+      [],
+      ["Total", "", "", "", "", pack.totals.stock],
+    ],
+    OPENING: () => [
+      [
+        "Shop",
+        "Opening stock",
+        "Item code",
+        "Item",
+        "Brand",
+        "Category",
+        "Tracking",
+        "Quantity",
+        "Unit cost",
+        "Lowest selling price",
+        "Standard selling price",
+        "Value at cost",
+        "IMEIs / serials",
+      ],
+      ...opening.lines.map((line) => [
+        line.shop,
+        line.status === "CLOSED" ? "Closed" : "Open",
+        line.sku,
+        line.name,
+        line.brand,
+        line.category,
+        line.tracking === "NONE" ? "Pieces" : line.tracking,
+        line.openingQty,
+        line.costPrice,
+        line.minimumPrice,
+        line.sellingPrice,
+        line.openingQty * line.costPrice,
+        line.identities.join(", "),
+      ]),
+      [],
+      ["Total", "", "", "", "", "", "", "", "", "", "", openingValue],
+    ],
+    BOUGHT: () => [
+      ["Bill", "Supplier", "Shop", "Date", "Bill value", "Paid", "Still owed"],
+      ...opening.boughtSince.map((bill) => [bill.invoiceNumber, bill.supplier, bill.shop, day(bill.date), bill.total, bill.paid, bill.owed]),
+      [],
+      ["Total", "", "", "", boughtValue],
+    ],
+  }
 
   return (
     <div className="space-y-5">
@@ -188,7 +302,33 @@ export function ReportsClientView({
           />
         </StatGrid>
 
+        {/*
+          The opening position and what was bought after it, kept apart: "any
+          financial reporting, it will guide us right to see the actual, clear
+          picture of what we used to open ... then subsequent uploading value".
+        */}
         <StatGrid>
+          <StatCard
+            label="Opening stock"
+            value={formatCurrency(openingValue)}
+            hint={
+              opening.shops.length === 0
+                ? "No shop has loaded opening stock yet"
+                : stillOpen.length
+                  ? `Still being counted: ${stillOpen.map((row) => row.shop).join(", ")}. Not final yet.`
+                  : `Closed for ${opening.shops.map((row) => row.shop).join(", ")}`
+            }
+            icon={<Lock className="h-4 w-4" />}
+            tone={stillOpen.length ? "warning" : "success"}
+            onClick={() => setDrilldown("OPENING")}
+          />
+          <StatCard
+            label="Goods bought after opening stock"
+            value={formatCurrency(boughtValue)}
+            hint={`${opening.boughtSince.length} supplier bill${opening.boughtSince.length === 1 ? "" : "s"}, not counting opening stock`}
+            icon={<PackagePlus className="h-4 w-4" />}
+            onClick={() => setDrilldown("BOUGHT")}
+          />
           <StatCard
             label="Customers still owe us"
             value={formatCurrency(pack.totals.owing)}
@@ -201,6 +341,9 @@ export function ReportsClientView({
             hint={`${pack.creditors.length} supplier bill${pack.creditors.length === 1 ? "" : "s"} not yet paid`}
             href="/suppliers"
           />
+        </StatGrid>
+
+        <StatGrid>
           <StatCard
             label="Money from swaps"
             value={formatCurrency(pack.totals.swaps)}
@@ -220,9 +363,18 @@ export function ReportsClientView({
             caption={
               <>
                 <h2 className="text-sm font-semibold tracking-tight">Shop by shop</h2>
-                <span className="text-xs text-muted-foreground">
-                  {pack.byShop.length} shop{pack.byShop.length === 1 ? "" : "s"} with sales
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    {pack.byShop.length} shop{pack.byShop.length === 1 ? "" : "s"} with sales
+                  </span>
+                  <TableDownload
+                    filename={`${fileScope}-shop-by-shop`}
+                    rows={() => [
+                      ["Shop", "How many sales", "Money from sales", "Money we collected"],
+                      ...pack.byShop.map((row) => [row.name, row.tickets, row.revenue, row.collected]),
+                    ]}
+                  />
+                </div>
               </>
             }
             columns={[
@@ -262,9 +414,15 @@ export function ReportsClientView({
             caption={
               <>
                 <h2 className="text-sm font-semibold tracking-tight">Customers who still owe us</h2>
-                <Button asChild variant="ghost" size="sm">
-                  <Link href="/customers">All customers</Link>
-                </Button>
+                <div className="flex items-center gap-2">
+                  <TableDownload
+                    filename={`${fileScope}-customers-owing`}
+                    rows={() => [["Customer", "Shop", "Still owed"], ...pack.debtors.map((row) => [row.name, row.shop, row.amount])]}
+                  />
+                  <Button asChild variant="ghost" size="sm">
+                    <Link href="/customers">All customers</Link>
+                  </Button>
+                </div>
               </>
             }
             columns={[{ label: "Customer" }, { label: "Shop" }, { label: "Still owed", align: "right" }]}
@@ -306,9 +464,18 @@ export function ReportsClientView({
             caption={
               <>
                 <h2 className="text-sm font-semibold tracking-tight">Supplier bills we have not paid</h2>
-                <Button asChild variant="ghost" size="sm">
-                  <Link href="/suppliers">All suppliers</Link>
-                </Button>
+                <div className="flex items-center gap-2">
+                  <TableDownload
+                    filename={`${fileScope}-supplier-bills-unpaid`}
+                    rows={() => [
+                      ["Bill", "Supplier", "Shop", "Still owed"],
+                      ...pack.creditors.map((row) => [row.invoice, row.supplier, row.shop, row.owed]),
+                    ]}
+                  />
+                  <Button asChild variant="ghost" size="sm">
+                    <Link href="/suppliers">All suppliers</Link>
+                  </Button>
+                </div>
               </>
             }
             columns={[{ label: "Bill" }, { label: "Shop" }, { label: "Still owed", align: "right" }]}
@@ -349,9 +516,18 @@ export function ReportsClientView({
             caption={
               <>
                 <h2 className="text-sm font-semibold tracking-tight">Running low</h2>
-                <Button asChild variant="ghost" size="sm">
-                  <Link href="/inventory">Shop stock</Link>
-                </Button>
+                <div className="flex items-center gap-2">
+                  <TableDownload
+                    filename={`${fileScope}-running-low`}
+                    rows={() => [
+                      ["Item", "Shop", "Left", "Minimum"],
+                      ...pack.lowStock.map((row) => [row.product, row.shop, row.quantity, row.min]),
+                    ]}
+                  />
+                  <Button asChild variant="ghost" size="sm">
+                    <Link href="/inventory">Shop stock</Link>
+                  </Button>
+                </div>
               </>
             }
             columns={[{ label: "Item" }, { label: "Shop" }, { label: "Left", align: "right" }]}
@@ -394,6 +570,11 @@ export function ReportsClientView({
         onClose={() => setDrilldown(null)}
         eyebrow={pack.scope}
         title={drilldown ? DRILLDOWN_TITLE[drilldown] : ""}
+        download={
+          drilldown
+            ? { filename: `${fileScope}-${drilldown.toLowerCase()}`, rows: drillRows[drilldown] }
+            : undefined
+        }
         summary={
           drilldown === "REVENUE" ? (
             <>
@@ -409,6 +590,21 @@ export function ReportsClientView({
             <>
               <span>{expenses.length} vouchers</span>
               <span className="font-semibold text-foreground">{formatCurrency(pack.totals.expenses)}</span>
+            </>
+          ) : drilldown === "OPENING" ? (
+            <>
+              <span>
+                {opening.lines.length} item lines ·{" "}
+                <Link href="/opening-stock" className="text-primary hover:underline">
+                  Correct &amp; close opening stock
+                </Link>
+              </span>
+              <span className="font-semibold text-foreground">{formatCurrency(openingValue)}</span>
+            </>
+          ) : drilldown === "BOUGHT" ? (
+            <>
+              <span>{opening.boughtSince.length} supplier bills</span>
+              <span className="font-semibold text-foreground">{formatCurrency(boughtValue)}</span>
             </>
           ) : (
             <>
@@ -600,6 +796,106 @@ export function ReportsClientView({
               onPageChange={stockPager.setPage}
               onPageSizeChange={stockPager.setPageSize}
               noun="stock lines"
+            />
+          </div>
+        ) : null}
+
+        {drilldown === "OPENING" ? (
+          <div>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Shop</th>
+                  <th className="text-right">Quantity</th>
+                  <th className="text-right">Unit cost</th>
+                  <th className="text-right">Lowest</th>
+                  <th className="text-right">Standard</th>
+                  <th className="text-right">Value at cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {openingPager.pageRows.map((line) => (
+                  <tr key={`${line.shop}-${line.sku}`}>
+                    <td>
+                      <p className="font-medium">{line.name}</p>
+                      <p className="font-mono text-xs text-muted-foreground">{line.sku}</p>
+                    </td>
+                    <td>
+                      <ShopTag>{line.shop}</ShopTag>{" "}
+                      <TonePill tone={line.status === "CLOSED" ? "success" : "warning"}>
+                        {line.status === "CLOSED" ? "Closed" : "Open"}
+                      </TonePill>
+                    </td>
+                    <td className="text-right num">{line.openingQty}</td>
+                    <td className="text-right num">{formatCurrency(line.costPrice)}</td>
+                    <td className="text-right num">{formatCurrency(line.minimumPrice)}</td>
+                    <td className="text-right num">{formatCurrency(line.sellingPrice)}</td>
+                    <td className="text-right num font-semibold">{formatCurrency(line.openingQty * line.costPrice)}</td>
+                  </tr>
+                ))}
+                {opening.lines.length === 0 ? <TableEmpty colSpan={7}>No opening stock here yet.</TableEmpty> : null}
+              </tbody>
+            </table>
+            <TablePager
+              page={openingPager.page}
+              pageCount={openingPager.pageCount}
+              pageSize={openingPager.pageSize}
+              total={openingPager.total}
+              start={openingPager.start}
+              end={openingPager.end}
+              onPageChange={openingPager.setPage}
+              onPageSizeChange={openingPager.setPageSize}
+              noun="item lines"
+            />
+          </div>
+        ) : null}
+
+        {drilldown === "BOUGHT" ? (
+          <div>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Bill</th>
+                  <th>Supplier</th>
+                  <th>Shop</th>
+                  <th>Date</th>
+                  <th className="text-right">Bill value</th>
+                  <th className="text-right">Still owed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {boughtPager.pageRows.map((bill) => (
+                  <tr key={bill.id}>
+                    <td>
+                      <Link href={`/purchases/${bill.id}`} className="font-medium text-primary hover:underline">
+                        {bill.invoiceNumber}
+                      </Link>
+                    </td>
+                    <td>{bill.supplier}</td>
+                    <td>
+                      <ShopTag>{bill.shop}</ShopTag>
+                    </td>
+                    <td className="text-muted-foreground">{formatDate(bill.date)}</td>
+                    <td className="text-right num font-semibold">{formatCurrency(bill.total)}</td>
+                    <td className="text-right num text-warning">{formatCurrency(bill.owed)}</td>
+                  </tr>
+                ))}
+                {opening.boughtSince.length === 0 ? (
+                  <TableEmpty colSpan={6}>No supplier bill other than opening stock.</TableEmpty>
+                ) : null}
+              </tbody>
+            </table>
+            <TablePager
+              page={boughtPager.page}
+              pageCount={boughtPager.pageCount}
+              pageSize={boughtPager.pageSize}
+              total={boughtPager.total}
+              start={boughtPager.start}
+              end={boughtPager.end}
+              onPageChange={boughtPager.setPage}
+              onPageSizeChange={boughtPager.setPageSize}
+              noun="bills"
             />
           </div>
         ) : null}

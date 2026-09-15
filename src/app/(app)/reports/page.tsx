@@ -1,4 +1,5 @@
 import { getReportData } from "@/app/actions/finance"
+import { getOpeningReport } from "@/app/actions/opening-stock"
 import { getBranches } from "@/app/actions/parties"
 import { PageHeader } from "@/components/shared"
 import { formatLagosStamp, watDayKey } from "@/lib/lagos-day"
@@ -16,11 +17,12 @@ export default async function ReportsPage({
   const params = await searchParams
   const selectedBranchId = params.branchId || undefined
 
-  const [data, settings, user, branches] = await Promise.all([
+  const [data, settings, user, branches, opening] = await Promise.all([
     getReportData(selectedBranchId),
     getAppSettings(),
     requireUser(),
     getBranches(),
+    getOpeningReport(selectedBranchId),
   ])
 
   const revenue = data.sales.reduce((sum, sale) => sum + money(sale.totalAmount), 0)
@@ -101,6 +103,7 @@ export default async function ReportsPage({
         sales={data.sales}
         expenses={data.expenses}
         inventory={data.inventory}
+        opening={opening}
         branches={branches}
         selectedBranchId={selectedBranchId}
       />
