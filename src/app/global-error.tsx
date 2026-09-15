@@ -52,11 +52,11 @@ export default function GlobalError({
             <button
               type="button"
               onClick={() => {
-                window.location.href = "/dashboard"
+                window.location.href = typeof navigator !== "undefined" && !navigator.onLine ? "/offline" : "/dashboard"
               }}
               className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-slate-200 bg-transparent px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
             >
-              Return to Dashboard
+              {typeof navigator !== "undefined" && !navigator.onLine ? "Open the phone copy" : "Return to Dashboard"}
             </button>
           </div>
         </div>

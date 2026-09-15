@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/shared"
 import { getAppSettings } from "@/lib/settings"
 import { money } from "@/lib/utils"
 import { InventoryClientView } from "./inventory-client-view"
+import { CachePageData } from "@/components/cache-page-data"
 
 export default async function InventoryPage() {
   const [rows, settings, vault, serializedIds, branches] = await Promise.all([
@@ -43,6 +44,7 @@ export default async function InventoryPage() {
 
   return (
     <div className="space-y-6">
+      <CachePageData pageKey="inventory" title="Shop stock" data={formattedRows} />
       <PageHeader
         title="Shop stock"
         description="What is on the shelf now, at cost and at selling price. Pick a shop and how the phone looks to shorten the list."

@@ -95,11 +95,17 @@ export default function ErrorPage({
         <div className="mt-8 flex flex-col gap-2.5 sm:flex-row sm:justify-center">
           <Button
             type="button"
-            onClick={() => retry()}
+            onClick={() => {
+              if (typeof navigator !== "undefined" && !navigator.onLine) {
+                window.location.replace("/offline")
+                return
+              }
+              retry()
+            }}
             className="min-h-11 gap-2 font-medium"
           >
             <RefreshCw className="h-4 w-4" />
-            Retry View
+            {isOffline ? "Open the phone copy" : "Retry View"}
           </Button>
 
           <Button
@@ -108,9 +114,9 @@ export default function ErrorPage({
             asChild
             className="min-h-11 gap-2 font-medium"
           >
-            <Link href="/dashboard">
+            <Link href={isOffline ? "/offline" : "/dashboard"}>
               <Home className="h-4 w-4" />
-              Return to Dashboard
+              {isOffline ? "Sell now" : "Return to Dashboard"}
             </Link>
           </Button>
         </div>

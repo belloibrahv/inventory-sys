@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
+import { getNetworkMonitor } from "@/lib/network-status"
 
 /**
  * Keeps the screen in step with the rest of the shop.
@@ -45,7 +46,7 @@ export function LiveRefresh({ seconds = 45 }: { seconds?: number }) {
     const tick = () => {
       if (running.current) return
       if (document.visibilityState !== "visible") return
-      if (typeof navigator !== "undefined" && !navigator.onLine) return
+      if (getNetworkMonitor().getSnapshot().state !== "online") return
       if (busyTyping()) return
       running.current = true
       router.refresh()

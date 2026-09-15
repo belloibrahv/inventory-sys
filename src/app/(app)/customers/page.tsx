@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { money } from "@/lib/utils"
 import { CustomersClientView } from "./customers-client-view"
+import { CachePageData } from "@/components/cache-page-data"
 
 export default async function CustomersPage() {
   const [rawCustomers, branches] = await Promise.all([getCustomers(), getBranches()])
@@ -29,6 +30,7 @@ export default async function CustomersPage() {
 
   return (
     <div className="space-y-6">
+      <CachePageData pageKey="customers" title="Customers & money owed" data={customers} />
       <PageHeader
         title="Customers & money owed"
         description="Everyone who has bought from us. See what they bought, what they paid, and what they still owe. Tap Still owing when you need to call people."

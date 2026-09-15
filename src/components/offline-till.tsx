@@ -6,6 +6,7 @@ import { flushParkedSales } from "@/lib/flush-parked"
 import { formatLagosStamp } from "@/lib/lagos-day"
 import { readSaleQueue, type QueuedSale } from "@/lib/offline-sales"
 import { readTillSnapshot, type TillSnapshot } from "@/lib/till-catalog"
+import { listPageSnapshots } from "@/lib/page-cache"
 import { formatCurrency } from "@/lib/utils"
 import { statusLabel } from "@/lib/status"
 import { Button } from "@/components/ui/button"
@@ -17,12 +18,14 @@ export function OfflineTill() {
   const [snapshot, setSnapshot] = useState<TillSnapshot | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState("")
+  const [lists, setLists] = useState<Array<{ key: string; title: string; savedAt: string }>>([])
 
   useEffect(() => {
     const refresh = async () => {
       setOnline(navigator.onLine)
       setQueue(await readSaleQueue())
       setSnapshot(await readTillSnapshot())
+      setLists(await listPageSnapshots())
     }
     void refresh()
     const onChange = () => void refresh()
@@ -43,6 +46,7 @@ export function OfflineTill() {
     setBusy(false)
     setQueue(await readSaleQueue())
     setSnapshot(await readTillSnapshot())
+    setLists(await listPageSnapshots())
     if (result.error) {
       setMessage(result.error)
       return
@@ -93,6 +97,11 @@ export function OfflineTill() {
           {snapshot ? (
             <p className="mt-3 text-xs text-slate-600">
               Last shop list saved {formatLagosStamp(new Date(snapshot.savedAt))}. {snapshot.imeis.length} In shop IMEIs. {snapshot.customers.length} named customers.
+            </p>
+          ) : null}
+          {lists.length ? (
+            <p className="mt-2 text-xs text-slate-600">
+              Also saved on this phone: {lists.map((row) => row.title).join(", ")}.
             </p>
           ) : null}
           {message ? <p className="mt-3 text-sm text-slate-700">{message}</p> : null}

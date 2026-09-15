@@ -24,5 +24,5 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   // Screens only. Sign-in, the service worker, and static files are left alone.
-  matcher: ["/((?!api|_next/static|_next/image|brand|icons|favicon.ico|manifest.webmanifest|sw.js|offline).*)"],
+  matcher: ["/((?!api|_next/static|_next/image|brand|icons|favicon.ico|manifest.webmanifest|sw.js|serwist|offline).*)"],
 }

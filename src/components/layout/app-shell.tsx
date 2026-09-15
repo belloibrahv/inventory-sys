@@ -10,6 +10,8 @@ import { AccessGate } from "@/components/layout/access-gate"
 import { SectionTabs } from "@/components/layout/section-tabs"
 import { pathIsAllowed } from "@/lib/access-path"
 import { OfflineBanner } from "@/components/offline-banner"
+import { OfflineGuard } from "@/components/offline-guard"
+import { WarmOfflineCache } from "@/components/warm-offline-cache"
 import { ShopCalculator } from "@/components/shop-calculator"
 import { DecisionProvider } from "@/hooks/use-decision"
 import { readSavedDesktopSidebar, useUI } from "@/store/ui"
@@ -66,6 +68,8 @@ export function AppShell({
         </div>
         <CommandPalette allowedHrefs={allowedHrefs} />
         <ShopCalculator />
+        <OfflineGuard />
+        <WarmOfflineCache />
       </div>
     </DecisionProvider>
   )

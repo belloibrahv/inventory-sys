@@ -4,6 +4,7 @@ import { WorkflowSteps } from "@/components/workflow-steps"
 import { FilterChips } from "@/components/filter-chips"
 import { Button } from "@/components/ui/button"
 import { ImeiTable } from "@/app/(app)/imei/imei-table"
+import { CachePageData } from "@/components/cache-page-data"
 import { Input } from "@/components/ui/input"
 import { IMEI_LIFE } from "@/lib/imei-life"
 import { statusLabel } from "@/lib/status"
@@ -43,6 +44,7 @@ export default async function ImeiPage({
 
   return (
     <div className="space-y-6">
+      <CachePageData pageKey="imei" title="All phones" data={{ records }} />
       <PageHeader
         title="All phones"
         description="Every phone has a life: received, in shop, sold or moved, returned or repaired. Tap a stage to see only those phones. Time is Lagos time."

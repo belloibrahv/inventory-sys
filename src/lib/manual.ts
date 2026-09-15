@@ -666,10 +666,10 @@ function alwaysSections(keys: Set<string>): ManualSection[] {
       id: "offline",
       title: "When the network goes off",
       group: "On every screen",
-      what: "If you opened Sell now on this phone while the network was good, the phone keeps a copy of the shop IMEIs and the customer names. You can still scan and finish a sale. It waits as a waiting sale. Refreshing the page is safe. When the network comes back it goes in by itself, or you tap Send parked work now.",
+      what: "If you opened the shop on this phone while the network was good, the phone keeps the last copy of phones, shop stock, sales, customers, and the till list. You can still look those lists up and still finish a sale. Waiting sales stay here. Refreshing the page is safe: you land on this phone copy, not a dead internet page. When the network comes back, waiting sales go in by themselves, or you tap Send waiting work now.",
       doThis: [
-        "Open Sell now at least once while the network is good, so this phone can keep the shop list.",
-        "If the network goes off, scan an IMEI from that saved list and finish the sale. You will see that it is saved on this phone.",
+        "Open Home, All phones, Shop stock, Sales or Sell now at least once while the network is good, so this phone can keep those lists.",
+        "If the network goes off, stay in the app. The yellow banner means this phone is using the last copy. Scan an IMEI from that saved list and finish the sale.",
         "Use a customer already on this phone, or a walk-in who pays everything now. Do not make up a new buyer while the network is down.",
         "If you refresh and land on the You can still sell page, the last shop list is there. Sell from it, or send the parked work when the network comes back.",
         "When the yellow banner says the network is back, send the parked work.",

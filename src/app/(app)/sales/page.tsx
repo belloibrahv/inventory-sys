@@ -4,11 +4,13 @@ import { getSales } from "@/app/actions/sales"
 import { PageHeader } from "@/components/shared"
 import { Button } from "@/components/ui/button"
 import { SalesList } from "./sales-list"
+import { CachePageData } from "@/components/cache-page-data"
 
 export default async function SalesPage() {
   const sales = await getSales()
   return (
     <div className="space-y-6">
+      <CachePageData pageKey="sales" title="Sales" data={sales} />
       <PageHeader
         title="Sales"
         description="Every sale stays as it was. Open the bill to collect the rest of the money. Never change an old sale."
