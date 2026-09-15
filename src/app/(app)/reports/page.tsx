@@ -55,6 +55,8 @@ export default async function ReportsPage({
       phone: settings.companyPhone,
       address: settings.companyAddress,
       email: settings.companyEmail,
+      logo: settings.companyLogo,
+      footer: settings.companyFooter,
     },
     scope,
     preparedAt: new Date().toISOString(),

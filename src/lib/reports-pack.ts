@@ -1,11 +1,7 @@
+import type { PaperCompany } from "@/lib/letterhead"
+
 export type ReportsPack = {
-  company: {
-    name: string
-    product: string
-    phone: string
-    address: string
-    email: string
-  }
+  company: PaperCompany
   scope: string
   preparedAt: string
   preparedBy: string

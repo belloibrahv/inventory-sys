@@ -33,11 +33,13 @@ const BRANCHES = [
 const RETIRED = ["LOS", "ABJ", "PHC"]
 
 const SETTINGS = [
-  { key: "company.name", value: "Abu Twins", description: "Legal trading name" },
-  { key: "company.product", value: "Abu Twins Softskills", description: "Product name" },
+  { key: "company.name", value: "Abu Twins", description: "Legal trading name printed on invoices" },
+  { key: "company.product", value: "Abu Twins Softskills", description: "Line under the name on invoices" },
   { key: "company.phone", value: "07062454854", description: "Phone on invoices" },
   { key: "company.address", value: "Iwo Road, Ibadan, Oyo State", description: "Address on invoices" },
   { key: "company.email", value: "hello@abutwins.com", description: "Email on invoices" },
+  { key: "company.logo", value: "", description: "Logo printed on invoices" },
+  { key: "company.footer", value: "Thank you for buying from Abu Twins", description: "Thank-you line at the bottom of invoices" },
   { key: "company.currency", value: "NGN", description: "Default currency" },
   { key: "sales.allow_below_minimum", value: "false", description: "Require approval below min price" },
   {
@@ -166,7 +168,7 @@ async function main() {
   for (const setting of SETTINGS) {
     await prisma.setting.upsert({
       where: { key: setting.key },
-      update: { value: setting.value, description: setting.description },
+      update: { description: setting.description },
       create: setting,
     })
   }

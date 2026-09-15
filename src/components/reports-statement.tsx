@@ -1,33 +1,23 @@
 import type { ReportsPack } from "@/lib/reports-pack"
 import { reportsKpis } from "@/lib/reports-pack"
 import { formatLagosStamp } from "@/lib/lagos-day"
+import { letterheadFromCompany } from "@/lib/letterhead"
 import { formatCurrency } from "@/lib/utils"
+import { DocumentLetterhead, DocumentPaperFooter } from "@/components/document-letterhead"
 
 export function ReportsStatement({ data }: { data: ReportsPack }) {
   const kpis = reportsKpis(data)
+  const brand = letterheadFromCompany(data.company)
 
   return (
     <section className="reports-statement mx-auto hidden w-full max-w-[210mm] overflow-hidden bg-white text-slate-900 print:block">
-      <header className="relative overflow-hidden bg-[#001BCE] px-6 py-5 text-white">
-        <div className="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-[#18C020]/25" />
-        <div className="pointer-events-none absolute bottom-0 left-1/3 h-20 w-20 rounded-full bg-[#7CFF86]/15" />
-        <div className="relative flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <img src="/brand/ab-mark.jpg" alt="" width={52} height={52} className="rounded-full bg-white ring-2 ring-[#7CFF86]" />
-            <div>
-              <p className="text-lg font-semibold tracking-tight">{data.company.name}</p>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#7CFF86]">Softskills Investment</p>
-              <p className="mt-1 text-[11px] text-white/75">{data.company.address}</p>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#7CFF86]">Executive Summary</p>
-            <p className="mt-1 text-xl font-semibold">Consolidated Branch Performance</p>
-            <p className="font-mono text-xs text-white/80">{data.statementRef}</p>
-            <p className="text-[11px] text-white/70">Lagos time {formatLagosStamp(new Date(data.preparedAt))}</p>
-          </div>
-        </div>
-        <div className="relative mt-4 grid gap-3 border-t border-white/15 pt-3 text-[12px] sm:grid-cols-3">
+      <DocumentLetterhead
+        brand={brand}
+        documentKind="Executive summary"
+        documentTitle="Consolidated Branch Performance"
+        meta={[data.statementRef, `Lagos time ${formatLagosStamp(new Date(data.preparedAt))}`]}
+      >
+        <div className="mt-4 grid gap-3 border-t border-white/15 pt-3 text-[12px] sm:grid-cols-3">
           <div>
             <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">Branch Scope</p>
             <p className="font-semibold">{data.scope}</p>
@@ -41,7 +31,7 @@ export function ReportsStatement({ data }: { data: ReportsPack }) {
             <p className="font-semibold">Consolidated audit & transaction records</p>
           </div>
         </div>
-      </header>
+      </DocumentLetterhead>
 
       <div className="grid grid-cols-4 divide-x divide-slate-200 border-b border-slate-200">
         {kpis.map((row) => (
@@ -141,10 +131,7 @@ export function ReportsStatement({ data }: { data: ReportsPack }) {
         </table>
       </div>
 
-      <footer className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-6 py-3 text-[10px] text-slate-500">
-        <p>{data.company.phone} · {data.company.email}</p>
-        <p>Software by Techvaults Limited · This paper does not change any sale.</p>
-      </footer>
+      <DocumentPaperFooter brand={brand} extra="Software by Techvaults Limited · This paper does not change any sale." />
     </section>
   )
 }

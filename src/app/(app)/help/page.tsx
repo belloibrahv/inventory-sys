@@ -29,9 +29,12 @@ export default async function HelpPage() {
         data={data}
         company={{
           name: settings.companyName,
+          product: settings.productName,
           phone: settings.companyPhone,
           address: settings.companyAddress,
           email: settings.companyEmail,
+          logo: settings.companyLogo,
+          footer: settings.companyFooter,
         }}
         preparedBy={user.name || user.email}
         statementRef={statementRef}

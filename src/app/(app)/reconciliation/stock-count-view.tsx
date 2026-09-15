@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation"
 import { CheckCircle2, FileSpreadsheet, Loader2, Printer, Scale, Send, TrendingDown, TrendingUp } from "lucide-react"
 import { toast } from "sonner"
 import { startReconciliation } from "@/app/actions/finance"
+import { DocumentLetterhead } from "@/components/document-letterhead"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { StatCard, StatGrid, TableEmpty, TableShell, TonePill, Toolbar } from "@/components/shared"
 import { TablePager, usePagedRows } from "@/components/table-pager"
 import { downloadTable } from "@/lib/download-table"
+import type { LetterheadBrand } from "@/lib/letterhead"
 import { formatCurrency, money } from "@/lib/utils"
 
 type Branch = { id: string; name: string; code?: string }
@@ -27,10 +29,12 @@ export function StockCountView({
   branches,
   inventory,
   defaultBranchId,
+  brand,
 }: {
   branches: Branch[]
   inventory: StockItem[]
   defaultBranchId?: string | null
+  brand: LetterheadBrand
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -199,17 +203,24 @@ export function StockCountView({
       </StatGrid>
 
       {/* Only on paper: the approver reads this instead of the screen. */}
-      <div className="mb-6 hidden border-b pb-4 print:block">
-        <h1 className="text-xl font-bold">Physical Inventory Reconciliation Worksheet</h1>
-        <p className="text-sm">
-          Branch Location: <strong>{selectedBranch?.name}</strong> · Date:{" "}
-          <strong>{new Date().toLocaleDateString("en-NG")}</strong>
-        </p>
-        <p className="mt-1 text-xs">
-          Perpetual Ledger: {formatCurrency(summary.systemValue)} · Physical Count: {formatCurrency(summary.countedValue)} ·
-          Net Variance: {formatCurrency(summary.netValue)}
-        </p>
-        {notes.trim() ? <p className="mt-1 text-xs">Audit Remarks: {notes.trim()}</p> : null}
+      <div className="mb-6 hidden overflow-hidden border border-slate-200 print:block">
+        <DocumentLetterhead
+          brand={brand}
+          documentKind="Stock count"
+          documentTitle="Physical inventory worksheet"
+          meta={[selectedBranch?.name || "", new Date().toLocaleDateString("en-NG")]}
+        />
+        <div className="border-b px-6 py-3 text-sm">
+          <p>
+            Branch location: <strong>{selectedBranch?.name}</strong> · Date:{" "}
+            <strong>{new Date().toLocaleDateString("en-NG")}</strong>
+          </p>
+          <p className="mt-1 text-xs">
+            Perpetual Ledger: {formatCurrency(summary.systemValue)} · Physical Count: {formatCurrency(summary.countedValue)} ·
+            Net Variance: {formatCurrency(summary.netValue)}
+          </p>
+          {notes.trim() ? <p className="mt-1 text-xs">Audit Remarks: {notes.trim()}</p> : null}
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">

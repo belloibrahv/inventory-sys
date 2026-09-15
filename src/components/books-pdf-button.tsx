@@ -5,26 +5,16 @@ import { jsPDF } from "jspdf"
 import type { BooksCheck } from "@/app/actions/books-check"
 import { Button } from "@/components/ui/button"
 import { booksCompareRows, booksMoneyLines, booksPeriodLabel, booksRangeTitle, formatPdfMoney, formatPdfMove } from "@/lib/books-pack"
+import { letterheadFromCompany } from "@/lib/letterhead"
 import { formatLagosStamp, formatWatLong } from "@/lib/lagos-day"
+import { drawPdfLetterhead, drawPdfPaperFooter, loadLogoDataUrl } from "@/lib/pdf-letterhead"
 import { formatDateTime } from "@/lib/utils"
 
 const NAVY: [number, number, number] = [0, 27, 206]
-const LIME: [number, number, number] = [24, 192, 32]
 const INK: [number, number, number] = [15, 23, 42]
 const MUTED: [number, number, number] = [100, 116, 139]
 const LINE: [number, number, number] = [226, 232, 240]
 const PAPER: [number, number, number] = [248, 250, 252]
-
-async function loadMark() {
-  const response = await fetch("/brand/ab-mark.jpg")
-  const blob = await response.blob()
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(new Error("Could not load the shop logo"))
-    reader.readAsDataURL(blob)
-  })
-}
 
 export function BooksPdfButton({ data }: { data: BooksCheck }) {
   const [busy, setBusy] = useState(false)
@@ -32,7 +22,8 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
   async function download() {
     setBusy(true)
     try {
-      const mark = await loadMark()
+      const brand = letterheadFromCompany(data.company)
+      const mark = await loadLogoDataUrl(brand.logoSrc)
       const doc = new jsPDF({ unit: "mm", format: "a4" })
       const pageW = 210
       const pageH = 297
@@ -46,53 +37,24 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
       const compared = booksPeriodLabel(data.range, data.priorFrom, data.priorTo)
 
       function footer() {
-        doc.setFillColor(...PAPER)
-        doc.rect(0, pageH - 12, pageW, 12, "F")
-        doc.setDrawColor(...NAVY)
-        doc.setLineWidth(0.6)
-        doc.line(0, pageH - 12, pageW, pageH - 12)
-        doc.setTextColor(...MUTED)
-        doc.setFontSize(7)
-        doc.text(`${data.company.phone || ""}  ·  ${data.company.email || ""}`, left, pageH - 5)
-        doc.text(`Page ${page}  ·  ${data.statementRef}`, right, pageH - 5, { align: "right" })
+        drawPdfPaperFooter(doc, brand, page, data.statementRef)
       }
 
       function letterhead(full: boolean) {
-        doc.setFillColor(...NAVY)
-        doc.rect(0, 0, pageW, full ? 42 : 18, "F")
-        doc.setFillColor(...LIME)
-        doc.rect(0, full ? 42 : 18, pageW, 1.2, "F")
-        try {
-          doc.addImage(mark, "JPEG", left, full ? 8 : 3, full ? 16 : 12, full ? 16 : 12)
-        } catch {
-          doc.setFillColor(255, 255, 255)
-          doc.circle(left + (full ? 8 : 6), full ? 16 : 9, full ? 8 : 6, "F")
-        }
-        doc.setTextColor(255, 255, 255)
-        doc.setFont("helvetica", "bold")
-        doc.setFontSize(full ? 13 : 10)
-        doc.text(data.company.name, left + (full ? 20 : 16), full ? 14 : 9)
-        doc.setFont("helvetica", "normal")
-        doc.setFontSize(7)
-        doc.setTextColor(124, 255, 134)
-        doc.text("SOFTSKILLS INVESTMENT", left + (full ? 20 : 16), full ? 19 : 13)
-        doc.setTextColor(255, 255, 255)
-        doc.setFont("helvetica", "bold")
-        doc.setFontSize(full ? 12 : 9)
-        doc.text("MONEY REPORT", right, full ? 12 : 8, { align: "right" })
-        doc.setFont("helvetica", "normal")
-        doc.setFontSize(8)
-        doc.text(data.statementRef, right, full ? 18 : 13, { align: "right" })
-        if (full) {
-          doc.setFontSize(8)
-          doc.setTextColor(210, 220, 255)
-          doc.text(data.company.address, left + 20, 24)
-          doc.text(`${data.shopName}  ·  ${data.shopCode}`, left, 34)
-          doc.text(`This time: ${period}`, left + 78, 34)
-          doc.text(`Compared with: ${compared}`, right, 34, { align: "right" })
-          doc.text(`${booksRangeTitle(data.range)}  ·  Lagos ${formatLagosStamp(new Date(data.preparedAt))}`, left, 39)
-        }
-        y = full ? 50 : 26
+        y = drawPdfLetterhead(doc, brand, {
+          title: "Money report",
+          subtitle: data.statementRef,
+          meta: full
+            ? [
+                `${data.shopName} · ${data.shopCode}`,
+                `This time: ${period}`,
+                `Compared with: ${compared}`,
+                `${booksRangeTitle(data.range)} · Lagos ${formatLagosStamp(new Date(data.preparedAt))}`,
+              ]
+            : undefined,
+          logo: mark,
+          full,
+        })
       }
 
       function ensure(space: number) {

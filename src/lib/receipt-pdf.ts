@@ -1,4 +1,6 @@
 import { jsPDF } from "jspdf"
+import { letterheadFromSettings } from "@/lib/letterhead"
+import { drawPdfLetterhead, drawPdfPaperFooter, loadLogoDataUrl } from "@/lib/pdf-letterhead"
 
 /**
  * Building a receipt a customer can be handed or sent.
@@ -8,7 +10,6 @@ import { jsPDF } from "jspdf"
  * over the counter.
  */
 
-const NAVY: [number, number, number] = [0, 27, 206]
 const INK: [number, number, number] = [15, 23, 42]
 const MUTED: [number, number, number] = [100, 116, 139]
 const LINE: [number, number, number] = [226, 232, 240]
@@ -26,6 +27,9 @@ export type ReceiptLine = {
 
 export type ReceiptData = {
   company: string
+  tagline?: string
+  logoSrc?: string
+  footer?: string
   invoiceNumber: string
   branch: string
   address?: string | null
@@ -51,59 +55,43 @@ function naira(value: number) {
  * can decide whether the next one fits.
  */
 export function drawReceipt(doc: jsPDF, data: ReceiptData, mark?: string) {
+  const brand = letterheadFromSettings({
+    companyName: data.company,
+    productName: data.tagline,
+    companyAddress: data.address || undefined,
+    companyPhone: data.shopPhone || undefined,
+    companyEmail: data.email || undefined,
+    companyLogo: data.logoSrc,
+    companyFooter: data.footer,
+  })
   const pageW = doc.internal.pageSize.getWidth()
   const left = 14
   const right = pageW - 14
-  let y = 16
+  let y = drawPdfLetterhead(doc, brand, {
+    title: "Sales invoice",
+    subtitle: data.invoiceNumber,
+    meta: [data.branch, data.soldAt, data.cashier ? `Served by ${data.cashier}` : ""].filter(Boolean),
+    logo: mark,
+    full: true,
+  })
 
-  if (mark) {
-    try {
-      doc.addImage(mark, "JPEG", left, y - 6, 14, 14)
-    } catch {
-      // A missing company mark must never stop a customer getting a receipt.
-    }
-  }
-  const textLeft = mark ? left + 18 : left
-
-  doc.setTextColor(...NAVY)
   doc.setFont("helvetica", "bold")
-  doc.setFontSize(14)
-  doc.text(data.company, textLeft, y)
-  y += 5
-  doc.setFont("helvetica", "normal")
   doc.setFontSize(8)
   doc.setTextColor(...MUTED)
-  const head = [data.branch, data.address, data.shopPhone, data.email].filter(Boolean).join("  ·  ")
-  doc.text(head, textLeft, y)
-  y += 8
-
-  doc.setDrawColor(...NAVY)
-  doc.setLineWidth(0.6)
-  doc.line(left, y, right, y)
-  y += 7
-
+  doc.text("BILL TO", left, y)
   doc.setTextColor(...INK)
   doc.setFont("helvetica", "bold")
-  doc.setFontSize(11)
-  doc.text("SALES RECEIPT", left, y)
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(9)
-  doc.text(data.invoiceNumber, right, y, { align: "right" })
-  y += 6
-
-  doc.setFontSize(8)
-  doc.setTextColor(...MUTED)
-  doc.text(`Sold ${data.soldAt}`, left, y)
-  if (data.cashier) doc.text(`Served by ${data.cashier}`, right, y, { align: "right" })
+  doc.setFontSize(10)
   y += 5
-  if (data.customer) {
-    doc.text(`Customer: ${data.customer}${data.customerPhone ? `  ·  ${data.customerPhone}` : ""}`, left, y)
-    y += 5
-  } else {
-    doc.text("Customer: Walk-in", left, y)
-    y += 5
+  doc.text(data.customer || "Walk-in", left, y)
+  if (data.customerPhone) {
+    doc.setFont("helvetica", "normal")
+    doc.setFontSize(8)
+    doc.setTextColor(...MUTED)
+    y += 4
+    doc.text(data.customerPhone, left, y)
   }
-  y += 2
+  y += 6
 
   doc.setDrawColor(...LINE)
   doc.setLineWidth(0.3)
@@ -186,27 +174,14 @@ export function drawReceipt(doc: jsPDF, data: ReceiptData, mark?: string) {
     left,
     y
   )
-  y += 4
-  doc.text("Thank you for buying from us.", left, y)
   y += 6
+  drawPdfPaperFooter(doc, brand, 1, data.invoiceNumber)
 
   return y
 }
 
-export async function loadMark() {
-  try {
-    const response = await fetch("/brand/ab-mark.jpg")
-    if (!response.ok) return undefined
-    const blob = await response.blob()
-    return await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(String(reader.result))
-      reader.onerror = () => reject(new Error("mark"))
-      reader.readAsDataURL(blob)
-    })
-  } catch {
-    return undefined
-  }
+export async function loadMark(logoSrc?: string) {
+  return loadLogoDataUrl(logoSrc || letterheadFromSettings({}).logoSrc)
 }
 
 export function receiptFileName(invoiceNumber: string) {

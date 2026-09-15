@@ -11,6 +11,8 @@ export async function getAppSettings() {
     companyPhone: map["company.phone"] || "07062454854",
     companyAddress: map["company.address"] || "Iwo Road, Ibadan",
     companyEmail: map["company.email"] || "hello@abutwins.com",
+    companyLogo: map["company.logo"] || "",
+    companyFooter: map["company.footer"] || "Thank you for buying from Abu Twins",
     currency: map["company.currency"] || "NGN",
     allowBelowMinimum: map["sales.allow_below_minimum"] === "true",
     /** Second person must say yes before received goods become sellable. */

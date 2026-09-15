@@ -2,7 +2,8 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { reverseInvoicePayment } from "@/app/actions/access"
 import { attachSaleCustomer, collectInvoicePayment, getSale } from "@/app/actions/sales"
-import { getSettings } from "@/app/actions/finance"
+import { getAppSettings } from "@/lib/settings"
+import { letterheadFromSettings } from "@/lib/letterhead"
 import { getCustomers } from "@/app/actions/parties"
 import { ActionForm } from "@/components/action-form"
 import { PageHeader, StatusBadge } from "@/components/shared"
@@ -29,21 +30,24 @@ export default async function SaleDetailPage({
   // The till sends the cashier straight here after a sale, asking for the
   // receipt to print itself.
   const { receipt } = await searchParams
-  const [me, sale, settings, customers] = await Promise.all([requireUser(), getSale(id), getSettings(), getCustomers()])
+  const [me, sale, settings, customers] = await Promise.all([requireUser(), getSale(id), getAppSettings(), getCustomers()])
   if (!sale) notFound()
   const due = money(sale.totalAmount) - money(sale.paidAmount)
-  const company = settings.find((row) => row.key === "company.name")?.value || "Abu Twins"
+  const brand = letterheadFromSettings(settings)
   const branchCustomers = customers.filter(
     (row) => row.branchId === sale.branchId && !row.name.toLowerCase().includes("walk-in")
   )
 
   const receiptData = {
-    company,
+    company: brand.name,
+    tagline: brand.tagline,
+    logoSrc: brand.logoSrc,
+    footer: brand.footer,
     invoiceNumber: sale.invoiceNumber,
     branch: sale.branch.name,
-    address: settings.find((row) => row.key === "company.address")?.value || sale.branch.address,
-    shopPhone: settings.find((row) => row.key === "company.phone")?.value || sale.branch.phone,
-    email: settings.find((row) => row.key === "company.email")?.value,
+    address: brand.address || sale.branch.address,
+    shopPhone: brand.phone || sale.branch.phone,
+    email: brand.email,
     cashier: sale.user.name ?? "Staff",
     customer: sale.customer?.name ?? null,
     customerPhone: sale.customer?.phone ?? null,
@@ -224,12 +228,9 @@ export default async function SaleDetailPage({
       ) : null}
       <div className="surface-card overflow-hidden print:border-0 print:shadow-none">
         <Receipt
-          company={company}
+          brand={brand}
           invoiceNumber={sale.invoiceNumber}
           branch={sale.branch.name}
-          address={settings.find((row) => row.key === "company.address")?.value || sale.branch.address}
-          shopPhone={settings.find((row) => row.key === "company.phone")?.value || sale.branch.phone}
-          email={settings.find((row) => row.key === "company.email")?.value}
           cashier={sale.user.name ?? "Staff"}
           customer={sale.customer?.name ?? "Walk-in"}
           phone={sale.customer?.phone}
@@ -240,6 +241,9 @@ export default async function SaleDetailPage({
             quantity: item.quantity,
             amount: money(item.totalPrice),
             warranty: warrantyState(sale.saleDate, item.warrantyDays ?? item.product.warrantyDays).label,
+            storage: item.product.storage,
+            condition: item.product.condition,
+            color: item.product.color,
           }))}
           total={money(sale.totalAmount)}
           paid={money(sale.paidAmount)}

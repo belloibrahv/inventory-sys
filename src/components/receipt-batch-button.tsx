@@ -32,7 +32,7 @@ export function ReceiptBatchButton() {
         toast.message("There was no sale on those days, so there is nothing to print.")
         return
       }
-      const mark = await loadMark()
+      const mark = await loadMark(result.receipts[0]?.logoSrc)
       const doc = new jsPDF({ unit: "mm", format: "a4" })
       result.receipts.forEach((receipt, index) => {
         if (index > 0) doc.addPage()

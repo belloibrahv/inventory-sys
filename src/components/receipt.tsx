@@ -1,4 +1,6 @@
-import { formatCurrency, formatDateTime, money } from "@/lib/utils"
+import { DocumentLetterhead, DocumentPaperFooter } from "@/components/document-letterhead"
+import type { LetterheadBrand } from "@/lib/letterhead"
+import { formatCurrency, formatDateTime } from "@/lib/utils"
 
 type Line = {
   name: string
@@ -12,12 +14,9 @@ type Line = {
 }
 
 export function Receipt({
-  company,
+  brand,
   invoiceNumber,
   branch,
-  address,
-  email,
-  shopPhone,
   cashier,
   customer,
   phone,
@@ -28,12 +27,9 @@ export function Receipt({
   method,
   notes,
 }: {
-  company: string
+  brand: LetterheadBrand
   invoiceNumber: string
   branch: string
-  address?: string | null
-  email?: string | null
-  shopPhone?: string | null
   cashier: string
   customer: string
   phone?: string | null
@@ -47,22 +43,12 @@ export function Receipt({
   const due = Math.max(0, total - paid)
   return (
     <section className="invoice mx-auto w-full max-w-[190mm] overflow-hidden bg-white text-slate-900">
-      <header className="flex items-center justify-between gap-4 bg-[#001BCE] px-6 py-5 text-white">
-        <div className="flex items-center gap-3">
-          <img src="/brand/ab-mark.jpg" alt="" width={48} height={48} className="rounded-full bg-white" />
-          <div>
-            <p className="text-lg font-semibold tracking-tight">{company}</p>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7CFF86]">Softskills Investment</p>
-          </div>
-        </div>
-        <div className="text-right text-[11px] text-white/80">
-          <p className="text-sm font-semibold text-white">SALES INVOICE</p>
-          <p>{branch}</p>
-          {address ? <p>{address}</p> : null}
-          {shopPhone ? <p>{shopPhone}</p> : null}
-          {email ? <p>{email}</p> : null}
-        </div>
-      </header>
+      <DocumentLetterhead
+        brand={brand}
+        documentKind="Sales invoice"
+        documentTitle={invoiceNumber}
+        meta={[branch, formatDateTime(soldAt)]}
+      />
 
       <div className="grid gap-4 border-b border-slate-200 px-6 py-4 text-sm md:grid-cols-2">
         <div>
@@ -91,7 +77,7 @@ export function Receipt({
             <tr key={`${item.name}-${index}`} className="border-b border-slate-100">
               <td className="px-6 py-3">
                 <p className="font-medium text-slate-900">{item.name}</p>
-                {(item.storage || item.condition || item.color) ? (
+                {item.storage || item.condition || item.color ? (
                   <p className="text-[11px] font-medium text-slate-600">
                     {[item.storage, item.condition, item.color].filter(Boolean).join(" · ")}
                   </p>
@@ -123,10 +109,7 @@ export function Receipt({
         </div>
       </div>
 
-      <footer className="flex items-center justify-between bg-slate-50 px-6 py-3 text-[10px] uppercase tracking-[0.16em] text-slate-500">
-        <span>Own The Future</span>
-        <span>Thank you for buying from Abu Twins</span>
-      </footer>
+      <DocumentPaperFooter brand={brand} extra={branch} />
     </section>
   )
 }

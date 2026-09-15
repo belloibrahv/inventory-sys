@@ -50,7 +50,7 @@ export function Header({
   const isHome = pathname === "/" || pathname === "/dashboard"
 
   return (
-    <header className="sticky top-0 z-30 flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-border bg-background/85 px-4 py-2 backdrop-blur-xl md:px-6">
+    <header className="app-header sticky top-0 z-30 flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-border bg-background/85 px-4 py-2 backdrop-blur-xl md:px-6">
       <div className="flex min-w-0 items-center gap-2">
         <Button
           variant="ghost"

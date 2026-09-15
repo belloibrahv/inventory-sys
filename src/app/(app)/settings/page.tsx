@@ -1,7 +1,10 @@
 import { getSettings } from "@/app/actions/finance"
 import { PageHeader } from "@/components/shared"
 import { can } from "@/lib/permissions"
+import { isLetterheadKey, letterheadFromSettings } from "@/lib/letterhead"
+import { canEditLetterhead } from "@/lib/roles"
 import { requireUser } from "@/lib/session"
+import { LetterheadEditor } from "./letterhead-editor"
 import { SettingCards, isCompanySetting } from "./setting-cards"
 
 /**
@@ -15,19 +18,36 @@ import { SettingCards, isCompanySetting } from "./setting-cards"
 export default async function SettingsPage() {
   const [me, settings] = await Promise.all([requireUser(), getSettings()])
   const canEdit = await can(me.role, "action.settings")
+  const letterheadEdit = canEditLetterhead(me.role)
+  const map = Object.fromEntries(settings.map((row) => [row.key, row.value]))
+  const brand = letterheadFromSettings({
+    companyName: map["company.name"],
+    productName: map["company.product"],
+    companyPhone: map["company.phone"],
+    companyAddress: map["company.address"],
+    companyEmail: map["company.email"],
+    companyLogo: map["company.logo"],
+    companyFooter: map["company.footer"],
+  })
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Shop details"
-        description="The name, phone, address and currency printed on every receipt and invoice, in every shop."
+        description="The logo, name, phone and address printed on every invoice, receipt and report."
       />
+      <LetterheadEditor brand={brand} canEdit={letterheadEdit} />
       {!canEdit ? (
         <div className="surface-card p-5 text-sm text-muted-foreground">
-          You can read these. Only staff allowed to change shop settings can edit them.
+          Currency stays with the main admin. The invoice header above can be changed by the main admin, the CEO, the accountant or the auditor.
         </div>
-      ) : null}
-      <SettingCards settings={settings.filter((row) => isCompanySetting(row.key))} canEdit={canEdit} />
+      ) : (
+        <h2 className="text-sm font-semibold">Currency</h2>
+      )}
+      <SettingCards
+        settings={settings.filter((row) => isCompanySetting(row.key) && !isLetterheadKey(row.key))}
+        canEdit={canEdit}
+      />
     </div>
   )
 }

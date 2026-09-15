@@ -6,8 +6,9 @@ import * as bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
 import { branchFilter, viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
-import { canApprove, canManageFinance, canManageStaff, isSuperAdmin, scopedBranchId } from "@/lib/rbac"
+import { canApprove, canManageFinance, canManageStaff, canEditLetterhead, isSuperAdmin, scopedBranchId } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
+import { isLetterheadKey } from "@/lib/letterhead"
 import { generateDocNumber, money } from "@/lib/utils"
 import { saleTenders, sumSaleTenders } from "@/lib/sale-money"
 import { healOpeningStockBills } from "@/lib/opening-stock-money"
@@ -653,6 +654,24 @@ export async function getSettings() {
       description: "Second person must say yes before received goods become sellable",
     },
   })
+  await prisma.setting.upsert({
+    where: { key: "company.logo" },
+    update: {},
+    create: {
+      key: "company.logo",
+      value: "",
+      description: "Logo printed on invoices",
+    },
+  })
+  await prisma.setting.upsert({
+    where: { key: "company.footer" },
+    update: {},
+    create: {
+      key: "company.footer",
+      value: "Thank you for buying from Abu Twins",
+      description: "Thank-you line at the bottom of invoices",
+    },
+  })
   return prisma.setting.findMany({ orderBy: { key: "asc" } })
 }
 
@@ -661,6 +680,9 @@ export async function saveSetting(formData: FormData) {
   if (!(await can(user.role, "action.settings"))) return { error: "Only the main admin can change settings, unless the main admin gives you that right." }
   const key = String(formData.get("key"))
   const value = String(formData.get("value"))
+  if (isLetterheadKey(key)) {
+    return { error: "Change the invoice header on Shop details, not here." }
+  }
   await prisma.setting.update({ where: { key }, data: { value } })
   revalidatePath("/settings")
   revalidatePath("/settings/rules")
@@ -668,6 +690,94 @@ export async function saveSetting(formData: FormData) {
   revalidatePath("/inventory")
   revalidatePath("/sales")
   revalidatePath("/incoming")
+  return { success: true }
+}
+
+const LETTERHEAD_FIELDS = [
+  { key: "company.name", description: "Legal trading name printed on invoices" },
+  { key: "company.product", description: "Line under the name on invoices" },
+  { key: "company.phone", description: "Phone on invoices" },
+  { key: "company.address", description: "Address on invoices" },
+  { key: "company.email", description: "Email on invoices" },
+  { key: "company.logo", description: "Logo printed on invoices" },
+  { key: "company.footer", description: "Thank-you line at the bottom of invoices" },
+] as const
+
+function validLogo(value: string) {
+  if (!value) return true
+  if (!value.startsWith("data:image/")) return false
+  if (value.length > 220_000) return false
+  return /^data:image\/(jpeg|jpg|png|webp);base64,/i.test(value)
+}
+
+/**
+ * Name, logo, address and thank-you line on every printed paper.
+ *
+ * Main admin, CEO, accountant and auditor may change this. Selling rules stay
+ * with the main admin.
+ */
+export async function saveLetterhead(formData: FormData) {
+  const user = await requireUser()
+  if (!(await can(user.role, "view.settings"))) {
+    return { error: "You cannot open shop settings." }
+  }
+  if (!canEditLetterhead(user.role)) {
+    return { error: "Only the main admin, the CEO, the accountant or the auditor can change the invoice header." }
+  }
+
+  const next: Array<{ key: string; value: string; description: string }> = [
+    { key: "company.name", value: String(formData.get("name") || "").trim(), description: LETTERHEAD_FIELDS[0].description },
+    { key: "company.product", value: String(formData.get("tagline") || "").trim(), description: LETTERHEAD_FIELDS[1].description },
+    { key: "company.phone", value: String(formData.get("phone") || "").trim(), description: LETTERHEAD_FIELDS[2].description },
+    { key: "company.address", value: String(formData.get("address") || "").trim(), description: LETTERHEAD_FIELDS[3].description },
+    { key: "company.email", value: String(formData.get("email") || "").trim(), description: LETTERHEAD_FIELDS[4].description },
+    { key: "company.footer", value: String(formData.get("footer") || "").trim(), description: LETTERHEAD_FIELDS[6].description },
+  ]
+  if (!next[0].value) return { error: "Type the company name that should print on invoices." }
+  if (!next[3].value) return { error: "Type the address that should print on invoices." }
+
+  const logo = String(formData.get("logo") || "")
+  const clearLogo = String(formData.get("clearLogo") || "") === "1"
+  if (clearLogo) {
+    next.push({ key: "company.logo", value: "", description: LETTERHEAD_FIELDS[5].description })
+  } else if (logo) {
+    if (!validLogo(logo)) return { error: "Use a JPEG, PNG or WebP logo under 150 KB." }
+    next.push({ key: "company.logo", value: logo, description: LETTERHEAD_FIELDS[5].description })
+  }
+
+  for (const row of next) {
+    await prisma.setting.upsert({
+      where: { key: row.key },
+      update: { value: row.value, description: row.description },
+      create: row,
+    })
+  }
+
+  await prisma.auditLog.create({
+    data: {
+      userId: user.id,
+      action: "UPDATE",
+      entityType: "Setting",
+      entityId: "company.letterhead",
+      newValue: JSON.stringify({
+        name: next[0].value,
+        tagline: next[1].value,
+        phone: next[2].value,
+        address: next[3].value,
+        email: next[4].value,
+        footer: next[5].value,
+        logo: clearLogo ? "default" : logo ? "updated" : "unchanged",
+      }),
+      branchId: user.branchId,
+    },
+  })
+
+  revalidatePath("/settings")
+  revalidatePath("/sales")
+  revalidatePath("/reports")
+  revalidatePath("/audit/books")
+  revalidatePath("/help")
+  revalidatePath("/pos")
   return { success: true }
 }
 

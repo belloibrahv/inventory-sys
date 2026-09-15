@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/session"
 import { canManageFinance, canSell, scopedBranchId } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { getAppSettings, lowStockLimit } from "@/lib/settings"
+import { letterheadFromSettings } from "@/lib/letterhead"
 import { generateDocNumber, money } from "@/lib/utils"
 import { ConflictError, claimImei, creditInvoice, drawStock, settle, shiftCustomerBalance } from "@/lib/concurrency"
 import { scopeRecord, viewBranchFilter } from "@/lib/branch-scope"
@@ -882,14 +883,18 @@ export async function getReceiptsForRange(from: string, to: string) {
   })
 
   const settings = await getAppSettings()
+  const brand = letterheadFromSettings(settings)
   return {
     receipts: sales.map((sale) => ({
-      company: settings.productName,
+      company: brand.name,
+      tagline: brand.tagline,
+      logoSrc: brand.logoSrc,
+      footer: brand.footer,
       invoiceNumber: sale.invoiceNumber,
       branch: sale.branch.name,
-      address: settings.companyAddress || sale.branch.address,
-      shopPhone: settings.companyPhone || sale.branch.phone,
-      email: settings.companyEmail,
+      address: brand.address || sale.branch.address,
+      shopPhone: brand.phone || sale.branch.phone,
+      email: brand.email,
       cashier: sale.user.name ?? "Staff",
       customer: sale.customer?.name ?? null,
       customerPhone: sale.customer?.phone ?? null,

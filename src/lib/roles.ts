@@ -20,6 +20,17 @@ export function isSuperAdmin(role: UserRole) {
   return role === "SUPER_ADMIN"
 }
 
+/**
+ * Who may change the name, logo and address printed on invoices.
+ *
+ * The client asked for the main admin, the CEO and the books desk
+ * (accountant / auditor) to set the letterhead from Shop details, without
+ * also handing them the selling rules.
+ */
+export function canEditLetterhead(role: UserRole) {
+  return role === "SUPER_ADMIN" || role === "CEO" || role === "AUDITOR" || role === "ACCOUNTANT"
+}
+
 export function isBooksDesk(role: UserRole) {
   return role === "AUDITOR" || role === "ACCOUNTANT"
 }

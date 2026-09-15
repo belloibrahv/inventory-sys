@@ -430,6 +430,8 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
       phone: settings.companyPhone,
       address: settings.companyAddress,
       email: settings.companyEmail,
+      logo: settings.companyLogo,
+      footer: settings.companyFooter,
     },
     invoices: sales.slice(0, 40).map((sale) => ({
       id: sale.id,

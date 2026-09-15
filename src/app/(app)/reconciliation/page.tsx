@@ -3,15 +3,18 @@ import { getReconciliations } from "@/app/actions/finance"
 import { getBranches } from "@/app/actions/parties"
 import { getPosLookups } from "@/app/actions/sales"
 import { EmptyState, PageHeader, StatusBadge } from "@/components/shared"
+import { letterheadFromSettings } from "@/lib/letterhead"
+import { getAppSettings } from "@/lib/settings"
 import { formatCurrency, formatDate, money } from "@/lib/utils"
 import { StockCountView } from "./stock-count-view"
 
 export default async function ReconciliationPage() {
-  const [rows, inventory, branches, lookups] = await Promise.all([
+  const [rows, inventory, branches, lookups, settings] = await Promise.all([
     getReconciliations(),
     getInventory(),
     getBranches(),
     getPosLookups(),
+    getAppSettings(),
   ])
 
   const activeBranches = branches.filter((b) => b.isActive).map((b) => ({ id: b.id, name: b.name, code: b.code }))
@@ -43,7 +46,12 @@ export default async function ReconciliationPage() {
       />
 
       {/* Stock count form and table */}
-      <StockCountView branches={activeBranches} inventory={formattedInventory} defaultBranchId={lookups.branchId} />
+      <StockCountView
+        branches={activeBranches}
+        inventory={formattedInventory}
+        defaultBranchId={lookups.branchId}
+        brand={letterheadFromSettings(settings)}
+      />
 
       {/* Past Stock Count Reports */}
       <div className="space-y-4 print:hidden">

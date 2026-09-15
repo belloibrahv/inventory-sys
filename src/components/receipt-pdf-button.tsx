@@ -21,7 +21,7 @@ export function ReceiptPdfButton({ data, label = "Download receipt" }: { data: R
       onClick={async () => {
         setBusy(true)
         try {
-          const mark = await loadMark()
+          const mark = await loadMark(data.logoSrc)
           const doc = new jsPDF({ unit: "mm", format: "a4" })
           drawReceipt(doc, data, mark)
           doc.save(receiptFileName(data.invoiceNumber))

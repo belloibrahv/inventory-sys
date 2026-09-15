@@ -206,9 +206,14 @@ body {
   body {
     background: white !important;
     color: #0f172a !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
+  /* Hide the shop chrome only. Document letterheads also used <header>, so a
+     blanket `header { display: none }` used to strip the company name, logo
+     and address off every invoice that was printed. */
   aside,
-  header,
+  .app-header,
   .shop-calculator,
   .books-chrome,
   .reports-chrome,
@@ -249,10 +254,30 @@ body {
     display: block !important;
     break-inside: avoid;
   }
-  .books-statement header,
-  .reports-statement header,
-  .manual-pack header {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+  .letterhead,
+  .letterhead-band,
+  .letterhead-rule,
+  .letterhead-foot,
+  .invoice,
+  .books-statement,
+  .reports-statement,
+  .manual-pack {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
+}
+
+.letterhead-band {
+  background: #001bce;
+}
+.letterhead-rule {
+  height: 4px;
+  background: #18c020;
+}
+.letterhead-foot {
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+}
+.letterhead-logo {
+  box-shadow: 0 0 0 2px #7cff86;
 }
