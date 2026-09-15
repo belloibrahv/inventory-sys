@@ -11,6 +11,7 @@ import { SectionTabs } from "@/components/layout/section-tabs"
 import { pathIsAllowed } from "@/lib/access-path"
 import { OfflineBanner } from "@/components/offline-banner"
 import { ShopCalculator } from "@/components/shop-calculator"
+import { DecisionProvider } from "@/hooks/use-decision"
 import { readSavedDesktopSidebar, useUI } from "@/store/ui"
 import { cn } from "@/lib/utils"
 
@@ -48,22 +49,24 @@ export function AppShell({
   }, [setDesktopSidebar])
 
   return (
-    <div className="min-h-screen bg-background">
-      <AccessGate allowedHrefs={allowedHrefs} fallback={allowedHrefs[0] || "/login"} />
-      <PasswordGate mustChange={Boolean(user.mustChangePassword)} />
-      <Sidebar allowedHrefs={allowedHrefs} />
-      <div className={cn("transition-[padding] duration-200", desktopSidebar ? "lg:pl-[264px]" : "lg:pl-0")}>
-        <Header title={title} unread={unread} user={user} shops={shops} />
-        <div className="mx-auto w-full max-w-[1600px] px-4 md:px-6">
-          <div className="pt-4">
-            <OfflineBanner />
+    <DecisionProvider>
+      <div className="min-h-screen bg-background">
+        <AccessGate allowedHrefs={allowedHrefs} fallback={allowedHrefs[0] || "/login"} />
+        <PasswordGate mustChange={Boolean(user.mustChangePassword)} />
+        <Sidebar allowedHrefs={allowedHrefs} />
+        <div className={cn("transition-[padding] duration-200", desktopSidebar ? "lg:pl-[264px]" : "lg:pl-0")}>
+          <Header title={title} unread={unread} user={user} shops={shops} />
+          <div className="mx-auto w-full max-w-[1600px] px-4 md:px-6">
+            <div className="pt-4">
+              <OfflineBanner />
+            </div>
+            {allowed ? <SectionTabs allowedHrefs={allowedHrefs} /> : null}
+            <main className="space-y-5 py-5 md:py-6">{allowed ? children : null}</main>
           </div>
-          {allowed ? <SectionTabs allowedHrefs={allowedHrefs} /> : null}
-          <main className="space-y-5 py-5 md:py-6">{allowed ? children : null}</main>
         </div>
+        <CommandPalette allowedHrefs={allowedHrefs} />
+        <ShopCalculator />
       </div>
-      <CommandPalette allowedHrefs={allowedHrefs} />
-      <ShopCalculator />
-    </div>
+    </DecisionProvider>
   )
 }

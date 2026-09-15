@@ -1,12 +1,13 @@
 "use client"
 
 import type { ReactNode } from "react"
-import { useRef } from "react"
+import { useRef, useState, useTransition } from "react"
 import { useFormStatus } from "react-dom"
 import { useRouter } from "next/navigation"
-import { Loader2 } from "lucide-react"
+import { AlertCircle, Loader2, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { DecisionModal, type DecisionTone } from "@/components/ui/decision-modal"
 import { cn } from "@/lib/utils"
 
 /**
@@ -14,8 +15,7 @@ import { cn } from "@/lib/utils"
  *
  * It has to be its own component because useFormStatus only reports on the form
  * above it. While the shop is waiting it says so and refuses further presses,
- * which is what stops a cashier on slow mobile data from tapping Complete sale
- * three times because nothing looked like it happened.
+ * preventing accidental duplicate submissions.
  */
 export function SubmitButton({
   children = "Save",
@@ -54,6 +54,15 @@ export function SubmitButton({
   )
 }
 
+export interface ActionFormConfirmConfig {
+  title: string
+  description?: string
+  tone?: DecisionTone
+  impactItems?: string[]
+  confirmLabel?: string
+  cancelLabel?: string
+}
+
 export function ActionForm({
   action,
   children,
@@ -65,6 +74,7 @@ export function ActionForm({
   buttonClassName = "mt-4",
   variant = "default",
   size = "default",
+  confirmModal,
 }: {
   action: (formData: FormData) => Promise<{ error?: string; success?: boolean; redirectTo?: string } | void>
   children: ReactNode
@@ -78,47 +88,119 @@ export function ActionForm({
   buttonClassName?: string
   variant?: "default" | "outline" | "destructive" | "secondary" | "ghost"
   size?: "default" | "sm" | "lg" | "icon"
+  /** Optional confirmation decision modal before submitting */
+  confirmModal?: ActionFormConfirmConfig
 }) {
   const router = useRouter()
   const ref = useRef<HTMLFormElement>(null)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [pendingFormData, setPendingFormData] = useState<FormData | null>(null)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [isPending, startTransition] = useTransition()
+
+  const executeAction = async (formData: FormData) => {
+    setFormError(null)
+    let result
+    try {
+      result = await action(formData)
+    } catch (err) {
+      console.error("ActionForm submission failed:", err)
+      const msg = "Network request failed to reach the server. Check your connection and try again."
+      setFormError(msg)
+      toast.error(msg)
+      return
+    }
+
+    if (result && "error" in result && result.error) {
+      setFormError(result.error)
+      toast.error(result.error)
+      return
+    }
+
+    toast.success(successMessage)
+    if (result && "redirectTo" in result && result.redirectTo) {
+      router.push(result.redirectTo)
+      return
+    }
+    if (resetOnSuccess) ref.current?.reset()
+    router.refresh()
+  }
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    if (confirmModal) {
+      e.preventDefault()
+      const formData = new FormData(e.currentTarget)
+      setPendingFormData(formData)
+      setConfirmOpen(true)
+    }
+  }
+
+  const handleModalConfirm = () => {
+    if (!pendingFormData) return
+    const fd = pendingFormData
+    setPendingFormData(null)
+    setConfirmOpen(false)
+    startTransition(() => {
+      void executeAction(fd)
+    })
+  }
 
   return (
-    <form
-      ref={ref}
-      className={className}
-      action={async (formData) => {
-        let result
-        try {
-          result = await action(formData)
-        } catch (err) {
-          console.error("ActionForm submission failed:", err)
-          // A dropped connection used to leave the button spinning with no word
-          // to the person standing at the counter.
-          toast.error("That did not reach the shop system. Check your network and try again.")
-          return
-        }
-        if (result && "error" in result && result.error) {
-          toast.error(result.error)
-          return
-        }
-        toast.success(successMessage)
-        if (result && "redirectTo" in result && result.redirectTo) {
-          router.push(result.redirectTo)
-          return
-        }
-        if (resetOnSuccess) ref.current?.reset()
-        router.refresh()
-      }}
-    >
-      {children}
-      <SubmitButton
-        variant={variant}
-        size={size}
-        className={cn(buttonClassName)}
-        pendingLabel={pendingLabel}
+    <>
+      <form
+        ref={ref}
+        className={className}
+        onSubmit={handleSubmit}
+        action={confirmModal ? undefined : executeAction}
       >
-        {submit}
-      </SubmitButton>
-    </form>
+        {formError ? (
+          <div className="mb-4 flex items-start justify-between gap-2 rounded-xl border border-destructive/20 bg-destructive/10 p-3.5 text-sm text-destructive">
+            <div className="flex items-start gap-2.5">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{formError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFormError(null)}
+              className="text-destructive/70 hover:text-destructive"
+              aria-label="Dismiss error"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ) : null}
+
+        {children}
+
+        <SubmitButton
+          variant={variant}
+          size={size}
+          className={cn(buttonClassName)}
+          pendingLabel={pendingLabel}
+          disabled={isPending}
+        >
+          {submit}
+        </SubmitButton>
+      </form>
+
+      {confirmModal ? (
+        <DecisionModal
+          open={confirmOpen}
+          onOpenChange={setConfirmOpen}
+          tone={confirmModal.tone ?? "warning"}
+          title={confirmModal.title}
+          description={confirmModal.description}
+          impactItems={confirmModal.impactItems}
+          confirmLabel={confirmModal.confirmLabel ?? "Yes, Proceed"}
+          cancelLabel={confirmModal.cancelLabel ?? "Cancel"}
+          busy={isPending}
+          onConfirm={handleModalConfirm}
+          onCancel={() => {
+            setConfirmOpen(false)
+            setPendingFormData(null)
+          }}
+        />
+      ) : null}
+    </>
   )
 }

@@ -12,7 +12,8 @@ import { Select } from "@/components/ui/select"
 import { pushSaleQueue } from "@/lib/offline-sales"
 import { applyParkedToTillSnapshot, readTillSnapshot, saveTillSnapshot, type TillBranch, type TillCustomer, type TillImei, type TillProduct, type TillSellLock, type TillSnapshot } from "@/lib/till-catalog"
 import { formatCurrency, money } from "@/lib/utils"
-import { Trash2 } from "lucide-react"
+import { Trash2, RotateCcw } from "lucide-react"
+import { useDecision } from "@/hooks/use-decision"
 
 export function PosClient({
   products: serverProducts,
@@ -62,6 +63,48 @@ export function PosClient({
   const [savingCustomer, setSavingCustomer] = useState(false)
   const [cart, setCart] = useState<Array<{ productId: string; imeiId?: string; name: string; imei?: string; unitPrice: number; minPrice: number; quantity: number }>>([])
   const [busy, setBusy] = useState(false)
+  const { confirm } = useDecision()
+
+  const handleClearCart = async () => {
+    if (cart.length === 0) return
+    const ok = await confirm({
+      title: "Discard Active Sale?",
+      description: `You currently have ${cart.length} item(s) scanned in this transaction. Discarding will clear the active register and release scanned devices back to inventory.`,
+      tone: "danger",
+      confirmLabel: "Yes, Discard Cart",
+      cancelLabel: "Keep Cart",
+      impactItems: [
+        `${cart.length} item(s) will be cleared immediately`,
+        "Scanned IMEIs and serial numbers will become available for other sales",
+      ],
+    })
+    if (ok) {
+      setCart([])
+      setPaid(0)
+    }
+  }
+
+  const handleBranchChange = async (newBranchId: string) => {
+    if (newBranchId === branchId) return
+    if (cart.length > 0) {
+      const ok = await confirm({
+        title: "Switch Branch Location?",
+        description: "Switching branches clears all items currently scanned in this cart because inventory records are branch-isolated.",
+        tone: "warning",
+        confirmLabel: "Yes, Switch & Clear",
+        cancelLabel: "Cancel",
+        impactItems: [
+          `Active cart of ${cart.length} item(s) will be cleared`,
+          "Items cannot be sold across different branch inventories simultaneously",
+        ],
+      })
+      if (!ok) return
+    }
+    setBranchId(newBranchId)
+    setCart([])
+    setPaid(0)
+    setCustomerId("")
+  }
 
   useEffect(() => {
     const onLine = () => {
@@ -262,6 +305,22 @@ export function PosClient({
       toast.error("A part payment needs a buyer name. A walk-in must pay everything now.")
       return
     }
+    if (due > 0 && customerId) {
+      const cust = customers.find((c) => c.id === customerId)
+      const ok = await confirm({
+        title: "Confirm Receivable / Balance Due",
+        description: `This transaction leaves an unpaid balance of ${formatCurrency(due)} to be booked against ${cust?.name || "the customer"}.`,
+        tone: "warning",
+        confirmLabel: "Yes, Book Receivable",
+        cancelLabel: "Adjust Payment Amount",
+        impactItems: [
+          `Immediate payment received: ${formatCurrency(paid)}`,
+          `Remaining balance owed to shop: ${formatCurrency(due)}`,
+          `Customer ledger: ${cust?.name || "Selected customer"}`,
+        ],
+      })
+      if (!ok) return
+    }
     if (!canOverrideFloor && cart.some((line) => line.unitPrice < line.minPrice)) {
       toast.error("One price is under the lowest price allowed. Raise it, or ask the main admin.")
       return
@@ -384,6 +443,21 @@ export function PosClient({
           ) : null}
         </div>
         <div className="surface-card overflow-hidden">
+          <div className="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-2.5">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Current Transaction Items ({cart.length})
+            </span>
+            {cart.length > 0 ? (
+              <button
+                type="button"
+                onClick={handleClearCart}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-destructive hover:underline"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Clear Cart
+              </button>
+            ) : null}
+          </div>
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left text-muted-foreground">
               <tr>
@@ -450,12 +524,7 @@ export function PosClient({
           <span className="mb-1 block text-muted-foreground">Shop</span>
           <Select
             value={branchId}
-            onChange={(event) => {
-              setBranchId(event.target.value)
-              setCart([])
-              setPaid(0)
-              setCustomerId("")
-            }}
+            onChange={(event) => void handleBranchChange(event.target.value)}
           >
             {branches.map((branch) => (
               <option key={branch.id} value={branch.id}>
