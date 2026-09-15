@@ -94,16 +94,16 @@ type Drilldown =
   | "RETURNS"
 
 const DRILLDOWN_TITLE: Record<Drilldown, string> = {
-  REVENUE: "Itemized Gross Sales Transactions",
-  RECEIVED: "Payments & Collections Received",
-  EXPENSES: "Authorized Operating Expenditures (OPEX)",
-  STOCK: "Current Stock Valuation Ledger",
-  OPENING: "Opening Stock Capital Baseline",
-  BOUGHT: "Vendor Purchases & Inbound Goods Receipts",
-  DEBTORS: "Customer Accounts Receivable Ledger (Debtors)",
-  CREDITORS: "Vendor Accounts Payable Ledger (Creditors)",
-  SWAPS: "Customer Device Trade-Ins & Swaps",
-  RETURNS: "Customer Returns & Warranty RMA Log",
+  REVENUE: "Sales",
+  RECEIVED: "Payments received",
+  EXPENSES: "Shop expenses",
+  STOCK: "Shop stock value",
+  OPENING: "Opening stock value",
+  BOUGHT: "Goods from supplier",
+  DEBTORS: "Customers who still owe us",
+  CREDITORS: "Still owed to suppliers",
+  SWAPS: "Swap Deal records",
+  RETURNS: "Returns",
 }
 
 const day = (value: Date | string) => new Date(value).toISOString().slice(0, 10)
@@ -265,7 +265,7 @@ export function ReportsClientView({
       ["Total Payables", "", "", supplierOwed],
     ],
     SWAPS: () => [
-      ["Swap Number", "Customer", "Shop", "Item Swapped For", "Trade-in Value", "Balance Paid", "Date"],
+      ["Swap Number", "Customer", "Shop", "Item Swapped For", "Swap Deal Value", "Balance Paid", "Date"],
       ...swaps.map((row) => [
         row.swapNumber,
         row.customer?.name ?? "Customer",
@@ -330,10 +330,10 @@ export function ReportsClientView({
 
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="ghost" size="sm">
-              <Link href="/audit/books">Financial Audit Pack</Link>
+              <Link href="/audit/books">Check the books</Link>
             </Button>
             <Button asChild variant="ghost" size="sm">
-              <Link href="/finance">Cash Flow &amp; Ledger</Link>
+              <Link href="/finance">Money in &amp; out</Link>
             </Button>
             <ReportsPdfButton data={pack} />
             <PrintButton label="Print / Save PDF" />
@@ -370,7 +370,7 @@ export function ReportsClientView({
           <StatCard
             label="Total payments received"
             value={formatCurrency(pack.totals.collected)}
-            hint="Gross receipts: cash received, bank transfer, and POS"
+            hint="Cash received plus Transfer received plus POS received. Credit still owed is not in this figure."
             icon={<Banknote className="h-4 w-4" />}
             tone="success"
             onClick={() => setDrilldown("RECEIVED")}
@@ -436,9 +436,9 @@ export function ReportsClientView({
 
         <StatGrid>
           <StatCard
-            label="Trade-in value"
+            label="Swap Deal value"
             value={formatCurrency(pack.totals.swaps)}
-            hint="Total cash differentials collected on trade-in transactions"
+            hint="Cash difference collected on Swap Deal sales"
             onClick={() => setDrilldown("SWAPS")}
           />
           <StatCard
@@ -504,7 +504,7 @@ export function ReportsClientView({
           <TableShell
             caption={
               <>
-                <h2 className="text-sm font-semibold tracking-tight">Accounts Receivable (Customer Balances)</h2>
+                <h2 className="text-sm font-semibold tracking-tight">Customers who still owe us</h2>
                 <div className="flex items-center gap-2">
                   <TableDownload
                     filename={`${fileScope}-receivables`}
@@ -516,7 +516,7 @@ export function ReportsClientView({
                 </div>
               </>
             }
-            columns={[{ label: "Customer" }, { label: "Shop" }, { label: "Balance Due", align: "right" }]}
+            columns={[{ label: "Customer" }, { label: "Shop" }, { label: "Still owed", align: "right" }]}
             footer={
               <TablePager
                 page={debtorsPager.page}
@@ -554,12 +554,12 @@ export function ReportsClientView({
           <TableShell
             caption={
               <>
-                <h2 className="text-sm font-semibold tracking-tight">Accounts Payable (Pending Vendor Bills)</h2>
+                <h2 className="text-sm font-semibold tracking-tight">Still owed to suppliers</h2>
                 <div className="flex items-center gap-2">
                   <TableDownload
                     filename={`${fileScope}-supplier-bills-unpaid`}
                     rows={() => [
-                      ["Bill", "Supplier", "Shop", "Payable Balance"],
+                      ["Bill", "Supplier", "Shop", "Still owed"],
                       ...pack.creditors.map((row) => [row.invoice, row.supplier, row.shop, row.owed]),
                     ]}
                   />
@@ -569,7 +569,7 @@ export function ReportsClientView({
                 </div>
               </>
             }
-            columns={[{ label: "Bill" }, { label: "Shop" }, { label: "Payable Balance", align: "right" }]}
+            columns={[{ label: "Bill" }, { label: "Shop" }, { label: "Still owed", align: "right" }]}
             footer={
               <TablePager
                 page={creditorsPager.page}
@@ -732,7 +732,7 @@ export function ReportsClientView({
               <span>
                 {returns.length} customer returns ·{" "}
                 <Link href="/returns" className="text-primary hover:underline">
-                  Returns &amp; RMAs
+                  Returns
                 </Link>
               </span>
               <span className="font-semibold text-foreground">{returns.length} return records</span>
@@ -1125,7 +1125,7 @@ export function ReportsClientView({
                   <th>Shop</th>
                   <th>New Item</th>
                   <th>Date</th>
-                  <th className="text-right">Trade-in Value</th>
+                  <th className="text-right">Swap Deal Value</th>
                   <th className="text-right">Balance Paid</th>
                 </tr>
               </thead>

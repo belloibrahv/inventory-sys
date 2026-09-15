@@ -14,7 +14,7 @@ export default async function OpeningStockPage() {
     <div className="space-y-6">
       <PageHeader
         title="Upload stock · Many at once (Excel)"
-        description="Put a whole shop on the system from one Excel file. Use this once per shop for what is already on the shelf."
+        description="Put a whole shop on the system from one Excel file. This is opening stock value only. It is not a supplier bill to pay. Use this once per shop for what is already on the shelf."
       />
 
       <div className="surface-card border-primary/30 bg-primary/5 p-4 text-sm text-muted-foreground">
@@ -38,9 +38,10 @@ export default async function OpeningStockPage() {
         <h2 className="text-sm font-semibold">Before you upload</h2>
         <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
           <li>One sheet covers one shop. Do the shops one after the other.</li>
-          <li>The system makes its own bill number, so do not type one.</li>
+          <li>The system makes its own opening stock number, so do not type one.</li>
           <li>
-            Type what has been paid on that stock. Whatever is left shows as money we still owe on Goods from supplier.
+            There is no paid or unpaid on this sheet. The value is what the shop started with. New cartons with a bill
+            go on Supplier bill, where payment belongs.
           </li>
           <li>Phones that are already on the system are left exactly as they are. Nothing is doubled.</li>
           <li>

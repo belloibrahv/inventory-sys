@@ -11,7 +11,7 @@ export default async function SwapsPage() {
     <div className="page-split">
       <div>
         <PageHeader
-          title="Swaps"
+          title="Swap Deal"
           description="A buyer brings an old phone. Agree what it is worth, wait for yes, hand over the new phone, settle the money, then print the bill."
         />
         <SwapsList swaps={swaps} />

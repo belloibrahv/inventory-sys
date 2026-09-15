@@ -30,7 +30,7 @@ export default async function WarrantyPage() {
                 <option key={product.id} value={product.id}>{product.name} · {product.warrantyDays} days</option>
               ))}
             </Select>
-            <Input name="warrantyDays" type="number" defaultValue={365} required />
+            <Input name="warrantyDays" type="number" defaultValue={0} required />
           </ActionForm>
         </SectionCard>
 

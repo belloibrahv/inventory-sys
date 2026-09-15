@@ -34,7 +34,7 @@ export function reportsKpis(data: ReportsPack) {
     { label: "Inventory valuation (Cost)", value: data.totals.stock, money: true },
     { label: "Sales volume", value: data.totals.invoices, money: false },
     { label: "Receivables", value: data.totals.owing, money: true },
-    { label: "Trade-in value", value: data.totals.swaps, money: true },
+    { label: "Swap Deal value", value: data.totals.swaps, money: true },
     { label: "Returned products", value: data.totals.returns, money: false },
   ]
 }

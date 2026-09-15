@@ -83,7 +83,7 @@ export function ReportsStatement({ data }: { data: ReportsPack }) {
 
       <div className="grid border-t border-slate-200 md:grid-cols-2">
         <div className="border-b border-slate-200 px-6 py-4 md:border-b-0 md:border-r">
-          <h3 className="text-sm font-semibold">Accounts Receivable (Receivables)</h3>
+          <h3 className="text-sm font-semibold">Customers who still owe us</h3>
           <table className="mt-2 w-full text-[11px]">
             <tbody>
               {data.debtors.map((row) => (
@@ -93,13 +93,13 @@ export function ReportsStatement({ data }: { data: ReportsPack }) {
                 </tr>
               ))}
               {data.debtors.length === 0 ? (
-                <tr><td colSpan={2} className="py-3 text-slate-500">No outstanding receivables.</td></tr>
+                <tr><td colSpan={2} className="py-3 text-slate-500">Nobody owes us money right now.</td></tr>
               ) : null}
             </tbody>
           </table>
         </div>
         <div className="px-6 py-4">
-          <h3 className="text-sm font-semibold">Accounts Payable (Suppliers Payment)</h3>
+          <h3 className="text-sm font-semibold">Still owed to suppliers</h3>
           <table className="mt-2 w-full text-[11px]">
             <tbody>
               {data.creditors.map((row) => (

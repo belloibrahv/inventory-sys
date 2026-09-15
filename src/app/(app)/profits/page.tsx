@@ -22,7 +22,7 @@ export default async function ProfitsPage() {
   const net = shopProfit + neighborProfit - data.expenses
 
   const shopCsvRows = [
-    ["Invoice", "Shop", "Date", "Product", "Storage", "Condition", "Color", "Quantity", "Cost Price", "Revenue", "Gross Margin"],
+    ["Invoice", "Shop", "Date", "Product", "Storage", "How it looks", "Color", "Quantity", "Cost price", "Sold for", "Profit"],
     ...data.shopLines.map((row) => [
       row.invoice,
       row.shop,
@@ -43,7 +43,7 @@ export default async function ProfitsPage() {
     ...shopCsvRows,
     [],
     ["Money we kept when we filled an order from a neighbor shop"],
-    ["Order Ref", "Shop", "Date", "Partner", "Customer", "Item", "Cost", "Revenue", "Retained Margin", "Status"],
+    ["Order", "Shop", "Date", "Neighbor", "Customer", "Item", "Cost", "Sold for", "Our profit", "Status"],
     ...data.neighborLines.map((row) => [
       row.fillNumber,
       row.shop,

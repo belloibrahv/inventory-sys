@@ -96,7 +96,7 @@ export function IncomingList({
                 <p className="font-semibold">{lot.lotNumber}</p>
                 <p className="text-sm text-muted-foreground">
                   Destination: {lot.branch.name}
-                  {lot.supplier ? ` · Vendor: ${lot.supplier.name}` : ""}
+                  {lot.supplier ? ` · Supplier: ${lot.supplier.name}` : ""}
                   {lot.purchase ? ` · PO #${lot.purchase.invoiceNumber}` : ""}
                   {lot.expectedDate ? ` · ETA: ${formatShopWhen(lot.expectedDate)}` : ""}
                 </p>
@@ -135,7 +135,7 @@ export function IncomingList({
                       ) : (
                         <>
                           {expected} units ·{" "}
-                          {item.identity === "IMEI" ? "IMEI Tracked" : item.identity === "SERIAL" ? "Serial Tracked" : "Standard SKU"}
+                          {item.identity === "IMEI" ? "Phone, IMEI" : item.identity === "SERIAL" ? "Serial" : "No number"}
                         </>
                       )}
                     </span>
@@ -145,7 +145,7 @@ export function IncomingList({
             </ul>
             {lot.status === "PENDING_APPROVAL" ? (
               <p className="mt-2 rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-warning">
-                Intake verification and unit costing completed. A supervisor must approve this consignment in the Approval Queue before inventory is released to Stock on Hand.
+                Intake is counted. A manager must say yes on Needs approval before these units sit on Shop stock.
               </p>
             ) : null}
             {lot.status === "ARRIVED" &&

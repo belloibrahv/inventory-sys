@@ -17,6 +17,8 @@ import {
   type NewOpeningItem,
   type OpeningChange,
 } from "@/lib/opening-book"
+import { OPENING_STOCK_METHOD } from "@/lib/upload-purchase"
+import { healOpeningStockBills } from "@/lib/opening-stock-money"
 import { money } from "@/lib/utils"
 
 /**
@@ -113,6 +115,7 @@ function totals(lines: BookLine[]) {
 export async function getOpeningShops() {
   const { user, allowed } = await viewer()
   if (!allowed) return []
+  await healOpeningStockBills()
   const scoped = await scopedBranchId(user.role, user.branchId)
   const [shops, records] = await Promise.all([
     prisma.branch.findMany({
@@ -407,19 +410,13 @@ async function applyPlan(
         where: { purchaseId: record.purchaseId },
         select: { totalAmount: true },
       })
-      const bill = await tx.purchase.findUniqueOrThrow({
-        where: { id: record.purchaseId },
-        select: { totalAmount: true, paidAmount: true, paymentMethod: true },
-      })
       const total = lineTotals.reduce((sum, row) => sum + money(row.totalAmount), 0)
-      // Opening stock is already owned, so a bill that was settled stays settled
-      // at its corrected value instead of turning into money owed.
-      const settled = bill.paymentMethod === "OPENING_STOCK" || money(bill.paidAmount) >= money(bill.totalAmount) - 0.005
       await tx.purchase.update({
         where: { id: record.purchaseId },
         data: {
           totalAmount: total.toFixed(2),
-          paidAmount: (settled ? total : Math.min(money(bill.paidAmount), total)).toFixed(2),
+          paidAmount: total.toFixed(2),
+          paymentMethod: OPENING_STOCK_METHOD,
         },
       })
 
@@ -490,7 +487,7 @@ async function addNewItems(tx: Tx, gate: Exclude<Gate, { error: string }>, items
           costPrice: item.costPrice.toFixed(2),
           minimumPrice: item.minimumPrice.toFixed(2),
           sellingPrice: item.sellingPrice.toFixed(2),
-          warrantyDays: 365,
+          warrantyDays: 0,
           description: `Opening stock · found on the count · ${record.invoiceNumber}`,
         },
       })
@@ -770,6 +767,7 @@ export async function closeOpeningStock(formData: FormData): Promise<{ error?: s
  */
 export async function getOpeningReport(requestedBranchId?: string) {
   const user = await requireUser()
+  await healOpeningStockBills()
   if (!(await can(user.role, "view.reports"))) return { shops: [], lines: [], boughtSince: [] }
   const scoped = await scopedBranchId(user.role, user.branchId, requestedBranchId)
   const branchId = scoped || requestedBranchId || null

@@ -79,7 +79,7 @@ export function Header({
             <span>Back</span>
           </button>
         ) : null}
-        <h1 className="truncate text-base font-semibold tracking-tight">{title}</h1>
+        <h1 className="min-w-0 text-base font-semibold tracking-tight whitespace-normal break-words">{title}</h1>
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5">
@@ -128,8 +128,8 @@ export function Header({
                 {initials}
               </span>
               <span className="hidden min-w-0 leading-tight sm:block">
-                <span className="block truncate text-[13px] font-semibold">{user?.name}</span>
-                <span className="block truncate text-[11px] text-muted-foreground">
+                <span className="block text-[13px] font-semibold whitespace-normal break-words">{user?.name}</span>
+                <span className="block text-[11px] text-muted-foreground whitespace-normal break-words">
                   {user?.role ? ROLE_LABELS[user.role] : ""}
                 </span>
               </span>
@@ -138,8 +138,8 @@ export function Header({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
-              <span className="block truncate">{user?.name}</span>
-              <span className="block truncate text-xs font-normal text-muted-foreground">
+              <span className="block whitespace-normal break-words">{user?.name}</span>
+              <span className="block text-xs font-normal text-muted-foreground whitespace-normal break-words">
                 {user?.role ? ROLE_LABELS[user.role] : ""}
               </span>
             </DropdownMenuLabel>

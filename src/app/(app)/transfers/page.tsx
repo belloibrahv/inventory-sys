@@ -10,15 +10,15 @@ export default async function TransfersPage() {
     <div className="page-split">
       <div>
         <PageHeader
-          title="Inter-Branch Stock Transfers"
-          description="Dispatch and track inventory movements between company branch locations. Receiving branches must confirm intake verification before stock is released to local inventory."
+          title="Shop to shop"
+          description="Send phones and items from one Abu Twins shop to another. The other shop must confirm they arrived before they sit on that shelf."
         />
         <TransfersList transfers={transfers} />
       </div>
       <div className="surface-card p-5">
-        <h3 className="mb-2 font-semibold">Initiate Inter-Branch Transfer</h3>
+        <h3 className="mb-2 font-semibold">Send to another shop</h3>
         <p className="mb-4 text-sm text-muted-foreground">
-          Select origin and destination locations, then specify serialized assets (IMEI) or standard SKU transfer quantities.
+          Pick the shop sending and the shop receiving. Use IMEIs for phones, or a quantity for cords and chargers.
         </p>
         <TransferForm
           branches={lookups.branches}

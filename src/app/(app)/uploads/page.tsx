@@ -93,7 +93,7 @@ export default async function UploadsPage() {
             .
           </li>
           <li>
-            <span className="font-medium text-foreground">Unpaid balance:</span> shows on Goods from supplier as money we still owe.
+            <span className="font-medium text-foreground">Unpaid balance:</span> only on a Supplier bill. Opening stock is value only and is never money owed.
           </li>
           <li>
             <span className="font-medium text-foreground">Same IMEI twice:</span> the system stops the copy. Nothing already in the shop is changed.

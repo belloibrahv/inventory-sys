@@ -176,27 +176,27 @@ export function ReportsPdfButton({ data }: { data: ReportsPack }) {
         })
       }
 
-      section("Accounts Receivable (Customer Balances)")
+      section("Customers who still owe us")
       if (data.debtors.length === 0) {
-        row("No outstanding receivables", "")
+        row("Nobody owes us money right now", "")
       } else {
         data.debtors.forEach((item, index) => {
           row(`${item.name}  ·  ${item.shop}`, formatPdfMoney(item.amount), index % 2 ? PAPER : undefined)
         })
       }
 
-      section("Accounts Payable (Pending Vendor Bills)")
+      section("Still owed to suppliers")
       if (data.creditors.length === 0) {
-        row("All vendor accounts settled", "")
+        row("Nothing is owed to suppliers", "")
       } else {
         data.creditors.forEach((item, index) => {
           row(`${item.invoice}  ·  ${item.supplier}  ·  ${item.shop}`, formatPdfMoney(item.owed), index % 2 ? PAPER : undefined)
         })
       }
 
-      section("Inventory Threshold Alerts")
+      section("Low stock warning")
       if (data.lowStock.length === 0) {
-        row("No items below minimum threshold", "")
+        row("No items below the low-stock warning", "")
       } else {
         data.lowStock.forEach((item, index) => {
           row(`${item.product}  ·  ${item.shop}`, `${item.quantity} / min ${item.min}`, index % 2 ? PAPER : undefined)

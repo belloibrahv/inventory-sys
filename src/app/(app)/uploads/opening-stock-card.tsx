@@ -15,25 +15,26 @@ type Shop = { id: string; name: string; code: string }
 type Supplier = { id: string; name: string; city: string | null; country: string | null }
 
 /**
- * One Excel file per shop. Creates a Goods from supplier bill with the supplier,
- * the value worked out from the sheet, and whatever has been paid against it,
- * then books the stock In shop.
+ * One Excel file per shop. Books what is already on the shelf as opening stock
+ * value. There is no supplier payment on this load.
  */
 export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; suppliers: Supplier[] }) {
   const router = useRouter()
   const formRef = useRef<HTMLFormElement>(null)
   const [busy, setBusy] = useState(false)
   const [problems, setProblems] = useState<string[]>([])
+  const [supplierChoice, setSupplierChoice] = useState(suppliers[0]?.id || "__new__")
+  const addingNewSupplier = supplierChoice === "__new__"
 
   return (
     <SectionCard
       title="Load a whole shop from the opening stock Excel sheet"
-      description="Use this for a first big count, or for a whole container. For one or two units, use the bill above."
+      description="Use this once per shop for the stock already on the shelf. Later cartons use Supplier bill, where payment belongs."
     >
       <p className="text-sm leading-relaxed text-muted-foreground">
-        One file for one shop, with tabs for PHONES, ACCESSORIES, SCREEN and LAPTOPS. Pick the shop and the supplier,
-        type whatever has been paid so far, then upload. The file creates its own bill number, books phones and laptops
-        In shop, sets the piece counts, and works the bill value out from the unit costs on the sheet.
+        One file for one shop, with tabs for PHONES, ACCESSORIES, SCREEN and LAPTOPS. Pick the shop and the supplier
+        (or add a new one). The file books phones and laptops In shop, sets the piece counts, and stores the opening
+        stock value from the unit costs. That value is not a bill to pay.
       </p>
 
       <ul className="mt-3 grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
@@ -64,18 +65,16 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
             return
           }
           const parts = [
-            result.invoiceNumber ? `Bill ${result.invoiceNumber}` : null,
+            result.invoiceNumber ? `Opening stock ${result.invoiceNumber}` : null,
             result.products ? `${result.products} new item${result.products === 1 ? "" : "s"}` : null,
             result.phones ? `${result.phones} phone${result.phones === 1 ? "" : "s"} In shop` : null,
             result.pieces ? `${result.pieces} piece line${result.pieces === 1 ? "" : "s"}` : null,
-            result.submissionValue != null ? `bill value ${formatCurrency(result.submissionValue)}` : null,
-            result.paid
-              ? "fully cleared"
-              : `paid ${formatCurrency(result.paidAmount ?? 0)}, still owed ${formatCurrency(result.balanceOwed ?? 0)}`,
+            result.submissionValue != null ? `opening value ${formatCurrency(result.submissionValue)}` : null,
           ].filter(Boolean)
           const skipped = result.skipped ? ` ${result.skipped} already on the system.` : ""
           toast.success(`${parts.join(" · ") || "Nothing new to add"}.${skipped}`)
           formRef.current?.reset()
+          setSupplierChoice(suppliers[0]?.id || "__new__")
           router.refresh()
         }}
       >
@@ -96,8 +95,9 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
             <Select
               name="supplierId"
               required
-              disabled={busy || suppliers.length === 0}
-              emptyLabel="No suppliers on the books yet. Add one on Suppliers first."
+              disabled={busy}
+              value={supplierChoice}
+              onChange={(event) => setSupplierChoice(event.target.value)}
             >
               {suppliers.map((supplier) => (
                 <option key={supplier.id} value={supplier.id}>
@@ -107,31 +107,23 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
                     : ""}
                 </option>
               ))}
+              <option value="__new__">Add new supplier</option>
             </Select>
           </label>
 
-          {/*
-            No more "paid already / not paid yet" buttons. Type the amount, and
-            the system works out what is left against the value of the sheet.
-          */}
-          <label className="block text-sm">
-            <span className="eyebrow mb-1 block">What has been paid on this bill so far (₦)</span>
-            <Input
-              name="amountPaid"
-              type="number"
-              min={0}
-              step="0.01"
-              defaultValue={0}
-              disabled={busy}
-              className="num font-semibold"
-            />
-            <span className="mt-1 block text-xs text-muted-foreground">
-              Leave it at zero if nothing has been paid. Anything still owed shows on Goods from supplier and on
-              Money in &amp; out until we pay it.
-            </span>
-          </label>
+          {addingNewSupplier ? (
+            <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3 sm:col-span-2">
+              <p className="text-xs font-semibold text-foreground">New supplier</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input name="newSupplierName" required placeholder="Supplier name" disabled={busy} />
+                <Input name="newSupplierPhone" required placeholder="Supplier phone number" disabled={busy} />
+                <Input name="newSupplierCity" placeholder="City (optional)" disabled={busy} />
+                <Input name="newSupplierCountry" placeholder="Country (optional)" disabled={busy} />
+              </div>
+            </div>
+          ) : null}
 
-          <label className="block text-sm">
+          <label className="block text-sm sm:col-span-2">
             <span className="eyebrow mb-1 block">Note, or the waybill number</span>
             <Input name="notes" placeholder="Optional" disabled={busy} />
           </label>
@@ -146,10 +138,10 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
             disabled={busy}
             className="h-10 max-w-full flex-1 rounded-lg border border-dashed border-input bg-card px-3 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-secondary-foreground disabled:opacity-60"
           />
-          <Button type="submit" disabled={busy || shops.length === 0 || suppliers.length === 0} aria-busy={busy}>
+          <Button type="submit" disabled={busy || shops.length === 0} aria-busy={busy}>
             {busy ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading opening stock…
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading this shop from Excel
               </>
             ) : (
               <>

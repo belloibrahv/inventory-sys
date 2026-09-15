@@ -63,6 +63,8 @@ const CONDITIONS: Record<string, ProductCondition> = {
   swap: "SWAP_DEVICE",
   swap_device: "SWAP_DEVICE",
   faulty: "FAULTY",
+  non_active: "FAULTY",
+  nonactive: "FAULTY",
   repair: "REPAIR_DEVICE",
   repair_device: "REPAIR_DEVICE",
   // Shop words on their own sheet that are not our enum names.
@@ -148,6 +150,7 @@ function mapCondition(raw: string): ProductCondition | null {
   if (words.startsWith("bran_new") || words.startsWith("brand_new") || words.startsWith("bran_")) return "BRAND_NEW"
   if (words.includes("uk")) return "UK_USED"
   if (words.includes("open") && words.includes("box")) return "OPEN_BOX"
+  if (words.includes("non") && words.includes("active")) return "FAULTY"
   return null
 }
 

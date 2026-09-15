@@ -329,7 +329,7 @@ export function PreviewIncomingModal({ lot }: { lot: IncomingLot }) {
                                   disabled={busy}
                                   className="rounded border-border"
                                 />
-                                <span className="truncate">{imei}</span>
+                                <span className="whitespace-normal break-all font-mono text-xs">{imei}</span>
                               </label>
                             )
                           })}

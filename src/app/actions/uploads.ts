@@ -9,7 +9,7 @@ import { readTableFile, readWorkbookGrids } from "@/lib/table-file"
 import { makeOpeningSku, planOpeningStock } from "@/lib/opening-stock"
 import { planCustomers, planImeis, planStock, type CatalogItem, type ShopRef } from "@/lib/upload-plan"
 import {
-  MARKED_PAID_ON_UPLOAD,
+  OPENING_STOCK_METHOD,
   UPLOAD_STOCK_SOURCE,
   attachPurchaseLine,
   isMarkedPaidOnUpload,
@@ -144,19 +144,36 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
     }
   }
 
-  const supplierId = String(formData.get("supplierId") || "")
-  const supplier = await prisma.supplier.findFirst({ where: { id: supplierId, isActive: true } })
-  if (!supplier) return { error: "Pick the supplier these goods were bought from." }
+  const note = String(formData.get("notes") || "").trim()
+  const newSupplierName = String(formData.get("newSupplierName") || "").trim()
+  const newSupplierPhone = String(formData.get("newSupplierPhone") || "").trim()
+  const newSupplierCity = String(formData.get("newSupplierCity") || "").trim()
+  const newSupplierCountry = String(formData.get("newSupplierCountry") || "").trim()
+  let supplierId = String(formData.get("supplierId") || "").trim()
+  if (supplierId === "__new__") supplierId = ""
+
+  let supplier = supplierId
+    ? await prisma.supplier.findFirst({ where: { id: supplierId, isActive: true } })
+    : null
+
+  if (newSupplierName) {
+    if (!newSupplierPhone) return { error: "Type the new supplier phone number." }
+    supplier = await prisma.supplier.create({
+      data: {
+        name: newSupplierName,
+        phone: newSupplierPhone,
+        city: newSupplierCity || null,
+        country: newSupplierCountry || null,
+        kind: "SUPPLIER",
+      },
+    })
+    revalidatePath("/suppliers")
+  }
+
+  if (!supplier) return { error: "Pick the supplier, or add a new one." }
   if (supplier.kind === "NEIGHBOR") {
     return { error: "A neighboring shop is not a supplier carton. Use Buy from next door for that." }
   }
-
-  // The client asked for the paid / not-paid buttons to go: "we only type in
-  // whatever amount we have paid, if at all we have made any payment for that
-  // particular uploaded invoice." The bill total is only known once the sheet has
-  // been read, so the amount is taken here and the balance worked out below.
-  const amountPaid = Math.max(0, Number(formData.get("amountPaid") || 0))
-  const note = String(formData.get("notes") || "").trim()
 
   let sheets: Array<{ sheet: string; grid: string[][] }>
   try {
@@ -243,7 +260,7 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
         costPrice: draft.costPrice.toFixed(2),
         minimumPrice: draft.minimumPrice.toFixed(2),
         sellingPrice: draft.sellingPrice.toFixed(2),
-        warrantyDays: 365,
+        warrantyDays: 0,
         description: `Opening stock · ${draft.category}`,
       },
     })
@@ -267,13 +284,17 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
       status: "RECEIVED",
       totalAmount: "0.00",
       paidAmount: "0.00",
-      paymentMethod: null,
+      paymentMethod: OPENING_STOCK_METHOD,
       source: UPLOAD_STOCK_SOURCE,
       sessionOpen: false,
       receivedDate: new Date(),
       originCountry: supplier.country,
       originCity: supplier.city,
-      notes: ["Loaded from the opening stock Excel sheet on Upload stock.", note || null, `File: ${file.name}`]
+      notes: [
+        "Loaded from the opening stock Excel sheet. This is the shop's opening stock value. It is not a supplier bill to pay.",
+        note || null,
+        `File: ${file.name}`,
+      ]
         .filter(Boolean)
         .join(" "),
     },
@@ -407,28 +428,20 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
 
   const refreshed = await prisma.purchase.findUnique({
     where: { id: purchase.id },
-    select: { totalAmount: true, paidAmount: true },
+    select: { totalAmount: true },
   })
 
-  // Never record more paid than the bill is worth. An over-typed figure would
-  // show as a negative balance on Goods from supplier and on Finance.
+  // Opening stock is an independent value. paidAmount matches the value so the
+  // books never treat it as money owed to a supplier, and no payment is posted.
   const billTotal = money(refreshed?.totalAmount)
-  const settled = Math.min(amountPaid, billTotal)
-  const balanceOwed = Math.max(0, billTotal - settled)
-  const fullyPaid = billTotal > 0 && settled >= billTotal - 0.005
 
   await prisma.purchase.update({
     where: { id: purchase.id },
     data: {
-      paidAmount: settled.toFixed(2),
-      paymentMethod: fullyPaid ? MARKED_PAID_ON_UPLOAD : settled > 0 ? "PARTIAL_PAYMENT" : "UNPAID",
+      paidAmount: billTotal.toFixed(2),
+      paymentMethod: OPENING_STOCK_METHOD,
       notes: [
-        "Loaded from the opening stock Excel sheet on Upload stock.",
-        fullyPaid
-          ? "This bill was paid in full when the stock was loaded."
-          : settled > 0
-            ? `Paid ${settled.toFixed(2)} on upload. Still owed ${balanceOwed.toFixed(2)}.`
-            : `Nothing paid on upload. Still owed ${balanceOwed.toFixed(2)}.`,
+        "Loaded from the opening stock Excel sheet. This is the shop's opening stock value. It is not a supplier bill to pay.",
         note || null,
         `File: ${file.name}`,
       ]
@@ -436,19 +449,6 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
         .join(" "),
     },
   })
-
-  if (settled > 0) {
-    await prisma.financeEntry.create({
-      data: {
-        branchId: shop.id,
-        account: "SUPPLIER_PAYMENTS",
-        type: "EXPENSE",
-        amount: settled.toFixed(2),
-        reference: invoiceNumber,
-        description: `Paid to ${supplier.name} on opening stock upload ${invoiceNumber}`,
-      },
-    })
-  }
 
   await trail(
     user.id,
@@ -463,8 +463,8 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
       phonesAlready: unitPayload.length - phonesAdded,
       pieceLines,
       submissionValue: billTotal,
-      amountPaid: settled,
-      balanceOwed,
+      amountPaid: 0,
+      balanceOwed: 0,
     },
     shop.id
   )
@@ -484,9 +484,9 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
     invoiceNumber,
     purchaseId: purchase.id,
     submissionValue: billTotal,
-    paidAmount: settled,
-    balanceOwed,
-    paid: fullyPaid,
+    paidAmount: 0,
+    balanceOwed: 0,
+    paid: true,
   }
 }
 
@@ -666,6 +666,10 @@ function revalidateStockViews() {
   revalidatePath("/purchases")
   revalidatePath("/finance")
   revalidatePath("/suppliers")
+  revalidatePath("/opening-stock")
+  revalidatePath("/uploads/opening-stock")
+  revalidatePath("/reports")
+  revalidatePath("/audit/books")
 }
 
 /** What the upload screen shows about how far the shop has got. */
@@ -915,7 +919,7 @@ export async function batchUploadStock(payload: BatchUploadPayload): Promise<Upl
             costPrice: np.costPrice.toFixed(2),
             minimumPrice: np.minimumPrice.toFixed(2),
             sellingPrice: np.sellingPrice.toFixed(2),
-            warrantyDays: 365,
+            warrantyDays: 0,
             description: "Added while loading stock",
           },
         })

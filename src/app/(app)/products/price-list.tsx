@@ -27,9 +27,9 @@ export type PriceRow = {
 }
 
 function trackingLabel(tracking: string) {
-  if (tracking === "SERIAL") return "Serial Tracked"
-  if (tracking === "NONE") return "Standard SKU"
-  return "IMEI Tracked"
+  if (tracking === "SERIAL") return "Serial"
+  if (tracking === "NONE") return "No number"
+  return "Phone, IMEI"
 }
 
 export function ProductPriceList({
@@ -90,20 +90,20 @@ export function ProductPriceList({
   async function onSave() {
     if (!canEdit) return
     if (selected.length === 0) {
-      toast.error("Select SKUs to perform batch price adjustments.")
+      toast.error("Tick the items whose selling price you want to change.")
       return
     }
     const changes: Array<{ id: string; sellingPrice: number }> = []
     for (const product of selected) {
       const sellingPrice = Number(prices[product.id])
       if (!Number.isFinite(sellingPrice) || sellingPrice <= 0) {
-        toast.error(`Specify a valid retail price for ${product.name}.`)
+        toast.error(`Type a selling price for ${product.name}.`)
         return
       }
       changes.push({ id: product.id, sellingPrice })
     }
     if (changes.length > 200) {
-      toast.error("Batch price updates are limited to 200 items per operation.")
+      toast.error("You can change up to 200 prices in one save.")
       return
     }
 
@@ -118,7 +118,7 @@ export function ProductPriceList({
       return
     }
     const count = outcome.updated ?? changes.length
-    toast.success(count === 1 ? "Successfully updated 1 price record." : `Successfully updated ${count} price records.`)
+    toast.success(count === 1 ? "1 selling price saved." : `${count} selling prices saved.`)
     setTicked({})
     setPrices({})
     setReason("")
@@ -132,18 +132,18 @@ export function ProductPriceList({
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search by SKU, model, or brand..."
-            aria-label="Search by SKU, model, or brand"
+            placeholder="Find item code, model, or brand"
+            aria-label="Find item code, model, or brand"
             className="max-w-xl"
           />
           <p className="text-sm text-muted-foreground">
-            {visible.length === 1 ? "1 SKU" : `${visible.length} SKUs`}
-            {query.trim() ? " matching query" : " in price book"}
+            {visible.length === 1 ? "1 item" : `${visible.length} items`}
+            {query.trim() ? " matching this search" : " on the price list"}
           </p>
         </div>
         {canEdit ? (
           <p className="text-sm text-muted-foreground">
-            Select items to adjust prices in batch. Enter updated retail price schedules. Floor prices (MAP) will enforce margins during POS checkout.
+            Tick items, type the new selling price, then save. Staff cannot sell below the lowest price at Sell now.
           </p>
         ) : null}
         {canEdit ? (
@@ -162,10 +162,10 @@ export function ProductPriceList({
           <thead className="text-left text-muted-foreground">
             <tr className="border-b border-border">
               {canEdit ? <th className="px-4 py-3">Select</th> : null}
-              <th className="px-4 py-3">Product / SKU</th>
-              <th className="px-4 py-3">Condition</th>
-              <th className="px-4 py-3">Cost / Floor / Retail</th>
-              {canEdit ? <th className="px-4 py-3">Updated Price</th> : null}
+              <th className="px-4 py-3">Item / item code</th>
+              <th className="px-4 py-3">How it looks</th>
+              <th className="px-4 py-3">Cost / lowest / sell</th>
+              {canEdit ? <th className="px-4 py-3">New sell price</th> : null}
               <th className="px-4 py-3">Warranty</th>
               <th className="px-4 py-3">Units</th>
             </tr>
@@ -211,8 +211,8 @@ export function ProductPriceList({
                         disabled={!chosen}
                         value={prices[product.id] ?? ""}
                         onChange={(event) => setPrices((prev) => ({ ...prev, [product.id]: event.target.value }))}
-                        placeholder="New retail price"
-                        aria-label={`New retail price for ${product.name}`}
+                        placeholder="New sell price"
+                        aria-label={`New sell price for ${product.name}`}
                       />
                     </td>
                   ) : null}
@@ -245,16 +245,16 @@ export function ProductPriceList({
       {canEdit ? (
         <div className="space-y-3 border-t border-border p-4">
           <p className="text-sm font-medium">
-            {selected.length === 1 ? "1 SKU selected" : `${selected.length} SKUs selected`}
+            {selected.length === 1 ? "1 item ticked" : `${selected.length} items ticked`}
           </p>
           <Input
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            placeholder="Audit reason for price adjustments..."
-            aria-label="Audit reason for price adjustments"
+            placeholder="Why these prices changed"
+            aria-label="Why these prices changed"
           />
           <Button type="button" onClick={onSave} disabled={busy}>
-            {busy ? "Applying Price Schedule…" : "Apply Batch Price Updates"}
+            {busy ? "Saving these prices" : "Update selected prices"}
           </Button>
         </div>
       ) : null}

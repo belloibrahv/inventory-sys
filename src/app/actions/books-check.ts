@@ -10,6 +10,8 @@ import { getParkedWatch } from "@/app/actions/parked"
 import { recentWatDays, shiftWatDay, watBounds, watDayKey } from "@/lib/lagos-day"
 import { getAppSettings } from "@/lib/settings"
 import { money } from "@/lib/utils"
+import { sumSaleTenders } from "@/lib/sale-money"
+import { healOpeningStockBills } from "@/lib/opening-stock-money"
 
 export type BooksRange = "day" | "week" | "month"
 
@@ -34,18 +36,26 @@ function previousWindow(from: string, range: BooksRange) {
   return periodWindow(last.toISOString().slice(0, 10), "month")
 }
 
-function sumSales(rows: Array<{ paymentMethod: string; totalAmount: unknown; paidAmount: unknown }>) {
-  const cash = rows.filter((row) => row.paymentMethod === "CASH").reduce((sum, row) => sum + money(row.paidAmount), 0)
-  const transfer = rows.filter((row) => row.paymentMethod === "TRANSFER").reduce((sum, row) => sum + money(row.paidAmount), 0)
-  const pos = rows.filter((row) => row.paymentMethod === "POS").reduce((sum, row) => sum + money(row.paidAmount), 0)
-  // Credit sales = outstanding balance only (total invoice minus whatever has already been paid)
-  // e.g. sale of ₦180k with ₦120k deposit → credit outstanding = ₦60k, NOT ₦180k
-  const credit = rows
-    .filter((row) => row.paymentMethod === "CREDIT")
-    .reduce((sum, row) => sum + Math.max(0, money(row.totalAmount) - money(row.paidAmount)), 0)
-  const revenue = rows.reduce((sum, row) => sum + money(row.totalAmount), 0)
-  const collected = rows.reduce((sum, row) => sum + money(row.paidAmount), 0)
-  return { cash, transfer, pos, credit, revenue, collected, due: revenue - collected, methodSum: cash + transfer + pos, count: rows.length }
+function sumSales(
+  rows: Array<{
+    paymentMethod: string
+    totalAmount: unknown
+    paidAmount: unknown
+    payments?: Array<{ method: string; amount: unknown }> | null
+  }>
+) {
+  const mix = sumSaleTenders(rows)
+  return {
+    cash: mix.cash,
+    transfer: mix.transfer,
+    pos: mix.pos,
+    credit: mix.credit,
+    revenue: mix.revenue,
+    collected: mix.collected,
+    due: mix.revenue - mix.collected,
+    methodSum: mix.received,
+    count: mix.count,
+  }
 }
 
 
@@ -56,6 +66,7 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
     (await can(user.role, "view.finance")) ||
     (await can(user.role, "view.reports"))
   if (!allowed) return null
+  await healOpeningStockBills()
 
   const shops = await prisma.branch.findMany({
     where: { isActive: true },
@@ -77,12 +88,12 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
     await Promise.all([
       prisma.sale.findMany({
         where: { status: "COMPLETED", ...shopWhere, saleDate: { gte: window.start, lt: window.end } },
-        include: { customer: true, user: { select: { name: true } } },
+        include: { customer: true, user: { select: { name: true } }, payments: true },
         orderBy: { saleDate: "desc" },
       }),
       prisma.sale.findMany({
         where: { status: "COMPLETED", ...shopWhere, saleDate: { gte: prior.start, lt: prior.end } },
-        select: { paymentMethod: true, totalAmount: true, paidAmount: true },
+        select: { paymentMethod: true, totalAmount: true, paidAmount: true, payments: { select: { method: true, amount: true } } },
       }),
       prisma.expense.aggregate({
         where: { ...shopWhere, date: { gte: window.start, lt: window.end }, approvedAt: { not: null } },

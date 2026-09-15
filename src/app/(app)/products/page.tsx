@@ -22,12 +22,12 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Product Catalog & Price Book"
-        description="Master SKU repository, serialization configuration, cost basis, floor price (MAP), and active retail price schedules."
+        title="Price list"
+        description="Names, cost, lowest price, and selling price for every item the shops sell."
       />
       {!canEdit ? (
         <div className="surface-card p-5 text-sm text-muted-foreground">
-          Displaying product catalog in read-only mode. Catalog management privileges are required to register SKUs or adjust price books.
+          This list is read-only for your job. Super Admin or the stock uploader can add names and change prices.
         </div>
       ) : null}
       <ProductPriceList products={rows} canEdit={canEdit} initialQuery={q} />

@@ -92,17 +92,17 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
     <div className="space-y-5">
       <Toolbar className="justify-between">
         <p className="text-sm text-muted-foreground">
-          Gross revenue reflects customer sales. Operating expenditures (OPEX) cover overhead and operations. Vendor disbursements reflect accounts payable settlements.
+          Gross sales, shop expenses, and money paid to suppliers. Cash is the till. Bank is transfer and POS.
         </p>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline" size="sm">
             <Link href="/finance/close">
-              <ClipboardCheck className="mr-1.5 h-4 w-4" /> End of Day Register
+              <ClipboardCheck className="mr-1.5 h-4 w-4" /> Close the day
             </Link>
           </Button>
           <Button asChild variant="outline" size="sm">
             <Link href="/audit/books">
-              <Scale className="mr-1.5 h-4 w-4" /> Financial Audit Pack
+              <Scale className="mr-1.5 h-4 w-4" /> Check the books
             </Link>
           </Button>
         </div>
@@ -110,32 +110,32 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
 
       <StatGrid>
         <StatCard
-          label="Gross Revenue (Inflows)"
+          label="Sales"
           value={formatCurrency(data.revenue)}
-          hint={`Cash Collections: ${formatCurrency(data.cashRevenue)} · Bank Deposits: ${formatCurrency(data.bankRevenue)}`}
+          hint={`Cash: ${formatCurrency(data.cashRevenue)} · Transfer and POS: ${formatCurrency(data.bankRevenue)}`}
           icon={<TrendingUp className="h-4 w-4" />}
           tone="success"
         />
         <StatCard
-          label="Operating Expenses (OPEX)"
+          label="Shop expenses"
           value={formatCurrency(data.expenditure)}
-          hint="Facilities, payroll, transport, utilities, and general overhead"
+          hint="Fuel, rent, salary, light bill, and other shop bills"
           icon={<TrendingDown className="h-4 w-4" />}
           tone="danger"
           href="/expenses"
         />
         <StatCard
-          label="Vendor Disbursements (AP)"
+          label="Paid to suppliers"
           value={formatCurrency(data.supplierPayments)}
-          hint="Accounts payable disbursements for inventory procurement"
+          hint="Money sent to suppliers for goods"
           icon={<Banknote className="h-4 w-4" />}
           tone="warning"
           href="/suppliers"
         />
         <StatCard
-          label={data.netCashFlow >= 0 ? "Net Cash Flow (Surplus)" : "Net Cash Flow (Deficit)"}
+          label={data.netCashFlow >= 0 ? "Money left after expenses" : "Money short after expenses"}
           value={formatCurrency(data.netCashFlow)}
-          hint="Gross collections minus operating expenses and vendor disbursements"
+          hint="Sales collected minus shop expenses and supplier payments"
           icon={<Scale className="h-4 w-4" />}
           tone={data.netCashFlow >= 0 ? "success" : "danger"}
         />
@@ -149,18 +149,18 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
                 <Wallet className="h-5 w-5" />
               </span>
               <div className="text-left">
-                <p className="text-sm font-semibold">Cash on Hand (Vault & Registers)</p>
-                <p className="text-xs text-muted-foreground">Physical currency collected and disbursed across branch registers</p>
+                <p className="text-sm font-semibold">Cash in the till</p>
+                <p className="text-xs text-muted-foreground">Physical cash collected and paid out</p>
               </div>
             </div>
             <span className="eyebrow">{cashDays.length} day{cashDays.length === 1 ? "" : "s"}</span>
           </div>
           <div className="mt-4 flex items-end justify-between border-t border-border pt-3">
-            <span className="text-xs text-muted-foreground">Perpetual Ledger Balance</span>
+            <span className="text-xs text-muted-foreground">Balance now</span>
             <span className="text-2xl font-semibold num">{formatCurrency(data.cashAccount.balance)}</span>
           </div>
           <p className="mt-1 text-right text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
-            View daily transaction ledger &rarr;
+            Open the day list
           </p>
         </button>
 
@@ -171,18 +171,18 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
                 <Landmark className="h-5 w-5" />
               </span>
               <div className="text-left">
-                <p className="text-sm font-semibold">Bank & Merchant Clearing Accounts</p>
-                <p className="text-xs text-muted-foreground">Electronic fund transfers, POS terminal settlements, and direct deposits</p>
+                <p className="text-sm font-semibold">Bank, transfer, and POS</p>
+                <p className="text-xs text-muted-foreground">Transfers, POS, and money that went into the bank</p>
               </div>
             </div>
             <span className="eyebrow">{bankDays.length} day{bankDays.length === 1 ? "" : "s"}</span>
           </div>
           <div className="mt-4 flex items-end justify-between border-t border-border pt-3">
-            <span className="text-xs text-muted-foreground">Perpetual Ledger Balance</span>
+            <span className="text-xs text-muted-foreground">Balance now</span>
             <span className="text-2xl font-semibold num">{formatCurrency(data.bankAccount.balance)}</span>
           </div>
           <p className="mt-1 text-right text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
-            View daily transaction ledger &rarr;
+            Open the day list
           </p>
         </button>
       </div>
@@ -244,19 +244,19 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
         <TableShell
           caption={
             <>
-              <h2 className="text-sm font-semibold tracking-tight">Accounts Payable (Vendor Balances)</h2>
+              <h2 className="text-sm font-semibold tracking-tight">Still owed to suppliers</h2>
               <div className="flex items-center gap-2">
                 <TableDownload
-                  filename="accounts-payable"
-                  rows={() => [["Vendor", "Outstanding Balance"], ...data.creditors.map((row) => [row.name, row.owed])]}
+                  filename="still-owed-to-suppliers"
+                  rows={() => [["Supplier", "Still owed"], ...data.creditors.map((row) => [row.name, row.owed])]}
                 />
                 <Button asChild variant="ghost" size="sm">
-                  <Link href="/suppliers">All Vendors</Link>
+                  <Link href="/suppliers">All suppliers</Link>
                 </Button>
               </div>
             </>
           }
-          columns={[{ label: "Vendor / Creditor" }, { label: "Outstanding Balance", align: "right" }]}
+          columns={[{ label: "Supplier" }, { label: "Still owed", align: "right" }]}
           footer={
             <TablePager
               page={creditorsPager.page}
@@ -267,7 +267,7 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
               end={creditorsPager.end}
               onPageChange={creditorsPager.setPage}
               onPageSizeChange={creditorsPager.setPageSize}
-              noun="vendors"
+              noun="suppliers"
             />
           }
         >
@@ -282,7 +282,7 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
             </tr>
           ))}
           {data.creditors.length === 0 ? (
-            <TableEmpty colSpan={2}>All vendor accounts payable settled.</TableEmpty>
+            <TableEmpty colSpan={2}>Nothing is owed to suppliers right now.</TableEmpty>
           ) : null}
         </TableShell>
       </div>
@@ -290,14 +290,14 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
       <DrilldownModal
         open={ledger !== null}
         onClose={() => setLedger(null)}
-        eyebrow="General Ledger Activity"
-        title={ledger === "CASH" ? "Cash on Hand General Ledger" : "Bank & Clearing Accounts General Ledger"}
+        eyebrow="Money movement"
+        title={ledger === "CASH" ? "Cash in the till" : "Bank, transfer, and POS"}
         download={
           account
             ? {
                 filename: `${ledger === "CASH" ? "cash" : "bank"}-ledger-${new Date().toISOString().slice(0, 10)}`,
                 rows: () => [
-                  ["Date", "Branch", "Transaction Type", "Category", "Description", "Amount"],
+                  ["Date", "Shop", "In or out", "Kind", "Note", "Amount"],
                   ...account.entries.map((entry) => [
                     new Date(entry.date).toISOString().slice(0, 10),
                     entry.branch,
@@ -351,7 +351,7 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
                         )}
                       </span>
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{entry.description}</p>
+                        <p className="text-sm font-medium whitespace-normal break-words">{entry.description}</p>
                         <p className="text-xs text-muted-foreground">
                           {entry.category} · {entry.branch}
                         </p>

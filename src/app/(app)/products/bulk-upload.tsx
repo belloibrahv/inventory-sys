@@ -9,9 +9,9 @@ import { ExportCsv } from "@/components/export-csv"
 
 const SAMPLE: string[][] = [
   ["item_code", "name", "brand", "category", "tracking", "condition", "color", "storage", "ram", "cost", "minimum", "selling", "warranty_days", "description"],
-  ["IP16-128-BLK", "iPhone 16 128GB", "Apple", "Phones", "IMEI", "BRAND_NEW", "Black", "128GB", "", "980000", "1050000", "1180000", "365", "A phone. You will scan its IMEI when the goods arrive."],
-  ["BUDS3-WHT", "Galaxy Buds3", "Samsung", "Accessories", "SERIAL", "BRAND_NEW", "White", "", "", "45000", "52000", "68000", "180", "An accessory that has a serial number."],
-  ["CORD-TYPEC", "Type-C charger cord", "Generic", "Accessories", "NONE", "BRAND_NEW", "Black", "", "", "1500", "2000", "2500", "90", "No unique number. You just count pieces."],
+  ["IP16-128-BLK", "iPhone 16 128GB", "Apple", "Phones", "IMEI", "BRAND_NEW", "Black", "128GB", "", "980000", "1050000", "1180000", "0", "A phone. You will scan its IMEI when the goods arrive. Warranty days start at zero."],
+  ["BUDS3-WHT", "Galaxy Buds3", "Samsung", "Accessories", "SERIAL", "BRAND_NEW", "White", "", "", "45000", "52000", "68000", "0", "An accessory that has a serial number."],
+  ["CORD-TYPEC", "Type-C charger cord", "Generic", "Accessories", "NONE", "BRAND_NEW", "Black", "", "", "1500", "2000", "2500", "0", "No unique number. You just count pieces."],
 ]
 
 export function BulkProductUpload() {

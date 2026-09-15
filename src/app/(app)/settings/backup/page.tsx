@@ -10,7 +10,7 @@ export default async function SettingsBackupPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Backup"
+        title="Shop backup"
         description="A copy of everything the system knows, in one file you keep yourself."
       />
 

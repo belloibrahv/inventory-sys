@@ -37,13 +37,13 @@ export default async function DayClosePage({
       <div className="flex flex-wrap items-center justify-between gap-4">
         <PageHeader
           title="Close the day"
-          description="Total sales for the day, cash received, bank transfer, POS, and cash remittance reconciliation."
+          description="Total sales for the day, cash received, bank transfer, POS, and cash remittance. Cash remittance is needed only when cash came into the till."
         />
         <Link
           href="/finance"
           className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="h-4 w-4" /> Back to Financial Ledger
+          <ArrowLeft className="h-4 w-4" /> Back to Money in & out
         </Link>
       </div>
 
@@ -305,7 +305,7 @@ export default async function DayClosePage({
           <div>
             <h3 className="font-bold text-base">Sales made on this day ({preview.sales.length})</h3>
             <p className="text-xs text-muted-foreground">
-              Itemized sales ledger making up the {formatCurrency(preview.totalSales)} total on {preview.businessDate}
+              Itemized sales making up the {formatCurrency(preview.totalSales)} total on {preview.businessDate}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -339,7 +339,7 @@ export default async function DayClosePage({
                 )}`}
                 download={`sales-ledger-${preview.branchName || "shop"}-${preview.businessDate}.csv`}
               >
-                <Download className="h-3.5 w-3.5" /> Download Sales Ledger (CSV)
+                <Download className="h-3.5 w-3.5" /> Download this day's sales (CSV)
               </a>
             )}
             <Link
@@ -356,7 +356,7 @@ export default async function DayClosePage({
               <tr className="border-b border-border">
                 <th className="px-5 py-3">Invoice</th>
                 <th className="px-4 py-3">Customer</th>
-                <th className="px-4 py-3">Itemized Devices & Products</th>
+                <th className="px-4 py-3">Phones and items sold</th>
                 <th className="px-4 py-3">Cashier</th>
                 <th className="px-4 py-3">Paid by</th>
                 <th className="px-4 py-3 text-right">Total amount</th>

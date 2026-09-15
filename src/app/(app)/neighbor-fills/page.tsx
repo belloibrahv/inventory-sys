@@ -15,20 +15,20 @@ export default async function NeighborFillsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="External Partner Sourcing & Cross-Fulfillment"
-        description="Manage back-to-back cross-fulfillment from external merchant partners when local inventory is unavailable. Track partner payables, customer billing, and retained gross margins."
+        title="Neighbor shop fill"
+        description="When this shop does not have the phone, collect it from the dealer next door for a named customer. Sell it here, send that dealer their money, and keep the profit."
       />
       <div className="grid gap-4 md:grid-cols-3">
         <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">Pending Orders</p>
+          <p className="text-sm text-muted-foreground">Still open</p>
           <p className="text-2xl font-semibold">{rows.filter((row) => row.status === "OPEN").length}</p>
         </div>
         <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">Retained Gross Margin</p>
+          <p className="text-sm text-muted-foreground">Profit kept</p>
           <p className="text-2xl font-semibold">{formatCurrency(openProfit)}</p>
         </div>
         <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">Accounts Payable (Partners)</p>
+          <p className="text-sm text-muted-foreground">Still owed to next door</p>
           <p className="text-2xl font-semibold">{formatCurrency(stillOwed)}</p>
         </div>
       </div>
@@ -36,7 +36,7 @@ export default async function NeighborFillsPage() {
         <div className="space-y-3">
           {rows.length === 0 ? (
             <div className="surface-card p-5 text-sm text-muted-foreground">
-              No partner cross-fulfillment transactions recorded. Use this workflow for back-to-back external sourcing to fulfill orders without stocking inventory.
+              No neighbor shop fills yet. Use this when you collect one unit from next door for a named customer.
             </div>
           ) : null}
           {rows.map((row) => {

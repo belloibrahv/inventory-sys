@@ -853,7 +853,7 @@ export async function createSwap(formData: FormData) {
       branchId,
       customerId,
       status: "RECEIVED",
-      notes: `Trade-in pending · ${condition} · value ${tradeValue}`,
+      notes: `Swap Deal pending · ${condition} · value ${tradeValue}`,
     },
   })
 
@@ -975,7 +975,7 @@ export async function completeSwap(formData: FormData) {
     })
     await tx.imeiRecord.update({
       where: { id: swap.oldImeiId },
-      data: { status: "IN_STOCK", customerId: null, notes: `Trade-in from ${swap.customer.name}` },
+      data: { status: "IN_STOCK", customerId: null, notes: `Swap Deal from ${swap.customer.name}` },
     })
     await drawStock(tx, {
       productId: swap.newProductId,

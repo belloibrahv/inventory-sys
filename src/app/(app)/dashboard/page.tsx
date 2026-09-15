@@ -12,7 +12,7 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       {data.tasks.length ? (
-        <SectionCard title="Pending Action Items" description="Operational tasks and exceptions requiring immediate review across active branches.">
+        <SectionCard title="Do these next" description="Work that still needs a person in the shops you can see.">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {data.tasks.map((task) => (
               <a
@@ -27,29 +27,29 @@ export default async function DashboardPage() {
           </div>
         </SectionCard>
       ) : (
-        <p className="text-sm text-muted-foreground">No pending action items require immediate attention.</p>
+        <p className="text-sm text-muted-foreground">Nothing waiting. The shops you can see are clear for now.</p>
       )}
       <StatGrid>
         <KpiCard
-          label="Gross Revenue"
+          label="Sales"
           value={formatCurrency(data.kpis.totalSales)}
           trend={data.kpis.salesTrend}
           icon={<Receipt className="h-5 w-5" />}
         />
         <KpiCard
-          label="Operating Expenses (OPEX)"
+          label="Shop expenses"
           value={formatCurrency(data.kpis.totalExpense)}
           trend={data.kpis.expenseTrend}
           icon={<CreditCard className="h-5 w-5" />}
         />
         <KpiCard
-          label="Disbursements (Outflows)"
+          label="Money sent out"
           value={formatCurrency(data.kpis.paymentSent)}
           trend={data.kpis.paymentSentTrend}
           icon={<Banknote className="h-5 w-5" />}
         />
         <KpiCard
-          label="Collections (Inflows)"
+          label="Money collected"
           value={formatCurrency(data.kpis.paymentReceived)}
           trend={data.kpis.paymentReceivedTrend}
           icon={<Wallet className="h-5 w-5" />}
@@ -58,32 +58,32 @@ export default async function DashboardPage() {
 
       <StatGrid>
         <StatCard
-          label="Pending Approvals"
+          label="Needs approval"
           value={String(data.exceptions.pendingApprovals)}
-          hint="Supervisory authorization required before workflow execution"
+          hint="Waiting for a manager to say yes or no"
           href="/approvals"
           tone={data.exceptions.pendingApprovals > 0 ? "warning" : "neutral"}
         />
         <StatCard
-          label="Unregistered Walk-Ins"
+          label="Sales with no customer name"
           value={String(data.exceptions.walkIns)}
-          hint="Sales completed without customer profile assignment"
+          hint="Invoices that did not name the buyer"
           href="/sales"
           tone={data.exceptions.walkIns > 0 ? "warning" : "neutral"}
         />
         <StatCard
-          label="Accounts Payable"
+          label="Still owed to suppliers"
           value={formatCurrency(data.exceptions.creditorOwed)}
-          hint="Outstanding vendor balances across scoped locations"
+          hint="Unpaid supplier bills for the shops you can see"
           href="/suppliers"
         />
         <StatCard
-          label="Serial Reconciliation Gaps"
+          label="Shop count vs IMEI"
           value={String(data.exceptions.imeiGaps)}
           hint={
             data.exceptions.imeiGaps === 0
-              ? "Physical inventory matches serialized asset register"
-              : "Discrepancies identified between stock and serial register"
+              ? "Shop count matches the IMEI list"
+              : "Some phones do not match the IMEI list"
           }
           href="#imei-check"
           tone={data.exceptions.imeiGaps > 0 ? "danger" : "success"}
@@ -91,36 +91,36 @@ export default async function DashboardPage() {
       </StatGrid>
 
       <p className="text-sm text-muted-foreground">
-        Open the{" "}
+        Open{" "}
         <a href="/audit/books" className="font-medium text-primary hover:underline">
-          Financial Audit Pack
+          Check the books
         </a>{" "}
-        for general ledger balances, asset valuation, and printable statutory compliance statements.
+        for the signed money paper, stock value, and who still owes.
       </p>
 
       <div id="imei-check" className="surface-card overflow-hidden">
         <div className="flex items-center justify-between px-6 py-5">
           <div>
-            <h3 className="font-semibold">Physical vs Serialized Asset Reconciliation</h3>
+            <h3 className="font-semibold">IMEI vs shop count</h3>
             <p className="text-sm text-muted-foreground">
               {data.exceptions.imeiGaps === 0
-                ? "Physical on-hand inventory perfectly matches registered serial counts."
-                : `${data.exceptions.imeiGaps} item${data.exceptions.imeiGaps === 1 ? "" : "s"} require serialization reconciliation.`}
+                ? "Shop count matches the IMEI list for every phone and laptop."
+                : `${data.exceptions.imeiGaps} item${data.exceptions.imeiGaps === 1 ? "" : "s"} do not match the IMEI list.`}
             </p>
           </div>
           <Badge variant={data.exceptions.imeiGaps ? "danger" : "success"}>
-            {data.exceptions.imeiGaps ? "Variance Detected" : "Reconciled"}
+            {data.exceptions.imeiGaps ? "Gap" : "Match"}
           </Badge>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-left text-muted-foreground">
               <tr className="border-y border-border">
-                <th className="px-6 py-3 font-medium">Product / SKU</th>
-                <th className="px-3 py-3 font-medium">Location</th>
-                <th className="px-3 py-3 font-medium">Stock on Hand</th>
-                <th className="px-3 py-3 font-medium">Serialized Assets</th>
-                <th className="px-6 py-3 font-medium">Variance</th>
+                <th className="px-6 py-3 font-medium">Item</th>
+                <th className="px-3 py-3 font-medium">Shop</th>
+                <th className="px-3 py-3 font-medium">Shop count</th>
+                <th className="px-3 py-3 font-medium">IMEI count</th>
+                <th className="px-6 py-3 font-medium">Match</th>
               </tr>
             </thead>
             <tbody>
@@ -132,7 +132,7 @@ export default async function DashboardPage() {
                   <td className="px-3 py-3 num">{row.imeis}</td>
                   <td className="px-6 py-3">
                     <Badge variant={row.delta === 0 ? "success" : "danger"}>
-                      {row.delta === 0 ? "Reconciled" : row.delta > 0 ? `+${row.delta} excess serials` : `${row.delta} missing serials`}
+                      {row.delta === 0 ? "Match" : row.delta > 0 ? `${row.delta} extra IMEIs` : `${Math.abs(row.delta)} missing IMEIs`}
                     </Badge>
                   </td>
                 </tr>
@@ -140,7 +140,7 @@ export default async function DashboardPage() {
               {data.imeiCheck.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-8 text-muted-foreground">
-                    No serialized inventory tracked in selected branch locations.
+                    No phones or laptops on the IMEI list for the shops you can see.
                   </td>
                 </tr>
               ) : null}
@@ -153,16 +153,16 @@ export default async function DashboardPage() {
         <div className="surface-card p-6 xl:col-span-4">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h3 className="font-semibold">Revenue vs Procurement</h3>
-              <p className="text-sm text-muted-foreground">Trailing six months for active branch scope</p>
+              <h3 className="font-semibold">Sales vs goods bought</h3>
+              <p className="text-sm text-muted-foreground">Last six months for the shops you can see</p>
             </div>
             <Badge variant="muted">6 Months</Badge>
           </div>
           <SalesPurchaseChart data={data.chartSales} />
         </div>
         <div className="surface-card p-6 xl:col-span-3">
-          <h3 className="font-semibold">Asset Breakdown by Brand</h3>
-          <p className="mb-4 text-sm text-muted-foreground">In-stock serialized inventory distribution</p>
+          <h3 className="font-semibold">Phones by brand</h3>
+          <p className="mb-4 text-sm text-muted-foreground">In-shop phones and laptops by brand</p>
           <DevicePie data={data.devices} />
         </div>
       </div>
@@ -170,7 +170,7 @@ export default async function DashboardPage() {
       <div className="grid gap-4 xl:grid-cols-7">
         <div className="surface-card overflow-hidden xl:col-span-4">
           <div className="flex items-center justify-between px-6 py-5">
-            <h3 className="font-semibold">Recent Sales Orders</h3>
+            <h3 className="font-semibold">Recent sales</h3>
             <Badge variant="muted">Invoices</Badge>
           </div>
           <div className="overflow-x-auto">
@@ -180,7 +180,7 @@ export default async function DashboardPage() {
                   <th className="px-6 py-3 font-medium">Invoice</th>
                   <th className="px-3 py-3 font-medium">Customer</th>
                   <th className="px-3 py-3 font-medium">Date</th>
-                  <th className="px-3 py-3 font-medium">Total Paid</th>
+                  <th className="px-3 py-3 font-medium">Paid</th>
                   <th className="px-6 py-3 font-medium">Status</th>
                 </tr>
               </thead>
@@ -190,7 +190,7 @@ export default async function DashboardPage() {
                     <td className="px-6 py-3 font-medium">
                       <a href={`/sales/${sale.id}`} className="text-primary font-mono">{sale.invoiceNumber}</a>
                     </td>
-                    <td className="px-3 py-3">{sale.customer?.name ?? "Walk-in Customer"}</td>
+                    <td className="px-3 py-3">{sale.customer?.name ?? "Walk-in"}</td>
                     <td className="px-3 py-3">{formatDate(sale.saleDate)}</td>
                     <td className="px-3 py-3 num">{formatCurrency(money(sale.paidAmount))}</td>
                     <td className="px-6 py-3">
@@ -206,12 +206,12 @@ export default async function DashboardPage() {
         <div className="space-y-4 xl:col-span-3">
           <div className="surface-card p-6">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="font-semibold">Inventory Valuation</h3>
-              <Badge variant="muted">Live</Badge>
+              <h3 className="font-semibold">Stock at cost</h3>
+              <Badge variant="muted">Now</Badge>
             </div>
-            <p className="text-sm text-muted-foreground">Total Stock at Cost</p>
+            <p className="text-sm text-muted-foreground">What is on the shelf, at cost</p>
             <p className="text-3xl font-semibold num">{formatCurrency(data.kpis.stockValue)}</p>
-            <p className="mt-1 text-xs text-success">Accounts Receivable: {formatCurrency(data.kpis.outstanding)}</p>
+            <p className="mt-1 text-xs text-success">Customers still owe: {formatCurrency(data.kpis.outstanding)}</p>
             <div className="mt-4 space-y-3">
               {data.stock.map((row) => (
                 <div key={row.id} className="flex items-center justify-between text-sm">
@@ -225,7 +225,7 @@ export default async function DashboardPage() {
             </div>
           </div>
           <div className="surface-card p-6">
-            <h3 className="mb-3 font-semibold">Branch Revenue Ranking</h3>
+            <h3 className="mb-3 font-semibold">Shop sales ranking</h3>
             <div className="space-y-3">
               {data.ranking.map((row, index) => (
                 <div key={row.name} className="flex items-center justify-between text-sm">

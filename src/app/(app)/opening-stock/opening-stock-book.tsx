@@ -562,8 +562,8 @@ function AddItemModal({
               className="mt-1 flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm shadow-sm"
             >
               <option value="NONE">Pieces (Accessories / General)</option>
-              <option value="IMEI">IMEI Tracked (Phones / Tablets)</option>
-              <option value="SERIAL">Serial Tracked (Laptops / MacBooks)</option>
+              <option value="IMEI">Phone, IMEI</option>
+              <option value="SERIAL">Serial (laptops)</option>
             </select>
           </div>
           {tracking === "NONE" ? (

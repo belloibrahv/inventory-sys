@@ -43,31 +43,31 @@ export default async function BooksCheckPage({
     <div className="audit-pack space-y-6">
       <div className="books-chrome space-y-6 print:hidden">
         <PageHeader
-          title="Financial Audit Pack & Daily Register"
-          description="Consolidated executive balance sheet, revenue verification, cash reconciliations, and discrepancy audits for internal controllers and executive leadership."
+          title="Check the books"
+          description="The official money paper for one shop and one stretch of days. It reprints sales, cash, transfer, POS, credit sales, and the till close. It does not change any invoice."
           actions={
             <div className="flex flex-wrap gap-2">
               <BooksPdfButton data={data} />
-              <PrintButton label="Print / Export PDF" />
+              <PrintButton label="Print / Save PDF" />
               <ExportCsv
                 filename={`${data.statementRef}.csv`}
-                label="Export Ledger CSV"
+                label="Download CSV"
                 rows={booksCsvRows(data)}
               />
             </div>
           }
         />
         <p className="text-sm">
-          <Link href="/audit" className="text-primary">System Audit Trail</Link>
+          <Link href="/audit" className="text-primary">Who did what</Link>
           {" · "}
-          <Link href="/finance/close" className="text-primary">End of Day Register</Link>
+          <Link href="/finance/close" className="text-primary">Close the day</Link>
           {" · "}
-          <Link href="/reports" className="text-primary">Financial Reports</Link>
+          <Link href="/reports" className="text-primary">Reports</Link>
         </p>
 
         <form className="surface-card grid gap-3 p-4 md:grid-cols-[1fr_150px_160px_160px_auto] md:items-end">
           <label className="text-sm">
-            <span className="mb-1 block text-muted-foreground">Branch Location</span>
+            <span className="mb-1 block text-muted-foreground">Shop</span>
             <Select name="shop" defaultValue={data.shopId}>
               {data.shops.map((row) => (
                 <option key={row.id} value={row.id}>{row.name}</option>
@@ -75,19 +75,19 @@ export default async function BooksCheckPage({
             </Select>
           </label>
           <label className="text-sm">
-            <span className="mb-1 block text-muted-foreground">Accounting Period</span>
+            <span className="mb-1 block text-muted-foreground">Period</span>
             <Select name="range" defaultValue={data.range}>
-              <option value="day">Single Business Day</option>
-              <option value="week">Trailing 7 Days</option>
-              <option value="month">Month to Date (MTD)</option>
+              <option value="day">One day</option>
+              <option value="week">Last 7 days</option>
+              <option value="month">This month so far</option>
             </Select>
           </label>
           <label className="text-sm">
-            <span className="mb-1 block text-muted-foreground">Period End Date</span>
+            <span className="mb-1 block text-muted-foreground">End date</span>
             <Input name="date" type="date" defaultValue={data.businessDate} required />
           </label>
           <label className="text-sm">
-            <span className="mb-1 block text-muted-foreground">Comparative Period</span>
+            <span className="mb-1 block text-muted-foreground">Compare with</span>
             <Input name="compare" type="date" defaultValue={compare && /^\d{4}-\d{2}-\d{2}$/.test(compare) ? compare : ""} />
           </label>
           <button type="submit" className="h-10 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">

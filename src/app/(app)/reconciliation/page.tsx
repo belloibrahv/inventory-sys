@@ -38,8 +38,8 @@ export default async function ReconciliationPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Physical Inventory Audit & Cycle Count"
-        description="Perform physical stock counts, verify perpetual balances against physical counts, calculate inventory variance, and submit cycle count audits for executive sign-off."
+        title="Stock count"
+        description="Count one shop with your hands. If the shelf and the IMEI list disagree, a manager must say yes before numbers change."
       />
 
       {/* Stock count form and table */}
@@ -47,7 +47,7 @@ export default async function ReconciliationPage() {
 
       {/* Past Stock Count Reports */}
       <div className="space-y-4 print:hidden">
-        <h2 className="text-sm font-semibold tracking-tight">Historical Cycle Count Audits</h2>
+        <h2 className="text-sm font-semibold tracking-tight">Past stock counts</h2>
         <div className="grid gap-4 md:grid-cols-2">
           {rows.map((row) => {
             const expected = money(row.totalExpected)
@@ -61,7 +61,7 @@ export default async function ReconciliationPage() {
                   <div>
                     <p className="font-medium">{row.branch.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {formatDate(row.createdAt)} · Audited by {row.user.name}
+                      {formatDate(row.createdAt)} · Counted by {row.user.name}
                     </p>
                   </div>
                   <StatusBadge value={row.status} />
@@ -91,7 +91,7 @@ export default async function ReconciliationPage() {
                 <div className="space-y-1 text-xs">
                   {offLines.map((item) => (
                     <div key={item.id} className="flex justify-between gap-3 border-b border-border/50 py-1">
-                      <span className="min-w-0 truncate">{item.product.name}</span>
+                      <span className="min-w-0 whitespace-normal break-words">{item.product.name}</span>
                       <span className="num shrink-0 font-medium">
                         {item.expectedQty} → {item.countedQty} ({item.variance > 0 ? `+${item.variance}` : item.variance})
                       </span>
@@ -108,8 +108,8 @@ export default async function ReconciliationPage() {
           {rows.length === 0 ? (
             <div className="md:col-span-2">
               <EmptyState
-                title="No cycle count audits recorded"
-                hint="Initiate a cycle count audit above and submit it for authorization. Historical audits, variance reconciliations, and sign-offs will appear here."
+                title="No stock counts yet"
+                hint="Count a shop above and send it for a manager to say yes. Past counts will show here."
               />
             </div>
           ) : null}

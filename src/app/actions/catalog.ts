@@ -438,7 +438,7 @@ export async function importProducts(formData: FormData) {
         costPrice: costPrice.toFixed(2),
         minimumPrice: Math.max(0, minimumPrice).toFixed(2),
         sellingPrice: sellingPrice.toFixed(2),
-        warrantyDays: Number(cell(row, "warranty_days", "warranty") || 365) || 365,
+        warrantyDays: Number(cell(row, "warranty_days", "warranty") || 0) || 0,
         description: cell(row, "description") || null,
       },
     })

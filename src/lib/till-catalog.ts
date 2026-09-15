@@ -6,6 +6,7 @@ export type TillImei = {
   serialNumber: string | null
   productId: string
   branchId: string
+  cosmeticGrade?: string | null
   product: {
     name: string
     sellingPrice: number

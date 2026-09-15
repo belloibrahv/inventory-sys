@@ -134,7 +134,7 @@ function NavLeaf({
     >
       {active ? <span className="absolute inset-y-1.5 left-0 w-[3px] rounded-r-full bg-brand" /> : null}
       <Icon className={cn("h-4 w-4 shrink-0", active ? "text-white" : "text-sidebar-foreground/55")} />
-      <span className="truncate">{name}</span>
+      <span className="whitespace-normal leading-snug">{name}</span>
     </Link>
   )
 }
@@ -184,7 +184,7 @@ function NavBranch({
           )}
         >
           <Icon className={cn("h-4 w-4 shrink-0", inside ? "text-white" : "text-sidebar-foreground/55")} />
-          <span className="truncate">{item.name}</span>
+          <span className="whitespace-normal leading-snug">{item.name}</span>
         </Link>
         <button
           type="button"
@@ -230,7 +230,7 @@ function NavBranch({
                 {ChildIcon ? (
                   <ChildIcon className={cn("h-3.5 w-3.5 shrink-0", active ? "text-brand" : "text-sidebar-foreground/40")} />
                 ) : null}
-                <span className="truncate">{child.name}</span>
+                <span className="whitespace-normal leading-snug">{child.name}</span>
               </Link>
             )
           })}

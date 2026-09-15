@@ -7,6 +7,7 @@ import type { ReportsPack } from "@/lib/reports-pack"
 import { getAppSettings, lowStockLimit } from "@/lib/settings"
 import { requireUser } from "@/lib/session"
 import { money } from "@/lib/utils"
+import { saleTenders } from "@/lib/sale-money"
 import { ReportsClientView } from "./reports-client-view"
 
 export default async function ReportsPage({
@@ -26,7 +27,7 @@ export default async function ReportsPage({
   ])
 
   const revenue = data.sales.reduce((sum, sale) => sum + money(sale.totalAmount), 0)
-  const collected = data.sales.reduce((sum, sale) => sum + money(sale.paidAmount), 0)
+  const collected = data.sales.reduce((sum, sale) => sum + saleTenders(sale).received, 0)
   const expense = data.expenses.reduce((sum, row) => sum + money(row.amount), 0)
   const stock = data.inventory.reduce((sum, row) => sum + row.quantity * money(row.product.costPrice), 0)
   const swapValue = data.swaps.reduce((sum, row) => sum + money(row.balanceAmount), 0)
@@ -38,7 +39,7 @@ export default async function ReportsPage({
       const key = sale.branch.id
       acc[key] = acc[key] ?? { name: sale.branch.name, revenue: 0, collected: 0, tickets: 0 }
       acc[key].revenue += money(sale.totalAmount)
-      acc[key].collected += money(sale.paidAmount)
+      acc[key].collected += saleTenders(sale).received
       acc[key].tickets += 1
       return acc
     }, {})
@@ -95,8 +96,8 @@ export default async function ReportsPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Business Intelligence & Operational Reports"
-        description={`Comprehensive enterprise executive summary: revenue performance, cash collections, asset valuation, operational expenses, and trade receivables aging as of ${formatLagosStamp()}.`}
+        title="Reports"
+        description={`Sales, payments received, stock value, and who still owes, as of ${formatLagosStamp()}.`}
       />
       <ReportsClientView
         pack={pack}

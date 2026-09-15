@@ -11,6 +11,7 @@ import { TablePager, usePagedRows } from "@/components/table-pager"
 import { downloadTable } from "@/lib/download-table"
 import { formatCurrency, money } from "@/lib/utils"
 import { lowStockLimit } from "@/lib/stock-limits"
+import { formatCondition } from "@/lib/status"
 
 type Branch = { id: string; name: string; code: string }
 type InventoryRow = {
@@ -100,28 +101,28 @@ export function InventoryClientView({
 
   const scopeLabel =
     selectedBranch === "ALL"
-      ? "all locations"
-      : branches.find((branch) => branch.id === selectedBranch)?.name ?? "this branch"
+      ? "all shops"
+      : branches.find((branch) => branch.id === selectedBranch)?.name ?? "this shop"
 
   /** Same rows, same order, same columns as the table on screen. */
   function tableRows() {
     return [
       [
-        "Product Name",
-        "SKU / Item Code",
+        "Product name",
+        "Item code",
         "Brand",
         "Category",
-        "Condition",
-        "Branch",
-        "Cost Basis",
-        "Retail Price",
-        "Unit Margin",
-        "Margin %",
-        "On Hand",
-        "In Transit",
-        "Serialized Units",
-        "Cost Valuation",
-        "Retail Valuation",
+        "How it looks",
+        "Shop",
+        "Cost",
+        "Sell price",
+        "Profit per unit",
+        "Profit %",
+        "On shelf",
+        "On the way",
+        "IMEI count",
+        "Value at cost",
+        "Value at sell price",
       ],
       ...filtered.map((row) => {
         const cost = money(row.product.costPrice)
@@ -140,7 +141,7 @@ export function InventoryClientView({
           `${marginPct(cost, selling).toFixed(1)}%`,
           String(row.quantity),
           String(row.incomingQty),
-          serialized.has(row.productId) ? String(imeis) : "Standard SKU",
+          serialized.has(row.productId) ? String(imeis) : "No IMEI",
           (row.quantity * cost).toFixed(2),
           (row.quantity * selling).toFixed(2),
         ]
@@ -155,32 +156,32 @@ export function InventoryClientView({
     <div className="space-y-5">
       <StatGrid className="print:hidden">
         <StatCard
-          label="Total Units on Hand"
+          label="Units on the shelf"
           value={totals.units.toLocaleString("en-NG")}
-          hint={`${filtered.length} inventory SKU${filtered.length === 1 ? "" : "s"} in ${scopeLabel}`}
+          hint={`${filtered.length} item${filtered.length === 1 ? "" : "s"} in ${scopeLabel}`}
           icon={<Layers className="h-4 w-4" />}
         />
         <StatCard
-          label="Inventory Valuation (Cost)"
+          label="Value at cost"
           value={formatCurrency(totals.cost)}
-          hint="Total inventory capital invested at baseline purchase cost."
+          hint="What the phones and items on the shelf cost you."
           icon={<Coins className="h-4 w-4" />}
           tone="primary"
         />
         <StatCard
-          label="Projected Retail Valuation"
+          label="Value at sell price"
           value={formatCurrency(totals.sales)}
-          hint={`Projected gross profit: ${formatCurrency(totals.profit)}`}
+          hint={`If every unit sold at list price: ${formatCurrency(totals.profit)} profit`}
           icon={<TrendingUp className="h-4 w-4" />}
           tone="success"
         />
         <StatCard
-          label="Weighted Margin %"
+          label="Profit %"
           value={`${totals.margin.toFixed(1)}%`}
           hint={
             totals.lowLines > 0
-              ? `${totals.lowLines} SKU${totals.lowLines === 1 ? "" : "s"} below reorder threshold`
-              : "All SKUs above reorder point"
+              ? `${totals.lowLines} item${totals.lowLines === 1 ? "" : "s"} below the low-stock warning`
+              : "Every item is above the low-stock warning"
           }
           tone={totals.lowLines > 0 ? "warning" : "neutral"}
           icon={<AlertTriangle className="h-4 w-4" />}
@@ -192,19 +193,19 @@ export function InventoryClientView({
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <div className="min-w-0 flex-1">
             <p className="font-semibold">
-              {gaps.length} SKU line${gaps.length === 1 ? "" : "s"} with serialized reconciliation variances
+              {gaps.length} item${gaps.length === 1 ? "" : "s"} where shop count and IMEI list do not match
             </p>
             <ul className="mt-1 space-y-0.5 text-xs">
               {gaps.slice(0, 4).map((item) => (
                 <li key={item.row.id}>
-                  {item.row.product.name} · {item.row.branch.name}: Ledger Qty: {item.row.quantity}, Serialized Registry:{" "}
+                  {item.row.product.name} · {item.row.branch.name}: shelf {item.row.quantity}, IMEIs{" "}
                   {item.imeis}
                 </li>
               ))}
               {gaps.length > 4 ? <li>and {gaps.length - 4} more</li> : null}
             </ul>
             <Link href="/reconciliation" className="mt-1.5 inline-block text-xs font-semibold underline">
-              Initiate Physical Inventory Audit & Cycle Count
+              Open Stock count
             </Link>
           </div>
         </div>
@@ -218,7 +219,7 @@ export function InventoryClientView({
       <Toolbar className="justify-between print:hidden">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
           <Select value={selectedBranch} onChange={(event) => setSelectedBranch(event.target.value)} className="h-9 w-52">
-            <option value="ALL">All Branches</option>
+            <option value="ALL">All shops</option>
             {branches.map((branch) => (
               <option key={branch.id} value={branch.id}>
                 {branch.name} ({branch.code})
@@ -230,17 +231,19 @@ export function InventoryClientView({
             onChange={(event) => setConditionFilter(event.target.value)}
             className="h-9 w-44"
           >
-            <option value="ALL">All Conditions</option>
+            <option value="ALL">How the phone looks: all</option>
             <option value="BRAND_NEW">Brand new</option>
             <option value="UK_USED">Uk</option>
             <option value="OPEN_BOX">OPENBOX</option>
             <option value="FAULTY">Faulty</option>
-            <option value="REFURBISHED">Refurbished / Certified</option>
+            <option value="SWAP_DEVICE">Swap Deal</option>
+            <option value="REPAIR_DEVICE">Repair device</option>
+            <option value="REFURBISHED">Refurbished</option>
           </Select>
           <div className="relative min-w-[200px] flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search by SKU, product name, or brand..."
+              placeholder="Find item code, name, or brand"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               className="h-9 pl-9"
@@ -263,15 +266,15 @@ export function InventoryClientView({
 
       <TableShell
         columns={[
-          { label: "Product / Description" },
-          { label: "Branch" },
-          { label: "Cost Basis", align: "right" },
-          { label: "Retail Price", align: "right" },
-          { label: "Margin", align: "right" },
-          { label: "On Hand", align: "center" },
-          { label: "In Transit", align: "center" },
-          { label: "Serialized", align: "center" },
-          { label: "Cost Valuation", align: "right" },
+          { label: "Item" },
+          { label: "Shop" },
+          { label: "Cost", align: "right" },
+          { label: "Sell price", align: "right" },
+          { label: "Profit", align: "right" },
+          { label: "On shelf", align: "center" },
+          { label: "On the way", align: "center" },
+          { label: "IMEIs", align: "center" },
+          { label: "Value at cost", align: "right" },
         ]}
         footer={
           <TablePager
@@ -283,7 +286,7 @@ export function InventoryClientView({
             end={pager.end}
             onPageChange={pager.setPage}
             onPageSizeChange={pager.setPageSize}
-            noun="inventory records"
+            noun="items"
           />
         }
       >
@@ -301,7 +304,7 @@ export function InventoryClientView({
               <td>
                 <p className="font-medium">{row.product.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {row.product.brand.name} · {row.product.condition.replace(/_/g, " ").toLowerCase()} ·{" "}
+                  {row.product.brand.name} · {formatCondition(row.product.condition)} ·{" "}
                   <span className="font-mono">{row.product.sku}</span>
                 </p>
               </td>
@@ -318,7 +321,7 @@ export function InventoryClientView({
               </td>
               <td className="text-center">
                 <span className={`num font-semibold ${isLow ? "text-danger" : "text-foreground"}`}>{row.quantity}</span>
-                {isLow ? <p className="text-[11px] font-medium text-danger">Below Min</p> : null}
+                {isLow ? <p className="text-[11px] font-medium text-danger">Low stock</p> : null}
               </td>
               <td className="text-center num text-muted-foreground">
                 {row.incomingQty > 0 ? `+${row.incomingQty}` : "—"}
@@ -329,10 +332,10 @@ export function InventoryClientView({
                     <span className={`num text-sm ${mismatch ? "font-semibold text-warning" : "text-muted-foreground"}`}>
                       {imeis}
                     </span>
-                    {mismatch ? <p className="text-[11px] font-medium text-warning">Variance</p> : null}
+                    {mismatch ? <p className="text-[11px] font-medium text-warning">Does not match</p> : null}
                   </>
                 ) : (
-                  <span className="text-xs text-muted-foreground">Standard</span>
+                  <span className="text-xs text-muted-foreground">No IMEI</span>
                 )}
               </td>
               <td className="text-right num font-semibold">{formatCurrency(row.quantity * cost)}</td>
@@ -340,7 +343,7 @@ export function InventoryClientView({
           )
         })}
         {filtered.length === 0 ? (
-          <TableEmpty colSpan={9}>No inventory records match the selected branch, condition, or search filter.</TableEmpty>
+          <TableEmpty colSpan={9}>No items match this shop, how the phone looks, or the search.</TableEmpty>
         ) : null}
       </TableShell>
     </div>

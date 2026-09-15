@@ -13,7 +13,6 @@ const conditions = [
   { value: "UK_USED", label: "Uk" },
   { value: "OPEN_BOX", label: "OPENBOX" },
   { value: "FAULTY", label: "Faulty" },
-  { value: "REFURBISHED", label: "Refurbished" },
   { value: "SWAP_DEVICE", label: "Swap Deal" },
   { value: "REPAIR_DEVICE", label: "Repair device" },
 ]
@@ -36,7 +35,7 @@ export default async function NewProductPage() {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)]">
         <SectionCard title="The item">
-          <ActionForm action={createProduct} submit="Create product" className="space-y-3">
+          <ActionForm action={createProduct} submit="Save this item" className="space-y-3">
             <Input name="sku" placeholder="Item code" required />
             <Input name="name" placeholder="Name" required />
             <div className="grid grid-cols-2 gap-2">

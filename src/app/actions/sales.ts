@@ -91,6 +91,7 @@ export async function getPosLookups() {
       serialNumber: item.serialNumber,
       productId: item.productId,
       branchId: item.branchId,
+      cosmeticGrade: item.cosmeticGrade,
       product: {
         name: item.product.name,
         sellingPrice: money(item.product.sellingPrice),
@@ -223,6 +224,12 @@ export async function checkoutSale(input: {
   const paid = Math.min(Math.max(0, rawPaid), subtotal)
   const method = paid < subtotal ? "CREDIT" : (isSplit ? "SPLIT_PAYMENT" : input.paymentMethod)
   const due = subtotal - paid
+  const receivedChannel: "CASH" | "TRANSFER" | "POS" =
+    isSplit && validSplits[0]
+      ? validSplits[0].method
+      : input.paymentMethod === "CASH" || input.paymentMethod === "TRANSFER" || input.paymentMethod === "POS"
+        ? input.paymentMethod
+        : "TRANSFER"
 
   if (due > 0 && !input.customerId) {
     return { error: "A credit sale or part payment needs a buyer name. A walk-in must pay everything now." }
@@ -281,7 +288,7 @@ export async function checkoutSale(input: {
                     : [
                         {
                           amount: paid.toFixed(2),
-                          method: input.paymentMethod === "CREDIT" ? "CASH" : input.paymentMethod,
+                          method: receivedChannel,
                         },
                       ],
                 }
@@ -396,11 +403,11 @@ export async function checkoutSale(input: {
           await tx.financeEntry.create({
             data: {
               branchId: input.branchId,
-              account: input.paymentMethod === "CASH" ? "CASH" : "BANK",
+              account: receivedChannel === "CASH" ? "CASH" : "BANK",
               type: "INCOME",
               amount: paid.toFixed(2),
               reference: invoiceNumber,
-              description: `Sales revenue received (${input.paymentMethod}): ${invoiceNumber}`,
+              description: `Sales revenue received (${receivedChannel}): ${invoiceNumber}`,
             },
           })
         }

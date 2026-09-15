@@ -20,12 +20,12 @@ export default async function AuditPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="System Audit Trail & Event Log"
-        description="Immutable ledger tracking user authentication, transactional mutations, inventory adjustments, financial disbursements, data exports, and security violations."
+        title="Who did what"
+        description="Who did an important action, when, and what changed, in shop words. Nothing here is deleted."
         actions={
           <div className="flex flex-wrap gap-2">
             <a href="/audit/books" className="inline-flex min-h-11 items-center rounded-xl border border-border px-3 text-sm">
-              Financial Audit Pack
+              Check the books
             </a>
             <AuditExportButton filters={filters} />
           </div>
@@ -42,19 +42,19 @@ export default async function AuditPage({
           href="/audit/books"
           className={`block rounded-xl px-4 py-3 text-sm ${books.openCount ? "bg-warning-soft text-warning" : "surface-card"}`}
         >
-          <p className="font-medium">Executive & Controller Briefing</p>
+          <p className="font-medium">Check the books</p>
           <p className="mt-1">{books.verdict}</p>
-          <p className="mt-1 text-primary">Open Financial Audit Pack</p>
+          <p className="mt-1 text-primary">Open Check the books</p>
         </a>
       ) : null}
 
       <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <WatchCard href="/audit?result=failed&action=LOGIN" label="Failed Authentications (24h)" value={data.watch.failedLogins} hot={data.watch.failedLogins > 0} />
-        <WatchCard href="/audit?risk=HIGH" label="High-Risk Operations (24h)" value={data.watch.highRisk} hot={data.watch.highRisk > 0} />
-        <WatchCard href="/audit?action=DENIED" label="Access Denied Events (24h)" value={data.watch.denied} hot={data.watch.denied > 0} />
-        <WatchCard href="/audit?action=EXPORT" label="Data Exports (7d)" value={data.watch.exports} hot={data.watch.exports > 0} />
-        <WatchCard href="/audit" label="After-Hours Activity (7d)" value={data.watch.afterHours} hot={data.watch.afterHours > 3} />
-        <WatchCard href="/audit?action=VIEW&views=1" label="Audited Screen Views (24h)" value={data.watch.screens} />
+        <WatchCard href="/audit?result=failed&action=LOGIN" label="Failed sign-ins (24 hours)" value={data.watch.failedLogins} hot={data.watch.failedLogins > 0} />
+        <WatchCard href="/audit?risk=HIGH" label="High-risk work (24 hours)" value={data.watch.highRisk} hot={data.watch.highRisk > 0} />
+        <WatchCard href="/audit?action=DENIED" label="Not allowed (24 hours)" value={data.watch.denied} hot={data.watch.denied > 0} />
+        <WatchCard href="/audit?action=EXPORT" label="Downloads (7 days)" value={data.watch.exports} hot={data.watch.exports > 0} />
+        <WatchCard href="/audit" label="Work after shop hours (7 days)" value={data.watch.afterHours} hot={data.watch.afterHours > 3} />
+        <WatchCard href="/audit?action=VIEW&views=1" label="Screens opened (24 hours)" value={data.watch.screens} />
       </div>
 
       <form className="surface-card grid gap-2 p-4 md:grid-cols-[1fr_160px_140px_180px_140px_auto] md:items-end">

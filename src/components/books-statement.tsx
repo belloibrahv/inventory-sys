@@ -37,7 +37,7 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
             </div>
           </div>
           <div className="text-right">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#7CFF86]">Financial Audit Statement</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#7CFF86]">Check the books</p>
             <p className="mt-1 text-xl font-semibold">{booksRangeTitle(data.range)}</p>
             <p className="font-mono text-xs text-white/80">{data.statementRef}</p>
             <p className="text-[11px] text-white/70">Lagos time {formatLagosStamp(new Date(data.preparedAt))}</p>
@@ -45,7 +45,7 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
         </div>
         <div className="relative mt-5 grid gap-3 border-t border-white/15 pt-4 text-[12px] sm:grid-cols-3">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">Shop Location</p>
+            <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">Shop</p>
             <p className="font-semibold">{data.shopName}</p>
             <p className="text-white/70">{data.shopCode}</p>
           </div>

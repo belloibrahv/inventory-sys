@@ -410,7 +410,7 @@ function OfflineSyncCenterDialog({
           {events.length > 0 ? (
             <div>
               <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Recent Network & Sync Events
+                  Recent line and sync notes
               </h4>
               <div className="mt-2 max-h-32 space-y-1 overflow-y-auto rounded-lg border border-border bg-muted/20 p-2 font-mono text-[11px]">
                 {events.slice(-6).reverse().map((ev) => (
@@ -419,7 +419,7 @@ function OfflineSyncCenterDialog({
                       [{formatShopWhen(new Date(ev.at))}] {ev.kind}
                     </span>
                     {ev.detail ? (
-                      <span className="text-[10px] text-foreground/80 truncate max-w-[200px]">
+                      <span className="max-w-[200px] whitespace-normal break-words text-[10px] text-foreground/80">
                         {JSON.stringify(ev.detail)}
                       </span>
                     ) : null}

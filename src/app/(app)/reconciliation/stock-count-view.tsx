@@ -104,15 +104,15 @@ export function StockCountView({
   function sheetRows() {
     return [
       [
-        "Product Name",
-        "SKU / Item Code",
-        "Branch",
-        "Unit Cost",
-        "Perpetual Ledger Qty",
-        "Physical Count Qty",
-        "Unit Variance",
-        "Variance Valuation",
-        "Variance Status",
+        "Item name",
+        "Item code",
+        "Shop",
+        "Cost",
+        "System count",
+        "Hand count",
+        "Difference",
+        "Difference value",
+        "Match",
       ],
       ...rows.map((row) => {
         const expected = row.quantity
@@ -226,7 +226,7 @@ export function StockCountView({
               </Select>
             </label>
             <Input
-              placeholder="Audit remarks, counting notes, or variance explanations..."
+              placeholder="Note for this count, or why a number is different"
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
               disabled={busy}
@@ -249,12 +249,12 @@ export function StockCountView({
 
         <TableShell
           columns={[
-            { label: "Product / Description" },
-            { label: "Cost Basis", align: "right" },
-            { label: "Perpetual Ledger", align: "center" },
-            { label: "Physical Count", align: "center" },
-            { label: "Variance", align: "center" },
-            { label: "Variance Valuation", align: "right" },
+          { label: "Item" },
+          { label: "Cost", align: "right" },
+          { label: "System count", align: "center" },
+          { label: "Hand count", align: "center" },
+          { label: "Difference", align: "center" },
+          { label: "Difference value", align: "right" },
           ]}
           footer={
             <TablePager
@@ -335,7 +335,7 @@ export function StockCountView({
 
         <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border pt-4 print:hidden">
           <p className="text-sm">
-            <span className="text-muted-foreground">Net cycle count variance: </span>
+            <span className="text-muted-foreground">Difference after this count: </span>
             <strong className={summary.netValue >= 0 ? "text-success" : "text-danger"}>
               {summary.netValue > 0 ? `+${formatCurrency(summary.netValue)}` : formatCurrency(summary.netValue)}
             </strong>

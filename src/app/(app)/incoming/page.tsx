@@ -23,19 +23,19 @@ export default async function IncomingPage() {
     <div className="page-split">
       <div>
         <PageHeader
-          title="Inbound Shipments"
-          description="Pre-alert and track inbound consignments prior to delivery. Shipments remain In Transit until physical inspection, receiving, and authorization are finalized."
+          title="Goods on the way"
+          description="Book phones and pieces that have left the supplier but have not been counted into this shop yet. They stay Coming until someone says they have arrived."
         />
         <div className="mt-5">
           <IncomingList lots={lots} canBook={canBook} isAdmin={isSuperAdmin(me.role)} />
         </div>
       </div>
       <SectionCard
-        title="Register Inbound Consignment"
-        description="Available inventory balances will not increment until warehouse receipt and receiving approval are confirmed."
+        title="Book goods still coming"
+        description="Shop stock does not go up until someone confirms the carton has arrived."
       >
         <p className="mb-4 text-sm text-muted-foreground">
-          Intake personnel can register serialized assets (IMEI / Serial) or bulk quantities. Link consignments to Purchase Orders for automated AP and variance matching.
+          Scan IMEIs or type how many pieces. You can attach this to a supplier bill if you already have one.
         </p>
         {canBook ? (
           <IncomingForm

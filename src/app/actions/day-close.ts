@@ -7,6 +7,7 @@ import { scopedBranchId } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { recentWatDays, shiftWatDay, watBounds, watDayKey } from "@/lib/lagos-day"
 import { money } from "@/lib/utils"
+import { saleTenders } from "@/lib/sale-money"
 import { viewBranchFilter } from "@/lib/branch-scope"
 
 async function resolveShop(user: { role: Parameters<typeof scopedBranchId>[0]; branchId: string | null }, requested?: string) {
@@ -120,27 +121,21 @@ export async function getDayClosePreview(branchId?: string, businessDate?: strin
   const totalSales = sales.reduce((sum, sale) => sum + money(sale.totalAmount), 0)
   const totalPaid = sales.reduce((sum, sale) => sum + money(sale.paidAmount), 0)
 
-  let expectedCash = 0
-  let transferTotal = 0
-  let posTotal = 0
-
-  for (const sale of sales) {
-    if (sale.payments && sale.payments.length > 0) {
-      for (const p of sale.payments) {
-        const amt = money(p.amount)
-        if (p.method === "CASH") expectedCash += amt
-        else if (p.method === "TRANSFER") transferTotal += amt
-        else if (p.method === "POS") posTotal += amt
-      }
-    } else {
-      const paid = money(sale.paidAmount)
-      if (sale.paymentMethod === "CASH") expectedCash += paid
-      else if (sale.paymentMethod === "TRANSFER") transferTotal += paid
-      else if (sale.paymentMethod === "POS") posTotal += paid
-    }
-  }
-
-  const creditTotal = sales.reduce((sum, sale) => sum + Math.max(0, money(sale.totalAmount) - money(sale.paidAmount)), 0)
+  const mix = sales.reduce(
+    (acc, sale) => {
+      const row = saleTenders(sale)
+      acc.expectedCash += row.cash
+      acc.transferTotal += row.transfer
+      acc.posTotal += row.pos
+      acc.creditTotal += row.credit
+      return acc
+    },
+    { expectedCash: 0, transferTotal: 0, posTotal: 0, creditTotal: 0 }
+  )
+  const expectedCash = mix.expectedCash
+  const transferTotal = mix.transferTotal
+  const posTotal = mix.posTotal
+  const creditTotal = mix.creditTotal
 
   return {
     sales: sales.map((sale) => ({

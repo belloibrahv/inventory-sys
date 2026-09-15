@@ -44,8 +44,8 @@ export default async function InventoryPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Stock on Hand & Inventory Balances"
-        description="Real-time stock valuation across all branches and warehouse locations. Monitor cost basis, retail valuation, gross margins, and export inventory ledgers."
+        title="Shop stock"
+        description="What is on the shelf now, at cost and at selling price. Pick a shop and how the phone looks to shorten the list."
       />
 
       <InventoryClientView

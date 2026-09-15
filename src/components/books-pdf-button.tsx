@@ -175,13 +175,13 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
       })
       y += 18
 
-      section("Period-over-Period Variance Analysis")
+      section("This period against the other")
       doc.setTextColor(...MUTED)
       doc.setFontSize(7)
-      doc.text("Account Line", left + 1, y)
-      doc.text("Current Period", left + 92, y, { align: "right" })
-      doc.text("Prior Period", left + 138, y, { align: "right" })
-      doc.text("Net Movement", right - 1, y, { align: "right" })
+      doc.text("Line", left + 1, y)
+      doc.text("This period", left + 92, y, { align: "right" })
+      doc.text("Other period", left + 138, y, { align: "right" })
+      doc.text("Difference", right - 1, y, { align: "right" })
       y += 5
       booksCompareRows(data).forEach((item, index) => {
         const now = item.money ? formatPdfMoney(item.now) : String(item.now)
@@ -190,12 +190,12 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
         row(item.label, now, then, move, index % 2 ? PAPER : undefined)
       })
 
-      section("Statement of Cash Flows & Collections")
+      section("Money summary")
       booksMoneyLines(data).forEach((item, index) => {
         row(item.label, formatPdfMoney(item.value), undefined, undefined, item.total ? [232, 237, 255] : index % 2 ? PAPER : undefined)
       })
 
-      section("Internal Audit Controls & Verifications")
+      section("Checks")
       data.papers.forEach((item, index) => {
         ensure(14)
         doc.setFillColor(item.ok ? 236 : 255, item.ok ? 253 : 241, item.ok ? 245 : 242)
@@ -205,7 +205,7 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
         doc.setFontSize(8)
         doc.text(`${index + 1}. ${item.label}`, left + 2, y + 1)
         doc.setTextColor(item.ok ? 5 : 190, item.ok ? 150 : 18, item.ok ? 105 : 60)
-        doc.text(item.ok ? "COMPLIANT" : "ACTION REQUIRED", right - 2, y + 1, { align: "right" })
+        doc.text(item.ok ? "CLEAR" : "FLAG", right - 2, y + 1, { align: "right" })
         doc.setFont("helvetica", "normal")
         doc.setTextColor(...MUTED)
         doc.setFontSize(7)
@@ -213,26 +213,26 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
         y += 13
       })
 
-      section("Collections by Sales Executive")
+      section("Payments received by staff")
       if (data.byStaff.length === 0) {
-        row("No completed sales transactions recorded for this period", "")
+        row("No sales in this period", "")
       } else {
         data.byStaff.forEach((item, index) => {
           row(`${item.name}  ·  ${item.count} sale${item.count === 1 ? "" : "s"}`, formatPdfMoney(item.collected), undefined, undefined, index % 2 ? PAPER : undefined)
         })
       }
 
-      section("Outstanding Balances & Reconciliation")
-      row("Accounts Receivable (Trade Debtors)", formatPdfMoney(data.customersOwe))
-      row("Accounts Payable (Trade Creditors)", formatPdfMoney(data.supplierOwed))
-      row("Unregistered Walk-in Transactions", String(data.walkIns))
+      section("Still owed")
+      row("Customers still owe us", formatPdfMoney(data.customersOwe))
+      row("Still owed to suppliers", formatPdfMoney(data.supplierOwed))
+      row("Sales with no customer name", String(data.walkIns))
       row("Cash sales (Expected in till)", formatPdfMoney(data.expectedCash))
       row("Cash remitted", data.countedCash == null ? "Day not closed" : formatPdfMoney(data.countedCash))
       row("Shortage / Overage", data.variance == null ? "Day not closed" : formatPdfMoney(data.variance), undefined, undefined, PAPER)
 
-      section("Sales Ledger")
+      section("Sales")
       if (data.invoices.length === 0) {
-        row("No completed sales transactions recorded for this period", "")
+        row("No sales in this period", "")
       } else {
         data.invoices.forEach((item, index) => {
           row(
@@ -245,18 +245,18 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
         })
       }
 
-      section("Daily Register Closes")
+      section("Close the day")
       if (data.closes.length === 0) {
-        row("No business days closed in this period", "")
+        row("No days closed in this period", "")
       } else {
         data.closes.forEach((item, index) => {
-          row(`${formatWatLong(item.day)}  ·  ${item.staff}`, formatPdfMoney(item.expected), "Variance", formatPdfMoney(item.variance), index % 2 ? PAPER : undefined)
+          row(`${formatWatLong(item.day)}  ·  ${item.staff}`, formatPdfMoney(item.expected), "Difference", formatPdfMoney(item.variance), index % 2 ? PAPER : undefined)
         })
       }
 
-      section("Physical Count vs System IMEI Ledger")
+      section("IMEI vs shop count")
       if (data.imeiRows.length === 0) {
-        row("No serialized inventory present at this branch", "")
+        row("No phones or laptops on the IMEI list for this shop", "")
       } else {
         data.imeiRows.forEach((item, index) => {
           row(item.product, `${item.shopQty} / ${item.imeis}`, undefined, item.delta === 0 ? "Matched" : String(item.delta), index % 2 ? PAPER : undefined)
@@ -265,7 +265,7 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
 
       ensure(42)
       y += 4
-      section("Auditor Certification & Statutory Sign-Off")
+      section("Sign-off")
       const boxesW = (width - 8) / 3
       ;["Prepared by (Internal Auditor)", "Verified by (Financial Accountant)", "Approved by (Managing Director)"].forEach((title, index) => {
         const x = left + index * (boxesW + 4)

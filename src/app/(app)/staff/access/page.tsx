@@ -27,27 +27,27 @@ export default async function AccessPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Role-Based Access Control (RBAC)"
-        description="Configure granular system permissions, view access, and operational execution privileges across organizational roles."
+        title="Who can see what"
+        description="Tick which pages and actions each job may use. The Financial Accountant and records checker see every shop page, post money, and cannot sell or change this list."
       />
 
       <div className="space-y-6">
         <div className="surface-card border-primary/30 p-5">
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-primary">Financial & Audit Cluster</p>
-              <h3 className="font-semibold">Internal Auditor & Financial Accountant</h3>
+              <p className="text-xs font-medium uppercase tracking-wider text-primary">Books desk</p>
+              <h3 className="font-semibold">Records checker and Financial Accountant</h3>
               <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                Synchronized permission set for controller roles. Granted policies allow access to the Financial Audit Pack, System Audit Trail, Expense Ledgers, and Vendor AP.
+                These two jobs share the same pages. They can open every shop page, Check the books, Who did what, Shop expenses, and pay suppliers. They cannot sell, load stock, or change this list.
               </p>
             </div>
-            <div className="rounded-xl bg-primary/10 px-3 py-2 text-xs text-primary">Unified Controller Scope</div>
+            <div className="rounded-xl bg-primary/10 px-3 py-2 text-xs text-primary">Same pages for both jobs</div>
           </div>
-          <ActionForm action={saveRoleAccess} submit="Save Controller Permissions" className="space-y-4">
+          <ActionForm action={saveRoleAccess} submit="Save books desk pages" className="space-y-4">
             <input type="hidden" name="role" value="AUDITOR" />
             <div>
               <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Authorized Views & Navigation
+                Pages they can open
               </p>
               <div className="grid gap-2 md:grid-cols-3">
                 {VIEW_PERMS.filter((row) => row.key !== "view.access").map((row) => (
@@ -60,7 +60,7 @@ export default async function AccessPage() {
             </div>
             <div>
               <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Operational & Transactional Privileges
+                What they can do
               </p>
               <div className="grid gap-2 md:grid-cols-3">
                 {ACTION_PERMS.map((row) => (
@@ -77,11 +77,11 @@ export default async function AccessPage() {
         {otherRoles.map((role) => (
           <div key={role} className="surface-card p-5">
             <h3 className="mb-4 font-semibold">{ROLE_LABELS[role]}</h3>
-            <ActionForm action={saveRoleAccess} submit={`Save ${ROLE_LABELS[role]} Permissions`} className="space-y-4">
+            <ActionForm action={saveRoleAccess} submit={`Save ${ROLE_LABELS[role]} pages`} className="space-y-4">
               <input type="hidden" name="role" value={role} />
               <div>
                 <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  Authorized Views & Navigation
+                  Pages they can open
                 </p>
                 <div className="grid gap-2 md:grid-cols-3">
                   {VIEW_PERMS.filter((row) => row.key !== "view.access").map((row) => (
@@ -94,7 +94,7 @@ export default async function AccessPage() {
               </div>
               <div>
                 <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  Operational & Transactional Privileges
+                  What they can do
                 </p>
                 <div className="grid gap-2 md:grid-cols-3">
                   {ACTION_PERMS.map((row) => (

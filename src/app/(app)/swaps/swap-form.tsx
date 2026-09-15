@@ -48,7 +48,7 @@ export function SwapForm({
           <option key={item} value={item}>{item}</option>
         ))}
       </Select>
-      <Input name="tradeValue" type="number" placeholder="Trade-in value" required />
+      <Input name="tradeValue" type="number" placeholder="Swap Deal value" required />
       <Select name="branchId" value={branchId} onChange={(event) => setBranchId(event.target.value)} required>
         {branches.map((branch) => (
           <option key={branch.id} value={branch.id}>{branch.name}</option>

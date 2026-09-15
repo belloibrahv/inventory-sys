@@ -16,6 +16,6 @@ export async function getAppSettings() {
     /** Second person must say yes before received goods become sellable. */
     dualControlIncoming: map["incoming.dual_control"] !== "false",
     lowStockThreshold: Number(map["inventory.low_stock_threshold"] || 3) || 3,
-    warrantyDays: Number(map["sales.warranty_days"] || 365) || 365,
+    warrantyDays: Number(map["sales.warranty_days"] || 0) || 0,
   }
 }

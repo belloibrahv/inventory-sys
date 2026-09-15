@@ -99,8 +99,8 @@ export default async function BranchesPage() {
     <div className="page-split">
       <div>
         <PageHeader
-          title="Branch Locations & Warehouses"
-          description="Enterprise multi-site administration. Manage central distribution centers, retail branch stores, contact metadata, and active operational status."
+          title="Shops"
+          description="The Abu Twins shops. Open or close a shop. Each shop keeps its own stock, sales, and customers."
         />
         <div className="grid gap-3 md:grid-cols-2">
           {open.map((branch) => (
@@ -109,9 +109,9 @@ export default async function BranchesPage() {
         </div>
         {admin && closed.length ? (
           <div className="mt-8">
-            <h3 className="mb-2 text-sm font-semibold text-muted-foreground">Archived & Inactive Locations</h3>
+            <h3 className="mb-2 text-sm font-semibold text-muted-foreground">Closed shops</h3>
             <p className="mb-3 text-sm text-muted-foreground">
-              Archived locations retain all historical sales and inventory transactions for compliance audits, but are hidden from active point-of-sale and receiving workflows.
+              Closed shops keep their old sales and stock for the books. They do not appear on Sell now or goods intake.
             </p>
             <div className="grid gap-3 md:grid-cols-2">
               {closed.map((branch) => (

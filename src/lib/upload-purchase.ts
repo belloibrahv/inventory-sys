@@ -3,6 +3,8 @@ import { money } from "@/lib/utils"
 
 export const UPLOAD_STOCK_SOURCE = "UPLOAD_STOCK"
 export const MARKED_PAID_ON_UPLOAD = "MARKED_PAID_ON_UPLOAD"
+/** Opening stock is value only. Not a payable, not a payment. */
+export const OPENING_STOCK_METHOD = "OPENING_STOCK"
 
 type Tx = Prisma.TransactionClient
 

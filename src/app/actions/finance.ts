@@ -9,6 +9,8 @@ import { requireUser } from "@/lib/session"
 import { canApprove, canManageFinance, canManageStaff, isSuperAdmin, scopedBranchId } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { generateDocNumber, money } from "@/lib/utils"
+import { saleTenders, sumSaleTenders } from "@/lib/sale-money"
+import { healOpeningStockBills } from "@/lib/opening-stock-money"
 
 export async function getFinance() {
   const user = await requireUser()
@@ -28,13 +30,14 @@ export async function getFinance() {
       creditors: [],
     }
   }
+  await healOpeningStockBills()
   const branchId = await viewBranchFilter(user)
   const where = branchId ? { branchId } : {}
 
   const [sales, expenses, purchases, entries, debtors] = await Promise.all([
     prisma.sale.findMany({
       where: { ...where, status: "COMPLETED" },
-      include: { branch: true, customer: true },
+      include: { branch: true, customer: true, payments: true },
       orderBy: { saleDate: "desc" },
     }),
     prisma.expense.findMany({
@@ -67,9 +70,10 @@ export async function getFinance() {
   ])
 
   // 1. Core Accounting Totals
-  const revenue = sales.reduce((sum, s) => sum + money(s.paidAmount), 0)
-  const cashRevenue = sales.filter((s) => s.paymentMethod === "CASH").reduce((sum, s) => sum + money(s.paidAmount), 0)
-  const bankRevenue = sales.filter((s) => s.paymentMethod === "TRANSFER" || s.paymentMethod === "POS").reduce((sum, s) => sum + money(s.paidAmount), 0)
+  const mix = sumSaleTenders(sales)
+  const revenue = mix.received
+  const cashRevenue = mix.cash
+  const bankRevenue = mix.transfer + mix.pos
 
   const expenditure = expenses.reduce((sum, e) => sum + money(e.amount), 0)
   const supplierPayments = purchases.reduce((sum, p) => sum + money(p.paidAmount), 0)
@@ -97,18 +101,26 @@ export async function getFinance() {
   }> = []
 
   for (const sale of sales) {
-    const isCash = sale.paymentMethod === "CASH"
-    const entry = {
-      id: sale.id,
-      date: sale.saleDate,
-      branch: sale.branch.name,
-      type: "IN" as const,
-      category: `Sales Revenue (${sale.paymentMethod})`,
-      description: `Sale ${sale.invoiceNumber} - ${sale.customer?.name || "Walk-in"}`,
-      amount: money(sale.paidAmount),
+    const tenders = saleTenders(sale)
+    const channels: Array<{ method: string; amount: number }> = [
+      { method: "CASH", amount: tenders.cash },
+      { method: "TRANSFER", amount: tenders.transfer },
+      { method: "POS", amount: tenders.pos },
+    ]
+    for (const channel of channels) {
+      if (channel.amount <= 0) continue
+      const entry = {
+        id: `${sale.id}-${channel.method}`,
+        date: sale.saleDate,
+        branch: sale.branch.name,
+        type: "IN" as const,
+        category: `Sales Revenue (${channel.method})`,
+        description: `Sale ${sale.invoiceNumber} - ${sale.customer?.name || "Walk-in"}`,
+        amount: channel.amount,
+      }
+      if (channel.method === "CASH") cashEntries.push(entry)
+      else bankEntries.push(entry)
     }
-    if (isCash) cashEntries.push(entry)
-    else bankEntries.push(entry)
   }
 
   for (const exp of expenses) {
@@ -621,8 +633,15 @@ export async function getSettings() {
     update: {},
     create: {
       key: "sales.warranty_days",
-      value: "365",
-      description: "Warranty days to use when an item has none of its own",
+      value: "0",
+      description: "Warranty days start at zero. The cashier sets the days on the sale.",
+    },
+  })
+  await prisma.setting.updateMany({
+    where: { key: "sales.warranty_days", value: "365" },
+    data: {
+      value: "0",
+      description: "Warranty days start at zero. The cashier sets the days on the sale.",
     },
   })
   await prisma.setting.upsert({
@@ -662,7 +681,7 @@ export async function getReportData(requestedBranchId?: string) {
   const [sales, expenses, swaps, returns, inventory, debtors, purchases] = await Promise.all([
     prisma.sale.findMany({
       where: { status: "COMPLETED", ...(branchId ? { branchId } : {}) },
-      include: { branch: true, items: true, customer: true },
+      include: { branch: true, items: true, customer: true, payments: true },
     }),
     prisma.expense.findMany({
       where: { ...(branchId ? { branchId } : {}), approvedAt: { not: null } },

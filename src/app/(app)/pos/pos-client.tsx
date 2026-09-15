@@ -13,8 +13,13 @@ import { pushSaleQueue } from "@/lib/offline-sales"
 import { applyParkedToTillSnapshot, readTillSnapshot, saveTillSnapshot, type TillBranch, type TillCustomer, type TillImei, type TillProduct, type TillSellLock, type TillSnapshot } from "@/lib/till-catalog"
 import { formatCurrency, money } from "@/lib/utils"
 import { formatCondition } from "@/lib/status"
+import { phoneLookLabel } from "@/lib/phone-look"
 import { Trash2, RotateCcw, PlusCircle } from "lucide-react"
 import { useDecision } from "@/hooks/use-decision"
+
+function lookLabel(item: TillImei) {
+  return phoneLookLabel(item.cosmeticGrade) || formatCondition(item.product.condition)
+}
 
 export function PosClient({
   products: serverProducts,
@@ -56,6 +61,7 @@ export function PosClient({
   const [customerId, setCustomerId] = useState("")
   const [branchId, setBranchId] = useState(defaultBranchId || serverBranches[0]?.id || "")
   const [method, setMethod] = useState<"CASH" | "TRANSFER" | "POS" | "CREDIT" | "SPLIT_PAYMENT">("CASH")
+  const [creditTender, setCreditTender] = useState<"CASH" | "TRANSFER" | "POS">("TRANSFER")
   const [paid, setPaid] = useState(0)
   const [splitCash, setSplitCash] = useState(0)
   const [splitTransfer, setSplitTransfer] = useState(0)
@@ -89,6 +95,7 @@ export function PosClient({
     setSplitCash(0)
     setSplitTransfer(0)
     setSplitPos(0)
+    setCreditTender("TRANSFER")
     setCustomerId("")
     setNotes("")
     setWholesale(false)
@@ -98,23 +105,23 @@ export function PosClient({
   const handleClearCart = async () => {
     if (cart.length === 0) {
       resetSale()
-      toast.info("Register cleared. Ready for next transaction.")
+      toast.info("Sale cleared. Ready for the next buyer.")
       return
     }
     const ok = await confirm({
-      title: "Start New Transaction / Discard Cart?",
-      description: `You currently have ${cart.length} item(s) scanned in this transaction. Starting a new transaction will clear the active register and release scanned devices back to inventory.`,
+      title: "Start a new sale?",
+      description: `This sale has ${cart.length} item${cart.length === 1 ? "" : "s"} scanned. Starting a new sale clears them so another till can sell those phones.`,
       tone: "danger",
-      confirmLabel: "Yes, Start New Transaction",
-      cancelLabel: "Keep Cart",
+      confirmLabel: "Yes, start a new sale",
+      cancelLabel: "Keep this sale",
       impactItems: [
-        `${cart.length} item(s) will be cleared immediately`,
-        "Scanned IMEIs and serial numbers will become available for other sales",
+        `${cart.length} item${cart.length === 1 ? "" : "s"} will leave this sale`,
+        "Those IMEIs can be sold again",
       ],
     })
     if (ok) {
       resetSale()
-      toast.info("Register cleared. Ready for next customer.")
+      toast.info("Sale cleared. Ready for the next buyer.")
     }
   }
 
@@ -240,11 +247,9 @@ export function PosClient({
 
   const total = useMemo(() => cart.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0), [cart])
   const customer = customers.find((row) => row.id === customerId)
-  const effectivePaid = method === "SPLIT_PAYMENT"
-    ? (splitCash + splitTransfer + splitPos)
-    : (method === "CREDIT" ? 0 : paid)
+  const effectivePaid = method === "SPLIT_PAYMENT" ? splitCash + splitTransfer + splitPos : paid
   const due = Math.max(0, total - effectivePaid)
-  const nextDebt = (customer?.currentBalance ?? 0) + (method === "CREDIT" ? total : due)
+  const nextDebt = (customer?.currentBalance ?? 0) + due
   const sellLock = sellLocks?.[branchId]
 
   function setPaidTo(nextTotal: number) {
@@ -284,7 +289,7 @@ export function PosClient({
     )
     if (exact) {
       addImei(exact)
-      toast.success("Added to cart")
+      toast.success("Added to this sale")
       return
     }
     setQuery(code)
@@ -305,7 +310,7 @@ export function PosClient({
         quantity: 1,
         warrantyDays: 0,
         storage: item.product.storage,
-        condition: item.product.condition,
+        condition: item.cosmeticGrade || item.product.condition,
         color: item.product.color,
       },
     ])
@@ -353,15 +358,15 @@ export function PosClient({
     if (due > 0 && customerId) {
       const cust = customers.find((c) => c.id === customerId)
       const ok = await confirm({
-        title: "Confirm Receivable / Balance Due",
-        description: `This transaction leaves an unpaid balance of ${formatCurrency(due)} to be booked against ${cust?.name || "the customer"}.`,
+        title: "This buyer will still owe us",
+        description: `${formatCurrency(due)} will stay owed by ${cust?.name || "this buyer"} after this sale.`,
         tone: "warning",
-        confirmLabel: "Yes, Book Receivable",
-        cancelLabel: "Adjust Payment Amount",
+        confirmLabel: "Yes, they still owe us",
+        cancelLabel: "Change the amount received",
         impactItems: [
-          `Immediate payment received: ${formatCurrency(effectivePaid)}`,
-          `Remaining balance owed to shop: ${formatCurrency(due)}`,
-          `Customer ledger: ${cust?.name || "Selected customer"}`,
+          `Money received now: ${formatCurrency(effectivePaid)}`,
+          `Still owed: ${formatCurrency(due)}`,
+          `Buyer: ${cust?.name || "this buyer"}`,
         ],
       })
       if (!ok) return
@@ -379,10 +384,13 @@ export function PosClient({
         ].filter((t) => t.amount > 0)
       : undefined
 
+    const checkoutMethod: "CASH" | "TRANSFER" | "POS" | "CREDIT" | "SPLIT_PAYMENT" =
+      method === "CREDIT" ? (effectivePaid > 0 ? creditTender : "CREDIT") : method
+
     const payload = {
       customerId: customerId || undefined,
       branchId,
-      paymentMethod: method,
+      paymentMethod: checkoutMethod,
       paidAmount: effectivePaid,
       splitTenders,
       notes,
@@ -453,14 +461,14 @@ export function PosClient({
         <div className="surface-card space-y-3 p-4">
           <div className="flex items-center justify-between gap-2 mb-1">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Scan or Search Product
+              Scan a phone or find an item
             </span>
             <button
               type="button"
               onClick={handleClearCart}
               className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
             >
-              <PlusCircle className="h-3.5 w-3.5" /> Start New Sale / Reset
+              <PlusCircle className="h-3.5 w-3.5" /> Start a new sale
             </button>
           </div>
           <ScanField onScan={takeScan} placeholder="Scan IMEI to sell, then Enter" />
@@ -493,9 +501,9 @@ export function PosClient({
                           {item.product.storage}
                         </span>
                       ) : null}
-                      {item.product.condition ? (
+                      {lookLabel(item) ? (
                         <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 font-medium text-[10px]">
-                          {formatCondition(item.product.condition)}
+                          {lookLabel(item)}
                         </span>
                       ) : null}
                       {item.product.color ? (
@@ -541,7 +549,7 @@ export function PosClient({
         <div className="surface-card overflow-hidden">
           <div className="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-2.5">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Current Transaction Items ({cart.length})
+              This sale ({cart.length})
             </span>
             <div className="flex items-center gap-2">
               <button
@@ -550,7 +558,7 @@ export function PosClient({
                 className="inline-flex items-center gap-1.5 text-xs font-semibold text-destructive hover:underline"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
-                {cart.length > 0 ? "Clear Cart / New Sale" : "New Sale"}
+                {cart.length > 0 ? "Clear this sale" : "New sale"}
               </button>
             </div>
           </div>
@@ -578,7 +586,7 @@ export function PosClient({
                         ) : null}
                         {line.condition ? (
                           <span className="inline-flex items-center px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 font-medium text-[10px]">
-                            {formatCondition(line.condition)}
+                            {formatCondition(line.condition) || phoneLookLabel(line.condition)}
                           </span>
                         ) : null}
                         {line.color ? (
@@ -723,9 +731,14 @@ export function PosClient({
             <option value="TRANSFER">Bank Transfer</option>
             <option value="POS">POS Terminal</option>
             <option value="SPLIT_PAYMENT">Split Payment (Multiple Tenders)</option>
-            <option value="CREDIT">Credit / Account Due</option>
+            <option value="CREDIT">Credit sales</option>
           </Select>
         </label>
+        {method === "CREDIT" ? (
+          <p className="text-xs text-muted-foreground">
+            Type any money received now. What is left is credit sales. If they paid nothing today, leave the amount at zero.
+          </p>
+        ) : null}
         {method === "SPLIT_PAYMENT" ? (
           <div className="space-y-3 rounded-lg border border-border/80 bg-muted/20 p-3.5">
             <div className="flex items-center justify-between text-xs">
@@ -772,15 +785,33 @@ export function PosClient({
             </div>
           </div>
         ) : (
-          <label className="block text-sm">
-            <span className="mb-1 block text-muted-foreground">Amount paid</span>
-            <Input
-              type="number"
-              value={method === "CREDIT" ? 0 : paid}
-              disabled={method === "CREDIT"}
-              onChange={(event) => setPaid(Number(event.target.value))}
-            />
-          </label>
+          <div className="space-y-3">
+            <label className="block text-sm">
+              <span className="mb-1 block text-muted-foreground">
+                {method === "CREDIT" ? "Amount received now" : "Amount paid"}
+              </span>
+              <Input
+                type="number"
+                min={0}
+                value={paid || ""}
+                placeholder="0"
+                onChange={(event) => setPaid(Math.max(0, Number(event.target.value) || 0))}
+              />
+            </label>
+            {method === "CREDIT" && paid > 0 ? (
+              <label className="block text-sm">
+                <span className="mb-1 block text-muted-foreground">How they paid this amount</span>
+                <Select
+                  value={creditTender}
+                  onChange={(event) => setCreditTender(event.target.value as "CASH" | "TRANSFER" | "POS")}
+                >
+                  <option value="TRANSFER">Bank Transfer</option>
+                  <option value="CASH">Cash</option>
+                  <option value="POS">POS Terminal</option>
+                </Select>
+              </label>
+            ) : null}
+          </div>
         )}
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={wholesale} onChange={(event) => setWholesale(event.target.checked)} />
@@ -791,7 +822,7 @@ export function PosClient({
           <p className="text-sm text-muted-foreground">Total</p>
           <p className="text-3xl font-semibold">{formatCurrency(total)}</p>
           <p className="text-xs text-muted-foreground">
-            Due now {formatCurrency(method === "CREDIT" ? total : Math.max(0, total - paid))}
+            Due now {formatCurrency(due)}
           </p>
           {customer && (method === "CREDIT" || due > 0) ? (
             <p className="mt-1 text-xs text-muted-foreground">After this sale they would owe {formatCurrency(nextDebt)}</p>

@@ -7,9 +7,9 @@ export function booksPeriodLabel(range: BooksCheck["range"], from: string, to: s
 }
 
 export function booksRangeTitle(range: BooksCheck["range"]) {
-  if (range === "week") return "Financial Audit Statement (Trailing 7 Days)"
-  if (range === "month") return "Financial Audit Statement (Month to Date)"
-  return "Financial Audit Statement (Single Business Day)"
+  if (range === "week") return "Check the books (last 7 days)"
+  if (range === "month") return "Check the books (this month so far)"
+  return "Check the books (one day)"
 }
 
 export function booksCompareRows(data: BooksCheck) {
@@ -68,45 +68,45 @@ export function booksCsvRows(data: BooksCheck): string[][] {
   const compared = booksPeriodLabel(data.range, data.priorFrom, data.priorTo)
   return [
     cells(data.company.product || data.company.name),
-    cells("Financial Audit Statement"),
-    cells("Statement Ref", data.statementRef),
-    cells("Shop Location", `${data.shopName} (${data.shopCode})`),
-    cells("Period Covered", period),
-    cells("Comparative Period", compared),
-    cells("Prepared By", data.preparedBy),
-    cells("Prepared At (WAT)", data.preparedAt),
-    cells("Auditor's Assessment", data.verdict),
+    cells("Check the books"),
+    cells("Statement number", data.statementRef),
+    cells("Shop", `${data.shopName} (${data.shopCode})`),
+    cells("Period", period),
+    cells("Compared with", compared),
+    cells("Prepared by", data.preparedBy),
+    cells("Prepared at (Lagos time)", data.preparedAt),
+    cells("Verdict", data.verdict),
     [],
-    cells("COMPARATIVE PERFORMANCE ANALYSIS"),
-    cells("Line", "Current Period", "Comparative Period", "Variance (Amount)", "Variance (%)"),
+    cells("THIS PERIOD AGAINST THE OTHER"),
+    cells("Line", "This period", "Other period", "Difference (amount)", "Difference (%)"),
     ...booksCompareRows(data).map((row) => cells(row.label, row.now, row.then, row.change.amount, row.change.value)),
     [],
-    cells("INTERNAL AUDIT CONTROLS & VERIFICATIONS"),
-    cells("Audit Check", "Status", "Findings / Notes"),
-    ...data.papers.map((row) => cells(row.label, row.ok ? "Verified" : "Discrepancy", row.detail)),
+    cells("CHECKS"),
+    cells("Check", "Status", "Notes"),
+    ...data.papers.map((row) => cells(row.label, row.ok ? "Clear" : "Flag", row.detail)),
     [],
-    cells("FINANCIAL RECONCILIATION SUMMARY"),
+    cells("MONEY SUMMARY"),
     cells("Line", "Amount"),
     ...booksMoneyLines(data).map((row) => cells(row.label, row.value)),
     [],
-    cells("OUTSTANDING RECEIVABLES & PAYABLES"),
-    cells("Receivables", data.customersOwe),
-    cells("Suppliers payment (Payables balance)", data.supplierOwed),
-    cells("Walk-in transactions (Unregistered)", data.walkIns),
+    cells("STILL OWED"),
+    cells("Customers still owe us", data.customersOwe),
+    cells("Still owed to suppliers", data.supplierOwed),
+    cells("Sales with no customer name", data.walkIns),
     [],
     cells("PAYMENTS RECEIVED BY STAFF"),
-    cells("Staff", "Sales volume", "Total payments received"),
+    cells("Staff", "Sales", "Total payments received"),
     ...data.byStaff.map((row) => cells(row.name, row.count, row.collected)),
     [],
-    cells("SALES LEDGER"),
+    cells("SALES"),
     cells("Invoice", "When", "Customer", "Staff", "Paid by", "Total", "Paid"),
     ...data.invoices.map((row) => cells(row.invoice, row.when, row.customer, row.staff, row.method, row.total, row.paid)),
     [],
-    cells("BUSINESS DAY REGISTERS CLOSED"),
+    cells("CLOSE THE DAY"),
     cells("Day", "Staff", "Total sales for the day", "Cash expected", "Cash remitted", "Shortage / Overage", "Sales"),
     ...data.closes.map((row) => cells(row.day, row.staff, row.totalSales ?? row.expected, row.expected, row.counted, row.variance, row.sales)),
     [],
-    cells("SERIALIZED STOCK INVENTORY RECONCILIATION"),
+    cells("IMEI VS SHOP COUNT"),
     cells("Item", "Shop count", "IMEIs", "Gap"),
     ...data.imeiRows.map((row) => cells(row.product, row.shopQty, row.imeis, row.delta)),
   ]
