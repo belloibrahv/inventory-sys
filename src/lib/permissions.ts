@@ -15,21 +15,21 @@ export const VIEW_PERMS = [
   { key: "view.sales", label: "Sales Orders & Invoices", href: "/sales" },
   { key: "view.pos", label: "Point of Sale (POS)", href: "/pos" },
   { key: "view.purchases", label: "Purchase Orders & Receiving", href: "/purchases" },
-  { key: "view.customers", label: "Customer Accounts & CRM", href: "/customers" },
+  { key: "view.customers", label: "Customers & money owed", href: "/customers" },
   { key: "view.suppliers", label: "Vendors & Suppliers", href: "/suppliers" },
   { key: "view.transfers", label: "Inter-Branch Transfers", href: "/transfers" },
   { key: "view.neighbor-fills", label: "External Partner Sourcing", href: "/neighbor-fills" },
   { key: "view.returns", label: "Customer Returns (RMA)", href: "/returns" },
-  { key: "view.swaps", label: "Trade-In & Exchange", href: "/swaps" },
+  { key: "view.swaps", label: "Swap Deal", href: "/swaps" },
   { key: "view.repairs", label: "Service & Repairs", href: "/repairs" },
   { key: "view.reconciliation", label: "Physical Inventory Audit", href: "/reconciliation" },
-  { key: "view.finance", label: "Cash Flow & Financial Ledger", href: "/finance" },
-  { key: "view.expenses", label: "Operating Expenses (OPEX)", href: "/expenses" },
+  { key: "view.finance", label: "Money in & out", href: "/finance" },
+  { key: "view.expenses", label: "Shop expenses", href: "/expenses" },
   { key: "view.approvals", label: "Approval Workflows", href: "/approvals" },
   { key: "view.branches", label: "Branch Locations", href: "/branches" },
   { key: "view.staff", label: "User Management", href: "/staff" },
   { key: "view.access", label: "Role-Based Access Control (RBAC)", href: "/staff/access" },
-  { key: "view.profits", label: "Profitability Analytics (P&L)", href: "/profits" },
+  { key: "view.profits", label: "Profit", href: "/profits" },
   { key: "view.reports", label: "Business Intelligence Reports", href: "/reports" },
   { key: "view.audit", label: "System Audit Trail", href: "/audit" },
   { key: "view.notifications", label: "System Alerts & Notifications", href: "/notifications" },
@@ -45,7 +45,7 @@ export const ACTION_PERMS = [
   { key: "action.transfer", label: "Dispatch & Receive Inter-Branch Transfers" },
   { key: "action.neighbor", label: "Process External Partner Sourced Units" },
   { key: "action.return", label: "Process Customer Returns & Warranties" },
-  { key: "action.swap", label: "Valuate & Ingest Customer Device Trade-Ins" },
+  { key: "action.swap", label: "Record a Swap Deal" },
   { key: "action.repair", label: "Manage Diagnostics & Hardware Repairs" },
   { key: "action.recon", label: "Perform Physical Inventory Audits" },
   { key: "action.approve", label: "Approve or Reject Workflow Requests" },
@@ -135,11 +135,11 @@ const DEFAULTS: Record<UserRole, string[]> = {
     "action.upload", "action.catalog", "action.all_branches"
   ),
   CASHIER: V(
-    "view.dashboard", "view.pos", "view.sales", "view.customers", "view.expenses", "view.neighbor-fills", "view.returns", "view.notifications",
+    "view.dashboard", "view.pos", "view.sales", "view.customers", "view.expenses", "view.finance", "view.neighbor-fills", "view.returns", "view.notifications",
     "action.sell", "action.neighbor", "action.return", "action.finance"
   ),
   SALES_EXECUTIVE: V(
-    "view.dashboard", "view.pos", "view.sales", "view.customers", "view.products", "view.expenses", "view.neighbor-fills", "view.notifications",
+    "view.dashboard", "view.pos", "view.sales", "view.customers", "view.products", "view.expenses", "view.finance", "view.neighbor-fills", "view.notifications",
     "action.sell", "action.neighbor", "action.finance"
   ),
   ENGINEER: V(
@@ -158,18 +158,29 @@ const EXPECTED_ROWS = ROLE_LIST.length * ALL_PERM_KEYS.length
  * screens and buttons ask what this member of staff may do.
  */
 export const ensureRolePermissions = cache(async () => {
-  if ((await prisma.rolePermission.count()) >= EXPECTED_ROWS) return
+  if ((await prisma.rolePermission.count()) < EXPECTED_ROWS) {
+    const existing = await prisma.rolePermission.findMany({ select: { role: true, permKey: true } })
+    const have = new Set(existing.map((row) => `${row.role}:${row.permKey}`))
+    const missing = ROLE_LIST.flatMap((role) =>
+      ALL_PERM_KEYS.filter((permKey) => !have.has(`${role}:${permKey}`)).map((permKey) => ({
+        role,
+        permKey,
+        allowed: role === "SUPER_ADMIN" || DEFAULTS[role].includes(permKey),
+      }))
+    )
+    if (missing.length) await prisma.rolePermission.createMany({ data: missing })
+  }
 
-  const existing = await prisma.rolePermission.findMany({ select: { role: true, permKey: true } })
-  const have = new Set(existing.map((row) => `${row.role}:${row.permKey}`))
-  const missing = ROLE_LIST.flatMap((role) =>
-    ALL_PERM_KEYS.filter((permKey) => !have.has(`${role}:${permKey}`)).map((permKey) => ({
-      role,
-      permKey,
-      allowed: role === "SUPER_ADMIN" || DEFAULTS[role].includes(permKey),
-    }))
-  )
-  if (missing.length) await prisma.rolePermission.createMany({ data: missing })
+  // Small shops: cashier and sales also record expenses and call people who still
+  // owe us. Turn those doors on even if an older install left them closed.
+  await prisma.rolePermission.updateMany({
+    where: {
+      role: { in: ["CASHIER", "SALES_EXECUTIVE"] },
+      permKey: { in: ["view.expenses", "view.finance", "view.customers", "action.finance"] },
+      allowed: false,
+    },
+    data: { allowed: true },
+  })
 })
 
 /**

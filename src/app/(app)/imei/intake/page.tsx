@@ -3,6 +3,7 @@ import { getProducts } from "@/app/actions/catalog"
 import { getBranches, getSuppliers } from "@/app/actions/parties"
 import { ImeiIntakeForm } from "@/app/(app)/imei/intake-form"
 import { PageHeader, SectionCard, StatCard, StatGrid } from "@/components/shared"
+import { formatCondition } from "@/lib/status"
 
 /**
  * Stock intake on its own screen.
@@ -36,7 +37,12 @@ export default async function ImeiIntakePage() {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,520px)_minmax(0,1fr)]">
         <SectionCard title="Receive one phone">
           <ImeiIntakeForm
-            products={products.map((product) => ({ id: product.id, name: product.name }))}
+            products={products.map((product) => ({
+              id: product.id,
+              name: [product.name, product.storage, formatCondition(product.condition), product.color]
+                .filter(Boolean)
+                .join(" · "),
+            }))}
             branches={branches.map((branch) => ({ id: branch.id, name: branch.name }))}
             suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name }))}
           />

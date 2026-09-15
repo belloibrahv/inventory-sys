@@ -231,9 +231,10 @@ export function InventoryClientView({
             className="h-9 w-44"
           >
             <option value="ALL">All Conditions</option>
-            <option value="BRAND_NEW">Brand New</option>
-            <option value="UK_USED">Pre-Owned (Grade A / UK)</option>
-            <option value="OPEN_BOX">Open Box</option>
+            <option value="BRAND_NEW">Brand new</option>
+            <option value="UK_USED">Uk</option>
+            <option value="OPEN_BOX">OPENBOX</option>
+            <option value="FAULTY">Faulty</option>
             <option value="REFURBISHED">Refurbished / Certified</option>
           </Select>
           <div className="relative min-w-[200px] flex-1">

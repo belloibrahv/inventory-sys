@@ -116,13 +116,13 @@ export function CustomersClientView({
               key={item.key}
               type="button"
               onClick={() => setTab(item.key)}
-              className={`rounded-lg px-3.5 py-1.5 text-[13px] font-semibold transition-all ${
+              className={`rounded-lg border px-3.5 py-2 text-sm font-bold transition-all ${
                 tab === item.key
-                  ? "bg-primary text-primary-foreground shadow-xs"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                  : "border-transparent bg-muted/70 text-foreground hover:border-border hover:bg-card"
               }`}
             >
-              {item.label} <span className={`num text-xs ${tab === item.key ? "text-primary-foreground/90 font-bold" : "opacity-75"}`}>({item.count})</span>
+              {item.label} <span className={`num text-xs ${tab === item.key ? "text-primary-foreground/90 font-bold" : "text-foreground/70"}`}>({item.count})</span>
             </button>
           ))}
         </div>

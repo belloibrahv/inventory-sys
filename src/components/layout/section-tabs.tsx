@@ -43,17 +43,17 @@ export function SectionTabs({ allowedHrefs }: { allowedHrefs: string[] }) {
               role="tab"
               aria-selected={isActive}
               className={cn(
-                "flex shrink-0 items-center gap-2 rounded-lg px-3.5 py-2 text-xs sm:text-[13px] font-semibold transition-all",
+                "flex shrink-0 items-center gap-2 rounded-lg border px-3.5 py-2.5 text-sm font-bold transition-all",
                 isActive
-                  ? "bg-primary text-primary-foreground shadow-xs ring-1 ring-primary/30"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                  : "border-transparent bg-muted/70 text-foreground hover:border-border hover:bg-card"
               )}
             >
               {Icon ? (
                 <Icon
                   className={cn(
                     "h-4 w-4 shrink-0",
-                    isActive ? "text-primary-foreground" : "text-muted-foreground"
+                    isActive ? "text-primary-foreground" : "text-foreground/70"
                   )}
                 />
               ) : null}

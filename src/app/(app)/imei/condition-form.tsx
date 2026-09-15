@@ -5,11 +5,11 @@ import { ActionForm } from "@/components/action-form"
 import { PhotoField } from "@/components/photo-field"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
+import { PHONE_LOOK_OPTIONS } from "@/lib/phone-look"
 
 export function ImeiConditionForm({
   id,
   cosmeticGrade,
-  batteryHealth,
   conditionNotes,
   photoData,
 }: {
@@ -24,13 +24,11 @@ export function ImeiConditionForm({
       <input type="hidden" name="id" value={id} />
       <Select name="cosmeticGrade" defaultValue={cosmeticGrade ?? ""}>
         <option value="">How the phone looks</option>
-        <option value="A">A. Looks like new</option>
-        <option value="B">B. Small marks</option>
-        <option value="C">C. You can see it has been used</option>
-        <option value="D">D. Badly used or cracked</option>
+        {PHONE_LOOK_OPTIONS.map((row) => (
+          <option key={row.value} value={row.value}>{row.label}</option>
+        ))}
       </Select>
-      <Input name="batteryHealth" type="number" min={1} max={100} defaultValue={batteryHealth ?? ""} placeholder="Battery health %" />
-      <Input name="conditionNotes" defaultValue={conditionNotes ?? ""} placeholder="Condition notes" />
+      <Input name="conditionNotes" defaultValue={conditionNotes ?? ""} placeholder="Anything else about its condition" />
       <PhotoField defaultValue={photoData} />
     </ActionForm>
   )

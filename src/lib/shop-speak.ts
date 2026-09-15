@@ -26,7 +26,7 @@ const RECORD_KINDS: Record<string, string> = {
   Product: "Product Master SKU",
   Expense: "Operating Expense",
   Return: "Customer Return (RMA)",
-  Swap: "Trade-In & Exchange",
+  Swap: "Swap Deal",
   Repair: "Service & Repair Order",
   Notification: "System Notification",
   Supplier: "Vendor",

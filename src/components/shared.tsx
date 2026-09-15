@@ -56,10 +56,10 @@ export function PageHeader({
           {backHref ? (
             <Link
               href={backHref}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-semibold text-foreground shadow-2xs transition-all hover:bg-accent hover:text-primary active:scale-95 shrink-0"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border-2 border-primary/50 bg-primary/10 px-3 text-sm font-bold text-primary shadow-sm transition-all hover:border-primary hover:bg-primary hover:text-primary-foreground active:scale-95 shrink-0"
               title="Go back"
             >
-              <ArrowLeft className="h-3.5 w-3.5 text-primary" />
+              <ArrowLeft className="h-4 w-4" />
               <span>Back</span>
             </Link>
           ) : null}

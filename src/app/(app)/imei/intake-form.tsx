@@ -7,6 +7,7 @@ import { PhotoField } from "@/components/photo-field"
 import { ScanField } from "@/components/scan-field"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
+import { PHONE_LOOK_OPTIONS } from "@/lib/phone-look"
 
 type Product = { id: string; name: string }
 type Branch = { id: string; name: string }
@@ -22,6 +23,9 @@ export function ImeiIntakeForm({
   suppliers: Supplier[]
 }) {
   const [imei1, setImei1] = useState("")
+  const [supplierChoice, setSupplierChoice] = useState("")
+
+  const addingNewSupplier = supplierChoice === "__new__"
 
   return (
     <ActionForm action={intakeImei} submit="Add phone to shop" className="space-y-3">
@@ -40,20 +44,31 @@ export function ImeiIntakeForm({
           <option key={branch.id} value={branch.id}>{branch.name}</option>
         ))}
       </Select>
-      <Select name="supplierId">
+      <Select
+        name="supplierId"
+        value={supplierChoice}
+        onChange={(event) => setSupplierChoice(event.target.value)}
+      >
         <option value="">Supplier</option>
         {suppliers.map((supplier) => (
           <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
         ))}
+        <option value="__new__">Add new supplier</option>
       </Select>
+      {addingNewSupplier ? (
+        <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3">
+          <p className="text-xs font-semibold text-foreground">New supplier</p>
+          <Input name="newSupplierName" required placeholder="Supplier name" />
+          <Input name="newSupplierPhone" required placeholder="Supplier phone number" />
+          <Input name="newSupplierCity" placeholder="City (optional)" />
+        </div>
+      ) : null}
       <Select name="cosmeticGrade" defaultValue="">
         <option value="">How the phone looks</option>
-        <option value="A">A. Looks like new</option>
-        <option value="B">B. Small marks</option>
-        <option value="C">C. You can see it has been used</option>
-        <option value="D">D. Badly used or cracked</option>
+        {PHONE_LOOK_OPTIONS.map((row) => (
+          <option key={row.value} value={row.value}>{row.label}</option>
+        ))}
       </Select>
-      <Input name="batteryHealth" type="number" min={1} max={100} placeholder="Battery health, in %" />
       <Input name="conditionNotes" placeholder="Anything else about its condition" />
       <PhotoField />
       <Input name="notes" placeholder="Notes" />

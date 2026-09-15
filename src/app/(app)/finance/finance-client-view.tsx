@@ -191,22 +191,22 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
         <TableShell
           caption={
             <>
-              <h2 className="text-sm font-semibold tracking-tight">Accounts Receivable (Outstanding Balances)</h2>
+              <h2 className="text-sm font-semibold tracking-tight">People who still owe us</h2>
               <div className="flex items-center gap-2">
                 <TableDownload
-                  filename="accounts-receivable"
+                  filename="people-who-owe-us"
                   rows={() => [
-                    ["Customer", "Branch", "Outstanding Balance"],
+                    ["Customer", "Shop", "Still owes"],
                     ...data.debtors.map((row) => [row.name, row.branch.code, money(row.currentBalance)]),
                   ]}
                 />
                 <Button asChild variant="ghost" size="sm">
-                  <Link href="/customers">All Customers</Link>
+                  <Link href="/customers">All customers</Link>
                 </Button>
               </div>
             </>
           }
-          columns={[{ label: "Customer / Account" }, { label: "Branch" }, { label: "Outstanding Balance", align: "right" }]}
+          columns={[{ label: "Customer" }, { label: "Shop" }, { label: "Still owes", align: "right" }]}
           footer={
             <TablePager
               page={debtorsPager.page}
@@ -237,7 +237,7 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
             </tr>
           ))}
           {data.debtors.length === 0 ? (
-            <TableEmpty colSpan={3}>No outstanding customer receivables.</TableEmpty>
+            <TableEmpty colSpan={3}>Nobody owes us money right now.</TableEmpty>
           ) : null}
         </TableShell>
 

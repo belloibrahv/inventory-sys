@@ -18,7 +18,7 @@ export default async function ExpensesPage() {
   return (
     <div className="page-split">
       <div>
-        <PageHeader title="Operating Expenses (OPEX)" description="Operational disbursements, utilities, logistics, and payroll. Vouchers require managerial sign-off prior to cash disbursement." />
+        <PageHeader title="Shop expenses" description="Fuel, rent, salary, light bill, and other shop bills. Write the request here. A manager must say yes before the money leaves." />
         <ExpensesList expenses={finance.expenses} />
       </div>
       <div className="surface-card p-5">

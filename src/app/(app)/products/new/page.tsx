@@ -8,7 +8,15 @@ import { canManageCatalog } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { CatalogLocked } from "../catalog-locked"
 
-const conditions = ["BRAND_NEW", "OPEN_BOX", "UK_USED", "REFURBISHED", "SWAP_DEVICE", "FAULTY", "REPAIR_DEVICE"]
+const conditions = [
+  { value: "BRAND_NEW", label: "Brand new" },
+  { value: "UK_USED", label: "Uk" },
+  { value: "OPEN_BOX", label: "OPENBOX" },
+  { value: "FAULTY", label: "Faulty" },
+  { value: "REFURBISHED", label: "Refurbished" },
+  { value: "SWAP_DEVICE", label: "Swap Deal" },
+  { value: "REPAIR_DEVICE", label: "Repair device" },
+]
 
 /** One new model onto the price list. */
 export default async function NewProductPage() {
@@ -50,7 +58,7 @@ export default async function NewProductPage() {
             </Select>
             <Select name="condition" defaultValue="BRAND_NEW">
               {conditions.map((item) => (
-                <option key={item} value={item}>{item.replaceAll("_", " ")}</option>
+                <option key={item.value} value={item.value}>{item.label}</option>
               ))}
             </Select>
             <div className="grid grid-cols-3 gap-2">

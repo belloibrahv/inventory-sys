@@ -71,11 +71,11 @@ export function Header({
                 router.push("/dashboard")
               }
             }}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold text-foreground shadow-2xs transition-all hover:border-primary/40 hover:bg-accent hover:text-primary active:scale-95"
+            className="inline-flex items-center gap-2 rounded-lg border-2 border-primary/50 bg-primary/10 px-3 py-2 text-sm font-bold text-primary shadow-sm transition-all hover:border-primary hover:bg-primary hover:text-primary-foreground active:scale-95"
             aria-label="Back to previous page"
-            title="Go back to previous page"
+            title="Go back to the page you were on"
           >
-            <ArrowLeft className="h-3.5 w-3.5 text-primary" />
+            <ArrowLeft className="h-4 w-4" />
             <span>Back</span>
           </button>
         ) : null}

@@ -6,6 +6,7 @@ import { PageHeader, StatusBadge } from "@/components/shared"
 import { WorkflowSteps } from "@/components/workflow-steps"
 import { formatCurrency, formatDateTime, money } from "@/lib/utils"
 import { statusLabel } from "@/lib/status"
+import { phoneLookLabel } from "@/lib/phone-look"
 import { formatRecordChange } from "@/lib/shop-speak"
 import { warrantyState } from "@/lib/warranty"
 
@@ -101,8 +102,8 @@ export default async function ImeiDetailPage({ params }: { params: Promise<{ id:
             ))}
             {record.notes ? <p className="text-muted-foreground">{record.notes}</p> : null}
             <div className="mt-4 space-y-2 border-t border-border pt-4">
-              <p className="font-medium">Condition</p>
-              <p>Grade {record.cosmeticGrade ?? "-"}{record.batteryHealth != null ? ` · battery ${record.batteryHealth}%` : ""}</p>
+              <p className="font-medium">How the phone looks</p>
+              <p>{phoneLookLabel(record.cosmeticGrade) || "Not set yet"}</p>
               {record.conditionNotes ? <p className="text-muted-foreground">{record.conditionNotes}</p> : null}
               {record.photoData ? <img src={record.photoData} alt="How the phone looks" className="mt-2 h-48 w-full rounded-xl object-cover" /> : null}
             </div>
@@ -130,7 +131,6 @@ export default async function ImeiDetailPage({ params }: { params: Promise<{ id:
         <ImeiConditionForm
           id={record.id}
           cosmeticGrade={record.cosmeticGrade}
-          batteryHealth={record.batteryHealth}
           conditionNotes={record.conditionNotes}
           photoData={record.photoData}
         />

@@ -30,8 +30,8 @@ export default async function CustomersPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Customers"
-        description="Everyone who has bought from us. See what they bought, what they paid, and what they still owe."
+        title="Customers & money owed"
+        description="Everyone who has bought from us. See what they bought, what they paid, and what they still owe. Tap Still owing when you need to call people."
       />
 
       <div className="page-split">

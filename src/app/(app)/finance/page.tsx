@@ -7,8 +7,8 @@ export default async function FinancePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Financial Accounting & General Ledger"
-        description="Comprehensive treasury overview, gross revenue, operating expenditures (OPEX), vendor disbursements, and real-time cash & bank ledgers."
+        title="Money in & out"
+        description="Money that came in from sales, money that went out for shop bills and suppliers, and people who still owe us. Use this page to follow credit sales."
       />
       <FinanceClientView data={data} />
     </div>

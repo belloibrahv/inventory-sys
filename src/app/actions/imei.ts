@@ -110,18 +110,35 @@ export async function intakeImei(formData: FormData) {
   })
   if (duplicate) return { error: "That IMEI is already in the shop." }
 
+  let supplierId = String(formData.get("supplierId") || "").trim()
+  if (supplierId === "__new__") supplierId = ""
+  const newSupplierName = String(formData.get("newSupplierName") || "").trim()
+  const newSupplierPhone = String(formData.get("newSupplierPhone") || "").trim()
+  if (newSupplierName) {
+    if (!newSupplierPhone) return { error: "Type the new supplier phone number." }
+    const created = await prisma.supplier.create({
+      data: {
+        name: newSupplierName,
+        phone: newSupplierPhone,
+        city: String(formData.get("newSupplierCity") || "").trim() || null,
+      },
+    })
+    supplierId = created.id
+    revalidatePath("/suppliers")
+  }
+
   await prisma.imeiRecord.create({
     data: {
       imei1,
       imei2: String(formData.get("imei2") || "") || null,
       serialNumber: String(formData.get("serialNumber") || "") || null,
       productId,
-      supplierId: String(formData.get("supplierId") || "") || null,
+      supplierId: supplierId || null,
       branchId,
       status: "IN_STOCK",
       notes: String(formData.get("notes") || "") || null,
       cosmeticGrade: String(formData.get("cosmeticGrade") || "") || null,
-      batteryHealth: formData.get("batteryHealth") ? Number(formData.get("batteryHealth")) : null,
+      batteryHealth: null,
       conditionNotes: String(formData.get("conditionNotes") || "") || null,
       photoData: String(formData.get("photoData") || "") || null,
     },
@@ -155,13 +172,10 @@ export async function updateImeiCondition(formData: FormData) {
     return { error: "You are not allowed to change the condition of a phone. Ask the main admin." }
   }
   const id = String(formData.get("id") || "")
-  const batteryRaw = String(formData.get("batteryHealth") || "")
-  const batteryHealth = batteryRaw ? Number(batteryRaw) : null
   await prisma.imeiRecord.update({
     where: { id },
     data: {
       cosmeticGrade: String(formData.get("cosmeticGrade") || "") || null,
-      batteryHealth: Number.isFinite(batteryHealth) ? batteryHealth : null,
       conditionNotes: String(formData.get("conditionNotes") || "") || null,
       photoData: String(formData.get("photoData") || "") || null,
     },
@@ -172,7 +186,7 @@ export async function updateImeiCondition(formData: FormData) {
       action: "UPDATE",
       entityType: "IMEIRecord",
       entityId: id,
-      newValue: JSON.stringify({ cosmeticGrade: String(formData.get("cosmeticGrade") || ""), batteryHealth }),
+      newValue: JSON.stringify({ cosmeticGrade: String(formData.get("cosmeticGrade") || "") }),
       branchId: user.branchId,
     },
   })

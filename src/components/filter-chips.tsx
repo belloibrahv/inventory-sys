@@ -41,7 +41,7 @@ export function FilterChips({
             "inline-flex min-h-9 items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all",
             active
               ? toneActive(chip.tone)
-              : "border-border bg-card text-muted-foreground hover:border-primary/30 hover:text-foreground"
+              : "border-border bg-card text-foreground hover:border-primary/40 hover:bg-muted"
           )
           const body = (
             <>
