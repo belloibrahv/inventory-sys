@@ -4,9 +4,9 @@ import { revalidatePath } from "next/cache"
 import { ExpenseCategory, UserRole } from "@prisma/client"
 import * as bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
-import { branchFilter, viewBranchFilter } from "@/lib/branch-scope"
+import { branchFilter, canReachBranch, OTHER_SHOP, viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
-import { canApprove, canManageFinance, canManageStaff, canEditLetterhead, isSuperAdmin, scopedBranchId } from "@/lib/rbac"
+import { canApprove, canManageFinance, canManageStaff, canEditLetterhead, canSetOpeningMoney, isSuperAdmin, scopedBranchId } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { isLetterheadKey } from "@/lib/letterhead"
 import { generateDocNumber, money } from "@/lib/utils"
@@ -15,30 +15,80 @@ import { healOpeningStockBills } from "@/lib/opening-stock-money"
 import { payablePurchaseWhere } from "@/lib/purchase-money"
 import { displayPartyName, partyNameKey } from "@/lib/party-key"
 import { shopPeriodWindow, shopPreviousWindow, watDayKey, type ShopRange } from "@/lib/lagos-day"
+import { writeAudit } from "@/lib/audit"
+import {
+  displayAccountNumber,
+  displayBankName,
+  listedBankClash,
+} from "@/lib/opening-money"
+
+function emptyFinance() {
+  return {
+    revenue: 0,
+    expenditure: 0,
+    supplierPayments: 0,
+    netCashFlow: 0,
+    cashRevenue: 0,
+    bankRevenue: 0,
+    openingCash: 0,
+    openingBank: 0,
+    cashAccount: { balance: 0, entries: [] as FinanceLedgerEntry[] },
+    bankAccount: { balance: 0, entries: [] as FinanceLedgerEntry[] },
+    entries: [],
+    expenses: [],
+    debtors: [] as Array<{ id: string; name: string; currentBalance: number; branch: { code: string } }>,
+    creditors: [] as Array<{ id: string; name: string; owed: number }>,
+    canSetOpening: false,
+    shops: [] as OpeningCashShop[],
+    bankAccounts: [] as NamedBankRow[],
+  }
+}
+
+type FinanceLedgerEntry = {
+  id: string
+  date: Date
+  branch: string
+  type: "IN" | "OUT"
+  category: string
+  description: string
+  amount: number
+}
+
+export type OpeningCashShop = {
+  id: string
+  name: string
+  code: string
+  openingCash: number
+  openingCashAt: string | null
+}
+
+export type NamedBankRow = {
+  id: string
+  bankName: string
+  accountNumber: string
+  accountName: string | null
+  openingBalance: number
+  branchId: string
+  branchName: string
+  branchCode: string
+  createdAt: string
+}
+
+function revalidateMoneyViews() {
+  revalidatePath("/finance")
+  revalidatePath("/audit")
+}
 
 export async function getFinance() {
   const user = await requireUser()
   if (!(await can(user.role, "view.finance")) && !(await can(user.role, "view.expenses"))) {
-    return {
-      revenue: 0,
-      expenditure: 0,
-      supplierPayments: 0,
-      netCashFlow: 0,
-      cashRevenue: 0,
-      bankRevenue: 0,
-      cashAccount: { balance: 0, entries: [] },
-      bankAccount: { balance: 0, entries: [] },
-      entries: [],
-      expenses: [],
-      debtors: [],
-      creditors: [],
-    }
+    return emptyFinance()
   }
   await healOpeningStockBills()
   const branchId = await viewBranchFilter(user)
   const where = branchId ? { branchId } : {}
 
-  const [sales, expenses, purchases, entries, debtors] = await Promise.all([
+  const [sales, expenses, purchases, entries, debtors, shops, bankAccounts] = await Promise.all([
     prisma.sale.findMany({
       where: { ...where, status: "COMPLETED" },
       include: { branch: true, customer: true, payments: true },
@@ -67,6 +117,16 @@ export async function getFinance() {
       where: { ...(branchId ? { branchId } : {}), currentBalance: { gt: 0 } },
       include: { branch: true },
       orderBy: { currentBalance: "desc" },
+    }),
+    prisma.branch.findMany({
+      where: { isActive: true, ...(branchId ? { id: branchId } : {}) },
+      select: { id: true, name: true, code: true, openingCash: true, openingCashAt: true },
+      orderBy: [{ isHq: "desc" }, { name: "asc" }],
+    }),
+    prisma.bankAccount.findMany({
+      where: { isActive: true, ...(branchId ? { branchId } : {}) },
+      include: { branch: { select: { name: true, code: true } } },
+      orderBy: [{ bankName: "asc" }, { accountNumber: "asc" }],
     }),
   ])
 
@@ -150,12 +210,57 @@ export async function getFinance() {
     }
   }
 
-  // Sort ledgers by date desc
+  const openingCashShops: OpeningCashShop[] = shops.map((shop) => ({
+    id: shop.id,
+    name: shop.name,
+    code: shop.code,
+    openingCash: money(shop.openingCash),
+    openingCashAt: shop.openingCashAt?.toISOString() ?? null,
+  }))
+  const namedBanks: NamedBankRow[] = bankAccounts.map((row) => ({
+    id: row.id,
+    bankName: row.bankName,
+    accountNumber: row.accountNumber,
+    accountName: row.accountName,
+    openingBalance: money(row.openingBalance),
+    branchId: row.branchId,
+    branchName: row.branch.name,
+    branchCode: row.branch.code,
+    createdAt: row.createdAt.toISOString(),
+  }))
+  const openingCash = openingCashShops.reduce((sum, shop) => sum + shop.openingCash, 0)
+  const openingBank = namedBanks.reduce((sum, row) => sum + row.openingBalance, 0)
+
+  for (const shop of openingCashShops) {
+    if (shop.openingCash <= 0) continue
+    cashEntries.push({
+      id: `opening-cash-${shop.id}`,
+      date: shop.openingCashAt ? new Date(shop.openingCashAt) : new Date(),
+      branch: shop.name,
+      type: "IN",
+      category: "Opening cash",
+      description: `Opening cash at ${shop.name} when this software started`,
+      amount: shop.openingCash,
+    })
+  }
+  for (const row of namedBanks) {
+    if (row.openingBalance <= 0) continue
+    bankEntries.push({
+      id: `opening-bank-${row.id}`,
+      date: new Date(row.createdAt),
+      branch: row.branchName,
+      type: "IN",
+      category: "Opening bank",
+      description: `Opening ${row.bankName} ${row.accountNumber} when this software started`,
+      amount: row.openingBalance,
+    })
+  }
+
   cashEntries.sort((a, b) => b.date.getTime() - a.date.getTime())
   bankEntries.sort((a, b) => b.date.getTime() - a.date.getTime())
 
-  const cashBalance = cashRevenue - expenditure
-  const bankBalance = bankRevenue - supplierPayments
+  const cashBalance = openingCash + cashRevenue - expenditure
+  const bankBalance = openingBank + bankRevenue - supplierPayments
 
   const creditors = Object.values(
     purchases.reduce<Record<string, { id: string; name: string; owed: number }>>((acc, row) => {
@@ -175,6 +280,8 @@ export async function getFinance() {
     netCashFlow,
     cashRevenue,
     bankRevenue,
+    openingCash,
+    openingBank,
     cashAccount: { balance: cashBalance, entries: cashEntries },
     bankAccount: { balance: bankBalance, entries: bankEntries },
     entries,
@@ -186,7 +293,149 @@ export async function getFinance() {
       branch: { code: row.branch.code },
     })),
     creditors,
+    canSetOpening: canSetOpeningMoney(user.role),
+    shops: openingCashShops,
+    bankAccounts: namedBanks,
   }
+}
+
+async function assertOpeningMoneyAccess(user: { id: string; role: UserRole; branchId: string | null }, branchId: string) {
+  if (!canSetOpeningMoney(user.role)) {
+    return { error: "Only the main admin, the CEO, the accountant, or the records checker can set opening money." }
+  }
+  if (!(await canReachBranch(user, branchId))) return { error: OTHER_SHOP }
+  const shop = await prisma.branch.findFirst({ where: { id: branchId, isActive: true }, select: { id: true, name: true } })
+  if (!shop) return { error: "Pick a shop that is open." }
+  return { shop }
+}
+
+export async function saveOpeningCash(formData: FormData) {
+  const user = await requireUser()
+  const branchId = String(formData.get("branchId") || "")
+  const amount = Number(formData.get("amount") ?? "")
+  if (!branchId) return { error: "Pick the shop." }
+  if (!Number.isFinite(amount) || amount < 0) return { error: "Type the cash in the till as a number, zero or more." }
+  const gate = await assertOpeningMoneyAccess(user, branchId)
+  if ("error" in gate) return gate
+
+  const before = await prisma.branch.findUnique({ where: { id: branchId }, select: { openingCash: true } })
+  await prisma.branch.update({
+    where: { id: branchId },
+    data: {
+      openingCash: amount.toFixed(2),
+      openingCashAt: new Date(),
+      openingCashBy: user.id,
+    },
+  })
+  await writeAudit({
+    userId: user.id,
+    action: "UPDATE",
+    entityType: "OpeningCash",
+    entityId: gate.shop.name,
+    oldValue: JSON.stringify({ openingCash: money(before?.openingCash) }),
+    newValue: JSON.stringify({ openingCash: amount }),
+    branchId,
+  })
+  revalidateMoneyViews()
+  return { success: true }
+}
+
+export async function createBankAccount(formData: FormData) {
+  const user = await requireUser()
+  const branchId = String(formData.get("branchId") || "")
+  const bankName = displayBankName(String(formData.get("bankName") || ""))
+  const accountNumber = displayAccountNumber(String(formData.get("accountNumber") || ""))
+  const accountName = displayBankName(String(formData.get("accountName") || "")) || null
+  const openingBalance = Number(formData.get("openingBalance") ?? "")
+  if (!branchId) return { error: "Pick the shop this bank belongs to." }
+  if (!bankName) return { error: "Type the bank name." }
+  if (accountNumber.length < 8) return { error: "Type the full account number." }
+  if (!Number.isFinite(openingBalance) || openingBalance < 0) {
+    return { error: "Type the opening bank balance as a number, zero or more." }
+  }
+  const gate = await assertOpeningMoneyAccess(user, branchId)
+  if ("error" in gate) return gate
+
+  const existing = await prisma.bankAccount.findMany({
+    where: { isActive: true },
+    select: { id: true, accountNumber: true },
+  })
+  const clash = listedBankClash(existing, accountNumber)
+  if (clash) return { error: clash }
+
+  const row = await prisma.bankAccount.create({
+    data: {
+      branchId,
+      bankName,
+      accountNumber,
+      accountName,
+      openingBalance: openingBalance.toFixed(2),
+      createdById: user.id,
+    },
+  })
+  await writeAudit({
+    userId: user.id,
+    action: "CREATE",
+    entityType: "BankAccount",
+    entityId: `${bankName} ${accountNumber}`,
+    newValue: JSON.stringify({ bankName, accountNumber, openingBalance, shop: gate.shop.name }),
+    branchId,
+  })
+  revalidateMoneyViews()
+  return { success: true, id: row.id }
+}
+
+export async function saveBankOpening(formData: FormData) {
+  const user = await requireUser()
+  const id = String(formData.get("id") || "")
+  const openingBalance = Number(formData.get("openingBalance") ?? "")
+  if (!id) return { error: "We could not find that bank account." }
+  if (!Number.isFinite(openingBalance) || openingBalance < 0) {
+    return { error: "Type the opening bank balance as a number, zero or more." }
+  }
+  const row = await prisma.bankAccount.findUnique({ where: { id } })
+  if (!row || !row.isActive) return { error: "We could not find that bank account." }
+  const gate = await assertOpeningMoneyAccess(user, row.branchId)
+  if ("error" in gate) return gate
+
+  await prisma.bankAccount.update({
+    where: { id },
+    data: { openingBalance: openingBalance.toFixed(2) },
+  })
+  await writeAudit({
+    userId: user.id,
+    action: "UPDATE",
+    entityType: "BankAccount",
+    entityId: `${row.bankName} ${row.accountNumber}`,
+    oldValue: JSON.stringify({ openingBalance: money(row.openingBalance) }),
+    newValue: JSON.stringify({ openingBalance }),
+    branchId: row.branchId,
+  })
+  revalidateMoneyViews()
+  return { success: true }
+}
+
+export async function takeBankOffTheBooks(formData: FormData) {
+  const user = await requireUser()
+  const id = String(formData.get("id") || "")
+  if (!id) return { error: "We could not find that bank account." }
+  const row = await prisma.bankAccount.findUnique({ where: { id } })
+  if (!row || !row.isActive) return { error: "We could not find that bank account." }
+  const gate = await assertOpeningMoneyAccess(user, row.branchId)
+  if ("error" in gate) return gate
+
+  await prisma.bankAccount.update({ where: { id }, data: { isActive: false } })
+  await writeAudit({
+    userId: user.id,
+    action: "UPDATE",
+    entityType: "BankAccount",
+    entityId: `${row.bankName} ${row.accountNumber}`,
+    oldValue: JSON.stringify({ isActive: true }),
+    newValue: JSON.stringify({ isActive: false }),
+    branchId: row.branchId,
+  })
+  revalidateMoneyViews()
+  return { success: true }
 }
 
 export async function createExpense(formData: FormData) {

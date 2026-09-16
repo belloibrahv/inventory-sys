@@ -8,7 +8,7 @@ export default async function FinancePage() {
     <div className="space-y-6">
       <PageHeader
         title="Money in & out"
-        description="Money that came in from sales, money that went out for shop bills and suppliers, and people who still owe us. Use this page to follow credit sales."
+        description="Opening cash and named banks, money that came in from sales, money that went out for shop bills and suppliers, and people who still owe us."
       />
       <FinanceClientView data={data} />
     </div>

@@ -1,5 +1,6 @@
 import type { UserRole } from "@prisma/client"
 import { can } from "@/lib/permissions"
+import { isBooksDesk, isShopOwner } from "@/lib/roles"
 
 export { isSuperAdmin, isShopOwner, isBooksDesk, booksDeskPartner, BOOKS_DESK_ROLES, ROLE_LABELS, canEditLetterhead } from "@/lib/roles"
 
@@ -21,6 +22,11 @@ export async function canApprove(role: UserRole) {
 
 export async function canManageFinance(role: UserRole) {
   return can(role, "action.finance")
+}
+
+/** Opening cash and named banks. Main admin, CEO, accountant, records checker. */
+export function canSetOpeningMoney(role: UserRole) {
+  return isShopOwner(role) || isBooksDesk(role)
 }
 
 export async function canManageStaff(role: UserRole) {

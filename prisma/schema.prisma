@@ -303,6 +303,11 @@ model Branch {
   parkedSales     ParkedSale[]
   neighborFills   NeighborFill[]
   openingStock    OpeningStock?
+  bankAccounts    BankAccount[]
+  /// Cash in the till on the day this shop started using the software.
+  openingCash     Decimal    @default(0)
+  openingCashAt   DateTime?
+  openingCashBy   String?
 
   @@index([code])
   @@index([isActive])
@@ -795,6 +800,27 @@ model FinanceEntry {
 
   @@index([branchId])
   @@index([createdAt])
+}
+
+/// A named bank or wallet. Opening balance is money already in that account
+/// when the shops started using this software. Later transfer and POS sit on
+/// top of these figures in Money in and out.
+model BankAccount {
+  id             String   @id @default(cuid())
+  branchId       String
+  branch         Branch   @relation(fields: [branchId], references: [id])
+  bankName       String
+  accountNumber  String
+  accountName    String?
+  openingBalance Decimal  @default(0)
+  isActive       Boolean  @default(true)
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([branchId])
+  @@index([accountNumber])
+  @@index([isActive])
 }
 
 model Approval {

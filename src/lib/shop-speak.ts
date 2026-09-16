@@ -3,6 +3,8 @@ import { statusLabel } from "@/lib/status"
 
 const RECORD_KINDS: Record<string, string> = {
   OpeningStock: "Opening stock",
+  OpeningCash: "Opening cash",
+  BankAccount: "Bank account",
   Purchase: "Supplier bill",
   PurchasePayment: "Payment to supplier",
   IMEIRecord: "Phone IMEI",

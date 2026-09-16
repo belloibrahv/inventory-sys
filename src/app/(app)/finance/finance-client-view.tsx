@@ -26,6 +26,8 @@ import {
   Toolbar,
 } from "@/components/shared"
 import { TablePager, usePagedRows } from "@/components/table-pager"
+import { OpeningMoneyPanel } from "./opening-money-panel"
+import type { NamedBankRow, OpeningCashShop } from "@/app/actions/finance"
 
 type LedgerEntry = {
   id: string
@@ -44,10 +46,15 @@ type FinanceData = {
   netCashFlow: number
   cashRevenue: number
   bankRevenue: number
+  openingCash: number
+  openingBank: number
   cashAccount: { balance: number; entries: LedgerEntry[] }
   bankAccount: { balance: number; entries: LedgerEntry[] }
   debtors: Array<{ id: string; name: string; currentBalance: number; branch: { code: string } }>
   creditors: Array<{ id: string; name: string; owed: number }>
+  canSetOpening: boolean
+  shops: OpeningCashShop[]
+  bankAccounts: NamedBankRow[]
 }
 
 /** One day's worth of movements on an account, with that day's in, out and net. */
@@ -92,7 +99,7 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
     <div className="space-y-5">
       <Toolbar className="justify-between">
         <p className="text-sm text-muted-foreground">
-          Gross sales, shop expenses, and money paid to suppliers. Cash is the till. Bank is transfer and POS.
+          Cash is the till. Bank is each named account plus transfer and POS. Opening figures are the money already there when this software started.
         </p>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline" size="sm">
@@ -107,6 +114,14 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
           </Button>
         </div>
       </Toolbar>
+
+      <OpeningMoneyPanel
+        shops={data.shops}
+        bankAccounts={data.bankAccounts}
+        canSet={data.canSetOpening}
+        openingCash={data.openingCash}
+        openingBank={data.openingBank}
+      />
 
       <StatGrid>
         <StatCard
@@ -135,7 +150,7 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
         <StatCard
           label={data.netCashFlow >= 0 ? "Money left after expenses" : "Money short after expenses"}
           value={formatCurrency(data.netCashFlow)}
-          hint="Sales collected minus shop expenses and supplier payments"
+          hint="Sales collected minus shop expenses and supplier payments. Opening cash and opening banks sit on the boxes below, not in this figure."
           icon={<Scale className="h-4 w-4" />}
           tone={data.netCashFlow >= 0 ? "success" : "danger"}
         />
@@ -150,7 +165,9 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
               </span>
               <div className="text-left">
                 <p className="text-sm font-semibold">Cash in the till</p>
-                <p className="text-xs text-muted-foreground">Physical cash collected and paid out</p>
+                <p className="text-xs text-muted-foreground">
+                  Started with {formatCurrency(data.openingCash)}. Cash sales in, shop expenses out.
+                </p>
               </div>
             </div>
             <span className="eyebrow">{cashDays.length} day{cashDays.length === 1 ? "" : "s"}</span>
@@ -172,7 +189,10 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
               </span>
               <div className="text-left">
                 <p className="text-sm font-semibold">Bank, transfer, and POS</p>
-                <p className="text-xs text-muted-foreground">Transfers, POS, and money that went into the bank</p>
+                <p className="text-xs text-muted-foreground">
+                  Started with {formatCurrency(data.openingBank)} across {data.bankAccounts.length} bank
+                  {data.bankAccounts.length === 1 ? "" : "s"}. Transfer and POS in, money to suppliers out.
+                </p>
               </div>
             </div>
             <span className="eyebrow">{bankDays.length} day{bankDays.length === 1 ? "" : "s"}</span>
