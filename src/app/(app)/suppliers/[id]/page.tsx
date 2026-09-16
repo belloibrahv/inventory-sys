@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { getSupplier } from "@/app/actions/parties"
-import { PageHeader, StatusBadge } from "@/components/shared"
+import { PageHeader, StatCard, StatGrid, StatusBadge } from "@/components/shared"
 import { formatCurrency, formatDate, money } from "@/lib/utils"
 
 export default async function SupplierDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -21,33 +21,36 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
         description={`${supplier.kind === "NEIGHBOR" ? "Neighboring shop" : "Supplier"} · ${[supplier.city, supplier.country].filter(Boolean).join(", ") || "Where they are is not set"} · ${supplier.phone}${supplier.contactPerson ? ` · ${supplier.contactPerson}` : ""}`}
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="surface-card p-4">
-          <p className="text-xs font-medium uppercase text-muted-foreground">Everything they billed us</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums">{formatCurrency(totalPurchased)}</p>
-          <p className="text-xs text-muted-foreground mt-1">{supplier.purchases.length} supplier bill(s)</p>
-        </div>
+      <StatGrid>
+        <StatCard
+          label="Everything they billed us"
+          value={formatCurrency(totalPurchased)}
+          hint={`${supplier.purchases.length} supplier bill${supplier.purchases.length === 1 ? "" : "s"}`}
+          href="#supplier-bills"
+        />
+        <StatCard
+          label="We have paid them"
+          value={formatCurrency(totalPaid)}
+          hint="Money we have sent to them so far"
+          tone="success"
+          href="#supplier-bills"
+        />
+        <StatCard
+          label="We still owe them"
+          value={formatCurrency(totalOwed)}
+          hint={totalOwed === 0 ? "We owe them nothing" : "Money we have not paid yet"}
+          tone={totalOwed > 0 ? "warning" : "neutral"}
+          href="#supplier-bills"
+        />
+        <StatCard
+          label="Phones we collected"
+          value={String(supplier.imeiRecords.length)}
+          hint="Phones and serial items booked in from them. Open a bill below to follow each IMEI."
+          href="#supplier-bills"
+        />
+      </StatGrid>
 
-        <div className="surface-card p-4">
-          <p className="text-xs font-medium uppercase text-muted-foreground">We have paid them</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-success">{formatCurrency(totalPaid)}</p>
-          <p className="text-xs text-muted-foreground mt-1">Money we have sent to them so far</p>
-        </div>
-
-        <div className="surface-card p-4">
-          <p className="text-xs font-medium uppercase text-muted-foreground">We still owe them</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-warning">{formatCurrency(totalOwed)}</p>
-          <p className="text-xs text-muted-foreground mt-1">{totalOwed === 0 ? "We owe them nothing" : "Money we have not paid yet"}</p>
-        </div>
-
-        <div className="surface-card p-4">
-          <p className="text-xs font-medium uppercase text-muted-foreground">Phones we collected</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums">{supplier.imeiRecords.length}</p>
-          <p className="text-xs text-muted-foreground mt-1">Phones and serial items booked in from them</p>
-        </div>
-      </div>
-
-      <div className="surface-card overflow-hidden">
+      <div id="supplier-bills" className="surface-card scroll-mt-4 overflow-hidden">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <h3 className="font-semibold">Every bill from this supplier</h3>
         </div>

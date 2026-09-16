@@ -18,6 +18,7 @@ import {
   type OpeningChange,
 } from "@/lib/opening-book"
 import { OPENING_STOCK_METHOD } from "@/lib/upload-purchase"
+import { payablePurchaseWhere } from "@/lib/purchase-money"
 import { healOpeningStockBills } from "@/lib/opening-stock-money"
 import { money } from "@/lib/utils"
 
@@ -808,11 +809,9 @@ export async function getOpeningReport(requestedBranchId?: string) {
     for (const line of book) lines.push({ ...line, shop: record.branch.code, status: record.status })
   }
 
-  const openingBillIds = (await prisma.openingStock.findMany({ select: { purchaseId: true } })).map((row) => row.purchaseId)
   const bills = await prisma.purchase.findMany({
     where: {
-      id: { notIn: openingBillIds },
-      status: { not: "CANCELLED" },
+      ...payablePurchaseWhere,
       ...(branchId ? { branchId } : {}),
     },
     include: { supplier: { select: { name: true } }, branch: { select: { code: true } } },

@@ -23,6 +23,8 @@ import { cell, readTableFile } from "@/lib/table-file"
 import { buildBillTrace, type SupplierBillTrace } from "@/lib/supplier-trace"
 import { watBounds, watDayKey } from "@/lib/lagos-day"
 import { getAppSettings } from "@/lib/settings"
+import { healOpeningStockBills } from "@/lib/opening-stock-money"
+import { isOpeningStockPurchase } from "@/lib/purchase-money"
 
 function parseImeis(raw: string) {
   return [...new Set(raw.split(/[\s,;]+/).map((item) => item.trim()).filter((item) => item.length >= 14))]
@@ -53,6 +55,9 @@ function refreshOps() {
     "/suppliers",
     "/neighbor-fills",
     "/profits",
+    "/reports",
+    "/dashboard",
+    "/audit/books",
   ]) {
     revalidatePath(path)
   }
@@ -139,6 +144,7 @@ const purchaseInclude = {
   user: true,
   items: { include: { product: true } },
   incomingLots: { select: { id: true, lotNumber: true, status: true, createdAt: true } },
+  openingStock: { select: { id: true } },
   imeiRecords: {
     include: {
       branch: true,
@@ -176,6 +182,7 @@ function purchaseSearchWhere(q: string) {
 export async function getPurchases(search?: string) {
   const user = await requireUser()
   const branchId = await viewBranchFilter(user)
+  await healOpeningStockBills()
   await attachImeisToPurchases()
   const q = search?.trim() ?? ""
   const purchases = await prisma.purchase.findMany({
@@ -212,6 +219,7 @@ export async function getPurchases(search?: string) {
 
 export async function getPurchase(id: string) {
   const user = await requireUser()
+  await healOpeningStockBills()
   await attachImeisToPurchases()
   const purchase = await prisma.purchase.findUnique({
     where: { id },
@@ -479,18 +487,14 @@ export async function payPurchase(formData: FormData) {
   const method = String(formData.get("method") || "TRANSFER")
   if (!id || amount <= 0) return { error: "Enter the amount sent to the supplier." }
 
+  await healOpeningStockBills()
   const purchase = await prisma.purchase.findUnique({
     where: { id },
     include: { supplier: true, openingStock: true },
   })
   if (!purchase) return { error: "We could not find that supplier bill." }
-  if (
-    purchase.openingStock ||
-    purchase.source === "UPLOAD_STOCK" ||
-    purchase.paymentMethod === "OPENING_STOCK" ||
-    purchase.invoiceNumber.startsWith("OPEN-")
-  ) {
-    return { error: "Opening stock represents an independent inventory asset valuation baseline and has no payment model." }
+  if (isOpeningStockPurchase(purchase)) {
+    return { error: "Opening stock is the value the shop started with. It is not a bill to pay." }
   }
   const due = money(purchase.totalAmount) - money(purchase.paidAmount)
   if (due <= 0) return { error: "This supplier bill is already fully paid." }

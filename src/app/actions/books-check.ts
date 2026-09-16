@@ -12,6 +12,7 @@ import { getAppSettings } from "@/lib/settings"
 import { money } from "@/lib/utils"
 import { sumSaleTenders } from "@/lib/sale-money"
 import { healOpeningStockBills } from "@/lib/opening-stock-money"
+import { payablePurchaseWhere } from "@/lib/purchase-money"
 import { healDuplicateDayCloses } from "@/lib/day-close-heal"
 
 export type BooksRange = ShopRange
@@ -88,9 +89,7 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
         where: {
           ...shopWhere,
           createdAt: { gte: window.start, lt: window.end },
-          source: { not: "UPLOAD_STOCK" },
-          paymentMethod: { not: "OPENING_STOCK" },
-          invoiceNumber: { not: { startsWith: "OPEN-" } },
+          ...payablePurchaseWhere,
         },
         _sum: { paidAmount: true },
       }),
@@ -98,9 +97,7 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
         where: {
           ...shopWhere,
           createdAt: { gte: prior.start, lt: prior.end },
-          source: { not: "UPLOAD_STOCK" },
-          paymentMethod: { not: "OPENING_STOCK" },
-          invoiceNumber: { not: { startsWith: "OPEN-" } },
+          ...payablePurchaseWhere,
         },
         _sum: { paidAmount: true },
       }),
@@ -124,10 +121,7 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
       prisma.purchase.findMany({
         where: {
           ...(shopId ? { branchId: shopId } : {}),
-          status: { not: "CANCELLED" },
-          source: { not: "UPLOAD_STOCK" },
-          paymentMethod: { not: "OPENING_STOCK" },
-          invoiceNumber: { not: { startsWith: "OPEN-" } },
+          ...payablePurchaseWhere,
         },
         select: { totalAmount: true, paidAmount: true },
       }),

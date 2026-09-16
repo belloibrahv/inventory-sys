@@ -7,6 +7,7 @@ import { shiftCustomerBalance } from "@/lib/concurrency"
 import { requireUser } from "@/lib/session"
 import { booksDeskPartner, isBooksDesk, isShopOwner } from "@/lib/rbac"
 import { ALL_PERM_KEYS, ensureRolePermissions } from "@/lib/permissions"
+import { isOpeningStockPurchase } from "@/lib/purchase-money"
 
 export async function getRoleMatrix() {
   const user = await requireUser()
@@ -166,8 +167,14 @@ export async function reverseSupplierPayment(formData: FormData) {
   const user = await requireUser()
   if (!isShopOwner(user.role)) return { error: "Only the main admin or the CEO can undo a supplier payment." }
   const id = String(formData.get("id") || "")
-  const purchase = await prisma.purchase.findUnique({ where: { id } })
+  const purchase = await prisma.purchase.findUnique({
+    where: { id },
+    include: { openingStock: true },
+  })
   if (!purchase) return { error: "We could not find that supplier bill." }
+  if (isOpeningStockPurchase(purchase)) {
+    return { error: "Opening stock is the value the shop started with. It is not a bill to pay." }
+  }
   const paid = Number(purchase.paidAmount)
   if (paid <= 0) return { error: "Nothing has been paid on this supplier bill yet." }
 
@@ -209,5 +216,8 @@ export async function reverseSupplierPayment(formData: FormData) {
   revalidatePath("/purchases")
   revalidatePath("/finance")
   revalidatePath("/suppliers")
+  revalidatePath("/reports")
+  revalidatePath("/dashboard")
+  revalidatePath("/audit/books")
   return { success: true }
 }

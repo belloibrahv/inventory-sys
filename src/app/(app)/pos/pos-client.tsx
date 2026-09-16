@@ -483,7 +483,11 @@ export function PosClient({
               <PlusCircle className="h-3.5 w-3.5" /> Start a new sale
             </button>
           </div>
-          <ScanField onScan={takeScan} placeholder="Scan IMEI to sell, then Enter" />
+          <ScanField
+            onScan={takeScan}
+            placeholder="Scan IMEI to sell, then Enter"
+            hint="A USB or Bluetooth scanner types the number and presses Enter. That adds the phone to this sale. It does not complete the sale."
+          />
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}

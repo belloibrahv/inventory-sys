@@ -44,7 +44,7 @@ export function IncomingForm({
   }
 
   return (
-    <ActionForm action={createIncomingLot} submit="Book goods on the way" className="space-y-3">
+    <ActionForm action={createIncomingLot} submit="Book goods on the way" enterDoesNotSubmit className="space-y-3">
       <Select name="branchId" value={branchId} onChange={(event) => setBranchId(event.target.value)} required>
         {branches.map((branch) => (
           <option key={branch.id} value={branch.id}>

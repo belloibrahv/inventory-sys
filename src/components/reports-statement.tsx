@@ -4,6 +4,7 @@ import { formatLagosStamp } from "@/lib/lagos-day"
 import { letterheadFromCompany } from "@/lib/letterhead"
 import { formatCurrency } from "@/lib/utils"
 import { DocumentLetterhead, DocumentPaperFooter } from "@/components/document-letterhead"
+import { groupOwedHouses } from "@/lib/purchase-money"
 
 export function ReportsStatement({ data }: { data: ReportsPack }) {
   const kpis = reportsKpis(data)
@@ -92,10 +93,15 @@ export function ReportsStatement({ data }: { data: ReportsPack }) {
           <h3 className="text-sm font-semibold">Still owed to suppliers</h3>
           <table className="mt-2 w-full text-[11px]">
             <tbody>
-              {data.creditors.map((row) => (
-                <tr key={row.id} className="border-b border-slate-100">
-                  <td className="py-1 pr-2">{row.invoice} · {row.supplier} · {row.shop}</td>
-                  <td className="py-1 text-right tabular-nums font-medium">{formatCurrency(row.owed)}</td>
+              {groupOwedHouses(data.creditors).map((house) => (
+                <tr key={house.key} className="border-b border-slate-100">
+                  <td className="py-1 pr-2">
+                    <span className="font-medium">{house.name}</span>
+                    {house.bills.map((row) => (
+                      <span key={row.id} className="block text-slate-500">{row.invoice} · {row.shop}</span>
+                    ))}
+                  </td>
+                  <td className="py-1 text-right tabular-nums font-medium">{formatCurrency(house.owed)}</td>
                 </tr>
               ))}
               {data.creditors.length === 0 ? (

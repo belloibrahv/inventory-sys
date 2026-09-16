@@ -6,14 +6,16 @@ import { PlusCircle, Trash2, CheckCircle2, Loader2, PackagePlus } from "lucide-r
 import { toast } from "sonner"
 import { batchUploadStock, type BatchUploadItem, type BatchUploadPayload, type UploadResult } from "@/app/actions/uploads"
 import { ItemNameSearch } from "@/components/item-name-search"
+import { preventEnterFromSubmitting } from "@/components/scan-field"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { BILL_CONDITION_OPTIONS, STORAGE_OPTIONS, mapBillCondition, normalizeStorage } from "@/lib/item-specs"
+import { listedSupplierClash } from "@/lib/party-key"
 import { formatCurrency, generateDocNumber } from "@/lib/utils"
 
 type Shop = { id: string; name: string; code: string }
-type Supplier = { id: string; name: string; city: string | null; country: string | null }
+type Supplier = { id: string; name: string; phone?: string | null; city: string | null; country: string | null }
 type Brand = { id: string; name: string }
 type Category = { id: string; name: string }
 type Product = {
@@ -253,9 +255,20 @@ export function UploadStockWizard({
       toast.error("Pick the supplier.")
       return
     }
-    if (supplierMode === "new" && !newSupplierName.trim()) {
-      toast.error("Type the name of the new supplier.")
-      return
+    if (supplierMode === "new") {
+      if (!newSupplierName.trim()) {
+        toast.error("Type the name of the new supplier.")
+        return
+      }
+      if (!newSupplierPhone.trim()) {
+        toast.error("Type the new supplier phone number.")
+        return
+      }
+      const clash = listedSupplierClash(suppliers, newSupplierName, newSupplierPhone)
+      if (clash) {
+        toast.error(clash)
+        return
+      }
     }
 
     // Validate IMEI rows
@@ -331,7 +344,11 @@ export function UploadStockWizard({
   const unitCount = items.reduce((sum, item) => sum + (item.quantity || 0), 0)
 
   return (
-    <form onSubmit={handleSubmit} className="surface-card overflow-visible">
+    <form
+      onSubmit={handleSubmit}
+      onKeyDown={preventEnterFromSubmitting}
+      className="surface-card overflow-visible"
+    >
       {/*
         The bill the client described: supplier at the top, the generated bill
         number and the date beside it, the item lines with cost, quantity and an
@@ -343,7 +360,7 @@ export function UploadStockWizard({
           <p className="eyebrow">Supplier bill</p>
           <h2 className="text-base font-semibold tracking-tight">Put a carton of goods on the system</h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Type the product name, pick it, then fill condition and storage yourself. The IMEI boxes open to match the quantity you type.
+            Type the product name, pick it, then fill condition and storage yourself. Scanning an IMEI only fills that box. It does not save until you press Upload this stock.
           </p>
         </div>
         <div className="rounded-lg border border-border bg-card px-4 py-2 text-right">
@@ -439,7 +456,13 @@ export function UploadStockWizard({
               </label>
               <label className="block text-sm">
                 <span className="eyebrow mb-1 block">Phone</span>
-                <Input value={newSupplierPhone} onChange={(e) => setNewSupplierPhone(e.target.value)} disabled={busy} />
+                <Input
+                  value={newSupplierPhone}
+                  onChange={(e) => setNewSupplierPhone(e.target.value)}
+                  required
+                  disabled={busy}
+                  placeholder="Supplier phone number"
+                />
               </label>
               <label className="block text-sm">
                 <span className="eyebrow mb-1 block">Country</span>
@@ -643,6 +666,18 @@ export function UploadStockWizard({
                             placeholder={item.tracking === "IMEI" ? "15-digit IMEI" : "Serial number"}
                             value={item.identities?.[idIdx] || ""}
                             onChange={(e) => handleIdentityChange(itemIdx, idIdx, e.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key !== "Enter") return
+                              event.preventDefault()
+                              const form = event.currentTarget.form
+                              if (!form) return
+                              const boxes = Array.from(form.querySelectorAll<HTMLInputElement>("input[data-scan-box='true']"))
+                              const index = boxes.indexOf(event.currentTarget)
+                              const next = boxes[index + 1]
+                              if (next) next.focus()
+                              else event.currentTarget.blur()
+                            }}
+                            data-scan-box="true"
                             required
                             disabled={busy}
                             autoComplete="off"

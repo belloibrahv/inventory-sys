@@ -8,6 +8,7 @@ import { AlertCircle, Loader2, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { DecisionModal, type DecisionTone } from "@/components/ui/decision-modal"
+import { preventEnterFromSubmitting } from "@/components/scan-field"
 import { cn } from "@/lib/utils"
 
 /**
@@ -45,7 +46,7 @@ export function SubmitButton({
       {pending ? (
         <>
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          {pendingLabel ?? "Working..."}
+          {pendingLabel ?? "Saving this record"}
         </>
       ) : (
         children
@@ -75,11 +76,12 @@ export function ActionForm({
   variant = "default",
   size = "default",
   confirmModal,
+  enterDoesNotSubmit = false,
 }: {
   action: (formData: FormData) => Promise<{ error?: string; success?: boolean; redirectTo?: string } | void>
   children: ReactNode
   submit?: string
-  /** What the button says while the shop waits, e.g. "Completing sale...". */
+  /** What the button says while the shop waits, e.g. "Completing this sale". */
   pendingLabel?: string
   /** What the toast says on success. Say what happened, not just "Saved". */
   successMessage?: string
@@ -90,6 +92,11 @@ export function ActionForm({
   size?: "default" | "sm" | "lg" | "icon"
   /** Optional confirmation decision modal before submitting */
   confirmModal?: ActionFormConfirmConfig
+  /**
+   * Stop Enter from saving. Use this on scan screens so a USB scanner cannot
+   * book a phone before staff fill the rest of the fields.
+   */
+  enterDoesNotSubmit?: boolean
 }) {
   const router = useRouter()
   const ref = useRef<HTMLFormElement>(null)
@@ -151,6 +158,7 @@ export function ActionForm({
         ref={ref}
         className={className}
         onSubmit={handleSubmit}
+        onKeyDown={enterDoesNotSubmit ? preventEnterFromSubmitting : undefined}
         action={confirmModal ? undefined : executeAction}
       >
         {formError ? (

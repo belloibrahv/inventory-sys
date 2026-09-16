@@ -7,6 +7,7 @@ import { EmptyState, StatusBadge } from "@/components/shared"
 import { TablePager, usePagedRows } from "@/components/table-pager"
 import { formatShopWhen } from "@/lib/lagos-day"
 import { formatCurrency, money } from "@/lib/utils"
+import { isOpeningStockPurchase } from "@/lib/purchase-money"
 
 type PurchaseRow = {
   id: string
@@ -18,6 +19,7 @@ type PurchaseRow = {
   expectedDate: Date | null
   receivedDate: Date | null
   createdAt: Date
+  openingStock?: { id: string } | null
   totalAmount: unknown
   paidAmount: unknown
   supplier: { name: string; city: string | null; country: string | null }
@@ -109,9 +111,7 @@ export function PurchasesList({
           const owedVal = Math.max(0, totalVal - paidVal)
           const when = purchase.receivedDate ?? purchase.createdAt
 
-          const isOpening =
-            purchase.source === "UPLOAD_STOCK" ||
-            purchase.invoiceNumber.startsWith("OPEN-")
+          const isOpening = isOpeningStockPurchase(purchase)
 
           return (
             <Link key={purchase.id} href={`/purchases/${purchase.id}`} className="surface-card block p-5 hover:bg-muted/40">

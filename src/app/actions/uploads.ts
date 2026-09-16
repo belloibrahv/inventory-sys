@@ -16,6 +16,8 @@ import {
 } from "@/lib/upload-purchase"
 import { generateDocNumber, money } from "@/lib/utils"
 import { mapBillCondition, normalizeStorage } from "@/lib/item-specs"
+import { displayPartyName } from "@/lib/party-key"
+import { findDuplicateSupplier } from "@/lib/supplier-identity"
 
 /**
  * Loading the shop system from a sheet or by hand.
@@ -174,9 +176,11 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
 
   if (newSupplierName) {
     if (!newSupplierPhone) return { error: "Type the new supplier phone number." }
+    const clash = await findDuplicateSupplier({ name: newSupplierName, phone: newSupplierPhone })
+    if (clash) return clash
     supplier = await prisma.supplier.create({
       data: {
-        name: newSupplierName,
+        name: displayPartyName(newSupplierName),
         phone: newSupplierPhone,
         city: newSupplierCity || null,
         country: newSupplierCountry || null,
@@ -835,7 +839,7 @@ export async function getUploadProgress() {
       }),
       prisma.supplier.findMany({
         where: { isActive: true, kind: "SUPPLIER" },
-        select: { id: true, name: true, city: true, country: true },
+        select: { id: true, name: true, phone: true, city: true, country: true },
         orderBy: { name: "asc" },
       }),
       prisma.purchase.findFirst({
@@ -917,8 +921,11 @@ export async function batchUploadStock(payload: BatchUploadPayload): Promise<Upl
   let supplierId = payload.supplierId || ""
   let supplierName = ""
   if (!supplierId && payload.newSupplierName) {
-    const sName = payload.newSupplierName.trim()
-    const sPhone = (payload.newSupplierPhone || "").trim() || "N/A"
+    const sName = displayPartyName(payload.newSupplierName)
+    const sPhone = (payload.newSupplierPhone || "").trim()
+    if (!sPhone) return { error: "Type the new supplier phone number." }
+    const clash = await findDuplicateSupplier({ name: sName, phone: sPhone })
+    if (clash) return clash
     const newSupp = await prisma.supplier.create({
       data: {
         name: sName,

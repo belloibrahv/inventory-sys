@@ -9,10 +9,11 @@ import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { SectionCard } from "@/components/shared"
 import { importOpeningStock, type UploadResult } from "@/app/actions/uploads"
+import { listedSupplierClash } from "@/lib/party-key"
 import { formatCurrency } from "@/lib/utils"
 
 type Shop = { id: string; name: string; code: string }
-type Supplier = { id: string; name: string; city: string | null; country: string | null }
+type Supplier = { id: string; name: string; phone?: string | null; city: string | null; country: string | null }
 
 /**
  * One Excel file per shop. Books what is already on the shelf as opening stock
@@ -48,6 +49,17 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
         ref={formRef}
         className="mt-5 space-y-4"
         action={async (formData) => {
+          if (addingNewSupplier) {
+            const clash = listedSupplierClash(
+              suppliers,
+              String(formData.get("newSupplierName") || ""),
+              String(formData.get("newSupplierPhone") || ""),
+            )
+            if (clash) {
+              toast.error(clash)
+              return
+            }
+          }
           setBusy(true)
           setProblems([])
           let result: UploadResult

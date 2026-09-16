@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Banknote, Lock, Package, PackagePlus, TrendingDown, TrendingUp } from "lucide-react"
+import { Banknote, ChevronDown, Lock, Package, PackagePlus, TrendingDown, TrendingUp } from "lucide-react"
 import type { OpeningReport } from "@/app/actions/opening-stock"
 import { formatCurrency, formatDate, money } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -26,6 +26,7 @@ import {
 import { TablePager, usePagedRows } from "@/components/table-pager"
 import type { ReportsPack } from "@/lib/reports-pack"
 import { formatWatLong } from "@/lib/lagos-day"
+import { groupOwedHouses, type OwedHouse } from "@/lib/purchase-money"
 
 type RawSale = {
   id: string
@@ -136,8 +137,10 @@ export function ReportsClientView({
 }) {
   const router = useRouter()
   const [drilldown, setDrilldown] = useState<Drilldown | null>(null)
+  const [openHouse, setOpenHouse] = useState<string | null>(null)
   const paidSales = sales.filter((sale) => money(sale.paidAmount) > 0)
   const supplierOwed = pack.creditors.reduce((sum, row) => sum + row.owed, 0)
+  const owedHouses = useMemo(() => groupOwedHouses(pack.creditors), [pack.creditors])
   const scopeKey = `${selectedBranchId ?? "all"}:${range}:${date}`
   function reportsHref(next: { branchId?: string; range?: string; date?: string }) {
     const params = new URLSearchParams()
@@ -161,7 +164,7 @@ export function ReportsClientView({
 
   const byShopPager = usePagedRows(pack.byShop, scopeKey)
   const debtorsPager = usePagedRows(pack.debtors, scopeKey)
-  const creditorsPager = usePagedRows(pack.creditors, scopeKey)
+  const creditorsPager = usePagedRows(owedHouses, scopeKey)
   const lowStockPager = usePagedRows(pack.lowStock, scopeKey)
   const revenuePager = usePagedRows(sales, drilldown === "REVENUE" ? "REVENUE" : "idle")
   const receivedPager = usePagedRows(paidSales, drilldown === "RECEIVED" ? "RECEIVED" : "idle")
@@ -170,7 +173,7 @@ export function ReportsClientView({
   const openingPager = usePagedRows(opening.lines, drilldown === "OPENING" ? "OPENING" : "idle")
   const boughtPager = usePagedRows(opening.boughtSince, drilldown === "BOUGHT" ? "BOUGHT" : "idle")
   const debtorsDrillPager = usePagedRows(pack.debtors, drilldown === "DEBTORS" ? "DEBTORS" : "idle")
-  const creditorsDrillPager = usePagedRows(pack.creditors, drilldown === "CREDITORS" ? "CREDITORS" : "idle")
+  const creditorsDrillPager = usePagedRows(owedHouses, drilldown === "CREDITORS" ? "CREDITORS" : "idle")
   const swapsPager = usePagedRows(swaps, drilldown === "SWAPS" ? "SWAPS" : "idle")
   const returnsPager = usePagedRows(returns, drilldown === "RETURNS" ? "RETURNS" : "idle")
 
@@ -492,7 +495,7 @@ export function ReportsClientView({
           <StatCard
             label="Suppliers payment (Payables)"
             value={formatCurrency(supplierOwed)}
-            hint={`${pack.creditors.length} vendor bill${pack.creditors.length === 1 ? "" : "s"} pending settlement`}
+            hint={`${owedHouses.length} supplier house${owedHouses.length === 1 ? "" : "s"} still owed`}
             onClick={() => setDrilldown("CREDITORS")}
           />
         </StatGrid>
@@ -632,7 +635,7 @@ export function ReportsClientView({
                 </div>
               </>
             }
-            columns={[{ label: "Bill" }, { label: "Shop" }, { label: "Still owed", align: "right" }]}
+            columns={[{ label: "Supplier" }, { label: "Still owed", align: "right" }]}
             footer={
               <TablePager
                 page={creditorsPager.page}
@@ -643,26 +646,24 @@ export function ReportsClientView({
                 end={creditorsPager.end}
                 onPageChange={creditorsPager.setPage}
                 onPageSizeChange={creditorsPager.setPageSize}
-                noun="bills"
+                noun="houses"
               />
             }
           >
-            {creditorsPager.pageRows.map((row) => (
-              <tr key={row.id}>
-                <td>
-                  <Link href={`/purchases/${row.id}`} className="font-medium text-primary hover:underline">
-                    {row.invoice}
-                  </Link>
-                  <p className="text-xs text-muted-foreground">{row.supplier}</p>
-                </td>
-                <td>
-                  <ShopTag>{row.shop}</ShopTag>
-                </td>
-                <td className="text-right num font-semibold text-danger">{formatCurrency(row.owed)}</td>
-              </tr>
-            ))}
+            {creditorsPager.pageRows.map((house) => {
+              const expanded = openHouse === house.key
+              return (
+                <OwedHouseRows
+                  key={house.key}
+                  house={house}
+                  expanded={expanded}
+                  colSpan={2}
+                  onToggle={() => setOpenHouse(expanded ? null : house.key)}
+                />
+              )
+            })}
             {pack.creditors.length === 0 ? (
-              <TableEmpty colSpan={3}>We have paid every supplier bill.</TableEmpty>
+              <TableEmpty colSpan={2}>We have paid every supplier bill.</TableEmpty>
             ) : null}
           </TableShell>
 
@@ -773,7 +774,7 @@ export function ReportsClientView({
           ) : drilldown === "CREDITORS" ? (
             <>
               <span>
-                {pack.creditors.length} unpaid supplier invoices ·{" "}
+                {owedHouses.length} supplier house{owedHouses.length === 1 ? "" : "s"} still owed ·{" "}
                 <Link href="/suppliers" className="text-primary hover:underline">
                   Supplier accounts
                 </Link>
@@ -1140,28 +1141,24 @@ export function ReportsClientView({
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Bill / Invoice</th>
                   <th>Supplier</th>
-                  <th>Shop</th>
-                  <th className="text-right">Amount Owed</th>
+                  <th className="text-right">Still owed</th>
                 </tr>
               </thead>
               <tbody>
-                {creditorsDrillPager.pageRows.map((row) => (
-                  <tr key={row.id}>
-                    <td>
-                      <Link href={`/purchases/${row.id}`} className="font-medium text-primary hover:underline">
-                        {row.invoice}
-                      </Link>
-                    </td>
-                    <td>{row.supplier}</td>
-                    <td>
-                      <ShopTag>{row.shop}</ShopTag>
-                    </td>
-                    <td className="text-right num font-semibold text-warning">{formatCurrency(row.owed)}</td>
-                  </tr>
-                ))}
-                {pack.creditors.length === 0 ? <TableEmpty colSpan={4}>No unpaid supplier bills.</TableEmpty> : null}
+                {creditorsDrillPager.pageRows.map((house) => {
+                  const expanded = openHouse === house.key
+                  return (
+                    <OwedHouseRows
+                      key={house.key}
+                      house={house}
+                      expanded={expanded}
+                      colSpan={2}
+                      onToggle={() => setOpenHouse(expanded ? null : house.key)}
+                    />
+                  )
+                })}
+                {pack.creditors.length === 0 ? <TableEmpty colSpan={2}>No unpaid supplier bills.</TableEmpty> : null}
               </tbody>
             </table>
             <TablePager
@@ -1173,7 +1170,7 @@ export function ReportsClientView({
               end={creditorsDrillPager.end}
               onPageChange={creditorsDrillPager.setPage}
               onPageSizeChange={creditorsDrillPager.setPageSize}
-              noun="bills"
+              noun="houses"
             />
           </div>
         ) : null}
@@ -1287,5 +1284,82 @@ export function ReportsClientView({
 
       <ReportsStatement data={pack} />
     </div>
+  )
+}
+
+function OwedHouseRows({
+  house,
+  expanded,
+  colSpan,
+  onToggle,
+}: {
+  house: OwedHouse
+  expanded: boolean
+  colSpan: number
+  onToggle: () => void
+}) {
+  return (
+    <>
+      <tr
+        className="cursor-pointer"
+        onClick={onToggle}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault()
+            onToggle()
+          }
+        }}
+        tabIndex={0}
+        aria-expanded={expanded}
+      >
+        <td>
+          <div className="flex items-start gap-2">
+            <ChevronDown
+              className={`mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-0" : "-rotate-90"}`}
+              aria-hidden
+            />
+            <div>
+              <p className="font-medium">{house.name}</p>
+              <p className="text-xs text-muted-foreground">
+                {house.bills.length} bill{house.bills.length === 1 ? "" : "s"}. Click to open.
+              </p>
+            </div>
+          </div>
+        </td>
+        <td className="text-right num font-semibold text-danger">{formatCurrency(house.owed)}</td>
+      </tr>
+      {expanded ? (
+        <tr className="hover:bg-transparent">
+          <td colSpan={colSpan} className="bg-muted/30 p-4">
+            <div className="overflow-x-auto rounded-lg border border-border bg-card" onClick={(event) => event.stopPropagation()}>
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Bill</th>
+                    <th className="px-3 py-2 font-medium">Shop</th>
+                    <th className="px-3 py-2 text-right font-medium">Still owed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {house.bills.map((bill) => (
+                    <tr key={bill.id} className="border-t border-border">
+                      <td className="px-3 py-2">
+                        <Link href={`/purchases/${bill.id}`} className="font-medium text-primary hover:underline">
+                          {bill.invoice}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-2">
+                        <ShopTag>{bill.shop}</ShopTag>
+                      </td>
+                      <td className="px-3 py-2 text-right num font-semibold text-danger">{formatCurrency(bill.owed)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </td>
+        </tr>
+      ) : null}
+    </>
   )
 }

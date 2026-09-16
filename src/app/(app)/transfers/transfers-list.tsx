@@ -106,7 +106,7 @@ export function TransfersList({ transfers }: { transfers: TransferRow[] }) {
                   <p className="mb-2 text-sm text-muted-foreground">
                     {transfer.toBranch.name} receiving staff must scan or enter verified serialized IMEIs upon physical arrival.
                   </p>
-                  <ActionForm action={receiveTransfer} submit="Confirm Receipt & Intake" className="space-y-2">
+                  <ActionForm action={receiveTransfer} submit="Confirm Receipt & Intake" enterDoesNotSubmit className="space-y-2">
                     <input type="hidden" name="id" value={transfer.id} />
                     {transfer.imeis.length ? (
                       <ScanList name="imeis" />

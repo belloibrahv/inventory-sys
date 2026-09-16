@@ -5,12 +5,15 @@ import { viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
 import { scopedBranchId } from "@/lib/rbac"
 import { money } from "@/lib/utils"
+import { healOpeningStockBills } from "@/lib/opening-stock-money"
+import { payablePurchaseWhere } from "@/lib/purchase-money"
 import { getUnclosedBusinessDays } from "@/app/actions/day-close"
 import { getParkedWatch } from "@/app/actions/parked"
 
 export async function getDashboardData() {
   const user = await requireUser()
   const branchId = await viewBranchFilter(user)
+  await healOpeningStockBills()
 
   const saleWhere = {
     status: "COMPLETED" as const,
@@ -78,9 +81,7 @@ export async function getDashboardData() {
       where: {
         ...(branchId ? { branchId } : {}),
         createdAt: { gte: monthStart },
-        source: { not: "UPLOAD_STOCK" },
-        paymentMethod: { not: "OPENING_STOCK" },
-        invoiceNumber: { not: { startsWith: "OPEN-" } },
+        ...payablePurchaseWhere,
       },
       _sum: { paidAmount: true },
     }),
@@ -121,10 +122,7 @@ export async function getDashboardData() {
     prisma.purchase.aggregate({
       where: {
         ...(branchId ? { branchId } : {}),
-        status: { not: "CANCELLED" },
-        source: { not: "UPLOAD_STOCK" },
-        paymentMethod: { not: "OPENING_STOCK" },
-        invoiceNumber: { not: { startsWith: "OPEN-" } },
+        ...payablePurchaseWhere,
       },
       _sum: { totalAmount: true, paidAmount: true },
     }),
@@ -185,9 +183,7 @@ export async function getDashboardData() {
         where: {
           ...(branchId ? { branchId } : {}),
           createdAt: { gte: lastMonthStart, lte: lastMonthEnd },
-          source: { not: "UPLOAD_STOCK" },
-          paymentMethod: { not: "OPENING_STOCK" },
-          invoiceNumber: { not: { startsWith: "OPEN-" } },
+          ...payablePurchaseWhere,
         },
         _sum: { paidAmount: true },
       })
@@ -225,9 +221,7 @@ export async function getDashboardData() {
           where: {
             ...(branchId ? { branchId } : {}),
             createdAt: { gte: month.start, lt: month.end },
-            source: { not: "UPLOAD_STOCK" },
-            paymentMethod: { not: "OPENING_STOCK" },
-            invoiceNumber: { not: { startsWith: "OPEN-" } },
+            ...payablePurchaseWhere,
           },
           _sum: { totalAmount: true },
         }),

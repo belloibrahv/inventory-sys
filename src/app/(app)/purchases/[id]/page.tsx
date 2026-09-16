@@ -15,6 +15,7 @@ import { Select } from "@/components/ui/select"
 import { ScanList } from "@/components/scan-field"
 import { statusLabel } from "@/lib/status"
 import { formatCurrency, formatDate, formatDateTime, money } from "@/lib/utils"
+import { isOpeningStockPurchase } from "@/lib/purchase-money"
 
 export default async function PurchaseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -24,12 +25,10 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
     where: { purchaseId: purchase.id },
     select: { status: true, branchId: true },
   })
-  const isOpening = Boolean(
-    opening ||
-    purchase.source === "UPLOAD_STOCK" ||
-    purchase.paymentMethod === "OPENING_STOCK" ||
-    purchase.invoiceNumber.startsWith("OPEN-")
-  )
+  const isOpening = isOpeningStockPurchase({
+    invoiceNumber: purchase.invoiceNumber,
+    openingStock: opening,
+  })
   const item = purchase.items[0]
   const remaining = item ? item.quantity - item.receivedQty : 0
   const due = isOpening ? 0 : money(purchase.totalAmount) - money(purchase.paidAmount)
@@ -200,7 +199,7 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
             <p className="mb-4 text-sm text-muted-foreground">
               Scan the IMEIs on the waybill. They stay as Coming until someone confirms they are in the shop. Stock does not rise yet.
             </p>
-            <ActionForm action={bookPurchaseAsComing} submit="Book as goods on the way" className="space-y-3">
+            <ActionForm action={bookPurchaseAsComing} submit="Book as goods on the way" enterDoesNotSubmit className="space-y-3">
               <input type="hidden" name="id" value={purchase.id} />
               <ScanList name="imeis" required={item?.product.tracking !== "NONE"} />
             </ActionForm>
@@ -210,7 +209,7 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
             <p className="mb-4 text-sm text-muted-foreground">
               Use this only if the boxes are on the counter now. Receiving stock does not pay the supplier.
             </p>
-            <ActionForm action={receivePurchaseImeis} submit={`Add ${remaining} unit(s) to shop`} className="space-y-3">
+            <ActionForm action={receivePurchaseImeis} submit={`Add ${remaining} unit(s) to shop`} enterDoesNotSubmit className="space-y-3">
               <input type="hidden" name="id" value={purchase.id} />
               <label className="block text-sm">
                 <span className="mb-1 block text-muted-foreground">Unit cost on this carton (₦)</span>

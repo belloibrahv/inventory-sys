@@ -116,7 +116,7 @@ export default async function ReportsPage({
     <div className="space-y-6">
       <PageHeader
         title="Reports"
-        description={`Sales, payments received, stock value, and who still owes for ${label}. Prepared ${formatLagosStamp()}.`}
+        description={`Sales, payments received, stock value, and who still owes for ${label}. Click a supplier house to see the bills inside. Prepared ${formatLagosStamp()}.`}
       />
       <ReportsClientView
         pack={pack}

@@ -8,10 +8,11 @@ import { ScanField } from "@/components/scan-field"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { PHONE_LOOK_OPTIONS } from "@/lib/phone-look"
+import { listedSupplierClash } from "@/lib/party-key"
 
 type Product = { id: string; name: string }
 type Branch = { id: string; name: string }
-type Supplier = { id: string; name: string }
+type Supplier = { id: string; name: string; phone?: string | null }
 
 export function ImeiIntakeForm({
   products,
@@ -28,7 +29,22 @@ export function ImeiIntakeForm({
   const addingNewSupplier = supplierChoice === "__new__"
 
   return (
-    <ActionForm action={intakeImei} submit="Add phone to shop" className="space-y-3">
+    <ActionForm
+      action={async (formData) => {
+        if (addingNewSupplier) {
+          const clash = listedSupplierClash(
+            suppliers,
+            String(formData.get("newSupplierName") || ""),
+            String(formData.get("newSupplierPhone") || ""),
+          )
+          if (clash) return { error: clash }
+        }
+        return intakeImei(formData)
+      }}
+      submit="Add phone to shop"
+      enterDoesNotSubmit
+      className="space-y-3"
+    >
       <ScanField onScan={setImei1} placeholder="Scan IMEI 1, then Enter" />
       <input type="hidden" name="imei1" value={imei1} />
       {imei1 ? <p className="font-mono text-xs">{imei1}</p> : null}

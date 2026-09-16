@@ -9,6 +9,8 @@ import { scopedBranchId } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { recentWatDays, watBounds } from "@/lib/lagos-day"
 import { IMEI_LIFE } from "@/lib/imei-life"
+import { displayPartyName } from "@/lib/party-key"
+import { findDuplicateSupplier } from "@/lib/supplier-identity"
 
 function whenBounds(when?: string) {
   if (!when || when === "all") return null
@@ -116,9 +118,11 @@ export async function intakeImei(formData: FormData) {
   const newSupplierPhone = String(formData.get("newSupplierPhone") || "").trim()
   if (newSupplierName) {
     if (!newSupplierPhone) return { error: "Type the new supplier phone number." }
+    const clash = await findDuplicateSupplier({ name: newSupplierName, phone: newSupplierPhone })
+    if (clash) return clash
     const created = await prisma.supplier.create({
       data: {
-        name: newSupplierName,
+        name: displayPartyName(newSupplierName),
         phone: newSupplierPhone,
         city: String(formData.get("newSupplierCity") || "").trim() || null,
       },

@@ -9,6 +9,7 @@ import { letterheadFromCompany } from "@/lib/letterhead"
 import { drawPdfLetterhead, drawPdfPaperFooter, loadLogoDataUrl } from "@/lib/pdf-letterhead"
 import type { ReportsPack } from "@/lib/reports-pack"
 import { reportsKpis } from "@/lib/reports-pack"
+import { groupOwedHouses } from "@/lib/purchase-money"
 
 const NAVY: [number, number, number] = [0, 27, 206]
 const INK: [number, number, number] = [15, 23, 42]
@@ -152,8 +153,12 @@ export function ReportsPdfButton({ data }: { data: ReportsPack }) {
       if (data.creditors.length === 0) {
         row("Nothing is owed to suppliers", "")
       } else {
-        data.creditors.forEach((item, index) => {
-          row(`${item.invoice}  ·  ${item.supplier}  ·  ${item.shop}`, formatPdfMoney(item.owed), index % 2 ? PAPER : undefined)
+        const houses = groupOwedHouses(data.creditors)
+        houses.forEach((house, houseIndex) => {
+          row(house.name, formatPdfMoney(house.owed), houseIndex % 2 ? PAPER : undefined)
+          house.bills.forEach((item) => {
+            row(`  ${item.invoice}  ·  ${item.shop}`, formatPdfMoney(item.owed), houseIndex % 2 ? PAPER : undefined)
+          })
         })
       }
 

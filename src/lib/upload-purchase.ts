@@ -70,5 +70,5 @@ export async function attachPurchaseLine(
 }
 
 export function isMarkedPaidOnUpload(paymentMethod: string | null | undefined) {
-  return paymentMethod === MARKED_PAID_ON_UPLOAD
+  return paymentMethod === MARKED_PAID_ON_UPLOAD || paymentMethod === "PAID_ON_UPLOAD"
 }

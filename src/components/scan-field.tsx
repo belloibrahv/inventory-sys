@@ -9,14 +9,29 @@ function cleanCode(raw: string) {
   return raw.replace(/[\s-]/g, "").trim()
 }
 
+/**
+ * USB and Bluetooth scanners type the number and then press Enter.
+ * Enter in a box must not save the form. Staff still have other fields to fill.
+ */
+export function preventEnterFromSubmitting(event: React.KeyboardEvent) {
+  if (event.key !== "Enter") return
+  const target = event.target
+  if (!(target instanceof HTMLElement)) return
+  if (target.tagName === "TEXTAREA") return
+  if (target instanceof HTMLButtonElement && target.type === "submit") return
+  event.preventDefault()
+}
+
 export function ScanField({
   onScan,
   kind = "IMEI",
   placeholder,
+  hint,
 }: {
   onScan: (value: string) => void
   kind?: "IMEI" | "SERIAL"
   placeholder?: string
+  hint?: string
 }) {
   const [value, setValue] = useState("")
   const [scanning, setScanning] = useState(false)
@@ -98,6 +113,7 @@ export function ScanField({
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault()
+              event.stopPropagation()
               commit(value)
             }
           }}
@@ -114,7 +130,8 @@ export function ScanField({
         <video ref={videoRef} className="h-48 w-full rounded-xl bg-black object-cover" autoPlay muted playsInline />
       ) : (
         <p className="text-xs text-muted-foreground">
-          A USB or Bluetooth scanner works like a keyboard. Point it at the box, then it types the number and presses Enter.
+          {hint ??
+            "A USB or Bluetooth scanner types the number and presses Enter. That only fills this box. It does not save. Fill the rest of the phone, then press the save button."}
         </p>
       )}
     </div>

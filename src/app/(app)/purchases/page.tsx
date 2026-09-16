@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { formatCurrency, money } from "@/lib/utils"
+import { isOpeningStockPurchase } from "@/lib/purchase-money"
 import { PurchasesList } from "./purchases-list"
 
 export default async function PurchasesPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
@@ -25,12 +26,8 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
   ])
 
   const houses = suppliers.filter((row) => row.kind !== "NEIGHBOR" && row.name !== "Opening stock")
-  const regularPurchases = purchases.filter(
-    (p) => p.source !== "UPLOAD_STOCK" && !p.invoiceNumber.startsWith("OPEN-")
-  )
-  const openingPurchases = purchases.filter(
-    (p) => p.source === "UPLOAD_STOCK" || p.invoiceNumber.startsWith("OPEN-")
-  )
+  const regularPurchases = purchases.filter((p) => !isOpeningStockPurchase(p))
+  const openingPurchases = purchases.filter((p) => isOpeningStockPurchase(p))
 
   const expected = regularPurchases.reduce((sum, row) => sum + row.trace.expected, 0)
   const recorded = regularPurchases.reduce((sum, row) => sum + row.trace.recorded, 0)
@@ -147,7 +144,7 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
             ) : (
               <p className="mb-4 text-sm text-muted-foreground">No faulty phone and no returned phone is waiting to go back.</p>
             )}
-            <ActionForm action={sendUnitsToSupplier} submit="Send these IMEIs back to the supplier" className="space-y-3">
+            <ActionForm action={sendUnitsToSupplier} submit="Send these IMEIs back to the supplier" enterDoesNotSubmit className="space-y-3">
               <Select name="supplierId" defaultValue="">
                 <option value="">Use the supplier already saved on each IMEI</option>
                 {houses.map((row) => (

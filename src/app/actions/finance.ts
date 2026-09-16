@@ -12,6 +12,8 @@ import { isLetterheadKey } from "@/lib/letterhead"
 import { generateDocNumber, money } from "@/lib/utils"
 import { saleTenders, sumSaleTenders } from "@/lib/sale-money"
 import { healOpeningStockBills } from "@/lib/opening-stock-money"
+import { payablePurchaseWhere } from "@/lib/purchase-money"
+import { displayPartyName, partyNameKey } from "@/lib/party-key"
 import { shopPeriodWindow, shopPreviousWindow, watDayKey, type ShopRange } from "@/lib/lagos-day"
 
 export async function getFinance() {
@@ -50,10 +52,7 @@ export async function getFinance() {
     prisma.purchase.findMany({
       where: {
         ...where,
-        status: { not: "CANCELLED" },
-        source: { not: "UPLOAD_STOCK" },
-        paymentMethod: { not: "OPENING_STOCK" },
-        invoiceNumber: { not: { startsWith: "OPEN-" } },
+        ...payablePurchaseWhere,
       },
       include: { supplier: true, branch: true },
       orderBy: { createdAt: "desc" },
@@ -162,8 +161,9 @@ export async function getFinance() {
     purchases.reduce<Record<string, { id: string; name: string; owed: number }>>((acc, row) => {
       const due = money(row.totalAmount) - money(row.paidAmount)
       if (due <= 0) return acc
-      acc[row.supplierId] = acc[row.supplierId] ?? { id: row.supplierId, name: row.supplier.name, owed: 0 }
-      acc[row.supplierId].owed += due
+      const key = partyNameKey(row.supplier.name) || row.supplierId
+      acc[key] = acc[key] ?? { id: row.supplierId, name: displayPartyName(row.supplier.name), owed: 0 }
+      acc[key].owed += due
       return acc
     }, {})
   ).sort((a, b) => b.owed - a.owed)
@@ -810,6 +810,7 @@ export async function getReportData(
   const period = shopPeriodWindow(day, span)
   const prior = shopPreviousWindow(period.from, span)
   const shopWhere = branchId ? { branchId } : {}
+  await healOpeningStockBills()
   const [sales, expenses, swaps, returns, inventory, debtors, purchases, priorSales, priorExpenses] = await Promise.all([
     prisma.sale.findMany({
       where: { status: "COMPLETED", ...shopWhere, saleDate: { gte: period.start, lt: period.end } },
@@ -841,10 +842,7 @@ export async function getReportData(
     prisma.purchase.findMany({
       where: {
         ...shopWhere,
-        status: { not: "CANCELLED" },
-        source: { not: "UPLOAD_STOCK" },
-        paymentMethod: { not: "OPENING_STOCK" },
-        invoiceNumber: { not: { startsWith: "OPEN-" } },
+        ...payablePurchaseWhere,
       },
       include: { supplier: true, branch: true },
     }),

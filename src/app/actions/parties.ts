@@ -5,6 +5,10 @@ import { prisma } from "@/lib/prisma"
 import { scopeRecord, viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
 import { isShopOwner, scopedBranchId } from "@/lib/rbac"
+import { displayPartyName } from "@/lib/party-key"
+import { findDuplicateSupplier } from "@/lib/supplier-identity"
+import { healOpeningStockBills } from "@/lib/opening-stock-money"
+import { payablePurchaseWhere } from "@/lib/purchase-money"
 import type { SupplierKind } from "@prisma/client"
 
 export async function getCustomers(search?: string) {
@@ -72,13 +76,26 @@ export async function createCustomer(formData: FormData) {
 
 export async function getSuppliers() {
   await requireUser()
+  await healOpeningStockBills()
   return prisma.supplier.findMany({
     where: {
       name: { not: "Opening stock" },
     },
     include: {
       _count: { select: { purchases: true, imeiRecords: true } },
-      purchases: { select: { totalAmount: true, paidAmount: true } },
+      purchases: {
+        where: payablePurchaseWhere,
+        select: {
+          id: true,
+          invoiceNumber: true,
+          totalAmount: true,
+          paidAmount: true,
+          status: true,
+          createdAt: true,
+          branch: { select: { name: true, code: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      },
     },
     orderBy: { name: "asc" },
   })
@@ -86,10 +103,12 @@ export async function getSuppliers() {
 
 export async function getSupplier(id: string) {
   await requireUser()
+  await healOpeningStockBills()
   return prisma.supplier.findUnique({
     where: { id },
     include: {
       purchases: {
+        where: payablePurchaseWhere,
         include: { branch: true, items: { include: { product: true } } },
         orderBy: { createdAt: "desc" },
       },
@@ -104,9 +123,11 @@ export async function getSupplier(id: string) {
 
 export async function createSupplier(formData: FormData) {
   await requireUser()
-  const name = String(formData.get("name") ?? "").trim()
+  const name = displayPartyName(String(formData.get("name") ?? ""))
   const phone = String(formData.get("phone") ?? "").trim()
   if (!name || !phone) return { error: "Name and phone are required." }
+  const clash = await findDuplicateSupplier({ name, phone })
+  if (clash) return clash
   await prisma.supplier.create({
     data: {
       name,
