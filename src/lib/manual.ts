@@ -97,6 +97,7 @@ const PAGES: Array<
     doThis: [
       "Upload stock is three screens. Pick the one you need from the tab strip at the top, or from the Upload stock fold in the menu.",
       "SUPPLIER BILL, for a new carton: pick the shop, the supplier (or add a new one), and whether it is paid.",
+      "Under What is on this bill, type the product name in the search bar and pick it. Only the name fills the item column. Then pick condition (Brand new, Uk, Open box, or Standard) and storage (32GB, 64GB, 128GB, 256GB, 1TB, or 2TB), the same way you fill cost and how many.",
       "Add each IMEI, serial, or piece count under that same bill. The form clears for the next unit. Close the bill when the carton is finished.",
       "OPENING STOCK SHEET, for a full shop count: fill the opening stock Excel one shop at a time, pick or add the supplier, and upload. There is no paid or unpaid on that sheet.",
       "PHONES: one row per phone with the IMEI. LAPTOPS: one row per laptop with the serial. ACCESSORIES and SCREEN: how many pieces.",
@@ -113,7 +114,7 @@ const PAGES: Array<
       "Do not invent an IMEI because the box is missing.",
       "This does not sell anything. Marking paid on upload does not write a cash or bank entry. Accounts still own the money trail when they pay later.",
     ],
-    lookup: ["upload", "excel", "opening stock", "sheets", "csv", "supplier bill", "phones", "accessories", "screen", "laptops", "imei", "bulk", "import", "manual", "one at a time", "serial", "add one", "supplier", "paid", "invoice", "PO", "submission value"],
+    lookup: ["upload", "excel", "opening stock", "sheets", "csv", "supplier bill", "phones", "accessories", "screen", "laptops", "imei", "bulk", "import", "manual", "one at a time", "serial", "add one", "supplier", "paid", "invoice", "PO", "submission value", "item name", "search", "condition", "storage"],
   },
   {
     id: "products",

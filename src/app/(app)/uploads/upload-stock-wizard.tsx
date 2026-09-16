@@ -1,13 +1,15 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { PlusCircle, Trash2, CheckCircle2, Loader2, PackagePlus } from "lucide-react"
 import { toast } from "sonner"
 import { batchUploadStock, type BatchUploadItem, type BatchUploadPayload, type UploadResult } from "@/app/actions/uploads"
+import { ItemNameSearch } from "@/components/item-name-search"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
+import { BILL_CONDITION_OPTIONS, STORAGE_OPTIONS, mapBillCondition, normalizeStorage } from "@/lib/item-specs"
 import { formatCurrency, generateDocNumber } from "@/lib/utils"
 
 type Shop = { id: string; name: string; code: string }
@@ -20,12 +22,38 @@ type Product = {
   sku: string
   tracking: "IMEI" | "SERIAL" | "NONE"
   costPrice: number
+  minimumPrice: number
+  sellingPrice: number
+  condition: string
+  storage: string | null
+  brandId: string
+  categoryId: string
   brand: { name: string }
+}
+
+function blankLine(defaults?: { brandId?: string; categoryId?: string }): BatchUploadItem {
+  return {
+    productMode: "existing",
+    productId: "",
+    productName: "",
+    brandId: defaults?.brandId || "",
+    categoryId: defaults?.categoryId || "",
+    condition: "",
+    storage: "",
+    costPrice: 0,
+    minimumPrice: 0,
+    sellingPrice: 0,
+    quantity: 1,
+    tracking: "IMEI",
+    identities: [""],
+  }
 }
 
 export function UploadStockWizard({
   shops,
   suppliers,
+  brands,
+  categories,
   products,
   defaultInvoiceNumber,
   defaultUploadDate,
@@ -49,6 +77,22 @@ export function UploadStockWizard({
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
+  const defaultBrandId = brands[0]?.id || ""
+  const defaultCategoryId =
+    categories.find((row) => /phone/i.test(row.name))?.id || categories[0]?.id || ""
+
+  const catalogNames = useMemo(() => {
+    const seen = new Set<string>()
+    const names: string[] = []
+    for (const row of products) {
+      const name = row.name.trim()
+      const key = name.toLowerCase()
+      if (!name || seen.has(key)) continue
+      seen.add(key)
+      names.push(name)
+    }
+    return names
+  }, [products])
 
   // Header state
   const [invoiceNumber, setInvoiceNumber] = useState(defaultInvoiceNumber)
@@ -64,14 +108,7 @@ export function UploadStockWizard({
 
   // Item Lines state
   const [items, setItems] = useState<BatchUploadItem[]>([
-    {
-      productMode: "existing",
-      productId: products[0]?.id || "",
-      costPrice: products[0]?.costPrice || 0,
-      quantity: 1,
-      tracking: products[0]?.tracking || "IMEI",
-      identities: [""],
-    },
+    blankLine({ brandId: defaultBrandId, categoryId: defaultCategoryId }),
   ])
 
   // Payment state
@@ -82,20 +119,87 @@ export function UploadStockWizard({
   const balanceOwed = Math.max(0, totalInvoiceValue - amountPaid)
   const isFullyPaid = totalInvoiceValue > 0 && amountPaid >= totalInvoiceValue
 
-  function handleProductSelect(index: number, prodId: string) {
-    const prod = products.find((p) => p.id === prodId)
-    if (!prod) return
+  function findNamedProducts(name: string) {
+    const key = name.trim().toLowerCase()
+    return products.filter((row) => row.name.trim().toLowerCase() === key)
+  }
+
+  function findVariant(name: string, condition: string, storage: string) {
+    const key = name.trim().toLowerCase()
+    const size = normalizeStorage(storage)
+    const look = mapBillCondition(condition)
+    return products.find(
+      (row) =>
+        row.name.trim().toLowerCase() === key &&
+        (!look || row.condition === look) &&
+        normalizeStorage(row.storage || "") === size
+    )
+  }
+
+  function patchLine(index: number, patch: Partial<BatchUploadItem>) {
     setItems((prev) => {
       const copy = [...prev]
-      const currentQty = copy[index].quantity || 1
-      copy[index] = {
-        ...copy[index],
-        productId: prod.id,
-        costPrice: prod.costPrice,
-        tracking: prod.tracking,
-        identities: prod.tracking === "NONE" ? [] : Array.from({ length: currentQty }, (_, i) => copy[index].identities?.[i] || ""),
-      }
+      const current = { ...copy[index], ...patch }
+      const qty = current.quantity || 1
+      current.identities =
+        current.tracking === "NONE" ? [] : Array.from({ length: qty }, (_, i) => current.identities?.[i] || "")
+      copy[index] = current
       return copy
+    })
+  }
+
+  function applyName(index: number, name: string) {
+    if (!name.trim()) {
+      patchLine(index, {
+        productName: "",
+        productId: "",
+        productMode: "existing",
+      })
+      return
+    }
+    const named = findNamedProducts(name)
+    const sample = named[0]
+    const current = items[index]
+    const variant = findVariant(name, current.condition || "", current.storage || "")
+    patchLine(index, {
+      productName: name,
+      productId: variant?.id || "",
+      productMode: variant ? "existing" : "new",
+      brandId: sample?.brandId || current.brandId || defaultBrandId,
+      categoryId: sample?.categoryId || current.categoryId || defaultCategoryId,
+      tracking: sample?.tracking || current.tracking || "IMEI",
+      costPrice: variant?.costPrice ?? sample?.costPrice ?? current.costPrice,
+      minimumPrice: variant?.minimumPrice ?? sample?.minimumPrice ?? current.minimumPrice,
+      sellingPrice: variant?.sellingPrice ?? sample?.sellingPrice ?? current.sellingPrice,
+    })
+  }
+
+  function applyCondition(index: number, condition: string) {
+    const current = items[index]
+    const variant = findVariant(current.productName || "", condition, current.storage || "")
+    patchLine(index, {
+      condition,
+      productId: variant?.id || "",
+      productMode: variant ? "existing" : "new",
+      costPrice: variant?.costPrice ?? current.costPrice,
+      minimumPrice: variant?.minimumPrice ?? current.minimumPrice,
+      sellingPrice: variant?.sellingPrice ?? current.sellingPrice,
+      tracking: variant?.tracking || current.tracking,
+    })
+  }
+
+  function applyStorage(index: number, storage: string) {
+    const current = items[index]
+    const size = normalizeStorage(storage)
+    const variant = findVariant(current.productName || "", current.condition || "", size)
+    patchLine(index, {
+      storage: size,
+      productId: variant?.id || "",
+      productMode: variant ? "existing" : "new",
+      costPrice: variant?.costPrice ?? current.costPrice,
+      minimumPrice: variant?.minimumPrice ?? current.minimumPrice,
+      sellingPrice: variant?.sellingPrice ?? current.sellingPrice,
+      tracking: variant?.tracking || current.tracking,
     })
   }
 
@@ -131,17 +235,7 @@ export function UploadStockWizard({
   }
 
   function addItemLine() {
-    setItems((prev) => [
-      ...prev,
-      {
-        productMode: "existing",
-        productId: products[0]?.id || "",
-        costPrice: products[0]?.costPrice || 0,
-        quantity: 1,
-        tracking: products[0]?.tracking || "IMEI",
-        identities: products[0]?.tracking === "NONE" ? [] : [""],
-      },
-    ])
+    setItems((prev) => [...prev, blankLine({ brandId: defaultBrandId, categoryId: defaultCategoryId })])
   }
 
   function removeItemLine(index: number) {
@@ -167,6 +261,22 @@ export function UploadStockWizard({
     // Validate IMEI rows
     for (let i = 0; i < items.length; i++) {
       const item = items[i]
+      if (!item.productName?.trim()) {
+        toast.error(`Item line #${i + 1}: type the name of the item, then pick it.`)
+        return
+      }
+      if (!item.condition) {
+        toast.error(`Item line #${i + 1}: pick if it is Brand new, Uk, Open box, or Standard.`)
+        return
+      }
+      if (item.tracking !== "NONE" && !item.storage) {
+        toast.error(`Item line #${i + 1}: pick the storage size.`)
+        return
+      }
+      if (!item.brandId) {
+        toast.error(`Item line #${i + 1}: pick the brand.`)
+        return
+      }
       if (item.tracking !== "NONE") {
         const ids = (item.identities || []).filter(Boolean)
         if (ids.length < item.quantity) {
@@ -214,23 +324,14 @@ export function UploadStockWizard({
     setInvoiceNumber(generateDocNumber("PO"))
     setAmountPaid(0)
     setNotes("")
-    setItems([
-      {
-        productMode: "existing",
-        productId: products[0]?.id || "",
-        costPrice: products[0]?.costPrice || 0,
-        quantity: 1,
-        tracking: products[0]?.tracking || "IMEI",
-        identities: [""],
-      },
-    ])
+    setItems([blankLine({ brandId: defaultBrandId, categoryId: defaultCategoryId })])
     router.refresh()
   }
 
   const unitCount = items.reduce((sum, item) => sum + (item.quantity || 0), 0)
 
   return (
-    <form onSubmit={handleSubmit} className="surface-card overflow-hidden">
+    <form onSubmit={handleSubmit} className="surface-card overflow-visible">
       {/*
         The bill the client described: supplier at the top, the generated bill
         number and the date beside it, the item lines with cost, quantity and an
@@ -242,7 +343,7 @@ export function UploadStockWizard({
           <p className="eyebrow">Supplier bill</p>
           <h2 className="text-base font-semibold tracking-tight">Put a carton of goods on the system</h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Enter the supplier and the items. The IMEI boxes open to match the quantity you type.
+            Type the product name, pick it, then fill condition and storage yourself. The IMEI boxes open to match the quantity you type.
           </p>
         </div>
         <div className="rounded-lg border border-border bg-card px-4 py-2 text-right">
@@ -404,19 +505,73 @@ export function UploadStockWizard({
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-12">
-                  <label className="block text-sm sm:col-span-6">
-                    <span className="eyebrow mb-1 block">Item</span>
-                    <Select
-                      value={item.productId}
-                      onChange={(e) => handleProductSelect(itemIdx, e.target.value)}
+                  <label className="block text-sm sm:col-span-8">
+                    <span className="eyebrow mb-1 block">Item name</span>
+                    <ItemNameSearch
+                      names={catalogNames}
+                      value={item.productName || ""}
+                      onPick={(name) => applyName(itemIdx, name)}
                       disabled={busy}
-                      emptyLabel="No item is on the list yet. Load the item list first."
+                    />
+                    <span className="mt-1 block text-xs text-muted-foreground">
+                      Only the product name. Condition, storage, cost, and how many sit beside it.
+                    </span>
+                  </label>
+
+                  <label className="block text-sm sm:col-span-4">
+                    <span className="eyebrow mb-1 block">Brand</span>
+                    <Select
+                      value={item.brandId || ""}
+                      onChange={(e) => patchLine(itemIdx, { brandId: e.target.value, productMode: "new", productId: "" })}
+                      disabled={busy}
+                      emptyLabel="Add brands on Phones and items first."
+                      required
                     >
-                      {products.map((product) => (
-                        <option key={product.id} value={product.id}>
-                          {product.name} · {product.brand.name} · cost {formatCurrency(product.costPrice)}
+                      {brands.map((brand) => (
+                        <option key={brand.id} value={brand.id}>
+                          {brand.name}
                         </option>
                       ))}
+                    </Select>
+                  </label>
+
+                  <label className="block text-sm sm:col-span-3">
+                    <span className="eyebrow mb-1 block">Condition</span>
+                    <Select
+                      value={item.condition || ""}
+                      onChange={(e) => applyCondition(itemIdx, e.target.value)}
+                      disabled={busy}
+                      required
+                    >
+                      <option value="" disabled>
+                        Pick Brand new, Uk, Open box, or Standard
+                      </option>
+                      {BILL_CONDITION_OPTIONS.map((row) => (
+                        <option key={row.value} value={row.value}>
+                          {row.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </label>
+
+                  <label className="block text-sm sm:col-span-3">
+                    <span className="eyebrow mb-1 block">Storage</span>
+                    <Select
+                      value={item.storage || ""}
+                      onChange={(e) => applyStorage(itemIdx, e.target.value)}
+                      disabled={busy}
+                      required={item.tracking !== "NONE"}
+                    >
+                      <option value="">{item.tracking === "NONE" ? "No storage for this item" : "Pick storage"}</option>
+                      {STORAGE_OPTIONS.map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                      {item.storage &&
+                      !(STORAGE_OPTIONS as readonly string[]).includes(item.storage) ? (
+                        <option value={item.storage}>{item.storage}</option>
+                      ) : null}
                     </Select>
                   </label>
 
@@ -427,14 +582,7 @@ export function UploadStockWizard({
                       min={0}
                       step="0.01"
                       value={item.costPrice || ""}
-                      onChange={(e) => {
-                        const val = Number(e.target.value) || 0
-                        setItems((prev) => {
-                          const copy = [...prev]
-                          copy[itemIdx] = { ...copy[itemIdx], costPrice: val }
-                          return copy
-                        })
-                      }}
+                      onChange={(e) => patchLine(itemIdx, { costPrice: Number(e.target.value) || 0 })}
                       required
                       disabled={busy}
                       className="num"
@@ -450,6 +598,19 @@ export function UploadStockWizard({
                       value={item.quantity}
                       onChange={(e) => handleQuantityChange(itemIdx, Number(e.target.value))}
                       required
+                      disabled={busy}
+                      className="num"
+                    />
+                  </label>
+
+                  <label className="block text-sm sm:col-span-3">
+                    <span className="eyebrow mb-1 block">Lowest selling price (₦)</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={item.minimumPrice || ""}
+                      onChange={(e) => patchLine(itemIdx, { minimumPrice: Number(e.target.value) || 0 })}
                       disabled={busy}
                       className="num"
                     />
@@ -577,7 +738,7 @@ export function UploadStockWizard({
         <Button type="submit" size="lg" disabled={busy || totalInvoiceValue <= 0}>
           {busy ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Uploading…
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Uploading this stock
             </>
           ) : (
             <>

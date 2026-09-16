@@ -15,6 +15,7 @@ import {
   isMarkedPaidOnUpload,
 } from "@/lib/upload-purchase"
 import { generateDocNumber, money } from "@/lib/utils"
+import { mapBillCondition, normalizeStorage } from "@/lib/item-specs"
 
 /**
  * Loading the shop system from a sheet or by hand.
@@ -53,6 +54,14 @@ export type UploadResult = {
 export type BatchUploadItem = {
   productMode: "existing" | "new"
   productId?: string
+  /** Model name only. Condition and storage are their own fields. */
+  productName?: string
+  brandId?: string
+  categoryId?: string
+  condition?: string
+  storage?: string
+  minimumPrice?: number
+  sellingPrice?: number
   newProduct?: {
     name: string
     brandId: string
@@ -663,6 +672,116 @@ function cleanIdentity(raw: string) {
   return raw.replace(/\s+/g, " ").trim()
 }
 
+function billLineName(item: BatchUploadItem) {
+  return cleanIdentity(item.productName || item.newProduct?.name || "")
+}
+
+function billLineCondition(item: BatchUploadItem) {
+  return mapBillCondition(item.condition || item.newProduct?.condition || "")
+}
+
+function billLineStorage(item: BatchUploadItem) {
+  return normalizeStorage(item.storage || item.newProduct?.storage || "") || null
+}
+
+async function resolveBillProduct(
+  item: BatchUploadItem,
+  activeShops: Array<{ id: string }>
+): Promise<{ productId: string; productName: string; createdProduct: boolean } | { error: string }> {
+  const name = billLineName(item)
+  const condition = billLineCondition(item)
+  const storage = billLineStorage(item)
+  const brandId = item.brandId || item.newProduct?.brandId || ""
+  const categoryId = item.categoryId || item.newProduct?.categoryId || ""
+  const tracking = item.tracking || item.newProduct?.tracking || "IMEI"
+  const costPrice = Number(item.costPrice || item.newProduct?.costPrice || 0)
+  const minimumPrice = Math.max(
+    Number(item.minimumPrice || item.newProduct?.minimumPrice || 0),
+    costPrice
+  )
+  const sellingPrice = Math.max(
+    Number(item.sellingPrice || item.newProduct?.sellingPrice || 0),
+    minimumPrice,
+    costPrice
+  )
+
+  if (name && condition) {
+    const existing =
+      (brandId
+        ? await prisma.product.findFirst({
+            where: { name, brandId, condition, tracking, storage },
+          })
+        : await prisma.product.findFirst({
+            where: { name, condition, tracking, storage },
+          })) ||
+      (item.productId
+        ? await prisma.product.findUnique({ where: { id: item.productId } })
+        : null)
+
+    if (existing && existing.name.toLowerCase() === name.toLowerCase() && existing.condition === condition) {
+      const sameStorage = (existing.storage || null) === storage
+      if (sameStorage) {
+        return { productId: existing.id, productName: existing.name, createdProduct: false }
+      }
+    }
+
+    if (!brandId || !categoryId) {
+      return { error: "Pick the item name, then pick the brand if this name is new." }
+    }
+
+    const [brand, category] = await Promise.all([
+      prisma.brand.findUnique({ where: { id: brandId } }),
+      prisma.category.findUnique({ where: { id: categoryId } }),
+    ])
+    if (!brand || !category) {
+      return { error: "Pick the brand and the kind of item." }
+    }
+
+    const sku = makeOpeningSku({
+      brand: brand.name,
+      name,
+      storage: storage || "",
+      condition,
+    })
+
+    const bySku = await prisma.product.findUnique({ where: { sku } })
+    if (bySku) {
+      return { productId: bySku.id, productName: bySku.name, createdProduct: false }
+    }
+
+    const created = await prisma.product.create({
+      data: {
+        sku,
+        name,
+        brandId,
+        categoryId,
+        tracking,
+        condition,
+        storage,
+        costPrice: costPrice.toFixed(2),
+        minimumPrice: minimumPrice.toFixed(2),
+        sellingPrice: sellingPrice.toFixed(2),
+        warrantyDays: 0,
+        description: "Added while loading stock",
+      },
+    })
+    if (activeShops.length) {
+      await prisma.inventory.createMany({
+        data: activeShops.map((shop) => ({ productId: created.id, branchId: shop.id, quantity: 0 })),
+      })
+    }
+    return { productId: created.id, productName: created.name, createdProduct: true }
+  }
+
+  if (item.productId) {
+    const prod = await prisma.product.findUnique({ where: { id: item.productId } })
+    if (!prod) return { error: "That item is not on the list." }
+    return { productId: prod.id, productName: prod.name, createdProduct: false }
+  }
+
+  return { error: "Type the name of the item, then pick condition and storage." }
+}
+
 function revalidateStockViews() {
   revalidatePath("/uploads")
   revalidatePath("/products")
@@ -703,7 +822,13 @@ export async function getUploadProgress() {
           name: true,
           sku: true,
           tracking: true,
+          condition: true,
+          storage: true,
           costPrice: true,
+          minimumPrice: true,
+          sellingPrice: true,
+          brandId: true,
+          categoryId: true,
           brand: { select: { name: true } },
         },
         orderBy: { name: "asc" },
@@ -759,6 +884,8 @@ export async function getUploadProgress() {
     products: products.map((row) => ({
       ...row,
       costPrice: money(row.costPrice),
+      minimumPrice: money(row.minimumPrice),
+      sellingPrice: money(row.sellingPrice),
     })),
     suppliers,
     openUploadBill,
@@ -883,79 +1010,21 @@ export async function batchUploadStock(payload: BatchUploadPayload): Promise<Upl
 
   const activeShops = await prisma.branch.findMany({ where: { isActive: true }, select: { id: true } })
 
-  for (const item of payload.items) {
-    let prodId = item.productId || ""
-    let prodName = ""
-    let isNewProd = false
-
-    if (item.productMode === "new" && item.newProduct) {
-      const np = item.newProduct
-      const name = cleanIdentity(np.name)
-      if (!name) return { error: "Type a name for this new item." }
-
-      const [brand, category] = await Promise.all([
-        prisma.brand.findUnique({ where: { id: np.brandId } }),
-        prisma.category.findUnique({ where: { id: np.categoryId } }),
-      ])
-      if (!brand || !category) return { error: "Pick the brand and the kind of item for this new item." }
-
-      const sku = makeOpeningSku({
-        brand: brand.name,
-        name,
-        storage: np.storage || "",
-        condition: np.condition,
-      })
-
-      const existingProd = await prisma.product.findFirst({
-        where: {
-          OR: [{ sku }, { name, brandId: np.brandId, condition: np.condition, tracking: np.tracking }],
-        },
-      })
-
-      if (existingProd) {
-        prodId = existingProd.id
-        prodName = existingProd.name
-      } else {
-        const created = await prisma.product.create({
-          data: {
-            sku,
-            name,
-            brandId: np.brandId,
-            categoryId: np.categoryId,
-            tracking: np.tracking,
-            condition: np.condition,
-            storage: np.storage || null,
-            costPrice: np.costPrice.toFixed(2),
-            minimumPrice: np.minimumPrice.toFixed(2),
-            sellingPrice: np.sellingPrice.toFixed(2),
-            warrantyDays: 0,
-            description: "Added while loading stock",
-          },
-        })
-        if (activeShops.length) {
-          await prisma.inventory.createMany({
-            data: activeShops.map((s) => ({ productId: created.id, branchId: s.id, quantity: 0 })),
-          })
-        }
-        prodId = created.id
-        prodName = created.name
-        isNewProd = true
-      }
-    } else {
-      if (!prodId) return { error: "Pick the item first." }
-      const prod = await prisma.product.findUnique({ where: { id: prodId } })
-      if (!prod) return { error: `Product ID ${prodId} not found.` }
-      prodName = prod.name
+  for (let i = 0; i < payload.items.length; i++) {
+    const item = payload.items[i]
+    const resolved = await resolveBillProduct(item, activeShops)
+    if ("error" in resolved) {
+      return { error: `Item line #${i + 1}: ${resolved.error}` }
     }
 
     resolvedItems.push({
-      productId: prodId,
-      productName: prodName,
+      productId: resolved.productId,
+      productName: resolved.productName,
       quantity: item.quantity,
       costPrice: item.costPrice,
       tracking: item.tracking,
       identities: (item.identities || []).map((id) => cleanIdentity(id)).filter(Boolean),
-      createdProduct: isNewProd,
+      createdProduct: resolved.createdProduct,
     })
   }
 

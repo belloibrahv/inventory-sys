@@ -24,7 +24,7 @@ export default async function UploadsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Upload stock · Supplier bill"
-        description="Add phones that came with a supplier bill. You can type one IMEI after another, or put many lines on the same bill."
+        description="Add phones that came with a supplier bill. Type the product name, pick it, then fill condition, storage, cost, and how many."
       />
 
       <div className="grid gap-3 md:grid-cols-3">
@@ -34,7 +34,7 @@ export default async function UploadsPage() {
             This page: one by one or many
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
-            Use the form below. Add one phone, save, then add the next. Or put several IMEIs on the same bill before you save.
+            Use the form below. Type the item name and pick it. Then pick condition and storage yourself. Add one phone, or several IMEIs on the same bill, then save.
           </p>
         </div>
         <Link
@@ -77,7 +77,7 @@ export default async function UploadsPage() {
         <h2 className="text-sm font-semibold">Which way should I use?</h2>
         <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
           <li>
-            <span className="font-medium text-foreground">New carton with a bill:</span> stay on this page. Pick the supplier, add each phone or many lines, say what was paid.
+            <span className="font-medium text-foreground">New carton with a bill:</span> stay on this page. Pick the supplier, type the item name, pick condition and storage, add each phone or many lines, say what was paid.
           </li>
           <li>
             <span className="font-medium text-foreground">First time loading a shop:</span> open{" "}
