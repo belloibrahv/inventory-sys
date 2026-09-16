@@ -3,6 +3,9 @@
  * @@unique([branchId, businessDate]) or Railway db push will refuse.
  *
  *   npx tsx scripts/heal-day-closes.ts
+ * Railway start then runs prisma db push --accept-data-loss so the unique
+ * shop+day lock can go on after this heal. Prisma treats a new unique index as
+ * possible data loss even when the table is already clean.
  */
 import { PrismaClient } from "@prisma/client"
 
