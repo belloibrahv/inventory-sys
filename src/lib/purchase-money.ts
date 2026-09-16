@@ -24,6 +24,23 @@ export function isTrueOpeningStockNotes(notes?: string | null) {
   return /opening stock/i.test(text) && /not a supplier bill/i.test(text)
 }
 
+/** What is still owed, or surplus the supplier owes us, after send-backs. */
+export function purchaseBalance(total: unknown, paid: unknown, returned: unknown = 0) {
+  const billed = money(total)
+  const paidVal = money(paid)
+  const sentBack = money(returned)
+  const remaining = Math.max(0, billed - sentBack)
+  const net = remaining - paidVal
+  return {
+    billed,
+    paid: paidVal,
+    sentBack,
+    remaining,
+    owed: Math.max(0, net),
+    surplus: Math.max(0, -net),
+  }
+}
+
 /** Prisma filter: supplier bills that can still be owed. */
 export const payablePurchaseWhere: Prisma.PurchaseWhereInput = {
   status: { not: "CANCELLED" },
@@ -99,4 +116,80 @@ export function groupOwedHouses(rows: OwedBill[]): OwedHouse[] {
     }
   }
   return [...houses.values()].sort((a, b) => b.owed - a.owed || a.name.localeCompare(b.name))
+}
+
+export type SupplierLedgerBill = {
+  supplierId: string
+  supplierName: string
+  creditBalance?: unknown
+  totalAmount: unknown
+  paidAmount: unknown
+  returnedAmount?: unknown
+}
+
+export type SupplierLedger = {
+  id: string
+  name: string
+  billed: number
+  paid: number
+  sentBack: number
+  extraCredit: number
+  owed: number
+  surplus: number
+}
+
+/** One house: bills netted, then any leftover send-back credit that was not on a bill. */
+export function groupSupplierLedgers(bills: SupplierLedgerBill[]): SupplierLedger[] {
+  const houses = new Map<
+    string,
+    {
+      id: string
+      name: string
+      bills: SupplierLedgerBill[]
+      credits: Map<string, number>
+    }
+  >()
+  for (const bill of bills) {
+    const key = partyNameKey(bill.supplierName) || displayPartyName(bill.supplierName) || bill.supplierId
+    const existing = houses.get(key)
+    const credit = money(bill.creditBalance)
+    if (existing) {
+      existing.bills.push(bill)
+      if (!existing.credits.has(bill.supplierId)) existing.credits.set(bill.supplierId, credit)
+    } else {
+      houses.set(key, {
+        id: bill.supplierId,
+        name: displayPartyName(bill.supplierName) || bill.supplierName,
+        bills: [bill],
+        credits: new Map([[bill.supplierId, credit]]),
+      })
+    }
+  }
+  return [...houses.values()]
+    .map((house) => {
+      let billed = 0
+      let paid = 0
+      let sentBack = 0
+      let net = 0
+      for (const bill of house.bills) {
+        const bal = purchaseBalance(bill.totalAmount, bill.paidAmount, bill.returnedAmount)
+        billed += bal.billed
+        paid += bal.paid
+        sentBack += bal.sentBack
+        net += bal.remaining - bal.paid
+      }
+      const extraCredit = [...house.credits.values()].reduce((sum, value) => sum + value, 0)
+      net -= extraCredit
+      return {
+        id: house.id,
+        name: house.name,
+        billed,
+        paid,
+        sentBack,
+        extraCredit,
+        owed: Math.max(0, net),
+        surplus: Math.max(0, -net),
+      }
+    })
+    .sort((a, b) => b.owed - a.owed || b.surplus - a.surplus || a.name.localeCompare(b.name))
 }

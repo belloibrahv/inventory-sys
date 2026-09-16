@@ -30,6 +30,7 @@ export type ReportsPack = {
   byShop: Array<{ name: string; tickets: number; revenue: number; collected: number }>
   debtors: Array<{ id: string; name: string; shop: string; amount: number }>
   creditors: Array<{ id: string; invoice: string; supplier: string; shop: string; owed: number }>
+  supplierCredits: Array<{ id: string; invoice: string; supplier: string; shop: string; owed: number }>
   lowStock: Array<{ id: string; product: string; shop: string; quantity: number; min: number }>
 }
 

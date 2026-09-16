@@ -1,18 +1,16 @@
 import Link from "next/link"
 import { requireUser } from "@/lib/session"
 import { getProducts } from "@/app/actions/catalog"
-import { getPurchases, getSupplierReturnCandidates, sendUnitsToSupplier } from "@/app/actions/ops"
+import { getPurchases, getSupplierReturnCandidates } from "@/app/actions/ops"
 import { getBranches, getSuppliers } from "@/app/actions/parties"
-import { ActionForm } from "@/components/action-form"
 import { PurchaseForm } from "@/app/(app)/purchases/purchase-form"
 import { PageHeader, SectionCard, StatCard, StatGrid } from "@/components/shared"
-import { ScanList } from "@/components/scan-field"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Select } from "@/components/ui/select"
 import { formatCurrency, money } from "@/lib/utils"
-import { isOpeningStockPurchase } from "@/lib/purchase-money"
+import { isOpeningStockPurchase, purchaseBalance } from "@/lib/purchase-money"
 import { PurchasesList } from "./purchases-list"
+import { SupplierReturnForm } from "./supplier-return-form"
 
 export default async function PurchasesPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const me = await requireUser()
@@ -37,7 +35,9 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
   const shortVsBill = regularPurchases.reduce((sum, row) => sum + row.trace.shortVsBill, 0)
   const billed = regularPurchases.reduce((sum, row) => sum + money(row.totalAmount), 0)
   const paid = regularPurchases.reduce((sum, row) => sum + money(row.paidAmount), 0)
-  const owed = Math.max(0, billed - paid)
+  const balances = regularPurchases.map((row) => purchaseBalance(row.totalAmount, row.paidAmount, row.returnedAmount))
+  const owed = balances.reduce((sum, row) => sum + row.owed, 0)
+  const surplus = balances.reduce((sum, row) => sum + row.surplus, 0)
   const openingValue = openingPurchases.reduce((sum, row) => sum + money(row.totalAmount), 0)
 
   return (
@@ -82,7 +82,7 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
         <StatCard
           label="Still owed"
           value={formatCurrency(owed)}
-          hint="It shows on Money in & out until we pay it"
+          hint={surplus > 0 ? `They owe us ${formatCurrency(surplus)} after send-backs` : "It shows on Money in and out until we pay it"}
           tone={owed > 0 ? "warning" : "neutral"}
         />
         <StatCard
@@ -130,7 +130,7 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
           </SectionCard>
           <SectionCard title="Send back to supplier">
             <p className="mb-4 text-sm text-muted-foreground">
-              Use this when a unit does not work, including a phone a customer returned to us. It leaves this shop and goes back to the supplier. It is not a shop-to-shop send.
+              Scan each IMEI. The phone, the supplier, and the cost fill in from that number. Do not pick the house. Scan ten or twenty phones if they all go back to the same supplier in this one send-back. That cost comes off what we still owe. If we do not owe them, they owe us.
             </p>
             {returnUnits.length ? (
               <ul className="mb-4 space-y-1 text-sm">
@@ -142,17 +142,9 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
                 ))}
               </ul>
             ) : (
-              <p className="mb-4 text-sm text-muted-foreground">No faulty phone and no returned phone is waiting to go back.</p>
+              <p className="mb-4 text-sm text-muted-foreground">No faulty phone and no returned phone is waiting to go back. You can still scan an In shop IMEI that must go back.</p>
             )}
-            <ActionForm action={sendUnitsToSupplier} submit="Send these IMEIs back to the supplier" enterDoesNotSubmit className="space-y-3">
-              <Select name="supplierId" defaultValue="">
-                <option value="">Use the supplier already saved on each IMEI</option>
-                {houses.map((row) => (
-                  <option key={row.id} value={row.id}>{row.name}</option>
-                ))}
-              </Select>
-              <ScanList name="imeis" required />
-            </ActionForm>
+            <SupplierReturnForm />
           </SectionCard>
         </div>
       </div>

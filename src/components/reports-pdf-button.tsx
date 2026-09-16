@@ -162,6 +162,19 @@ export function ReportsPdfButton({ data }: { data: ReportsPack }) {
         })
       }
 
+      section("Suppliers who owe us")
+      if ((data.supplierCredits ?? []).length === 0) {
+        row("No supplier owes us after send-backs", "")
+      } else {
+        const houses = groupOwedHouses(data.supplierCredits ?? [])
+        houses.forEach((house, houseIndex) => {
+          row(house.name, formatPdfMoney(house.owed), houseIndex % 2 ? PAPER : undefined)
+          house.bills.forEach((item) => {
+            row(`  ${item.invoice}  ·  ${item.shop}`, formatPdfMoney(item.owed), houseIndex % 2 ? PAPER : undefined)
+          })
+        })
+      }
+
       section("Low stock warning")
       if (data.lowStock.length === 0) {
         row("No items below the low-stock warning", "")

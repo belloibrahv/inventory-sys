@@ -27,7 +27,7 @@ const RECORD_KINDS: Record<string, string> = {
   Customer: "Customer",
   Product: "Item",
   Expense: "Shop expense",
-  Return: "Return",
+  VendorReturn: "Send back to supplier",
   Swap: "Swap Deal",
   Repair: "Repair",
   Notification: "Alert",

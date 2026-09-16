@@ -140,7 +140,9 @@ export function ReportsClientView({
   const [openHouse, setOpenHouse] = useState<string | null>(null)
   const paidSales = sales.filter((sale) => money(sale.paidAmount) > 0)
   const supplierOwed = pack.creditors.reduce((sum, row) => sum + row.owed, 0)
+  const supplierCredit = (pack.supplierCredits ?? []).reduce((sum, row) => sum + row.owed, 0)
   const owedHouses = useMemo(() => groupOwedHouses(pack.creditors), [pack.creditors])
+  const creditHouses = useMemo(() => groupOwedHouses(pack.supplierCredits ?? []), [pack.supplierCredits])
   const scopeKey = `${selectedBranchId ?? "all"}:${range}:${date}`
   function reportsHref(next: { branchId?: string; range?: string; date?: string }) {
     const params = new URLSearchParams()
@@ -165,6 +167,7 @@ export function ReportsClientView({
   const byShopPager = usePagedRows(pack.byShop, scopeKey)
   const debtorsPager = usePagedRows(pack.debtors, scopeKey)
   const creditorsPager = usePagedRows(owedHouses, scopeKey)
+  const creditsPager = usePagedRows(creditHouses, `${scopeKey}-credits`)
   const lowStockPager = usePagedRows(pack.lowStock, scopeKey)
   const revenuePager = usePagedRows(sales, drilldown === "REVENUE" ? "REVENUE" : "idle")
   const receivedPager = usePagedRows(paidSales, drilldown === "RECEIVED" ? "RECEIVED" : "idle")
@@ -498,6 +501,11 @@ export function ReportsClientView({
             hint={`${owedHouses.length} supplier house${owedHouses.length === 1 ? "" : "s"} still owed`}
             onClick={() => setDrilldown("CREDITORS")}
           />
+          <StatCard
+            label="They owe us"
+            value={formatCurrency(supplierCredit)}
+            hint="Send-backs that left a surplus on the house"
+          />
         </StatGrid>
 
         <StatGrid>
@@ -667,6 +675,58 @@ export function ReportsClientView({
             ) : null}
           </TableShell>
 
+          <TableShell
+            caption={
+              <>
+                <h2 className="text-sm font-semibold tracking-tight">Suppliers who owe us</h2>
+                <div className="flex items-center gap-2">
+                  <TableDownload
+                    filename={`${fileScope}-suppliers-who-owe-us`}
+                    rows={() => [
+                      ["Bill", "Supplier", "Shop", "They owe us"],
+                      ...(pack.supplierCredits ?? []).map((row) => [row.invoice, row.supplier, row.shop, row.owed]),
+                    ]}
+                  />
+                  <Button asChild variant="ghost" size="sm">
+                    <Link href="/suppliers">All suppliers</Link>
+                  </Button>
+                </div>
+              </>
+            }
+            columns={[{ label: "Supplier" }, { label: "They owe us", align: "right" }]}
+            footer={
+              <TablePager
+                page={creditsPager.page}
+                pageCount={creditsPager.pageCount}
+                pageSize={creditsPager.pageSize}
+                total={creditsPager.total}
+                start={creditsPager.start}
+                end={creditsPager.end}
+                onPageChange={creditsPager.setPage}
+                onPageSizeChange={creditsPager.setPageSize}
+                noun="houses"
+              />
+            }
+          >
+            {creditsPager.pageRows.map((house) => {
+              const expanded = openHouse === `credit-${house.key}`
+              return (
+                <OwedHouseRows
+                  key={house.key}
+                  house={house}
+                  expanded={expanded}
+                  colSpan={2}
+                  onToggle={() => setOpenHouse(expanded ? null : `credit-${house.key}`)}
+                />
+              )
+            })}
+            {(pack.supplierCredits ?? []).length === 0 ? (
+              <TableEmpty colSpan={2}>No supplier owes us after send-backs.</TableEmpty>
+            ) : null}
+          </TableShell>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-2">
           <TableShell
             caption={
               <>

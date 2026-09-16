@@ -458,6 +458,8 @@ model Supplier {
   city          String?
   kind          SupplierKind @default(SUPPLIER)
   isActive      Boolean      @default(true)
+  /// Surplus after send-backs that were not on a supplier bill, so this house owes us.
+  creditBalance Decimal      @default(0)
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
@@ -483,6 +485,9 @@ model Purchase {
   status        PurchaseStatus @default(PENDING)
   totalAmount   Decimal
   paidAmount    Decimal        @default(0)
+  /// Cost of units sent back to this supplier. Cuts what we still owe, or
+  /// leaves a surplus when we already paid.
+  returnedAmount Decimal       @default(0)
   paymentMethod String?
   notes         String?
   /// UPLOAD_STOCK when the bill was born on Upload stock (manual session or Excel).

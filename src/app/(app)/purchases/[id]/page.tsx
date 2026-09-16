@@ -15,7 +15,7 @@ import { Select } from "@/components/ui/select"
 import { ScanList } from "@/components/scan-field"
 import { statusLabel } from "@/lib/status"
 import { formatCurrency, formatDate, formatDateTime, money } from "@/lib/utils"
-import { isOpeningStockPurchase } from "@/lib/purchase-money"
+import { isOpeningStockPurchase, purchaseBalance } from "@/lib/purchase-money"
 
 export default async function PurchaseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -31,7 +31,9 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
   })
   const item = purchase.items[0]
   const remaining = item ? item.quantity - item.receivedQty : 0
-  const due = isOpening ? 0 : money(purchase.totalAmount) - money(purchase.paidAmount)
+  const billMoney = purchaseBalance(purchase.totalAmount, purchase.paidAmount, purchase.returnedAmount)
+  const due = isOpening ? 0 : billMoney.owed
+  const surplus = isOpening ? 0 : billMoney.surplus
   const step = isOpening
     ? (opening?.status === "CLOSED" ? 2 : 1)
     : purchase.status === "RECEIVED" && due <= 0
@@ -157,12 +159,14 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
           <p className="text-sm text-muted-foreground">Never scanned {trace.shortVsBill}</p>
         </div>
         <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">{isOpening ? "Payment Model" : "Supplier still owed"}</p>
+          <p className="text-sm text-muted-foreground">{isOpening ? "Payment Model" : surplus > 0 ? "They owe us" : "Supplier still owed"}</p>
           <p className="text-xl font-semibold text-success">
-            {isOpening ? "Independent Asset" : formatCurrency(due)}
+            {isOpening ? "Independent Asset" : formatCurrency(surplus > 0 ? surplus : due)}
           </p>
           <p className="text-xs text-muted-foreground">
-            {isOpening ? "No payment model required" : `Paid ${formatCurrency(money(purchase.paidAmount))}`}
+            {isOpening
+              ? "No payment model required"
+              : `Paid ${formatCurrency(money(purchase.paidAmount))}${billMoney.sentBack > 0 ? ` · sent back ${formatCurrency(billMoney.sentBack)}` : ""}`}
           </p>
         </div>
         <div className="surface-card p-5">
@@ -319,6 +323,14 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
             </Select>
           </ActionForm>
         </div>
+      ) : surplus > 0 ? (
+        <p className="text-sm text-muted-foreground">
+          This house owes us {formatCurrency(surplus)} after phones were sent back. Do not pay more on this bill.
+        </p>
+      ) : surplus > 0 ? (
+        <p className="text-sm text-muted-foreground">
+          This house owes us {formatCurrency(surplus)} after phones were sent back. Do not pay more on this bill.
+        </p>
       ) : (
         <p className="text-sm text-muted-foreground">This supplier bill is fully paid.</p>
       )}

@@ -92,6 +92,7 @@ export function booksCsvRows(data: BooksCheck): string[][] {
     cells("STILL OWED"),
     cells("Customers still owe us", data.customersOwe),
     cells("Still owed to suppliers", data.supplierOwed),
+    cells("Suppliers who owe us", data.supplierCredit),
     cells("Sales with no customer name", data.walkIns),
     [],
     cells("PAYMENTS RECEIVED BY STAFF"),

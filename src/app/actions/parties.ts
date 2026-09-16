@@ -90,6 +90,7 @@ export async function getSuppliers() {
           invoiceNumber: true,
           totalAmount: true,
           paidAmount: true,
+          returnedAmount: true,
           status: true,
           createdAt: true,
           branch: { select: { name: true, code: true } },

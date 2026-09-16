@@ -77,6 +77,7 @@ export function ActionForm({
   size = "default",
   confirmModal,
   enterDoesNotSubmit = false,
+  onSuccess,
 }: {
   action: (formData: FormData) => Promise<{ error?: string; success?: boolean; redirectTo?: string } | void>
   children: ReactNode
@@ -97,6 +98,7 @@ export function ActionForm({
    * book a phone before staff fill the rest of the fields.
    */
   enterDoesNotSubmit?: boolean
+  onSuccess?: () => void
 }) {
   const router = useRouter()
   const ref = useRef<HTMLFormElement>(null)
@@ -125,6 +127,7 @@ export function ActionForm({
     }
 
     toast.success(successMessage)
+    onSuccess?.()
     if (result && "redirectTo" in result && result.redirectTo) {
       router.push(result.redirectTo)
       return

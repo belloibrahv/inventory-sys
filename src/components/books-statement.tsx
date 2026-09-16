@@ -224,6 +224,12 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
               </Link>
             </p>
             <p className="flex justify-between gap-3">
+              <span className="text-slate-500">Suppliers who owe us</span>
+              <Link href="/suppliers" className="tabular-nums font-semibold text-primary hover:underline">
+                {formatCurrency(data.supplierCredit)}
+              </Link>
+            </p>
+            <p className="flex justify-between gap-3">
               <span className="text-slate-500">Walk-in transactions</span>
               <span>{data.walkIns}</span>
             </p>

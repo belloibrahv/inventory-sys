@@ -24,7 +24,8 @@ import { buildBillTrace, type SupplierBillTrace } from "@/lib/supplier-trace"
 import { watBounds, watDayKey } from "@/lib/lagos-day"
 import { getAppSettings } from "@/lib/settings"
 import { healOpeningStockBills } from "@/lib/opening-stock-money"
-import { isOpeningStockPurchase } from "@/lib/purchase-money"
+import { isOpeningStockPurchase, purchaseBalance } from "@/lib/purchase-money"
+import { isSupplierReturnableStatus, supplierReturnMoneyPlan } from "@/lib/vendor-return"
 
 function parseImeis(raw: string) {
   return [...new Set(raw.split(/[\s,;]+/).map((item) => item.trim()).filter((item) => item.length >= 14))]
@@ -496,8 +497,14 @@ export async function payPurchase(formData: FormData) {
   if (isOpeningStockPurchase(purchase)) {
     return { error: "Opening stock is the value the shop started with. It is not a bill to pay." }
   }
-  const due = money(purchase.totalAmount) - money(purchase.paidAmount)
-  if (due <= 0) return { error: "This supplier bill is already fully paid." }
+  const due = purchaseBalance(purchase.totalAmount, purchase.paidAmount, purchase.returnedAmount).owed
+  if (due <= 0) {
+    const surplus = purchaseBalance(purchase.totalAmount, purchase.paidAmount, purchase.returnedAmount).surplus
+    if (surplus > 0) {
+      return { error: "This house already owes us after phones were sent back. Do not pay more on this bill." }
+    }
+    return { error: "This supplier bill is already fully paid." }
+  }
   const sent = Math.min(amount, due)
   const payRef = generateDocNumber("SPAY")
 
@@ -511,9 +518,10 @@ export async function payPurchase(formData: FormData) {
         paidAmount: { increment: sent },
         paymentMethod: method,
       },
-      select: { paidAmount: true, totalAmount: true, invoiceNumber: true },
+      select: { paidAmount: true, totalAmount: true, returnedAmount: true, invoiceNumber: true },
     })
-    if (money(paid.paidAmount) > money(paid.totalAmount) + 0.005) {
+    const remaining = Math.max(0, money(paid.totalAmount) - money(paid.returnedAmount))
+    if (money(paid.paidAmount) > remaining + 0.005) {
       throw new ConflictError(`${paid.invoiceNumber} was already paid while you were typing. Open it again to see what is still owed.`)
     }
     await tx.financeEntry.create({
@@ -650,7 +658,17 @@ export async function completeReturn(formData: FormData) {
   const id = String(formData.get("id"))
   const record = await prisma.stockReturn.findUnique({
     where: { id },
-    include: { customer: true, imei: { include: { product: true } } },
+    include: {
+      customer: true,
+      imei: {
+        include: {
+          product: true,
+          supplier: true,
+          branch: true,
+          purchase: { include: { items: true, openingStock: true } },
+        },
+      },
+    },
   })
   if (!record) return { error: "We could not find that return." }
   if (record.status === "COMPLETED") return { error: "That return is already finished." }
@@ -733,15 +751,16 @@ export async function completeReturn(formData: FormData) {
       await tx.imeiRecord.update({ where: { id: record.imeiId }, data: { status: "FAULTY" } })
     }
 
-    if (record.outcome === "SEND_TO_SUPPLIER" && record.imeiId) {
+    if (record.outcome === "SEND_TO_SUPPLIER" && record.imeiId && record.imei) {
       await tx.imeiRecord.update({
         where: { id: record.imeiId },
         data: {
           status: "RETURNED_TO_SUPPLIER",
           customerId: null,
-          notes: [record.imei?.notes, `Sent back to supplier on ${record.returnNumber}`].filter(Boolean).join(" · "),
+          notes: [record.imei.notes, `Sent back to supplier on ${record.returnNumber}`].filter(Boolean).join(" · "),
         },
       })
+      await applySupplierReturnMoney(tx, record.imei)
     }
 
     if (record.outcome === "REPLACEMENT") {
@@ -1551,22 +1570,141 @@ export async function getSupplierReturnCandidates() {
   }))
 }
 
+const supplierReturnImeiInclude = {
+  product: { select: { id: true, name: true, costPrice: true } },
+  supplier: { select: { id: true, name: true } },
+  branch: { select: { name: true } },
+  purchase: {
+    include: {
+      items: { select: { productId: true, costPrice: true } },
+      openingStock: { select: { id: true } },
+    },
+  },
+} as const
+
+type SupplierReturnImei = {
+  id: string
+  imei1: string
+  productId: string
+  supplierId: string | null
+  branchId: string
+  status: string
+  notes: string | null
+  product: { id: string; name: string; costPrice: unknown }
+  supplier: { id: string; name: string } | null
+  branch: { name: string }
+  purchase: {
+    id: string
+    invoiceNumber: string
+    notes: string | null
+    items: Array<{ productId: string; costPrice: unknown }>
+    openingStock: { id: string } | null
+  } | null
+}
+
+async function applySupplierReturnMoney(
+  tx: Prisma.TransactionClient,
+  record: SupplierReturnImei,
+) {
+  const plan = supplierReturnMoneyPlan({
+    supplierId: record.supplierId,
+    productId: record.productId,
+    productCost: record.product.costPrice,
+    purchase: record.purchase,
+  })
+  if (!plan.moneyMoves || !record.supplierId) return plan
+
+  if (plan.reason === "bill" && record.purchase) {
+    await tx.purchase.update({
+      where: { id: record.purchase.id },
+      data: { returnedAmount: { increment: plan.cost.toFixed(2) } },
+    })
+  } else if (plan.reason === "house-credit") {
+    await tx.supplier.update({
+      where: { id: record.supplierId },
+      data: { creditBalance: { increment: plan.cost.toFixed(2) } },
+    })
+  }
+  return plan
+}
+
+function toReturnLookup(row: SupplierReturnImei) {
+  const plan = supplierReturnMoneyPlan({
+    supplierId: row.supplierId,
+    productId: row.productId,
+    productCost: row.product.costPrice,
+    purchase: row.purchase,
+  })
+  return {
+    imei: row.imei1,
+    productName: row.product.name,
+    supplierId: row.supplierId || "",
+    supplierName: row.supplier?.name || "",
+    cost: plan.cost,
+    invoice: row.purchase?.invoiceNumber || "",
+    shop: row.branch.name,
+    status: row.status,
+    moneyMoves: plan.moneyMoves,
+    moneyNote:
+      plan.reason === "opening-stock"
+        ? "Opening stock. Sending it back does not change what we owe."
+        : plan.reason === "no-supplier"
+          ? "This phone has no supplier on the record."
+          : plan.reason === "no-cost"
+            ? "No purchase cost is saved on this phone."
+            : "",
+  }
+}
+
+export async function lookupSupplierReturnImei(imei: string) {
+  const user = await requireUser()
+  const code = imei.replace(/[\s-]/g, "").trim()
+  if (code.length < 14) return { error: "That IMEI is too short. Scan the box again, or type every digit." }
+
+  const row = await prisma.imeiRecord.findUnique({
+    where: { imei1: code },
+    include: supplierReturnImeiInclude,
+  })
+  if (!row) return { error: "We could not find that IMEI on the system." }
+
+  const scoped = await scopedBranchId(user.role, user.branchId)
+  if (scoped && row.branchId !== scoped) {
+    return { error: "You can only send back a phone from your own shop." }
+  }
+  if (row.status === "RETURNED_TO_SUPPLIER") {
+    return { error: `${code} was already sent back to the supplier.` }
+  }
+  if (!isSupplierReturnableStatus(row.status)) {
+    return { error: "You can only send back a phone that is in the shop, returned, or faulty." }
+  }
+  if (!row.supplierId) {
+    return { error: "This IMEI has no supplier on the record. Ask records to attach the house before sending it back." }
+  }
+  return toReturnLookup(row as SupplierReturnImei)
+}
+
 export async function sendUnitsToSupplier(formData: FormData) {
   const user = await requireUser()
   if (!(await can(user.role, "action.intake")) && !(await can(user.role, "action.return"))) {
     return { error: "You are not allowed to send goods back to a supplier. Ask the main admin." }
   }
-  const supplierId = String(formData.get("supplierId") || "").trim()
   const imeis = parseImeis(String(formData.get("imeis") || ""))
-  if (!imeis.length) return { error: "Scan or paste the IMEIs going back to the supplier." }
+  if (!imeis.length) return { error: "Scan the IMEIs going back to the supplier." }
 
   const records = await prisma.imeiRecord.findMany({
     where: { imei1: { in: imeis } },
-    include: { product: true, supplier: true },
+    include: supplierReturnImeiInclude,
   })
   if (records.length !== imeis.length) return { error: "We could not find one or more of those IMEIs." }
-  if (records.some((row) => !["FAULTY", "RETURNED", "IN_STOCK"].includes(row.status))) {
+  if (records.some((row) => !isSupplierReturnableStatus(row.status))) {
     return { error: "You can only send back a phone that is in the shop, returned, or faulty." }
+  }
+  if (records.some((row) => !row.supplierId)) {
+    return { error: "One of these phones has no supplier on the record. The IMEI must already name the house." }
+  }
+  const houseIds = [...new Set(records.map((row) => row.supplierId).filter(Boolean))]
+  if (houseIds.length > 1) {
+    return { error: "Scan phones from one supplier only. These IMEIs belong to more than one house." }
   }
 
   const scoped = await scopedBranchId(user.role, user.branchId)
@@ -1574,13 +1712,12 @@ export async function sendUnitsToSupplier(formData: FormData) {
     return { error: "You can only send units from your own shop." }
   }
 
+  const rtv = generateDocNumber("RTV")
+  const houseName = records[0]?.supplier?.name || "supplier"
+
   try {
   await prisma.$transaction(async (tx) => {
     for (const record of records) {
-      const houseId = supplierId || record.supplierId
-      // Claim from the state this screen was showing. A unit sold between the
-      // list loading and Send being pressed is now refused, not shipped away
-      // from under the customer who just bought it.
       await claimImei(tx, {
         imeiId: record.id,
         branchId: record.branchId,
@@ -1589,8 +1726,8 @@ export async function sendUnitsToSupplier(formData: FormData) {
         data: {
           status: "RETURNED_TO_SUPPLIER",
           customerId: null,
-          supplierId: houseId || record.supplierId,
-          notes: [record.notes, "Sent back to the supplier"].filter(Boolean).join(" · "),
+          supplierId: record.supplierId,
+          notes: [record.notes, `Sent back to ${houseName} on ${rtv}`].filter(Boolean).join(" · "),
         },
       })
       if (record.status === "IN_STOCK") {
@@ -1601,6 +1738,7 @@ export async function sendUnitsToSupplier(formData: FormData) {
           label: record.imei1,
         })
       }
+      const moneyMove = await applySupplierReturnMoney(tx, record as SupplierReturnImei)
       await tx.auditLog.create({
         data: {
           userId: user.id,
@@ -1608,11 +1746,33 @@ export async function sendUnitsToSupplier(formData: FormData) {
           entityType: "IMEIRecord",
           entityId: record.imei1,
           oldValue: record.status,
-          newValue: JSON.stringify({ status: "RETURNED_TO_SUPPLIER", supplierId: houseId || record.supplierId }),
+          newValue: JSON.stringify({
+            status: "RETURNED_TO_SUPPLIER",
+            supplierId: record.supplierId,
+            rtv,
+            cost: moneyMove.cost,
+            moneyMoves: moneyMove.moneyMoves,
+            reason: moneyMove.reason,
+          }),
           branchId: record.branchId,
         },
       })
     }
+    await tx.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "CREATE",
+        entityType: "VendorReturn",
+        entityId: rtv,
+        newValue: JSON.stringify({
+          supplierId: houseIds[0],
+          supplierName: houseName,
+          imeis,
+          count: imeis.length,
+        }),
+        branchId: records[0]?.branchId,
+      },
+    })
   })
   } catch (error) {
     return { error: shopError(error, "Could not send these units back. Nothing was moved.") }

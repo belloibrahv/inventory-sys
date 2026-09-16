@@ -2,10 +2,11 @@
 
 import { useMemo, useState } from "react"
 import Link from "next/link"
-import { ChevronDown, Coins, HandCoins, Users, Wallet } from "lucide-react"
+import { ChevronDown, Coins, HandCoins, Undo2, Users, Wallet } from "lucide-react"
 import { StatCard, StatGrid, StatusBadge, TableEmpty, TableShell, TonePill } from "@/components/shared"
 import { TablePager, usePagedRows } from "@/components/table-pager"
 import { groupByPartyIdentity } from "@/lib/party-key"
+import { purchaseBalance } from "@/lib/purchase-money"
 import { formatCurrency, formatDate } from "@/lib/utils"
 
 export type SupplierBillRow = {
@@ -13,6 +14,7 @@ export type SupplierBillRow = {
   invoiceNumber: string
   totalAmount: number
   paidAmount: number
+  returnedAmount?: number
   status: string
   createdAt: string
   branchCode: string
@@ -27,9 +29,10 @@ export type SupplierRow = {
   city: string | null
   country: string | null
   purchases: SupplierBillRow[]
+  creditBalance?: number
 }
 
-type HouseFilter = "all" | "bought" | "paid" | "owing"
+type HouseFilter = "all" | "bought" | "paid" | "owing" | "credit"
 
 type House = {
   key: string
@@ -41,7 +44,10 @@ type House = {
   bills: SupplierBillRow[]
   purchased: number
   paid: number
+  sentBack: number
+  extraCredit: number
   owed: number
+  surplus: number
   openHref: string
 }
 
@@ -60,6 +66,14 @@ function buildHouses(suppliers: SupplierRow[]): House[] {
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       const purchased = bills.reduce((sum, row) => sum + row.totalAmount, 0)
       const paid = bills.reduce((sum, row) => sum + row.paidAmount, 0)
+      const sentBack = bills.reduce((sum, row) => sum + (row.returnedAmount ?? 0), 0)
+      const extraCredit = copies.reduce((sum, copy) => sum + (copy.creditBalance ?? 0), 0)
+      let net = 0
+      for (const bill of bills) {
+        const bal = purchaseBalance(bill.totalAmount, bill.paidAmount, bill.returnedAmount)
+        net += bal.remaining - bal.paid
+      }
+      net -= extraCredit
       const from =
         copies
           .map((copy) => [copy.city, copy.country].filter(Boolean).join(", "))
@@ -74,7 +88,10 @@ function buildHouses(suppliers: SupplierRow[]): House[] {
         bills,
         purchased,
         paid,
-        owed: Math.max(0, purchased - paid),
+        sentBack,
+        extraCredit,
+        owed: Math.max(0, net),
+        surplus: Math.max(0, -net),
         openHref: `/suppliers/${primary.id}`,
       }
     })
@@ -86,6 +103,7 @@ const FILTER_LABEL: Record<HouseFilter, string> = {
   bought: "Houses we bought from",
   paid: "Houses we have paid",
   owing: "Houses we still owe",
+  credit: "Houses who owe us",
 }
 
 export function SuppliersList({ suppliers }: { suppliers: SupplierRow[] }) {
@@ -96,6 +114,7 @@ export function SuppliersList({ suppliers }: { suppliers: SupplierRow[] }) {
   const totalInvoiced = houses.reduce((sum, house) => sum + house.purchased, 0)
   const totalPaid = houses.reduce((sum, house) => sum + house.paid, 0)
   const totalOwed = houses.reduce((sum, house) => sum + house.owed, 0)
+  const totalSurplus = houses.reduce((sum, house) => sum + house.surplus, 0)
   const owingCount = houses.filter((house) => house.owed > 0).length
 
   const filtered = useMemo(() => {
@@ -103,6 +122,7 @@ export function SuppliersList({ suppliers }: { suppliers: SupplierRow[] }) {
       if (filter === "bought") return house.purchased > 0
       if (filter === "paid") return house.paid > 0
       if (filter === "owing") return house.owed > 0
+      if (filter === "credit") return house.surplus > 0
       return true
     })
   }, [houses, filter])
@@ -151,6 +171,14 @@ export function SuppliersList({ suppliers }: { suppliers: SupplierRow[] }) {
           tone={totalOwed > 0 ? "warning" : "neutral"}
           onClick={() => pickFilter("owing")}
         />
+        <StatCard
+          label="They owe us"
+          value={formatCurrency(totalSurplus)}
+          hint="Send-backs that flipped the house into credit"
+          icon={<Undo2 className="h-4 w-4" />}
+          tone={totalSurplus > 0 ? "success" : "neutral"}
+          onClick={() => pickFilter("credit")}
+        />
       </StatGrid>
 
       <TableShell
@@ -168,7 +196,7 @@ export function SuppliersList({ suppliers }: { suppliers: SupplierRow[] }) {
           { label: "From" },
           { label: "Bought from them", align: "right" },
           { label: "We have paid", align: "right" },
-          { label: "Still owed", align: "right" },
+          { label: "Balance", align: "right" },
           { label: "", align: "center" },
         ]}
         footer={
@@ -252,9 +280,17 @@ function HouseRows({
         <td className="text-xs text-muted-foreground">{house.from}</td>
         <td className="text-right num font-medium">{formatCurrency(house.purchased)}</td>
         <td className="text-right num text-success">{formatCurrency(house.paid)}</td>
-        <td className="text-right num font-semibold">{formatCurrency(house.owed)}</td>
+        <td className="text-right num font-semibold">
+          {house.surplus > 0 ? formatCurrency(house.surplus) : formatCurrency(house.owed)}
+        </td>
         <td className="text-center">
-          {house.owed === 0 ? <TonePill tone="success">Settled</TonePill> : <TonePill tone="warning">Owing</TonePill>}
+          {house.surplus > 0 ? (
+            <TonePill tone="success">They owe us</TonePill>
+          ) : house.owed === 0 ? (
+            <TonePill tone="success">Settled</TonePill>
+          ) : (
+            <TonePill tone="warning">Owing</TonePill>
+          )}
         </td>
       </tr>
       {expanded ? (
@@ -310,13 +346,14 @@ function HouseBreakdown({ house }: { house: House }) {
                 <th className="px-3 py-2 font-medium">Shop</th>
                 <th className="px-3 py-2 text-right font-medium">Bill value</th>
                 <th className="px-3 py-2 text-right font-medium">We have paid</th>
-                <th className="px-3 py-2 text-right font-medium">Still owed</th>
+                <th className="px-3 py-2 text-right font-medium">Sent back</th>
+                <th className="px-3 py-2 text-right font-medium">Balance</th>
                 <th className="px-3 py-2 text-center font-medium">Status</th>
               </tr>
             </thead>
             <tbody>
               {house.bills.map((bill) => {
-                const owed = Math.max(0, bill.totalAmount - bill.paidAmount)
+                const bal = purchaseBalance(bill.totalAmount, bill.paidAmount, bill.returnedAmount)
                 return (
                   <tr key={bill.id} className="border-t border-border">
                     <td className="px-3 py-2">
@@ -328,7 +365,10 @@ function HouseBreakdown({ house }: { house: House }) {
                     <td className="px-3 py-2">{bill.branchName || bill.branchCode || "Not recorded"}</td>
                     <td className="px-3 py-2 text-right num">{formatCurrency(bill.totalAmount)}</td>
                     <td className="px-3 py-2 text-right num text-success">{formatCurrency(bill.paidAmount)}</td>
-                    <td className="px-3 py-2 text-right num font-semibold">{formatCurrency(owed)}</td>
+                    <td className="px-3 py-2 text-right num">{formatCurrency(bal.sentBack)}</td>
+                    <td className="px-3 py-2 text-right num font-semibold">
+                      {bal.surplus > 0 ? `They owe us ${formatCurrency(bal.surplus)}` : formatCurrency(bal.owed)}
+                    </td>
                     <td className="px-3 py-2 text-center">
                       <StatusBadge value={bill.status} />
                     </td>
@@ -341,6 +381,11 @@ function HouseBreakdown({ house }: { house: House }) {
       ) : (
         <p className="text-sm text-muted-foreground">No supplier bill yet for this house.</p>
       )}
+      {house.extraCredit > 0 ? (
+        <p className="text-sm text-muted-foreground">
+          Extra send-back credit not on a bill: {formatCurrency(house.extraCredit)}.
+        </p>
+      ) : null}
     </div>
   )
 }

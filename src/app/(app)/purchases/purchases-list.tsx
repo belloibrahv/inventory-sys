@@ -7,7 +7,7 @@ import { EmptyState, StatusBadge } from "@/components/shared"
 import { TablePager, usePagedRows } from "@/components/table-pager"
 import { formatShopWhen } from "@/lib/lagos-day"
 import { formatCurrency, money } from "@/lib/utils"
-import { isOpeningStockPurchase } from "@/lib/purchase-money"
+import { isOpeningStockPurchase, purchaseBalance } from "@/lib/purchase-money"
 
 type PurchaseRow = {
   id: string
@@ -22,6 +22,7 @@ type PurchaseRow = {
   openingStock?: { id: string } | null
   totalAmount: unknown
   paidAmount: unknown
+  returnedAmount?: unknown
   supplier: { name: string; city: string | null; country: string | null }
   branch: { name: string }
   items: Array<{ product: { name: string } }>
@@ -108,7 +109,9 @@ export function PurchasesList({
           const { trace } = purchase
           const totalVal = money(purchase.totalAmount)
           const paidVal = money(purchase.paidAmount)
-          const owedVal = Math.max(0, totalVal - paidVal)
+          const billMoney = purchaseBalance(purchase.totalAmount, purchase.paidAmount, purchase.returnedAmount)
+          const owedVal = billMoney.owed
+          const surplusVal = billMoney.surplus
           const when = purchase.receivedDate ?? purchase.createdAt
 
           const isOpening = isOpeningStockPurchase(purchase)
@@ -195,9 +198,9 @@ export function PurchasesList({
                     <strong className="num text-success">{formatCurrency(paidVal)}</strong>
                   </span>
                   <span>
-                    <span className="eyebrow block">Still owed</span>
+                    <span className="eyebrow block">{surplusVal > 0 ? "They owe us" : "Still owed"}</span>
                     <strong className={`num ${owedVal > 0 ? "text-warning" : "text-success"}`}>
-                      {formatCurrency(owedVal)}
+                      {formatCurrency(surplusVal > 0 ? surplusVal : owedVal)}
                     </strong>
                   </span>
                 </div>

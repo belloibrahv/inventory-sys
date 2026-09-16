@@ -187,6 +187,7 @@ export function BooksPdfButton({ data }: { data: BooksCheck }) {
       section("Still owed")
       row("Customers still owe us", formatPdfMoney(data.customersOwe))
       row("Still owed to suppliers", formatPdfMoney(data.supplierOwed))
+      row("Suppliers who owe us", formatPdfMoney(data.supplierCredit))
       row("Sales with no customer name", String(data.walkIns))
       row("Cash sales (Expected in till)", formatPdfMoney(data.expectedCash))
       row("Cash remitted", data.countedCash == null ? "Day not closed" : formatPdfMoney(data.countedCash))

@@ -110,6 +110,27 @@ export function ReportsStatement({ data }: { data: ReportsPack }) {
             </tbody>
           </table>
         </div>
+        <div className="px-6 py-4">
+          <h3 className="text-sm font-semibold">Suppliers who owe us</h3>
+          <table className="mt-2 w-full text-[11px]">
+            <tbody>
+              {groupOwedHouses(data.supplierCredits ?? []).map((house) => (
+                <tr key={house.key} className="border-b border-slate-100">
+                  <td className="py-1 pr-2">
+                    <span className="font-medium">{house.name}</span>
+                    {house.bills.map((row) => (
+                      <span key={row.id} className="block text-slate-500">{row.invoice} · {row.shop}</span>
+                    ))}
+                  </td>
+                  <td className="py-1 text-right tabular-nums font-medium">{formatCurrency(house.owed)}</td>
+                </tr>
+              ))}
+              {(data.supplierCredits ?? []).length === 0 ? (
+                <tr><td colSpan={2} className="py-3 text-slate-500">No supplier owes us after send-backs.</td></tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="border-t border-slate-200 px-6 py-4">

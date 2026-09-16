@@ -12,8 +12,7 @@ import { isLetterheadKey } from "@/lib/letterhead"
 import { generateDocNumber, money } from "@/lib/utils"
 import { saleTenders, sumSaleTenders } from "@/lib/sale-money"
 import { healOpeningStockBills } from "@/lib/opening-stock-money"
-import { payablePurchaseWhere } from "@/lib/purchase-money"
-import { displayPartyName, partyNameKey } from "@/lib/party-key"
+import { payablePurchaseWhere, groupSupplierLedgers, purchaseBalance } from "@/lib/purchase-money"
 import { shopPeriodWindow, shopPreviousWindow, watDayKey, type ShopRange } from "@/lib/lagos-day"
 import { writeAudit } from "@/lib/audit"
 import {
@@ -38,6 +37,7 @@ function emptyFinance() {
     expenses: [],
     debtors: [] as Array<{ id: string; name: string; currentBalance: number; branch: { code: string } }>,
     creditors: [] as Array<{ id: string; name: string; owed: number }>,
+    supplierCredits: [] as Array<{ id: string; name: string; owed: number }>,
     canSetOpening: false,
     shops: [] as OpeningCashShop[],
     bankAccounts: [] as NamedBankRow[],
@@ -88,7 +88,7 @@ export async function getFinance() {
   const branchId = await viewBranchFilter(user)
   const where = branchId ? { branchId } : {}
 
-  const [sales, expenses, purchases, entries, debtors, shops, bankAccounts] = await Promise.all([
+  const [sales, expenses, purchases, entries, debtors, shops, bankAccounts, creditHouses] = await Promise.all([
     prisma.sale.findMany({
       where: { ...where, status: "COMPLETED" },
       include: { branch: true, customer: true, payments: true },
@@ -127,6 +127,10 @@ export async function getFinance() {
       where: { isActive: true, ...(branchId ? { branchId } : {}) },
       include: { branch: { select: { name: true, code: true } } },
       orderBy: [{ bankName: "asc" }, { accountNumber: "asc" }],
+    }),
+    prisma.supplier.findMany({
+      where: { creditBalance: { gt: 0 }, name: { not: "Opening stock" } },
+      select: { id: true, name: true, creditBalance: true },
     }),
   ])
 
@@ -262,16 +266,33 @@ export async function getFinance() {
   const cashBalance = openingCash + cashRevenue - expenditure
   const bankBalance = openingBank + bankRevenue - supplierPayments
 
-  const creditors = Object.values(
-    purchases.reduce<Record<string, { id: string; name: string; owed: number }>>((acc, row) => {
-      const due = money(row.totalAmount) - money(row.paidAmount)
-      if (due <= 0) return acc
-      const key = partyNameKey(row.supplier.name) || row.supplierId
-      acc[key] = acc[key] ?? { id: row.supplierId, name: displayPartyName(row.supplier.name), owed: 0 }
-      acc[key].owed += due
-      return acc
-    }, {})
-  ).sort((a, b) => b.owed - a.owed)
+  const seenHouses = new Set(purchases.map((row) => row.supplierId))
+  const ledgers = groupSupplierLedgers([
+    ...purchases.map((row) => ({
+      supplierId: row.supplierId,
+      supplierName: row.supplier.name,
+      creditBalance: row.supplier.creditBalance,
+      totalAmount: row.totalAmount,
+      paidAmount: row.paidAmount,
+      returnedAmount: row.returnedAmount,
+    })),
+    ...creditHouses
+      .filter((row) => !seenHouses.has(row.id))
+      .map((row) => ({
+        supplierId: row.id,
+        supplierName: row.name,
+        creditBalance: row.creditBalance,
+        totalAmount: 0,
+        paidAmount: 0,
+        returnedAmount: 0,
+      })),
+  ])
+  const creditors = ledgers
+    .filter((row) => row.owed > 0)
+    .map((row) => ({ id: row.id, name: row.name, owed: row.owed }))
+  const supplierCredits = ledgers
+    .filter((row) => row.surplus > 0)
+    .map((row) => ({ id: row.id, name: row.name, owed: row.surplus }))
 
   return {
     revenue,
@@ -293,6 +314,7 @@ export async function getFinance() {
       branch: { code: row.branch.code },
     })),
     creditors,
+    supplierCredits,
     canSetOpening: canSetOpeningMoney(user.role),
     shops: openingCashShops,
     bankAccounts: namedBanks,
@@ -1048,6 +1070,7 @@ export async function getReportData(
       inventory: [],
       debtors: [],
       creditors: [],
+      supplierCredits: [],
       period: empty,
       prior: { from: emptyPrior.from, to: emptyPrior.to, revenue: 0, collected: 0, expenses: 0 },
     }
@@ -1060,7 +1083,7 @@ export async function getReportData(
   const prior = shopPreviousWindow(period.from, span)
   const shopWhere = branchId ? { branchId } : {}
   await healOpeningStockBills()
-  const [sales, expenses, swaps, returns, inventory, debtors, purchases, priorSales, priorExpenses] = await Promise.all([
+  const [sales, expenses, swaps, returns, inventory, debtors, purchases, priorSales, priorExpenses, creditHouses] = await Promise.all([
     prisma.sale.findMany({
       where: { status: "COMPLETED", ...shopWhere, saleDate: { gte: period.start, lt: period.end } },
       include: { branch: true, items: true, customer: true, payments: true },
@@ -1103,19 +1126,79 @@ export async function getReportData(
       where: { ...shopWhere, approvedAt: { not: null }, date: { gte: prior.start, lt: prior.end } },
       select: { amount: true },
     }),
+    prisma.supplier.findMany({
+      where: { creditBalance: { gt: 0 }, name: { not: "Opening stock" } },
+      select: { id: true, name: true, creditBalance: true },
+    }),
   ])
   const creditors = purchases
-    .map((row) => ({
-      id: row.id,
-      invoiceNumber: row.invoiceNumber,
-      supplier: row.supplier.name,
-      supplierId: row.supplierId,
-      branch: row.branch.code,
-      total: money(row.totalAmount),
-      paid: money(row.paidAmount),
-      owed: money(row.totalAmount) - money(row.paidAmount),
-    }))
+    .map((row) => {
+      const bal = purchaseBalance(row.totalAmount, row.paidAmount, row.returnedAmount)
+      return {
+        id: row.id,
+        invoiceNumber: row.invoiceNumber,
+        supplier: row.supplier.name,
+        supplierId: row.supplierId,
+        branch: row.branch.code,
+        total: money(row.totalAmount),
+        paid: money(row.paidAmount),
+        owed: bal.owed,
+        surplus: bal.surplus,
+        sentBack: bal.sentBack,
+        creditBalance: money(row.supplier.creditBalance),
+      }
+    })
     .filter((row) => row.owed > 0)
+  const supplierCredits = [
+    ...purchases
+      .map((row) => {
+        const bal = purchaseBalance(row.totalAmount, row.paidAmount, row.returnedAmount)
+        return {
+          id: row.id,
+          invoiceNumber: row.invoiceNumber,
+          supplier: row.supplier.name,
+          supplierId: row.supplierId,
+          branch: row.branch.code,
+          total: money(row.totalAmount),
+          paid: money(row.paidAmount),
+          owed: bal.surplus,
+        }
+      })
+      .filter((row) => row.owed > 0),
+    ...groupSupplierLedgers(
+      purchases.map((row) => ({
+        supplierId: row.supplierId,
+        supplierName: row.supplier.name,
+        creditBalance: row.supplier.creditBalance,
+        totalAmount: 0,
+        paidAmount: 0,
+        returnedAmount: 0,
+      }))
+    )
+      .filter((house) => house.extraCredit > 0 && house.surplus > 0)
+      .map((house) => ({
+        id: `${house.id}-credit`,
+        invoiceNumber: "Send-back surplus",
+        supplier: house.name,
+        supplierId: house.id,
+        branch: "",
+        total: 0,
+        paid: 0,
+        owed: house.extraCredit,
+      })),
+    ...creditHouses
+      .filter((row) => !purchases.some((bill) => bill.supplierId === row.id))
+      .map((row) => ({
+        id: `${row.id}-credit`,
+        invoiceNumber: "Send-back surplus",
+        supplier: row.name,
+        supplierId: row.id,
+        branch: "",
+        total: 0,
+        paid: 0,
+        owed: money(row.creditBalance),
+      })),
+  ]
   const priorMix = sumSaleTenders(priorSales)
   const priorExpense = priorExpenses.reduce((sum, row) => sum + money(row.amount), 0)
   return {
@@ -1126,6 +1209,7 @@ export async function getReportData(
     inventory,
     debtors,
     creditors,
+    supplierCredits,
     period,
     prior: {
       from: prior.from,

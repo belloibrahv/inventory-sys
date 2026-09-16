@@ -52,6 +52,7 @@ type FinanceData = {
   bankAccount: { balance: number; entries: LedgerEntry[] }
   debtors: Array<{ id: string; name: string; currentBalance: number; branch: { code: string } }>
   creditors: Array<{ id: string; name: string; owed: number }>
+  supplierCredits: Array<{ id: string; name: string; owed: number }>
   canSetOpening: boolean
   shops: OpeningCashShop[]
   bankAccounts: NamedBankRow[]
@@ -93,6 +94,7 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
   const days = ledger === "CASH" ? cashDays : ledger === "BANK" ? bankDays : []
   const debtorsPager = usePagedRows(data.debtors, "debtors")
   const creditorsPager = usePagedRows(data.creditors, "creditors")
+  const creditsPager = usePagedRows(data.supplierCredits, "supplier-credits")
   const daysPager = usePagedRows(days, ledger ?? "none")
 
   return (
@@ -303,6 +305,51 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
           ))}
           {data.creditors.length === 0 ? (
             <TableEmpty colSpan={2}>Nothing is owed to suppliers right now.</TableEmpty>
+          ) : null}
+        </TableShell>
+
+        <TableShell
+          caption={
+            <>
+              <h2 className="text-sm font-semibold tracking-tight">Suppliers who owe us</h2>
+              <div className="flex items-center gap-2">
+                <TableDownload
+                  filename="suppliers-who-owe-us"
+                  rows={() => [["Supplier", "They owe us"], ...data.supplierCredits.map((row) => [row.name, row.owed])]}
+                />
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/suppliers">All suppliers</Link>
+                </Button>
+              </div>
+            </>
+          }
+          columns={[{ label: "Supplier" }, { label: "They owe us", align: "right" }]}
+          footer={
+            <TablePager
+              page={creditsPager.page}
+              pageCount={creditsPager.pageCount}
+              pageSize={creditsPager.pageSize}
+              total={creditsPager.total}
+              start={creditsPager.start}
+              end={creditsPager.end}
+              onPageChange={creditsPager.setPage}
+              onPageSizeChange={creditsPager.setPageSize}
+              noun="suppliers"
+            />
+          }
+        >
+          {creditsPager.pageRows.map((row) => (
+            <tr key={row.id}>
+              <td>
+                <Link href={`/suppliers/${row.id}`} className="font-medium text-primary hover:underline">
+                  {row.name}
+                </Link>
+              </td>
+              <td className="text-right num font-semibold text-success">{formatCurrency(row.owed)}</td>
+            </tr>
+          ))}
+          {data.supplierCredits.length === 0 ? (
+            <TableEmpty colSpan={2}>No supplier owes us after send-backs.</TableEmpty>
           ) : null}
         </TableShell>
       </div>

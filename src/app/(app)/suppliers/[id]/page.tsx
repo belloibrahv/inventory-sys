@@ -3,6 +3,7 @@ import { notFound } from "next/navigation"
 import { getSupplier } from "@/app/actions/parties"
 import { PageHeader, StatCard, StatGrid, StatusBadge } from "@/components/shared"
 import { formatCurrency, formatDate, money } from "@/lib/utils"
+import { purchaseBalance } from "@/lib/purchase-money"
 
 export default async function SupplierDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -11,7 +12,14 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
 
   const totalPurchased = supplier.purchases.reduce((sum, row) => sum + money(row.totalAmount), 0)
   const totalPaid = supplier.purchases.reduce((sum, row) => sum + money(row.paidAmount), 0)
-  const totalOwed = Math.max(0, totalPurchased - totalPaid)
+  let net = 0
+  for (const row of supplier.purchases) {
+    const bal = purchaseBalance(row.totalAmount, row.paidAmount, row.returnedAmount)
+    net += bal.remaining - bal.paid
+  }
+  net -= money(supplier.creditBalance)
+  const totalOwed = Math.max(0, net)
+  const totalSurplus = Math.max(0, -net)
 
   return (
     <div className="space-y-6">
@@ -43,6 +51,13 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
           href="#supplier-bills"
         />
         <StatCard
+          label="They owe us"
+          value={formatCurrency(totalSurplus)}
+          hint={totalSurplus === 0 ? "They owe us nothing" : "Send-backs that left a surplus on this house"}
+          tone={totalSurplus > 0 ? "success" : "neutral"}
+          href="#supplier-bills"
+        />
+        <StatCard
           label="Phones we collected"
           value={String(supplier.imeiRecords.length)}
           hint="Phones and serial items booked in from them. Open a bill below to follow each IMEI."
@@ -62,7 +77,8 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
                 <th className="px-3 py-3">Shop</th>
                 <th className="px-3 py-3 text-right">Bill value</th>
                 <th className="px-3 py-3 text-right">We have paid</th>
-                <th className="px-4 py-3 text-right">Still owed</th>
+                <th className="px-3 py-3 text-right">Sent back</th>
+                <th className="px-4 py-3 text-right">Balance</th>
                 <th className="px-5 py-3 text-center">Status</th>
               </tr>
             </thead>
@@ -70,7 +86,7 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
               {supplier.purchases.map((row) => {
                 const poVal = money(row.totalAmount)
                 const poPaid = money(row.paidAmount)
-                const poOwed = Math.max(0, poVal - poPaid)
+                const bal = purchaseBalance(row.totalAmount, row.paidAmount, row.returnedAmount)
 
                 return (
                   <tr key={row.id} className="hover:bg-muted/30 transition-colors">
@@ -93,8 +109,12 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
                       {formatCurrency(poPaid)}
                     </td>
 
+                    <td className="px-3 py-3 text-right tabular-nums font-mono">
+                      {formatCurrency(bal.sentBack)}
+                    </td>
+
                     <td className="px-4 py-3 text-right tabular-nums font-mono font-bold text-foreground">
-                      {formatCurrency(poOwed)}
+                      {bal.surplus > 0 ? `They owe us ${formatCurrency(bal.surplus)}` : formatCurrency(bal.owed)}
                     </td>
 
                     <td className="px-5 py-3 text-center">

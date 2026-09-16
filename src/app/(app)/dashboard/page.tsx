@@ -74,7 +74,11 @@ export default async function DashboardPage() {
         <StatCard
           label="Still owed to suppliers"
           value={formatCurrency(data.exceptions.creditorOwed)}
-          hint="Unpaid supplier bills for the shops you can see"
+          hint={
+            data.exceptions.supplierCredit > 0
+              ? `They owe us ${formatCurrency(data.exceptions.supplierCredit)} after send-backs`
+              : "Unpaid supplier bills for the shops you can see"
+          }
           href="/suppliers"
         />
         <StatCard

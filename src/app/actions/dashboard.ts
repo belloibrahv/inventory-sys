@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/session"
 import { scopedBranchId } from "@/lib/rbac"
 import { money } from "@/lib/utils"
 import { healOpeningStockBills } from "@/lib/opening-stock-money"
-import { payablePurchaseWhere } from "@/lib/purchase-money"
+import { payablePurchaseWhere, groupSupplierLedgers } from "@/lib/purchase-money"
 import { getUnclosedBusinessDays } from "@/app/actions/day-close"
 import { getParkedWatch } from "@/app/actions/parked"
 
@@ -119,12 +119,18 @@ export async function getDashboardData() {
     }),
     prisma.approval.count({ where: { status: "PENDING" } }),
     prisma.sale.count({ where: { ...saleWhere, customerId: null } }),
-    prisma.purchase.aggregate({
+    prisma.purchase.findMany({
       where: {
         ...(branchId ? { branchId } : {}),
         ...payablePurchaseWhere,
       },
-      _sum: { totalAmount: true, paidAmount: true },
+      select: {
+        totalAmount: true,
+        paidAmount: true,
+        returnedAmount: true,
+        supplierId: true,
+        supplier: { select: { name: true, creditBalance: true } },
+      },
     }),
     prisma.imeiRecord.groupBy({
       by: ["productId", "branchId"],
@@ -339,12 +345,25 @@ export async function getDashboardData() {
       })),
     ranking,
     imeiCheck,
-    exceptions: {
-      pendingApprovals,
-      walkIns,
-      creditorOwed: money(openPurchases._sum.totalAmount) - money(openPurchases._sum.paidAmount),
-      imeiGaps: imeiCheck.filter((row) => row.delta !== 0).length,
-    },
+    exceptions: (() => {
+      const ledgers = groupSupplierLedgers(
+        openPurchases.map((row) => ({
+          supplierId: row.supplierId,
+          supplierName: row.supplier.name,
+          creditBalance: row.supplier.creditBalance,
+          totalAmount: row.totalAmount,
+          paidAmount: row.paidAmount,
+          returnedAmount: row.returnedAmount,
+        }))
+      )
+      return {
+        pendingApprovals,
+        walkIns,
+        creditorOwed: ledgers.reduce((sum, row) => sum + row.owed, 0),
+        supplierCredit: ledgers.reduce((sum, row) => sum + row.surplus, 0),
+        imeiGaps: imeiCheck.filter((row) => row.delta !== 0).length,
+      }
+    })(),
     tasks: [
       { href: "/finance/close", label: "Days not closed yet", count: unclosedCount },
       { href: "/pos", label: "Parked sales sitting too long", count: parked.sitting },

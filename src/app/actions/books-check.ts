@@ -12,7 +12,7 @@ import { getAppSettings } from "@/lib/settings"
 import { money } from "@/lib/utils"
 import { sumSaleTenders } from "@/lib/sale-money"
 import { healOpeningStockBills } from "@/lib/opening-stock-money"
-import { payablePurchaseWhere } from "@/lib/purchase-money"
+import { payablePurchaseWhere, groupSupplierLedgers } from "@/lib/purchase-money"
 import { healDuplicateDayCloses } from "@/lib/day-close-heal"
 
 export type BooksRange = ShopRange
@@ -123,7 +123,7 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
           ...(shopId ? { branchId: shopId } : {}),
           ...payablePurchaseWhere,
         },
-        select: { totalAmount: true, paidAmount: true },
+        select: { totalAmount: true, paidAmount: true, returnedAmount: true, supplier: { select: { creditBalance: true, name: true, id: true } }, supplierId: true },
       }),
       prisma.inventory.findMany({
         where: shopId ? { branchId: shopId } : {},
@@ -179,7 +179,18 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
   const closedOn = new Set(recentCloses.map((row) => row.businessDate || watDayKey(row.closeDate)))
   const shop = shops.find((row) => row.id === shopId)
 
-  const supplierOwed = creditors.reduce((sum, row) => sum + money(row.totalAmount) - money(row.paidAmount), 0)
+  const supplierLedgers = groupSupplierLedgers(
+    creditors.map((row) => ({
+      supplierId: row.supplierId,
+      supplierName: row.supplier.name,
+      creditBalance: row.supplier.creditBalance,
+      totalAmount: row.totalAmount,
+      paidAmount: row.paidAmount,
+      returnedAmount: row.returnedAmount,
+    }))
+  )
+  const supplierOwed = supplierLedgers.reduce((sum, row) => sum + row.owed, 0)
+  const supplierCredit = supplierLedgers.reduce((sum, row) => sum + row.surplus, 0)
   const closeForDay = span === "day" ? closes.find((row) => (row.businessDate || "") === day) ?? closes[0] ?? null : null
   const expectedCash = now.cash
   const countedCash = closeForDay ? money(closeForDay.countedCash) : null
@@ -350,6 +361,7 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
     moneyOut: expenseNow + paidNow,
     customersOwe: money(debtors._sum.currentBalance),
     supplierOwed,
+    supplierCredit,
     expectedCash,
     countedCash,
     variance,

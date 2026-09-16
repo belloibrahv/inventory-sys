@@ -18,7 +18,7 @@ import {
   type OpeningChange,
 } from "@/lib/opening-book"
 import { OPENING_STOCK_METHOD } from "@/lib/upload-purchase"
-import { payablePurchaseWhere } from "@/lib/purchase-money"
+import { payablePurchaseWhere, purchaseBalance } from "@/lib/purchase-money"
 import { healOpeningStockBills } from "@/lib/opening-stock-money"
 import { money } from "@/lib/utils"
 
@@ -825,7 +825,7 @@ export async function getOpeningReport(requestedBranchId?: string) {
     date: (bill.receivedDate ?? bill.createdAt).toISOString(),
     total: money(bill.totalAmount),
     paid: money(bill.paidAmount),
-    owed: Math.max(0, money(bill.totalAmount) - money(bill.paidAmount)),
+    owed: purchaseBalance(bill.totalAmount, bill.paidAmount, bill.returnedAmount).owed,
   }))
 
   return { shops, lines, boughtSince }

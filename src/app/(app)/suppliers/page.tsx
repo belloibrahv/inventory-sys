@@ -20,18 +20,20 @@ export default async function SuppliersPage() {
       invoiceNumber: purchase.invoiceNumber,
       totalAmount: money(purchase.totalAmount),
       paidAmount: money(purchase.paidAmount),
+      returnedAmount: money(purchase.returnedAmount),
       status: purchase.status,
       createdAt: purchase.createdAt.toISOString(),
       branchCode: purchase.branch.code,
       branchName: purchase.branch.name,
     })),
+    creditBalance: money(supplier.creditBalance),
   }))
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Suppliers"
-        description="What we bought from each supplier, what we paid, and what we still owe. Click a box to see the houses that make that number. Click a house to open its bills. Each house is one name and one phone."
+        description="What we bought from each supplier, what we paid, what we still owe, and what they owe us after send-backs. Click a box to see the houses that make that number. Click a house to open its bills. Each house is one name and one phone."
       />
 
       <div className="page-split">

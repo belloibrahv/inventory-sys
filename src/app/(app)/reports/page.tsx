@@ -103,6 +103,13 @@ export default async function ReportsPage({
       shop: row.branch,
       owed: row.owed,
     })),
+    supplierCredits: (data.supplierCredits ?? []).map((row) => ({
+      id: row.id,
+      invoice: row.invoiceNumber,
+      supplier: row.supplier,
+      shop: row.branch,
+      owed: row.owed,
+    })),
     lowStock: lowStock.map((row) => ({
       id: row.id,
       product: row.product.name,
