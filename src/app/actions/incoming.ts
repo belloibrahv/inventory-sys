@@ -3,7 +3,7 @@
 import { IncomingIdentity, IncomingStatus, type Prisma } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
-import { can, isSuperAdmin } from "@/lib/permissions"
+import { can, isShopOwner } from "@/lib/permissions"
 import { scopedBranchId } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { generateDocNumber, money } from "@/lib/utils"
@@ -22,11 +22,11 @@ function unitKey(identity: IncomingIdentity, value: string) {
 }
 
 async function canBookIncoming(role: Parameters<typeof can>[0]) {
-  return isSuperAdmin(role) || (await can(role, "action.incoming"))
+  return isShopOwner(role) || (await can(role, "action.incoming"))
 }
 
 async function canViewIncoming(role: Parameters<typeof can>[0]) {
-  return isSuperAdmin(role) || (await can(role, "view.incoming")) || (await can(role, "action.incoming"))
+  return isShopOwner(role) || (await can(role, "view.incoming")) || (await can(role, "action.incoming"))
 }
 
 export async function getIncomingLots() {
@@ -37,7 +37,7 @@ export async function getIncomingLots() {
   const lots = await prisma.incomingLot.findMany({
     where: {
       ...(branchId ? { branchId } : {}),
-      ...(booker || isSuperAdmin(user.role) ? {} : { visible: true }),
+      ...(booker || isShopOwner(user.role) ? {} : { visible: true }),
     },
     include: {
       branch: true,
@@ -836,7 +836,7 @@ export async function bookPurchaseAsComing(formData: FormData) {
 
 export async function setIncomingVisible(formData: FormData) {
   const user = await requireUser()
-  if (!isSuperAdmin(user.role)) return { error: "Only the main admin can show or hide goods on the way." }
+  if (!isShopOwner(user.role)) return { error: "Only the main admin or the CEO can show or hide goods on the way." }
   const id = String(formData.get("id") || "")
   const visible = String(formData.get("visible") || "") === "true"
   await prisma.incomingLot.update({ where: { id }, data: { visible } })

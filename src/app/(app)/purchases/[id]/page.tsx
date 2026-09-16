@@ -5,7 +5,7 @@ import { bookPurchaseAsComing } from "@/app/actions/incoming"
 import { getPurchase, payPurchase, receivePurchaseImeis } from "@/app/actions/ops"
 import { ExportCsv } from "@/components/export-csv"
 import { prisma } from "@/lib/prisma"
-import { isSuperAdmin } from "@/lib/rbac"
+import { isShopOwner } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { ActionForm } from "@/components/action-form"
 import { PageHeader, StatusBadge } from "@/components/shared"
@@ -323,10 +323,10 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
       ) : (
         <p className="text-sm text-muted-foreground">This supplier bill is fully paid.</p>
       )}
-      {!isOpening && isSuperAdmin(me.role) && money(purchase.paidAmount) > 0 ? (
+      {!isOpening && isShopOwner(me.role) && money(purchase.paidAmount) > 0 ? (
         <div className="surface-card p-5">
           <h3 className="mb-2 font-semibold">Undo last supplier payment</h3>
-          <p className="mb-3 text-sm text-muted-foreground">Main admin only. The stock and the phone numbers (IMEIs) do not change.</p>
+          <p className="mb-3 text-sm text-muted-foreground">Main admin or CEO. The stock and the phone numbers (IMEIs) do not change. Who did what keeps this step.</p>
           <ActionForm action={reverseSupplierPayment} submit="Reverse last payment" variant="outline">
             <input type="hidden" name="id" value={purchase.id} />
           </ActionForm>

@@ -678,7 +678,7 @@ export async function getSettings() {
 
 export async function saveSetting(formData: FormData) {
   const user = await requireUser()
-  if (!(await can(user.role, "action.settings"))) return { error: "Only the main admin can change settings, unless the main admin gives you that right." }
+  if (!(await can(user.role, "action.settings"))) return { error: "Only the main admin or the CEO can change settings." }
   const key = String(formData.get("key"))
   const value = String(formData.get("value"))
   if (isLetterheadKey(key)) {

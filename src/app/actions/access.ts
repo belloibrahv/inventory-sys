@@ -5,12 +5,12 @@ import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { shiftCustomerBalance } from "@/lib/concurrency"
 import { requireUser } from "@/lib/session"
-import { booksDeskPartner, isBooksDesk, isSuperAdmin } from "@/lib/rbac"
+import { booksDeskPartner, isBooksDesk, isShopOwner } from "@/lib/rbac"
 import { ALL_PERM_KEYS, ensureRolePermissions } from "@/lib/permissions"
 
 export async function getRoleMatrix() {
   const user = await requireUser()
-  if (!isSuperAdmin(user.role)) return { error: "Only the main admin can open Who can see what." as const }
+  if (!isShopOwner(user.role)) return { error: "Only the main admin or the CEO can open Who can see what." as const }
   await ensureRolePermissions()
   const rows = await prisma.rolePermission.findMany()
   return { rows }
@@ -18,9 +18,11 @@ export async function getRoleMatrix() {
 
 export async function saveRoleAccess(formData: FormData) {
   const user = await requireUser()
-  if (!isSuperAdmin(user.role)) return { error: "Only the main admin can change what others see." }
+  if (!isShopOwner(user.role)) return { error: "Only the main admin or the CEO can change what others see." }
   const role = String(formData.get("role") || "") as UserRole
-  if (!role || role === "SUPER_ADMIN") return { error: "Nobody can take pages away from the main admin." }
+  if (!role || role === "SUPER_ADMIN" || role === "CEO") {
+    return { error: "Nobody can take pages away from the main admin or the CEO." }
+  }
 
   await ensureRolePermissions()
 
@@ -68,13 +70,13 @@ export async function saveRoleAccess(formData: FormData) {
 
 export async function setStaffActive(formData: FormData) {
   const user = await requireUser()
-  if (!isSuperAdmin(user.role)) return { error: "Only the main admin can disable or restore staff." }
+  if (!isShopOwner(user.role)) return { error: "Only the main admin or the CEO can disable or restore staff." }
   const id = String(formData.get("id") || "")
   const next = String(formData.get("active") || "") === "true"
   const target = await prisma.user.findUnique({ where: { id } })
   if (!target) return { error: "We could not find that staff." }
-  if (target.id === user.id) return { error: "You cannot lock your own main admin login." }
-  if (target.role === "SUPER_ADMIN" && !next) return { error: "Only the person who owns the database can lock another main admin, and only after a proper handover." }
+  if (target.id === user.id) return { error: "You cannot lock your own login." }
+  if (target.role === "SUPER_ADMIN") return { error: "The CEO cannot lock the main admin. Only another main admin, after a proper handover, can do that." }
 
   await prisma.user.update({ where: { id }, data: { isActive: next } })
   await prisma.auditLog.create({
@@ -95,7 +97,7 @@ export async function setStaffActive(formData: FormData) {
 
 export async function reverseInvoicePayment(formData: FormData) {
   const user = await requireUser()
-  if (!isSuperAdmin(user.role)) return { error: "Only the main admin can undo a collection." }
+  if (!isShopOwner(user.role)) return { error: "Only the main admin or the CEO can undo a collection." }
   const saleId = String(formData.get("saleId") || "")
   const sale = await prisma.sale.findUnique({
     where: { id: saleId },
@@ -127,7 +129,7 @@ export async function reverseInvoicePayment(formData: FormData) {
           amount: amount.toFixed(2),
           balance: Number(after.currentBalance).toFixed(2),
           reference: sale.invoiceNumber,
-          description: `Main admin undid money collected on ${sale.invoiceNumber}`,
+          description: `The main admin or the CEO undid money collected on ${sale.invoiceNumber}`,
         },
       })
     }
@@ -162,7 +164,7 @@ export async function reverseInvoicePayment(formData: FormData) {
 
 export async function reverseSupplierPayment(formData: FormData) {
   const user = await requireUser()
-  if (!isSuperAdmin(user.role)) return { error: "Only the main admin can undo a supplier payment." }
+  if (!isShopOwner(user.role)) return { error: "Only the main admin or the CEO can undo a supplier payment." }
   const id = String(formData.get("id") || "")
   const purchase = await prisma.purchase.findUnique({ where: { id } })
   if (!purchase) return { error: "We could not find that supplier bill." }

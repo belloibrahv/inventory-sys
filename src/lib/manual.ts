@@ -26,11 +26,11 @@ export type RoleManual = {
 
 const ROLE_JOB: Record<UserRole, { job: string; shops: string }> = {
   SUPER_ADMIN: {
-    job: "You can open every page. You can undo a true money mistake. Only you can tick Who can see what, change Settings, and open or close a shop.",
+    job: "You can open every page. You can undo a true money mistake. You can tick Who can see what, change Settings, and open or close a shop. The CEO can do the same corrections. Nobody can secretly rewrite an old invoice.",
     shops: "You see every shop.",
   },
   CEO: {
-    job: "You watch all three Ibadan shops: sales, stock, money, and the trail. You cannot change Who can see what, Settings, or sell below the lowest price.",
+    job: "You own the shops with the main admin. You can correct money, staff, shops, settings, and Who can see what. You cannot take the main admin job away, and you cannot secretly rewrite an old invoice.",
     shops: "You see every shop.",
   },
   AUDITOR: {
@@ -496,13 +496,13 @@ const PAGES: Array<
     href: "/branches",
     title: "Shops",
     needAction: "action.settings",
-    what: "Iwo Road is head office. Bodija and Challenge are the other two shops. Each shop keeps its own stock, sales, customers, and money, and staff there see only their own shop. The main admin can open a new shop or close one. Closed shops stay in a main-admin-only list so old sales are not lost.",
+    what: "Iwo Road is head office. Bodija and Challenge are the other two shops. Each shop keeps its own stock, sales, customers, and money, and staff there see only their own shop. The main admin or the CEO can open a new shop or close one. Closed shops stay in an owner list so old sales are not lost.",
     doThis: [
       "Confirm you see Iwo Road, Ibadan, Bodija, Ibadan, and Challenge, Ibadan.",
-      "If you are the main admin, you can open a new shop with a name, a short code, and an address.",
+      "If you are the main admin or the CEO, you can open a new shop with a name, a short code, and an address.",
     ],
     watch: ["Old Lagos or Abuja names do not appear when you sell or book new goods."],
-    cannot: ["Only the main admin can open or close a shop."],
+    cannot: ["Only the main admin or the CEO can open or close a shop."],
     lookup: ["shop", "branch", "iwo", "challenge"],
   },
   {
@@ -510,7 +510,7 @@ const PAGES: Array<
     href: "/staff",
     title: "Staff",
     needAction: "action.staff",
-    what: "The people list. Add a person, pick their job, pick their shop, and give a first password. The main admin can lock a login.",
+    what: "The people list. Add a person, pick their job, pick their shop, and give a first password. The main admin or the CEO can lock a login.",
     doThis: [
       "Add name, work email, job, and shop.",
       "Give a temporary password. They should change it after they sign in.",
@@ -524,13 +524,13 @@ const PAGES: Array<
     id: "access",
     href: "/staff/access",
     title: "Who can see what",
-    what: "Main admin only. Tick the pages and the work for each job. The main admin is not ticked here because The main admin always has all rights.",
+    what: "Main admin and CEO. Tick the pages and the work for each job. The main admin and the CEO are not ticked here because they always keep the right to change the shop.",
     doThis: [
       "Open a job, such as Cashier.",
       "Tick or untick a page. Save only if you mean to change a live rule.",
     ],
-    watch: ["A CEO who opens this address is sent away."],
-    cannot: ["You cannot remove main admin rights here. That is by design."],
+    watch: ["A cashier who opens this address is sent away."],
+    cannot: ["You cannot remove main admin or CEO rights here. That is by design."],
     lookup: ["access", "permission", "tick", "role"],
   },
   {
@@ -583,15 +583,15 @@ const PAGES: Array<
     href: "/settings",
     title: "Settings",
     needAction: "action.settings",
-    what: "Shop name, phone, address, and email that print on invoices, books, reports, and this manual. Also the low stock alert, default warranty days, and whether cashiers may sell below the lowest price. The main admin can download a shop backup.",
+    what: "Shop name, phone, address, and email that print on invoices, books, reports, and this manual. Also the low stock alert, default warranty days, and whether cashiers may sell below the lowest price. The main admin or the CEO can download a shop backup.",
     doThis: [
       "Settings is three screens. Shop details holds what prints on an invoice. Selling rules holds the lowest-price rule, the low stock warning, and warranty days. Backup is the download.",
       "Read the invoice header values on Shop details.",
-      "Change them only if the main admin and the CEO agree.",
-      "The main admin may download a shop backup on the Backup screen and keep that file off this computer.",
+      "Change them if you are the main admin or the CEO.",
+      "The main admin or the CEO may download a shop backup on the Backup screen and keep that file off this computer.",
     ],
     watch: ["The next printed invoice and the next books PDF use these values. A backup does not include passwords."],
-    cannot: ["CEO can read settings but cannot change them. CEO cannot download the shop backup."],
+    cannot: ["A cashier cannot change Settings or download a shop backup."],
     lookup: ["settings", "shop details", "selling rules", "address", "phone", "lowest price", "backup"],
   },
   {

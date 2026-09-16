@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/shared"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { isSuperAdmin } from "@/lib/rbac"
+import { isShopOwner } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 
 async function toggle(formData: FormData) {
@@ -94,7 +94,7 @@ export default async function BranchesPage() {
   const [me, branches] = await Promise.all([requireUser(), getBranches()])
   const open = branches.filter((branch) => branch.isActive)
   const closed = branches.filter((branch) => !branch.isActive)
-  const admin = isSuperAdmin(me.role)
+  const admin = isShopOwner(me.role)
   return (
     <div className="page-split">
       <div>
@@ -121,7 +121,7 @@ export default async function BranchesPage() {
           </div>
         ) : null}
       </div>
-      {isSuperAdmin(me.role) ? (
+      {isShopOwner(me.role) ? (
         <div className="surface-card p-5">
           <h3 className="mb-4 font-semibold">Provision Branch Location</h3>
           <p className="mb-3 text-sm text-muted-foreground">Register a new retail branch store or distribution warehouse location.</p>

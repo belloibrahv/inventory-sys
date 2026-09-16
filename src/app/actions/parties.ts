@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { scopeRecord, viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
-import { isSuperAdmin, scopedBranchId } from "@/lib/rbac"
+import { isShopOwner, scopedBranchId } from "@/lib/rbac"
 import type { SupplierKind } from "@prisma/client"
 
 export async function getCustomers(search?: string) {
@@ -135,7 +135,7 @@ export async function getBranches() {
 
 export async function createBranch(formData: FormData) {
   const user = await requireUser()
-  if (!isSuperAdmin(user.role)) return { error: "Only the main admin can open a new shop." }
+  if (!isShopOwner(user.role)) return { error: "Only the main admin or the CEO can open a new shop." }
   const code = String(formData.get("code") ?? "").trim().toUpperCase()
   const name = String(formData.get("name") ?? "").trim()
   if (!code || !name) return { error: "Type the name and the short code." }
@@ -154,7 +154,7 @@ export async function createBranch(formData: FormData) {
 
 export async function updateBranch(formData: FormData) {
   const user = await requireUser()
-  if (!isSuperAdmin(user.role)) return { error: "Only the main admin can edit a shop." }
+  if (!isShopOwner(user.role)) return { error: "Only the main admin or the CEO can edit a shop." }
 
   const id = String(formData.get("id") || "")
   const name = String(formData.get("name") ?? "").trim()
@@ -202,7 +202,7 @@ export async function updateBranch(formData: FormData) {
 
 export async function toggleBranch(id: string) {
   const user = await requireUser()
-  if (!isSuperAdmin(user.role)) return { error: "Only the main admin can close a shop or open it again." }
+  if (!isShopOwner(user.role)) return { error: "Only the main admin or the CEO can close a shop or open it again." }
   const branch = await prisma.branch.findUnique({ where: { id } })
   if (!branch) return { error: "We could not find that shop." }
   await prisma.branch.update({ where: { id }, data: { isActive: !branch.isActive } })

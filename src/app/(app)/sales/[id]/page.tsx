@@ -13,7 +13,7 @@ import { AutoPrint } from "@/components/auto-print"
 import { Receipt } from "@/components/receipt"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
-import { isSuperAdmin } from "@/lib/rbac"
+import { isShopOwner } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { formatCurrency, formatDateTime, money } from "@/lib/utils"
 import { formatCondition, statusLabel } from "@/lib/status"
@@ -201,11 +201,11 @@ export default async function SaleDetailPage({
           </ActionForm>
         </div>
       ) : null}
-      {isSuperAdmin(me.role) && sale.payments.length ? (
+      {isShopOwner(me.role) && sale.payments.length ? (
         <div className="surface-card p-5 print:hidden">
           <h3 className="mb-2 font-semibold">Undo the last money collected</h3>
           <p className="mb-3 text-sm text-muted-foreground">
-            Main admin only. Items and IMEIs stay as they are. The last money collected is taken off the record.
+            Main admin or CEO. Items and IMEIs stay as they are. The last money collected is taken off the record. Who did what keeps this step.
           </p>
           <ActionForm action={reverseInvoicePayment} submit="Reverse last payment" variant="outline">
             <input type="hidden" name="saleId" value={sale.id} />

@@ -4,7 +4,7 @@ import { getBranches, getSuppliers } from "@/app/actions/parties"
 import { IncomingForm } from "@/app/(app)/incoming/incoming-form"
 import { IncomingList } from "./incoming-list"
 import { PageHeader, SectionCard } from "@/components/shared"
-import { can, isSuperAdmin } from "@/lib/permissions"
+import { can, isShopOwner } from "@/lib/permissions"
 import { requireUser } from "@/lib/session"
 
 export default async function IncomingPage() {
@@ -16,7 +16,7 @@ export default async function IncomingPage() {
     getSuppliers(),
     getOpenPurchases(),
   ])
-  const canBook = isSuperAdmin(me.role) || (await can(me.role, "action.incoming"))
+  const canBook = isShopOwner(me.role) || (await can(me.role, "action.incoming"))
   const activeShops = branches.filter((branch) => branch.isActive)
 
   return (
@@ -27,7 +27,7 @@ export default async function IncomingPage() {
           description="Book phones and pieces that have left the supplier but have not been counted into this shop yet. They stay Coming until someone says they have arrived."
         />
         <div className="mt-5">
-          <IncomingList lots={lots} canBook={canBook} isAdmin={isSuperAdmin(me.role)} />
+          <IncomingList lots={lots} canBook={canBook} isAdmin={isShopOwner(me.role)} />
         </div>
       </div>
       <SectionCard

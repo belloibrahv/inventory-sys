@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { PasswordInput } from "@/components/ui/password-input"
 import { Select } from "@/components/ui/select"
-import { canManageStaff, isSuperAdmin, ROLE_LABELS } from "@/lib/rbac"
+import { canManageStaff, isShopOwner, isSuperAdmin, ROLE_LABELS } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { UserRole } from "@prisma/client"
 
@@ -16,6 +16,7 @@ export default async function StaffPage() {
   const [staff, branches] = await Promise.all([getStaff(), getBranches()])
   const canAdd = await canManageStaff(me.role)
   const admin = isSuperAdmin(me.role)
+  const owner = isShopOwner(me.role)
   const roles = (Object.keys(ROLE_LABELS) as UserRole[]).filter((role) => admin || role !== "SUPER_ADMIN")
   const activeShops = branches.filter((branch) => branch.isActive)
 
@@ -24,14 +25,14 @@ export default async function StaffPage() {
       <div className="min-w-0">
         <PageHeader
           title="Staff"
-          description="The main admin decides what each person can see. You can also move someone to another shop or change their job without creating a new login."
+          description="The main admin and the CEO decide what each person can see. You can also move someone to another shop or change their job without creating a new login."
         />
         <div className="space-y-3">
           {staff.map((user) => {
             const canEditThis =
               canAdd &&
               user.id !== me.id &&
-              (admin || (user.branchId && me.branchId && user.branchId === me.branchId)) &&
+              (owner || (user.branchId && me.branchId && user.branchId === me.branchId)) &&
               (admin || user.role !== "SUPER_ADMIN")
 
             return (
@@ -46,7 +47,7 @@ export default async function StaffPage() {
                       <span className="text-xs text-muted-foreground">{user.isActive ? "Active" : "Disabled"}</span>
                     </div>
                   </div>
-                  {admin && user.id !== me.id ? (
+                  {owner && user.id !== me.id && (admin || user.role !== "SUPER_ADMIN") ? (
                     <ActionForm
                       action={setStaffActive}
                       submit={user.isActive ? "Disable" : "Restore"}
@@ -91,8 +92,8 @@ export default async function StaffPage() {
                       <label className="block text-xs text-muted-foreground">
                         Shop
                         <Select name="branchId" defaultValue={user.branchId ?? ""} className="mt-1">
-                          {admin ? <option value="">Head office / all shops</option> : null}
-                          {(admin ? activeShops : activeShops.filter((branch) => branch.id === me.branchId)).map(
+                          {owner ? <option value="">Head office / all shops</option> : null}
+                          {(owner ? activeShops : activeShops.filter((branch) => branch.id === me.branchId)).map(
                             (branch) => (
                               <option key={branch.id} value={branch.id}>
                                 {branch.name}
@@ -143,8 +144,8 @@ export default async function StaffPage() {
             <label className="block text-sm">
               <span className="mb-1 block text-muted-foreground">Shop</span>
               <Select name="branchId">
-                {admin ? <option value="">Head office / all shops</option> : null}
-                {(admin ? activeShops : activeShops.filter((branch) => branch.id === me.branchId)).map((branch) => (
+                {owner ? <option value="">Head office / all shops</option> : null}
+                {(owner ? activeShops : activeShops.filter((branch) => branch.id === me.branchId)).map((branch) => (
                   <option key={branch.id} value={branch.id}>
                     {branch.name}
                   </option>

@@ -3,7 +3,7 @@
 import * as bcrypt from "bcryptjs"
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
-import { isSuperAdmin } from "@/lib/permissions"
+import { isShopOwner } from "@/lib/permissions"
 import { requireUser } from "@/lib/session"
 
 export async function getAccountState() {
@@ -15,7 +15,7 @@ export async function getAccountState() {
   return {
     email: row?.email ?? user.email,
     mustChangePassword: Boolean(row?.mustChangePassword),
-    isSuperAdmin: isSuperAdmin(user.role),
+    isShopOwner: isShopOwner(user.role),
   }
 }
 
@@ -50,7 +50,7 @@ export async function changePassword(formData: FormData) {
 
 export async function exportShopBackup() {
   const user = await requireUser()
-  if (!isSuperAdmin(user.role)) return { error: "Only the main admin can download a shop backup." }
+  if (!isShopOwner(user.role)) return { error: "Only the main admin or the CEO can download a shop backup." }
   const [branches, users, products, inventory, imeis, sales, purchases, incoming, transfers] = await Promise.all([
     prisma.branch.findMany(),
     prisma.user.findMany({

@@ -1,9 +1,9 @@
 import { cache } from "react"
 import { UserRole } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
-import { BOOKS_DESK_ROLES, isBooksDesk, isSuperAdmin } from "@/lib/roles"
+import { BOOKS_DESK_ROLES, isBooksDesk, isShopOwner, isSuperAdmin } from "@/lib/roles"
 
-export { isSuperAdmin, isBooksDesk, BOOKS_DESK_ROLES } from "@/lib/roles"
+export { isSuperAdmin, isShopOwner, isBooksDesk, BOOKS_DESK_ROLES } from "@/lib/roles"
 
 export const VIEW_PERMS = [
   { key: "view.dashboard", label: "Home", href: "/dashboard" },
@@ -78,16 +78,10 @@ export const BOOKS_DESK_KEYS = V(
 
 const DEFAULTS: Record<UserRole, string[]> = {
   SUPER_ADMIN: ALL,
-  // The CEO watches the business. Loading the item list and the stock is the
-  // uploader's job, so those two are left off deliberately.
-  CEO: ALL.filter(
-    (key) =>
-      key !== "view.access" &&
-      key !== "action.override_floor" &&
-      key !== "action.settings" &&
-      key !== "view.uploads" &&
-      key !== "action.upload"
-  ),
+  // The CEO is an owner of the shop, with the main admin. They can correct
+  // money, staff, shops, settings, and Who can see what. They cannot take the
+  // main admin job away, and nobody can secretly rewrite an old invoice.
+  CEO: ALL,
   AUDITOR: BOOKS_DESK_KEYS,
   ACCOUNTANT: BOOKS_DESK_KEYS,
   BRANCH_MANAGER: V(
@@ -163,6 +157,11 @@ export const ensureRolePermissions = cache(async () => {
       permKey: { in: ["view.uploads", "action.upload", "action.intake", "view.imei", "view.products", "view.inventory"] },
       allowed: false,
     },
+    data: { allowed: true },
+  })
+
+  await prisma.rolePermission.updateMany({
+    where: { role: "CEO", allowed: false },
     data: { allowed: true },
   })
 
@@ -264,13 +263,14 @@ export async function getAllowedKeys(role: UserRole) {
 
 export async function can(role: UserRole, key: string) {
   if (role === "SUPER_ADMIN") return true
-  if (key === "action.undo" || key === "view.access") return false
+  if (isShopOwner(role) && (key === "action.undo" || key === "view.access")) return true
+  if (key === "action.undo") return false
   const allowed = await getAllowedKeys(role)
   return allowed.has(key)
 }
 
 export async function canUndo(role: UserRole) {
-  return role === "SUPER_ADMIN"
+  return isShopOwner(role)
 }
 
 export function viewKeyForPath(pathname: string) {

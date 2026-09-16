@@ -20,6 +20,11 @@ export function isSuperAdmin(role: UserRole) {
   return role === "SUPER_ADMIN"
 }
 
+/** Main admin and CEO may correct the shop. Every change is written in Who did what. */
+export function isShopOwner(role: UserRole) {
+  return role === "SUPER_ADMIN" || role === "CEO"
+}
+
 /**
  * Who may change the name, logo and address printed on invoices.
  *

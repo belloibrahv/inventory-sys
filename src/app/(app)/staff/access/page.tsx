@@ -3,17 +3,17 @@ import { getRoleMatrix, saveRoleAccess } from "@/app/actions/access"
 import { ActionForm } from "@/components/action-form"
 import { PageHeader } from "@/components/shared"
 import { ACTION_PERMS, BOOKS_DESK_KEYS, VIEW_PERMS } from "@/lib/permissions"
-import { ROLE_LABELS, isSuperAdmin } from "@/lib/rbac"
+import { ROLE_LABELS, isShopOwner } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { UserRole } from "@prisma/client"
 
 const otherRoles = (Object.keys(ROLE_LABELS) as UserRole[]).filter(
-  (role) => role !== "SUPER_ADMIN" && role !== "AUDITOR" && role !== "ACCOUNTANT"
+  (role) => role !== "SUPER_ADMIN" && role !== "CEO" && role !== "AUDITOR" && role !== "ACCOUNTANT"
 )
 
 export default async function AccessPage() {
   const user = await requireUser()
-  if (!isSuperAdmin(user.role)) redirect("/staff")
+  if (!isShopOwner(user.role)) redirect("/staff")
   const matrix = await getRoleMatrix()
   if ("error" in matrix) redirect("/staff")
   const allowed = new Map(matrix.rows.map((row) => [`${row.role}:${row.permKey}`, row.allowed]))
@@ -28,7 +28,7 @@ export default async function AccessPage() {
     <div className="space-y-6">
       <PageHeader
         title="Who can see what"
-        description="Tick which pages and actions each job may use. The Financial Accountant and records checker see every shop page, post money, and cannot sell or change this list."
+        description="Tick which pages and actions each job may use. The main admin and the CEO always keep the right to change the shop. The Financial Accountant and records checker see every shop page, post money, and cannot sell or change this list."
       />
 
       <div className="space-y-6">
