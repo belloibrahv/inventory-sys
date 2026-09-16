@@ -17,10 +17,14 @@ const pageExpiry = new ExpirationPlugin({
   maxAgeFrom: "last-used",
 })
 
-/** Health pings and sign-in must hit the live server, never a cached reply. */
+/** Health pings and sign-in must hit the live server, never a cached shop page. */
 const liveOnly: RuntimeCaching = {
   matcher: ({ url, sameOrigin }) =>
-    sameOrigin && (url.pathname.startsWith("/api/health") || url.pathname.startsWith("/api/auth")),
+    sameOrigin &&
+    (url.pathname.startsWith("/api/health") ||
+      url.pathname.startsWith("/api/auth") ||
+      url.pathname === "/login" ||
+      url.pathname === "/"),
   handler: new NetworkOnly(),
 }
 
@@ -32,6 +36,7 @@ const appPages: RuntimeCaching = {
   matcher: ({ request, url, sameOrigin }) => {
     if (!sameOrigin) return false
     if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/serwist/")) return false
+    if (url.pathname === "/login" || url.pathname === "/") return false
     if (request.mode === "navigate") return true
     const accept = request.headers.get("accept") || ""
     return request.method === "GET" && accept.includes("text/html")
@@ -47,6 +52,8 @@ const rscPages: RuntimeCaching = {
   matcher: ({ request, url, sameOrigin }) =>
     sameOrigin &&
     !url.pathname.startsWith("/api/") &&
+    url.pathname !== "/login" &&
+    url.pathname !== "/" &&
     (url.searchParams.has("_rsc") || request.headers.get("RSC") === "1"),
   handler: new NetworkFirst({
     cacheName: "app-rsc",

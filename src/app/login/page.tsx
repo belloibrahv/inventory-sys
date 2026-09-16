@@ -4,6 +4,7 @@ import { useState } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { BrandLockup, BrandMark } from "@/components/brand-mark"
+import { LoginHero } from "@/components/login-hero"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { PasswordInput } from "@/components/ui/password-input"
@@ -32,27 +33,7 @@ export default function LoginPage() {
 
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.1fr_0.9fr]">
-      <div className="relative hidden overflow-hidden bg-primary text-white lg:flex lg:flex-col lg:justify-between p-12">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.16),transparent_38%),radial-gradient(circle_at_85%_80%,rgba(24,192,32,0.22),transparent_32%)]" />
-        <div className="relative">
-          <BrandLockup light />
-        </div>
-        <div className="relative max-w-lg space-y-6">
-          <p className="text-5xl font-semibold tracking-tight leading-tight">Run the shop with clear numbers</p>
-          <p className="text-lg text-white/75">
-            See every phone, every sale, and every naira in one place. Old records stay as they are. Nobody can hide a change.
-          </p>
-        </div>
-        <div className="relative space-y-2">
-          <p className="text-xs uppercase tracking-[0.22em] text-white/45">Abu Twins Softskills Investment</p>
-          <p className="text-xs text-white/55">
-            Built by{" "}
-            <a href="https://techvaults.com/" target="_blank" rel="noopener noreferrer" className="text-white underline underline-offset-2">
-              Techvaults Limited
-            </a>
-          </p>
-        </div>
-      </div>
+      <LoginHero />
       <div className="flex items-center justify-center bg-background px-6 py-12">
         <form onSubmit={onSubmit} className="w-full max-w-md space-y-6">
           <div className="lg:hidden">

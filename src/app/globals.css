@@ -281,3 +281,51 @@ body {
 .letterhead-logo {
   box-shadow: 0 0 0 2px #7cff86;
 }
+
+/*
+ * Sign-in banner film. Colour and motion only. No photo sits under it.
+ * Paused looks like a still frame. Playing moves the lights.
+ */
+.login-film {
+  background:
+    radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.18), transparent 34%),
+    radial-gradient(circle at 82% 78%, rgba(24, 192, 32, 0.28), transparent 36%),
+    radial-gradient(circle at 50% 110%, rgba(0, 12, 90, 0.55), transparent 48%),
+    #001bce;
+}
+.login-film::before,
+.login-film::after {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  background: linear-gradient(
+    115deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.07) 18%,
+    transparent 36%,
+    transparent 58%,
+    rgba(24, 192, 32, 0.16) 72%,
+    transparent 88%
+  );
+  transform: translateX(-8%);
+  animation: login-film-pan 18s linear infinite;
+  animation-play-state: paused;
+}
+.login-film::after {
+  inset: -30%;
+  opacity: 0.7;
+  animation-duration: 26s;
+  animation-direction: reverse;
+}
+.login-film.is-playing::before,
+.login-film.is-playing::after {
+  animation-play-state: running;
+}
+@keyframes login-film-pan {
+  from {
+    transform: translateX(-18%) rotate(2deg);
+  }
+  to {
+    transform: translateX(18%) rotate(-2deg);
+  }
+}

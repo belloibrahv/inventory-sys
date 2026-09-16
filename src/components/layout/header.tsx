@@ -1,7 +1,8 @@
 "use client"
 
-import { signOut } from "next-auth/react"
+import { useState } from "react"
 import type { UserRole } from "@prisma/client"
+import { leaveTheShop } from "@/lib/leave-shop"
 import { useTheme } from "@/components/theme-provider"
 import { useRouter, usePathname } from "next/navigation"
 import { ArrowLeft, Bell, BookOpen, ChevronDown, LogOut, Menu, Moon, Search, Sun, UserRound } from "lucide-react"
@@ -48,6 +49,7 @@ export function Header({
   const router = useRouter()
   const pathname = usePathname()
   const isHome = pathname === "/" || pathname === "/dashboard"
+  const [leaving, setLeaving] = useState(false)
 
   return (
     <header className="app-header sticky top-0 z-30 flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-border bg-background/85 px-4 py-2 backdrop-blur-xl md:px-6">
@@ -155,12 +157,25 @@ export function Header({
               </a>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => signOut({ callbackUrl: "/login" })}>
+            <DropdownMenuItem
+              disabled={leaving}
+              onSelect={(event) => {
+                event.preventDefault()
+                if (leaving) return
+                setLeaving(true)
+                void leaveTheShop()
+              }}
+            >
               <LogOut className="mr-2 h-4 w-4" /> Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      {leaving ? (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#001BCE] text-white" role="status" aria-busy>
+          <p className="text-lg font-semibold">Signing you out</p>
+        </div>
+      ) : null}
     </header>
   )
 }
