@@ -32,7 +32,7 @@ import { money } from "@/lib/utils"
  * booked on other bills are never counted twice.
  */
 
-const MAX_BYTES = 4_000_000
+const MAX_BYTES = 25_000_000
 
 type Snapshot = { lines: BookLine[] }
 
@@ -560,7 +560,7 @@ export async function correctOpeningFromSheet(formData: FormData): Promise<Corre
 
   const file = formData.get("file")
   if (!(file instanceof File) || file.size === 0) return { error: "Choose the filled-in count sheet first." }
-  if (file.size > MAX_BYTES) return { error: "That file is too big. Use a file under 4 MB." }
+  if (file.size > MAX_BYTES) return { error: "That file is too big. Use a file under 25 MB." }
 
   let sheets: Array<{ sheet: string; grid: string[][] }>
   try {

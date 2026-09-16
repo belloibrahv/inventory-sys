@@ -17,7 +17,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { useNetworkStatus, getNetworkMonitor } from "@/lib/network-status"
-import { flushParkedSales } from "@/lib/flush-parked"
+import { flushParkedSales, requestParkedFlush } from "@/lib/flush-parked"
 import {
   getDeviceId,
   readOfflineEvents,
@@ -64,27 +64,7 @@ export function NetworkStatusIndicator() {
     }
   }, [])
 
-  React.useEffect(() => {
-    void reloadData()
-
-    const onQueueUpdate = () => void reloadData()
-    window.addEventListener("abutwins-queue", onQueueUpdate)
-    window.addEventListener("storage", onQueueUpdate)
-
-    return () => {
-      window.removeEventListener("abutwins-queue", onQueueUpdate)
-      window.removeEventListener("storage", onQueueUpdate)
-    }
-  }, [reloadData])
-
-  // Automatic sync when connection returns
-  React.useEffect(() => {
-    if (network.state === "online" && queue.length > 0 && !syncing && !isFlushing.current) {
-      void handleSync("auto")
-    }
-  }, [network.state, queue.length, syncing])
-
-  const handleSync = async (reason: "auto" | "manual") => {
+  const handleSync = React.useCallback(async (reason: "auto" | "manual") => {
     if (isFlushing.current) return
     isFlushing.current = true
     setSyncing(true)
@@ -93,27 +73,67 @@ export function NetworkStatusIndicator() {
     try {
       const result = await flushParkedSales(reason)
       if (result.error) {
-        toast.error(`Sync notice: ${result.error}`)
+        toast.error(result.error)
       } else if (result.posted.length > 0) {
         toast.success(
-          `Successfully synchronized ${result.posted.length} offline record${
-            result.posted.length === 1 ? "" : "s"
-          } with cloud database.`
+          `${result.posted.length} waiting sale${result.posted.length === 1 ? "" : "s"} sent to the shop system.`
         )
         router.refresh()
       } else if (reason === "manual") {
-        toast.info("No pending records to synchronize.")
+        toast.info("There are no waiting sales on this phone.")
       }
     } catch (err) {
       console.error("Offline sync error:", err)
-      toast.error("Failed to complete background sync. Records remain safely on device.")
+      toast.error("The waiting sales stayed on this phone. Try Send waiting work now.")
     } finally {
       isFlushing.current = false
       setSyncing(false)
       getNetworkMonitor().setSyncing(false)
       await reloadData()
     }
-  }
+  }, [reloadData, router])
+
+  React.useEffect(() => {
+    void reloadData()
+    const onQueueUpdate = () => void reloadData()
+    window.addEventListener("abutwins-queue", onQueueUpdate)
+    window.addEventListener("storage", onQueueUpdate)
+    return () => {
+      window.removeEventListener("abutwins-queue", onQueueUpdate)
+      window.removeEventListener("storage", onQueueUpdate)
+    }
+  }, [reloadData])
+
+  React.useEffect(() => {
+    if (network.state === "online" && queue.length > 0 && !syncing && !isFlushing.current) {
+      void handleSync("auto")
+    }
+  }, [network.state, queue.length, syncing, handleSync])
+
+  React.useEffect(() => {
+    const onOffline = () => {
+      void recordOfflineEvent("LINE_DOWN", {})
+    }
+    const onOnline = () => {
+      void recordOfflineEvent("LINE_BACK", {})
+      void requestParkedFlush()
+    }
+    window.addEventListener("offline", onOffline)
+    window.addEventListener("online", onOnline)
+    return () => {
+      window.removeEventListener("offline", onOffline)
+      window.removeEventListener("online", onOnline)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    if (!("serviceWorker" in navigator)) return
+    const onMessage = (event: MessageEvent<{ type?: string }>) => {
+      if (event.data?.type === "ABUTWINS_FLUSH") void handleSync("auto")
+    }
+    navigator.serviceWorker.addEventListener("message", onMessage)
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage)
+  }, [handleSync])
 
   const isOffline = network.state === "offline"
   const isReconnecting = network.state === "reconnecting" || syncing
@@ -209,15 +229,13 @@ export function NetworkStatusIndicator() {
               <RefreshCw className="h-5 w-5 animate-spin" />
             </div>
             <div>
-              <p className="text-sm font-semibold">Connection Restored · Synchronizing</p>
+              <p className="text-sm font-semibold">The line is back. Sending parked sales</p>
               <p className="text-xs text-blue-800/90 dark:text-blue-300/90">
-                Synchronizing {queue.length} offline record{queue.length === 1 ? "" : "s"} with the cloud ERP database...
+                Sending {queue.length} waiting sale{queue.length === 1 ? "" : "s"} to the shop system. If one sale needs a fix, the others still send.
               </p>
             </div>
           </div>
-          <span className="text-xs font-semibold tabular-nums text-blue-700 dark:text-blue-300">
-            In progress...
-          </span>
+          <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">Still sending parked sales</span>
         </div>
       ) : null}
 
@@ -358,7 +376,7 @@ function OfflineSyncCenterDialog({
           {/* Device ID */}
           <div className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs">
             <span className="text-muted-foreground font-mono">Terminal Device UUID:</span>
-            <span className="font-mono font-semibold text-foreground">{deviceId || "Detecting..."}</span>
+            <span className="font-mono font-semibold text-foreground">{deviceId || "Finding this phone"}</span>
           </div>
 
           {/* Queue Listing */}
@@ -463,7 +481,7 @@ function OfflineSyncCenterDialog({
               {syncing ? (
                 <>
                   <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  Synchronizing...
+                  Sending parked sales
                 </>
               ) : (
                 <>

@@ -4,12 +4,13 @@ import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { createCustomer } from "@/app/actions/parties"
-import { checkoutSale } from "@/app/actions/sales"
+import { checkoutSale, findInStockImei } from "@/app/actions/sales"
 import { ScanField } from "@/components/scan-field"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { pushSaleQueue } from "@/lib/offline-sales"
+import { requestParkedFlush } from "@/lib/flush-parked"
 import { applyParkedToTillSnapshot, readTillSnapshot, saveTillSnapshot, type TillBranch, type TillCustomer, type TillImei, type TillProduct, type TillSellLock, type TillSnapshot } from "@/lib/till-catalog"
 import { formatCurrency, money } from "@/lib/utils"
 import { formatCondition } from "@/lib/status"
@@ -283,7 +284,7 @@ export function PosClient({
     router.refresh()
   }
 
-  function takeScan(code: string) {
+  async function takeScan(code: string) {
     const exact = branchImeis.find(
       (item) => item.imei1 === code || item.serialNumber === code || item.imei1.endsWith(code)
     )
@@ -292,8 +293,18 @@ export function PosClient({
       toast.success("Added to this sale")
       return
     }
+    if (typeof navigator !== "undefined" && navigator.onLine) {
+      const found = await findInStockImei(code, branchId)
+      if (found.imei) {
+        addImei(found.imei)
+        toast.success("Added to this sale")
+        return
+      }
+      toast.error(found.error || "That IMEI is not in this shop. Check Goods on the way, or check the shop.")
+      return
+    }
     setQuery(code)
-    toast.error("That IMEI is not in this shop. Check Goods on the way, or check the shop.")
+    toast.error("That IMEI is not in the list saved on this phone. Scan a phone from the last In shop list, or wait for the network.")
   }
 
   function addImei(item: TillImei) {
@@ -410,6 +421,7 @@ export function PosClient({
     setBusy(true)
     async function keepOnDevice() {
       await pushSaleQueue(payload)
+      await requestParkedFlush()
       const next = await applyParkedToTillSnapshot(payload)
       if (next) setDeviceList(next)
       setBusy(false)

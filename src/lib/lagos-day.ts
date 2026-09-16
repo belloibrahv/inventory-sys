@@ -94,6 +94,29 @@ export function formatShopDay(date: Date | string | null | undefined) {
 
 /** Client list chips: Any day / Today / Last 7 days / Last 30 days. */
 export type WhenFilter = "all" | "today" | "week" | "month"
+export type ShopRange = "day" | "week" | "month"
+
+/** One Lagos day, the last 7 days ending on `day`, or this month up to `day`. */
+export function shopPeriodWindow(day: string, range: ShopRange) {
+  if (range === "week") {
+    const from = shiftWatDay(day, -6)
+    return { from, to: day, start: watBounds(from).start, end: watBounds(day).end }
+  }
+  if (range === "month") {
+    const from = `${day.slice(0, 8)}01`
+    return { from, to: day, start: watBounds(from).start, end: watBounds(day).end }
+  }
+  const bounds = watBounds(day)
+  return { from: day, to: day, start: bounds.start, end: bounds.end }
+}
+
+export function shopPreviousWindow(from: string, range: ShopRange) {
+  if (range === "day") return shopPeriodWindow(shiftWatDay(from, -1), "day")
+  if (range === "week") return shopPeriodWindow(shiftWatDay(from, -1), "week")
+  const [year, month] = from.split("-").map(Number)
+  const last = new Date(Date.UTC(year, month - 1, 0))
+  return shopPeriodWindow(last.toISOString().slice(0, 10), "month")
+}
 
 export function matchesWhenFilter(date: Date | string | null | undefined, when: WhenFilter) {
   if (when === "all") return true

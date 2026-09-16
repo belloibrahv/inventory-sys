@@ -44,6 +44,7 @@ export function ReportsPdfButton({ data }: { data: ReportsPack }) {
           meta: full
             ? [
                 `Scope: ${data.scope}`,
+                `Period: ${data.periodLabel}`,
                 `Prepared by ${data.preparedBy}`,
                 `Lagos ${formatLagosStamp(new Date(data.preparedAt))}`,
               ]

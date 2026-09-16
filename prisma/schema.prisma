@@ -573,6 +573,7 @@ model SaleItem {
   createdAt  DateTime    @default(now())
 
   @@index([saleId])
+  @@index([imeiId])
 }
 
 model Payment {
@@ -586,6 +587,7 @@ model Payment {
   paidAt    DateTime      @default(now())
 
   @@index([saleId])
+  @@index([paidAt])
 }
 
 model Customer {
@@ -952,6 +954,7 @@ model DayClose {
   @@index([branchId])
   @@index([closeDate])
   @@index([businessDate])
+  @@unique([branchId, businessDate])
 }
 
 enum ParkedSaleStatus {

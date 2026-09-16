@@ -4,6 +4,7 @@ import { getUploadProgress } from "@/app/actions/uploads"
 import { OpeningStockCard } from "../opening-stock-card"
 
 export const dynamic = "force-dynamic"
+export const maxDuration = 180
 
 /** Day-one stock for one shop, from the opening stock Excel sheet. */
 export default async function OpeningStockPage() {

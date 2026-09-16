@@ -537,8 +537,10 @@ const PAGES: Array<
     id: "reports",
     href: "/reports",
     title: "Reports",
-    what: "Sales, money collected, stock, swaps, returns, and who still owes you, for every finished record you are allowed to see. On the screen it is cards and tables. When you print or download it, you get a clean paper for the boss.",
+    what: "Sales, money collected, stock, swaps, returns, and who still owes you, for the day, week, or month you pick. Last period sits beside this period. On the screen it is cards and tables. When you print or download it, you get a clean paper for the boss.",
     doThis: [
+      "Pick One day, Last 7 days, or This month so far.",
+      "Read this period next to last period.",
       "Read the cards and the shop-by-shop table.",
       "Download the PDF, or print it and save it as a PDF.",
       "Download sales as CSV if you want to open them in Excel.",
@@ -666,7 +668,7 @@ function alwaysSections(keys: Set<string>): ManualSection[] {
       id: "offline",
       title: "When the network goes off",
       group: "On every screen",
-      what: "If you opened the shop on this phone while the network was good, the phone keeps the last copy of phones, shop stock, sales, customers, and the till list. You can still look those lists up and still finish a sale. Waiting sales stay here. Refreshing the page is safe: you land on this phone copy, not a dead internet page. When the network comes back, waiting sales go in by themselves, or you tap Send waiting work now.",
+      what: "If you opened the shop on this phone while the network was good, the phone keeps the last copy of phones, shop stock, sales, customers, and the till list. You can still look those lists up and still finish a sale. Waiting sales stay here. Refreshing the page is safe: you land on this phone copy, not a dead internet page. When the network comes back, waiting sales go in by themselves, one sale at a time. If one sale needs a fix, the others still send. You can also tap Send waiting work now.",
       doThis: [
         "Open Home, All phones, Shop stock, Sales or Sell now at least once while the network is good, so this phone can keep those lists.",
         "If the network goes off, stay in the app. The yellow banner means this phone is using the last copy. Scan an IMEI from that saved list and finish the sale.",

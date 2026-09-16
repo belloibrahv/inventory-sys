@@ -15,7 +15,7 @@ export function ReportsStatement({ data }: { data: ReportsPack }) {
         brand={brand}
         documentKind="Executive summary"
         documentTitle="Consolidated Branch Performance"
-        meta={[data.statementRef, `Lagos time ${formatLagosStamp(new Date(data.preparedAt))}`]}
+        meta={[data.statementRef, data.periodLabel, `Lagos time ${formatLagosStamp(new Date(data.preparedAt))}`]}
       >
         <div className="mt-4 grid gap-3 border-t border-white/15 pt-3 text-[12px] sm:grid-cols-3">
           <div>
@@ -28,7 +28,7 @@ export function ReportsStatement({ data }: { data: ReportsPack }) {
           </div>
           <div>
             <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">Report Scope</p>
-            <p className="font-semibold">Consolidated audit & transaction records</p>
+            <p className="font-semibold">{data.periodLabel}</p>
           </div>
         </div>
       </DocumentLetterhead>

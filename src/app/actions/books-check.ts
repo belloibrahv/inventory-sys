@@ -7,34 +7,14 @@ import { requireUser } from "@/lib/session"
 import { verifyAuditChain } from "@/lib/audit"
 import { getUnclosedBusinessDays } from "@/app/actions/day-close"
 import { getParkedWatch } from "@/app/actions/parked"
-import { recentWatDays, shiftWatDay, watBounds, watDayKey } from "@/lib/lagos-day"
+import { recentWatDays, shopPeriodWindow, shopPreviousWindow, watBounds, watDayKey, type ShopRange } from "@/lib/lagos-day"
 import { getAppSettings } from "@/lib/settings"
 import { money } from "@/lib/utils"
 import { sumSaleTenders } from "@/lib/sale-money"
 import { healOpeningStockBills } from "@/lib/opening-stock-money"
+import { healDuplicateDayCloses } from "@/lib/day-close-heal"
 
-export type BooksRange = "day" | "week" | "month"
-
-function periodWindow(day: string, range: BooksRange) {
-  if (range === "week") {
-    const from = shiftWatDay(day, -6)
-    return { from, to: day, start: watBounds(from).start, end: watBounds(day).end }
-  }
-  if (range === "month") {
-    const from = `${day.slice(0, 8)}01`
-    return { from, to: day, start: watBounds(from).start, end: watBounds(day).end }
-  }
-  const bounds = watBounds(day)
-  return { from: day, to: day, start: bounds.start, end: bounds.end }
-}
-
-function previousWindow(from: string, range: BooksRange) {
-  if (range === "day") return periodWindow(shiftWatDay(from, -1), "day")
-  if (range === "week") return periodWindow(shiftWatDay(from, -1), "week")
-  const [year, month] = from.split("-").map(Number)
-  const last = new Date(Date.UTC(year, month - 1, 0))
-  return periodWindow(last.toISOString().slice(0, 10), "month")
-}
+export type BooksRange = ShopRange
 
 function sumSales(
   rows: Array<{
@@ -67,6 +47,7 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
     (await can(user.role, "view.reports"))
   if (!allowed) return null
   await healOpeningStockBills()
+  await healDuplicateDayCloses()
 
   const shops = await prisma.branch.findMany({
     where: { isActive: true },
@@ -77,9 +58,9 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
   const shopId = scoped || branchId || shops[0]?.id || ""
   const day = businessDate && /^\d{4}-\d{2}-\d{2}$/.test(businessDate) ? businessDate : watDayKey()
   const span = range === "week" || range === "month" ? range : "day"
-  const window = periodWindow(day, span)
+  const window = shopPeriodWindow(day, span)
   const compareDay = compareDate && /^\d{4}-\d{2}-\d{2}$/.test(compareDate) ? compareDate : ""
-  const prior = compareDay ? periodWindow(compareDay, span) : previousWindow(window.from, span)
+  const prior = compareDay ? shopPeriodWindow(compareDay, span) : shopPreviousWindow(window.from, span)
   const shopWhere = shopId ? { branchId: shopId } : {}
   const recentDays = recentWatDays(14, day)
   const recentStart = watBounds(recentDays[recentDays.length - 1]).start

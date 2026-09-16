@@ -25,6 +25,7 @@ import {
 } from "@/components/shared"
 import { TablePager, usePagedRows } from "@/components/table-pager"
 import type { ReportsPack } from "@/lib/reports-pack"
+import { formatWatLong } from "@/lib/lagos-day"
 
 type RawSale = {
   id: string
@@ -118,6 +119,8 @@ export function ReportsClientView({
   opening,
   branches,
   selectedBranchId,
+  range = "month",
+  date,
 }: {
   pack: ReportsPack
   sales: RawSale[]
@@ -128,12 +131,29 @@ export function ReportsClientView({
   opening: OpeningReport
   branches: BranchOption[]
   selectedBranchId?: string
+  range?: "day" | "week" | "month"
+  date: string
 }) {
   const router = useRouter()
   const [drilldown, setDrilldown] = useState<Drilldown | null>(null)
   const paidSales = sales.filter((sale) => money(sale.paidAmount) > 0)
   const supplierOwed = pack.creditors.reduce((sum, row) => sum + row.owed, 0)
-  const scopeKey = selectedBranchId ?? "all"
+  const scopeKey = `${selectedBranchId ?? "all"}:${range}:${date}`
+  function reportsHref(next: { branchId?: string; range?: string; date?: string }) {
+    const params = new URLSearchParams()
+    const shop = next.branchId !== undefined ? next.branchId : selectedBranchId
+    if (shop) params.set("branchId", shop)
+    params.set("range", next.range ?? range)
+    params.set("date", next.date ?? date)
+    return `/reports?${params.toString()}`
+  }
+  const movement = (now: number, then: number) => {
+    const change = now - then
+    if (then === 0) return change === 0 ? "Same as last period" : "No last-period figure to compare"
+    const percent = Math.round((change / then) * 100)
+    if (change === 0) return "Same as last period"
+    return `${change > 0 ? "Up" : "Down"} ${formatCurrency(Math.abs(change))} (${Math.abs(percent)} percent)`
+  }
   const openingValue = opening.shops.reduce((sum, row) => sum + row.value, 0)
   const boughtValue = opening.boughtSince.reduce((sum, row) => sum + row.total, 0)
   const stillOpen = opening.shops.filter((row) => row.status === "OPEN")
@@ -312,8 +332,7 @@ export function ReportsClientView({
               <Select
                 value={selectedBranchId ?? ""}
                 onChange={(event) => {
-                  const next = event.target.value
-                  router.push(next ? `/reports?branchId=${next}` : "/reports")
+                  router.push(reportsHref({ branchId: event.target.value }))
                 }}
                 className="h-9 w-56"
               >
@@ -325,7 +344,29 @@ export function ReportsClientView({
                 ))}
               </Select>
             </label>
+            <label className="flex items-center gap-2 text-sm">
+              <span className="eyebrow">Period</span>
+              <Select
+                value={range}
+                onChange={(event) => router.push(reportsHref({ range: event.target.value }))}
+                className="h-9 w-40"
+              >
+                <option value="day">One day</option>
+                <option value="week">Last 7 days</option>
+                <option value="month">This month so far</option>
+              </Select>
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <span className="eyebrow">Ending on</span>
+              <input
+                type="date"
+                value={date}
+                onChange={(event) => router.push(reportsHref({ date: event.target.value }))}
+                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+              />
+            </label>
             <TonePill tone={selectedBranchId ? "primary" : "neutral"}>{pack.scope}</TonePill>
+            <TonePill tone="neutral">{pack.periodLabel}</TonePill>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -355,6 +396,28 @@ export function ReportsClientView({
             />
           </div>
         </Toolbar>
+
+        <div className="surface-card grid gap-3 p-4 md:grid-cols-3">
+          <div>
+            <p className="eyebrow">This period</p>
+            <p className="mt-1 text-sm font-semibold">{pack.periodLabel}</p>
+            <p className="mt-1 text-sm text-muted-foreground">Sales {formatCurrency(pack.totals.revenue)}</p>
+          </div>
+          <div>
+            <p className="eyebrow">Compared with</p>
+            <p className="mt-1 text-sm font-semibold">
+              {pack.range === "day" ? formatWatLong(pack.compare.from) : `${formatWatLong(pack.compare.from)} to ${formatWatLong(pack.compare.to)}`}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">Sales {formatCurrency(pack.compare.revenue)}</p>
+          </div>
+          <div>
+            <p className="eyebrow">Movement</p>
+            <p className="mt-1 text-sm font-semibold">{movement(pack.totals.revenue, pack.compare.revenue)}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Payments received {movement(pack.totals.collected, pack.compare.collected)}. Expenses {movement(pack.totals.expenses, pack.compare.expenses)}.
+            </p>
+          </div>
+        </div>
 
         {/* Every headline figure opens the rows that add up to it. */}
         {/* Every headline figure opens the rows that add up to it. */}

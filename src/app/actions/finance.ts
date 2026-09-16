@@ -12,6 +12,7 @@ import { isLetterheadKey } from "@/lib/letterhead"
 import { generateDocNumber, money } from "@/lib/utils"
 import { saleTenders, sumSaleTenders } from "@/lib/sale-money"
 import { healOpeningStockBills } from "@/lib/opening-stock-money"
+import { shopPeriodWindow, shopPreviousWindow, watDayKey, type ShopRange } from "@/lib/lagos-day"
 
 export async function getFinance() {
   const user = await requireUser()
@@ -781,29 +782,50 @@ export async function saveLetterhead(formData: FormData) {
   return { success: true }
 }
 
-export async function getReportData(requestedBranchId?: string) {
+export async function getReportData(
+  requestedBranchId?: string,
+  range: ShopRange = "month",
+  businessDate?: string
+) {
   const user = await requireUser()
   if (!(await can(user.role, "view.reports"))) {
-    return { sales: [], expenses: [], swaps: [], returns: [], inventory: [], debtors: [], creditors: [] }
+    const empty = shopPeriodWindow(watDayKey(), "month")
+    const emptyPrior = shopPreviousWindow(empty.from, "month")
+    return {
+      sales: [],
+      expenses: [],
+      swaps: [],
+      returns: [],
+      inventory: [],
+      debtors: [],
+      creditors: [],
+      period: empty,
+      prior: { from: emptyPrior.from, to: emptyPrior.to, revenue: 0, collected: 0, expenses: 0 },
+    }
   }
   const scoped = await scopedBranchId(user.role, user.branchId, requestedBranchId)
   const branchId = scoped || requestedBranchId || (await viewBranchFilter(user))
-  const [sales, expenses, swaps, returns, inventory, debtors, purchases] = await Promise.all([
+  const day = businessDate && /^\d{4}-\d{2}-\d{2}$/.test(businessDate) ? businessDate : watDayKey()
+  const span: ShopRange = range === "week" || range === "day" ? range : "month"
+  const period = shopPeriodWindow(day, span)
+  const prior = shopPreviousWindow(period.from, span)
+  const shopWhere = branchId ? { branchId } : {}
+  const [sales, expenses, swaps, returns, inventory, debtors, purchases, priorSales, priorExpenses] = await Promise.all([
     prisma.sale.findMany({
-      where: { status: "COMPLETED", ...(branchId ? { branchId } : {}) },
+      where: { status: "COMPLETED", ...shopWhere, saleDate: { gte: period.start, lt: period.end } },
       include: { branch: true, items: true, customer: true, payments: true },
     }),
     prisma.expense.findMany({
-      where: { ...(branchId ? { branchId } : {}), approvedAt: { not: null } },
+      where: { ...shopWhere, approvedAt: { not: null }, date: { gte: period.start, lt: period.end } },
       include: { branch: true },
     }),
     prisma.swap.findMany({
-      where: { status: "COMPLETED", ...(branchId ? { branchId } : {}) },
+      where: { status: "COMPLETED", ...shopWhere, createdAt: { gte: period.start, lt: period.end } },
       include: { branch: true, customer: true, newProduct: true },
       orderBy: { createdAt: "desc" },
     }),
     prisma.stockReturn.findMany({
-      where: branchId ? { branchId } : undefined,
+      where: { ...shopWhere, createdAt: { gte: period.start, lt: period.end } },
       include: { branch: true, customer: true, imei: { include: { product: true } } },
       orderBy: { createdAt: "desc" },
     }),
@@ -818,13 +840,21 @@ export async function getReportData(requestedBranchId?: string) {
     }),
     prisma.purchase.findMany({
       where: {
-        ...(branchId ? { branchId } : {}),
+        ...shopWhere,
         status: { not: "CANCELLED" },
         source: { not: "UPLOAD_STOCK" },
         paymentMethod: { not: "OPENING_STOCK" },
         invoiceNumber: { not: { startsWith: "OPEN-" } },
       },
       include: { supplier: true, branch: true },
+    }),
+    prisma.sale.findMany({
+      where: { status: "COMPLETED", ...shopWhere, saleDate: { gte: prior.start, lt: prior.end } },
+      select: { totalAmount: true, paidAmount: true, paymentMethod: true, payments: { select: { method: true, amount: true } } },
+    }),
+    prisma.expense.findMany({
+      where: { ...shopWhere, approvedAt: { not: null }, date: { gte: prior.start, lt: prior.end } },
+      select: { amount: true },
     }),
   ])
   const creditors = purchases
@@ -839,7 +869,25 @@ export async function getReportData(requestedBranchId?: string) {
       owed: money(row.totalAmount) - money(row.paidAmount),
     }))
     .filter((row) => row.owed > 0)
-  return { sales, expenses, swaps, returns, inventory, debtors, creditors }
+  const priorMix = sumSaleTenders(priorSales)
+  const priorExpense = priorExpenses.reduce((sum, row) => sum + money(row.amount), 0)
+  return {
+    sales,
+    expenses,
+    swaps,
+    returns,
+    inventory,
+    debtors,
+    creditors,
+    period,
+    prior: {
+      from: prior.from,
+      to: prior.to,
+      revenue: priorMix.revenue,
+      collected: priorMix.received,
+      expenses: priorExpense,
+    },
+  }
 }
 
 

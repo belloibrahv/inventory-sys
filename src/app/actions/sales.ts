@@ -42,6 +42,8 @@ export async function getSale(id: string) {
   }))
 }
 
+const POS_IMEI_SNAPSHOT = 400
+
 export async function getPosLookups() {
   const user = await requireUser()
   const viewShop = await viewBranchFilter(user)
@@ -60,6 +62,7 @@ export async function getPosLookups() {
       where: { status: "IN_STOCK", ...(branchId ? { branchId } : {}) },
       include: { product: true, branch: true },
       orderBy: { createdAt: "desc" },
+      take: POS_IMEI_SNAPSHOT,
     }),
     prisma.branch.findMany({ where: { isActive: true }, orderBy: [{ isHq: "desc" }, { name: "asc" }] }),
   ])
@@ -86,22 +89,7 @@ export async function getPosLookups() {
       creditLimit: money(customer.creditLimit),
       currentBalance: money(customer.currentBalance),
     })),
-    imeis: imeis.map((item) => ({
-      id: item.id,
-      imei1: item.imei1,
-      serialNumber: item.serialNumber,
-      productId: item.productId,
-      branchId: item.branchId,
-      cosmeticGrade: item.cosmeticGrade,
-      product: {
-        name: item.product.name,
-        sellingPrice: money(item.product.sellingPrice),
-        minimumPrice: money(item.product.minimumPrice),
-        storage: item.product.storage,
-        condition: item.product.condition,
-        color: item.product.color,
-      },
-    })),
+    imeis: imeis.map(mapTillImei),
     branches: branches.map((branch) => ({
       id: branch.id,
       name: branch.name,
@@ -119,6 +107,88 @@ export async function getPosLookups() {
         })
       )
     ),
+  }
+}
+
+function mapTillImei(item: {
+  id: string
+  imei1: string
+  serialNumber: string | null
+  productId: string
+  branchId: string
+  cosmeticGrade: string | null
+  product: {
+    name: string
+    sellingPrice: unknown
+    minimumPrice: unknown
+    storage: string | null
+    condition: string
+    color: string | null
+  }
+}) {
+  return {
+    id: item.id,
+    imei1: item.imei1,
+    serialNumber: item.serialNumber,
+    productId: item.productId,
+    branchId: item.branchId,
+    cosmeticGrade: item.cosmeticGrade,
+    product: {
+      name: item.product.name,
+      sellingPrice: money(item.product.sellingPrice),
+      minimumPrice: money(item.product.minimumPrice),
+      storage: item.product.storage,
+      condition: item.product.condition,
+      color: item.product.color,
+    },
+  }
+}
+
+/** Scan one In shop IMEI or serial without loading the whole shelf into the till. */
+export async function findInStockImei(code: string, branchId?: string) {
+  const user = await requireUser()
+  const cleaned = code.replace(/[\s-]/g, "").trim()
+  if (!cleaned) return { error: "Scan or type an IMEI first." }
+  const viewShop = await viewBranchFilter(user)
+  const shop = branchId || (await scopedBranchId(user.role, user.branchId)) || user.branchId || viewShop || undefined
+  const item = await prisma.imeiRecord.findFirst({
+    where: {
+      status: "IN_STOCK",
+      ...(shop ? { branchId: shop } : {}),
+      OR: [{ imei1: cleaned }, { serialNumber: cleaned }],
+    },
+    include: { product: true },
+  })
+  if (!item) return { error: "That IMEI is not in this shop. Check Goods on the way, or check the shop." }
+  return { imei: mapTillImei(item) }
+}
+
+/** Newest In shop phones at one shop, for a shop-to-shop CSV. Caps at 50,000 lines. */
+export async function getShopImeiSheet(branchId: string) {
+  const user = await requireUser()
+  if (!branchId) return { rows: [] as string[][], truncated: false }
+  const scoped = await scopedBranchId(user.role, user.branchId, branchId)
+  const shop = scoped || branchId
+  const rows = await prisma.imeiRecord.findMany({
+    where: { status: "IN_STOCK", branchId: shop },
+    include: { product: { select: { sku: true, name: true } } },
+    orderBy: { createdAt: "desc" },
+    take: 50_000,
+  })
+  return {
+    truncated: rows.length === 50_000,
+    rows: [
+      ["imei", "serial", "item_code", "name", "quantity", "color", "notes"],
+      ...rows.map((item) => [
+        item.imei1,
+        item.serialNumber ?? "",
+        item.product.sku,
+        item.product.name,
+        "1",
+        "",
+        "",
+      ]),
+    ],
   }
 }
 

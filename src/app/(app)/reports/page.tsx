@@ -2,7 +2,7 @@ import { getReportData } from "@/app/actions/finance"
 import { getOpeningReport } from "@/app/actions/opening-stock"
 import { getBranches } from "@/app/actions/parties"
 import { PageHeader } from "@/components/shared"
-import { formatLagosStamp, watDayKey } from "@/lib/lagos-day"
+import { formatLagosStamp, formatWatLong, watDayKey, type ShopRange } from "@/lib/lagos-day"
 import type { ReportsPack } from "@/lib/reports-pack"
 import { getAppSettings, lowStockLimit } from "@/lib/settings"
 import { requireUser } from "@/lib/session"
@@ -10,16 +10,27 @@ import { money } from "@/lib/utils"
 import { saleTenders } from "@/lib/sale-money"
 import { ReportsClientView } from "./reports-client-view"
 
+function asRange(value?: string): ShopRange {
+  return value === "week" || value === "day" ? value : "month"
+}
+
+function periodLabel(range: ShopRange, from: string, to: string) {
+  if (range === "day") return formatWatLong(from)
+  return `${formatWatLong(from)} to ${formatWatLong(to)}`
+}
+
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ branchId?: string }>
+  searchParams: Promise<{ branchId?: string; range?: string; date?: string }>
 }) {
   const params = await searchParams
   const selectedBranchId = params.branchId || undefined
+  const range = asRange(params.range)
+  const date = params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : watDayKey()
 
   const [data, settings, user, branches, opening] = await Promise.all([
-    getReportData(selectedBranchId),
+    getReportData(selectedBranchId, range, date),
     getAppSettings(),
     requireUser(),
     getBranches(),
@@ -47,6 +58,7 @@ export default async function ReportsPage({
 
   const selectedBranch = branches.find((b) => b.id === selectedBranchId)
   const scope = selectedBranch ? `${selectedBranch.name} (${selectedBranch.code})` : "All shops together"
+  const label = periodLabel(range, data.period.from, data.period.to)
 
   const pack: ReportsPack = {
     company: {
@@ -61,7 +73,12 @@ export default async function ReportsPage({
     scope,
     preparedAt: new Date().toISOString(),
     preparedBy: user.name || user.email,
-    statementRef: `RP-${selectedBranch ? selectedBranch.code : "ALL"}-${watDayKey().replaceAll("-", "")}`,
+    statementRef: `RP-${selectedBranch ? selectedBranch.code : "ALL"}-${range.toUpperCase()}-${data.period.from.replaceAll("-", "")}`,
+    periodLabel: label,
+    range,
+    from: data.period.from,
+    to: data.period.to,
+    compare: data.prior,
     totals: {
       revenue,
       collected,
@@ -99,7 +116,7 @@ export default async function ReportsPage({
     <div className="space-y-6">
       <PageHeader
         title="Reports"
-        description={`Sales, payments received, stock value, and who still owes, as of ${formatLagosStamp()}.`}
+        description={`Sales, payments received, stock value, and who still owes for ${label}. Prepared ${formatLagosStamp()}.`}
       />
       <ReportsClientView
         pack={pack}
@@ -111,6 +128,8 @@ export default async function ReportsPage({
         opening={opening}
         branches={branches}
         selectedBranchId={selectedBranchId}
+        range={range}
+        date={date}
       />
     </div>
   )

@@ -81,3 +81,25 @@ const serwist = new Serwist({
 })
 
 serwist.addEventListeners()
+
+self.addEventListener("sync", (event) => {
+  const syncEvent = event as Event & { tag?: string; waitUntil: (p: Promise<unknown>) => void }
+  if (syncEvent.tag !== "abutwins-flush") return
+  syncEvent.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        client.postMessage({ type: "ABUTWINS_FLUSH" })
+      }
+    })
+  )
+})
+
+self.addEventListener("message", (event) => {
+  const data = event.data as { type?: string } | undefined
+  if (data?.type !== "ABUTWINS_FLUSH") return
+  void self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+    for (const client of clients) {
+      client.postMessage({ type: "ABUTWINS_FLUSH" })
+    }
+  })
+})

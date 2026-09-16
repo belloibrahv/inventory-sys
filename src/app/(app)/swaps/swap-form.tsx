@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import { createSwap } from "@/app/actions/ops"
 import { ActionForm } from "@/components/action-form"
 import { Input } from "@/components/ui/input"
@@ -9,26 +9,19 @@ import { Select } from "@/components/ui/select"
 type Product = { id: string; name: string }
 type Customer = { id: string; name: string }
 type Branch = { id: string; name: string }
-type Imei = { id: string; imei1: string; branchId: string; product: { name: string } }
 
 export function SwapForm({
   customers,
   products,
-  imeis,
   branches,
   defaultBranchId,
 }: {
   customers: Customer[]
   products: Product[]
-  imeis: Imei[]
   branches: Branch[]
   defaultBranchId?: string | null
 }) {
   const [branchId, setBranchId] = useState(defaultBranchId || branches[0]?.id || "")
-  const stock = useMemo(
-    () => imeis.filter((item) => item.branchId === branchId),
-    [imeis, branchId]
-  )
 
   return (
     <ActionForm action={createSwap} className="space-y-3">
@@ -54,14 +47,10 @@ export function SwapForm({
           <option key={branch.id} value={branch.id}>{branch.name}</option>
         ))}
       </Select>
-      <Select name="newImeiId" required emptyLabel="No phone like that is in this shop. Receive the goods first, or pick another item.">
-        {stock.map((imei) => (
-          <option key={imei.id} value={imei.id}>{imei.product.name} · {imei.imei1}</option>
-        ))}
-      </Select>
-      {stock.length === 0 ? (
-        <p className="text-xs text-danger">This shop has no IMEI for that phone.</p>
-      ) : null}
+      <Input name="newImei1" placeholder="Scan or type the shop phone IMEI going out" required />
+      <p className="text-sm text-muted-foreground">
+        Scan the In shop phone the buyer is taking. You do not pick from a long list, so a large shelf still works.
+      </p>
     </ActionForm>
   )
 }

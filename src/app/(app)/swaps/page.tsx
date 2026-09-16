@@ -21,12 +21,6 @@ export default async function SwapsPage() {
         <SwapForm
           customers={lookups.customers.map((customer) => ({ id: customer.id, name: customer.name }))}
           products={products.map((product) => ({ id: product.id, name: product.name }))}
-          imeis={lookups.imeis.map((item) => ({
-            id: item.id,
-            imei1: item.imei1,
-            branchId: item.branchId,
-            product: { name: item.product.name },
-          }))}
           branches={lookups.branches.map((branch) => ({ id: branch.id, name: branch.name }))}
           defaultBranchId={lookups.branchId}
         />

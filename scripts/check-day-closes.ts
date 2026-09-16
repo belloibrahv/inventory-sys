@@ -13,10 +13,8 @@
  *
  *   @@unique([branchId, businessDate])
  *
- * Do not add it until this script reports a clean result against the live
- * database. Railway runs `prisma db push` on every deploy, and adding a unique
- * index over rows that already break it makes that command fail, which takes the
- * shop offline. Clean the duplicates first, then add the line, then deploy.
+ * Clean duplicates first with `npx tsx scripts/heal-day-closes.ts`, then deploy.
+ * Railway start now runs that heal before `prisma db push`.
  */
 import { PrismaClient } from "@prisma/client"
 

@@ -9,6 +9,7 @@ import { recentWatDays, shiftWatDay, watBounds, watDayKey } from "@/lib/lagos-da
 import { money } from "@/lib/utils"
 import { saleTenders } from "@/lib/sale-money"
 import { viewBranchFilter } from "@/lib/branch-scope"
+import { healDuplicateDayCloses } from "@/lib/day-close-heal"
 
 async function resolveShop(user: { role: Parameters<typeof scopedBranchId>[0]; branchId: string | null }, requested?: string) {
   const scoped = await scopedBranchId(user.role, user.branchId, requested)
@@ -86,6 +87,7 @@ export async function getDayClosePreview(branchId?: string, businessDate?: strin
     }
   }
   const shopId = await resolveShop(user, branchId)
+  await healDuplicateDayCloses()
   const [unclosed, shop] = await Promise.all([
     shopId ? getUnclosedBusinessDays(shopId) : Promise.resolve([]),
     shopId ? prisma.branch.findUnique({ where: { id: shopId }, select: { name: true } }) : Promise.resolve(null),

@@ -829,20 +829,31 @@ export async function createSwap(formData: FormData) {
   if (!(await can(user.role, "action.swap"))) return { error: "You are not allowed to record a swap. Ask the main admin." }
   const customerId = String(formData.get("customerId"))
   const oldImei1 = String(formData.get("oldImei1") ?? "").trim()
-  const newImeiId = String(formData.get("newImeiId"))
+  const newImei1 = String(formData.get("newImei1") ?? "").replace(/[\s-]/g, "").trim()
+  const newImeiId = String(formData.get("newImeiId") || "")
   const oldProductId = String(formData.get("oldProductId") || "")
   const tradeValue = Number(formData.get("tradeValue") || 0)
   const condition = String(formData.get("oldDeviceCondition")) as ProductCondition
   const branchId = String(formData.get("branchId") || user.branchId || "")
 
   if (oldImei1.length < 14) return { error: "Enter the customer device IMEI." }
+  if (!newImeiId && newImei1.length < 8) return { error: "Scan or type the shop phone IMEI going out." }
   const exists = await prisma.imeiRecord.findFirst({ where: { OR: [{ imei1: oldImei1 }, { imei2: oldImei1 }] } })
   if (exists) return { error: "That IMEI is already in the shop." }
 
-  const newImei = await prisma.imeiRecord.findUnique({
-    where: { id: newImeiId },
-    include: { product: true },
-  })
+  const newImei = newImeiId
+    ? await prisma.imeiRecord.findUnique({
+        where: { id: newImeiId },
+        include: { product: true },
+      })
+    : await prisma.imeiRecord.findFirst({
+        where: {
+          status: "IN_STOCK",
+          branchId,
+          OR: [{ imei1: newImei1 }, { serialNumber: newImei1 }],
+        },
+        include: { product: true },
+      })
   if (!newImei || newImei.status !== "IN_STOCK") return { error: "That phone is not in the shop." }
   if (newImei.branchId !== branchId) return { error: "That IMEI is not in the selected shop." }
 

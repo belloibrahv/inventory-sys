@@ -7,6 +7,7 @@ import { generateDocNumber } from "@/lib/utils"
 import { UploadStockWizard } from "./upload-stock-wizard"
 
 export const dynamic = "force-dynamic"
+export const maxDuration = 180
 
 /**
  * Upload stock, section one: one supplier carton going onto the system today.

@@ -6,6 +6,17 @@ export type ReportsPack = {
   preparedAt: string
   preparedBy: string
   statementRef: string
+  periodLabel: string
+  range: "day" | "week" | "month"
+  from: string
+  to: string
+  compare: {
+    from: string
+    to: string
+    revenue: number
+    collected: number
+    expenses: number
+  }
   totals: {
     revenue: number
     collected: number

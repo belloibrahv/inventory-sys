@@ -23,8 +23,15 @@ import { generateDocNumber, money } from "@/lib/utils"
  * so accountants can see supplier, submission value, and paid or not paid.
  */
 
-const MAX_BYTES = 4_000_000
-const MAX_ROWS = 2_000
+const MAX_BYTES = 25_000_000
+const MAX_ROWS = 20_000
+const WRITE_CHUNK = 400
+
+function chunks<T>(rows: T[], size: number) {
+  const out: T[][] = []
+  for (let i = 0; i < rows.length; i += size) out.push(rows.slice(i, i + size))
+  return out
+}
 
 export type UploadResult = {
   error?: string
@@ -81,7 +88,7 @@ export type BatchUploadPayload = {
 async function readSheet(formData: FormData): Promise<{ rows: Record<string, string>[]; name: string } | { error: string }> {
   const file = formData.get("file")
   if (!(file instanceof File) || file.size === 0) return { error: "Choose an Excel or CSV file first." }
-  if (file.size > MAX_BYTES) return { error: "That file is too big. Use a file under 4 MB." }
+  if (file.size > MAX_BYTES) return { error: "That file is too big. Use a file under 25 MB." }
   let rows: Record<string, string>[]
   try {
     rows = await readTableFile(file)
@@ -126,7 +133,7 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
 
   const file = formData.get("file")
   if (!(file instanceof File) || file.size === 0) return { error: "Choose the opening stock Excel file first." }
-  if (file.size > MAX_BYTES) return { error: "That file is too big. Use a file under 4 MB." }
+  if (file.size > MAX_BYTES) return { error: "That file is too big. Use a file under 25 MB." }
 
   const branchId = String(formData.get("branchId") || "")
   const shop = await prisma.branch.findFirst({ where: { id: branchId, isActive: true } })
@@ -846,18 +853,20 @@ export async function batchUploadStock(payload: BatchUploadPayload): Promise<Upl
 
   // Check for existing IMEIs in database
   if (allIdentities.length > 0) {
-    const existingInDb = await prisma.imeiRecord.findMany({
-      where: {
-        OR: [
-          { imei1: { in: allIdentities } },
-          { serialNumber: { in: allIdentities } },
-        ],
-      },
-      select: { imei1: true, serialNumber: true },
-    })
-    if (existingInDb.length > 0) {
-      const conflict = existingInDb[0].imei1 || existingInDb[0].serialNumber
-      return { error: `IMEI/Serial '${conflict}' is already registered in the system.` }
+    for (const batch of chunks(allIdentities, WRITE_CHUNK)) {
+      const existingInDb = await prisma.imeiRecord.findFirst({
+        where: {
+          OR: [
+            { imei1: { in: batch } },
+            { serialNumber: { in: batch } },
+          ],
+        },
+        select: { imei1: true, serialNumber: true },
+      })
+      if (existingInDb) {
+        const conflict = existingInDb.imei1 || existingInDb.serialNumber
+        return { error: `IMEI/Serial '${conflict}' is already registered in the system.` }
+      }
     }
   }
 
@@ -961,7 +970,6 @@ export async function batchUploadStock(payload: BatchUploadPayload): Promise<Upl
   let totalPieces = 0
   let totalProductsAdded = resolvedItems.filter((i) => i.createdProduct).length
 
-  // 5. Atomic database transaction
   const purchase = await prisma.$transaction(async (tx) => {
     // Create Purchase (PO)
     const po = await tx.purchase.create({
@@ -1030,21 +1038,22 @@ export async function batchUploadStock(payload: BatchUploadPayload): Promise<Upl
       // If IMEI / SERIAL, insert individual records
       if (item.tracking === "IMEI" || item.tracking === "SERIAL") {
         totalPhones += item.identities.length
-        for (const id of item.identities) {
+        const unitRows = item.identities.map((id) => {
           const isImei = item.tracking === "IMEI"
           const imeiDigits = isImei ? id.replace(/\D/g, "") : null
-          await tx.imeiRecord.create({
-            data: {
-              imei1: imeiDigits || id,
-              serialNumber: !isImei ? id : null,
-              productId: item.productId,
-              branchId: shop.id,
-              supplierId,
-              purchaseId: po.id,
-              status: "IN_STOCK",
-              notes: `Uploaded via Stock Upload · ${invoiceNumber}`,
-            },
-          })
+          return {
+            imei1: imeiDigits || id,
+            serialNumber: !isImei ? id : null,
+            productId: item.productId,
+            branchId: shop.id,
+            supplierId,
+            purchaseId: po.id,
+            status: "IN_STOCK" as const,
+            notes: `Uploaded via Stock Upload · ${invoiceNumber}`,
+          }
+        })
+        for (const batch of chunks(unitRows, WRITE_CHUNK)) {
+          await tx.imeiRecord.createMany({ data: batch })
         }
       } else {
         totalPieces += item.quantity
@@ -1052,7 +1061,7 @@ export async function batchUploadStock(payload: BatchUploadPayload): Promise<Upl
     }
 
     return po
-  })
+  }, { timeout: 180_000, maxWait: 20_000 })
 
   // 6. Audit Trail
   await trail(

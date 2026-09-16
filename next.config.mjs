@@ -5,6 +5,11 @@ const nextConfig = {
   images: {
     remotePatterns: [],
   },
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "32mb",
+    },
+  },
 }
 
 export default withSerwist(nextConfig)

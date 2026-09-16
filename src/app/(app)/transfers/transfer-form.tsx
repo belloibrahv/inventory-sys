@@ -1,16 +1,16 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { createTransfer } from "@/app/actions/ops"
+import { getShopImeiSheet } from "@/app/actions/sales"
 import { ExportCsv } from "@/components/export-csv"
 import { Button } from "@/components/ui/button"
 import { Select } from "@/components/ui/select"
 
 type Branch = { id: string; name: string; code?: string }
 type Product = { id: string; name: string; sku: string; serialized: boolean; stock: Array<{ branchId: string; quantity: number }> }
-type Imei = { id: string; imei1: string; serialNumber?: string | null; productId: string; branchId: string; product: { name: string } }
 
 const SAMPLE: string[][] = [
   ["imei", "serial", "item_code", "name", "quantity", "color", "notes"],
@@ -20,40 +20,36 @@ const SAMPLE: string[][] = [
 
 export function TransferForm({
   branches,
-  products,
-  imeis,
   defaultFromId,
 }: {
   branches: Branch[]
-  products: Product[]
-  imeis: Imei[]
+  products?: Product[]
+  imeis?: unknown
   defaultFromId?: string | null
 }) {
   const router = useRouter()
   const [fromId, setFromId] = useState(defaultFromId || branches[0]?.id || "")
   const [busy, setBusy] = useState(false)
   const [errors, setErrors] = useState<string[]>([])
+  const [sheet, setSheet] = useState<string[][]>(SAMPLE.slice(0, 1))
+  const [sheetBusy, setSheetBusy] = useState(false)
+  const [truncated, setTruncated] = useState(false)
   const fromShop = branches.find((row) => row.id === fromId)
-  const shopImeis = useMemo(
-    () => imeis.filter((item) => item.branchId === fromId),
-    [imeis, fromId]
-  )
+  const shopImeiRows = useMemo(() => (sheet.length > 1 ? sheet : SAMPLE.slice(0, 1)), [sheet])
 
-  const shopImeiRows: string[][] = [
-    ["imei", "serial", "item_code", "name", "quantity", "color", "notes"],
-    ...shopImeis.map((item) => {
-      const product = products.find((row) => row.id === item.productId)
-      return [
-        item.imei1,
-        item.serialNumber ?? "",
-        product?.sku ?? "",
-        product?.name ?? item.product.name,
-        "1",
-        "",
-        "",
-      ]
-    }),
-  ]
+  useEffect(() => {
+    let cancelled = false
+    setSheetBusy(true)
+    void getShopImeiSheet(fromId).then((result) => {
+      if (cancelled) return
+      setSheet(result.rows)
+      setTruncated(result.truncated)
+      setSheetBusy(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [fromId])
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -98,10 +94,15 @@ export function TransferForm({
         <ExportCsv
           filename={`shop-to-shop-${(fromShop?.code || "shop").toLowerCase()}-imeis.csv`}
           rows={shopImeiRows}
-          label="Download the phone numbers (IMEIs) in the shop you are sending from"
+          label={sheetBusy ? "Loading the phone numbers in this shop" : "Download the phone numbers (IMEIs) in the shop you are sending from"}
         />
       </div>
-      {shopImeis.length === 0 ? (
+      {truncated ? (
+        <p className="text-sm text-muted-foreground">
+          This list shows the newest 50,000 In shop phones. Split a bigger send into more than one file.
+        </p>
+      ) : null}
+      {shopImeiRows.length <= 1 && !sheetBusy ? (
         <p className="text-sm text-muted-foreground">The shop you are sending from has no phone in stock to put on a list. You can still send accessories by item code and quantity.</p>
       ) : null}
       <input
