@@ -13,6 +13,8 @@ import { ConflictError, claimImei, creditInvoice, drawStock, settle, shiftCustom
 import { scopeRecord, viewBranchFilter } from "@/lib/branch-scope"
 import { getSellLock } from "@/app/actions/day-close"
 import { markParkedPosted } from "@/app/actions/parked"
+import { isBlockedFromSell } from "@/lib/phone-look"
+import { reservedTransferImeiSet, reservedSwapImeiSet } from "@/app/actions/ops"
 
 export async function getSales() {
   const user = await requireUser()
@@ -50,7 +52,7 @@ export async function getPosLookups() {
   const branchId = (await scopedBranchId(user.role, user.branchId)) ?? user.branchId ?? viewShop ?? undefined
   const [products, customers, imeis, branches] = await Promise.all([
     prisma.product.findMany({
-      where: { isActive: true },
+      where: { isActive: true, condition: { not: "FAULTY" } },
       include: { brand: true, inventory: true, _count: { select: { imeiRecords: true } } },
       orderBy: { name: "asc" },
     }),
@@ -59,7 +61,12 @@ export async function getPosLookups() {
       orderBy: { name: "asc" },
     }),
     prisma.imeiRecord.findMany({
-      where: { status: "IN_STOCK", ...(branchId ? { branchId } : {}) },
+      where: {
+        status: "IN_STOCK",
+        NOT: { cosmeticGrade: "FAULTY" },
+        product: { condition: { not: "FAULTY" } },
+        ...(branchId ? { branchId } : {}),
+      },
       include: { product: true, branch: true },
       orderBy: { createdAt: "desc" },
       take: POS_IMEI_SNAPSHOT,
@@ -160,6 +167,22 @@ export async function findInStockImei(code: string, branchId?: string) {
     include: { product: true },
   })
   if (!item) return { error: "That IMEI is not in this shop. Check Goods on the way, or check the shop." }
+  if (isBlockedFromSell({ cosmeticGrade: item.cosmeticGrade, productCondition: item.product.condition })) {
+    return { error: "That phone is Damaged. It cannot be sold. Open All phones and Set Good (sellable) if it is fixed." }
+  }
+  const reserved = await reservedTransferImeiSet(item.branchId)
+  if (reserved.has(item.imei1) || (item.serialNumber && reserved.has(item.serialNumber))) {
+    return {
+      error:
+        "That phone is on a shop-to-shop transfer waiting for the other shop to accept or reject. It stays In shop at the sending shop until then.",
+    }
+  }
+  const reservedSwap = await reservedSwapImeiSet(item.branchId)
+  if (reservedSwap.has(item.imei1) || (item.serialNumber && reservedSwap.has(item.serialNumber))) {
+    return {
+      error: "That device is on a Swap Deal waiting for approval. It cannot be sold yet.",
+    }
+  }
   return { imei: mapTillImei(item) }
 }
 
@@ -228,7 +251,14 @@ export async function checkoutSale(input: {
     imeiIds.length
       ? prisma.imeiRecord.findMany({
           where: { id: { in: imeiIds } },
-          select: { id: true, imei1: true, status: true, branchId: true },
+          select: {
+            id: true,
+            imei1: true,
+            status: true,
+            branchId: true,
+            cosmeticGrade: true,
+            product: { select: { condition: true, name: true } },
+          },
         })
       : Promise.resolve([]),
     prisma.inventory.findMany({
@@ -238,6 +268,8 @@ export async function checkoutSale(input: {
   ])
   const imeiById = new Map(cartImeis.map((row) => [row.id, row]))
   const stockByProduct = new Map(stockRows.map((row) => [row.productId, row]))
+  const reservedOnTransfer = await reservedTransferImeiSet(input.branchId)
+  const reservedOnSwap = await reservedSwapImeiSet(input.branchId)
 
   // Pieces wanted per product, so a cart holding the same accessory on two lines
   // is checked against stock once, on the combined figure. Phone IMEI lines are
@@ -249,6 +281,9 @@ export async function checkoutSale(input: {
   for (const item of input.items) {
     const product = productById.get(item.productId)
     if (!product) return { error: "One of the items in the cart is missing." }
+    if (isBlockedFromSell({ productCondition: product.condition })) {
+      return { error: `${product.name} is Damaged and cannot be sold.` }
+    }
     if (!Number.isFinite(item.quantity) || item.quantity < 1) {
       return { error: `Enter how many ${product.name} the customer is buying.` }
     }
@@ -262,6 +297,19 @@ export async function checkoutSale(input: {
       const imei = imeiById.get(item.imeiId)
       if (!imei || imei.status !== "IN_STOCK") return { error: `IMEI ${imei?.imei1 ?? ""} is not available.` }
       if (imei.branchId !== input.branchId) return { error: `${imei.imei1} is not in this shop.` }
+      if (isBlockedFromSell({ cosmeticGrade: imei.cosmeticGrade, productCondition: imei.product.condition })) {
+        return { error: `${imei.imei1} is Damaged and cannot be sold.` }
+      }
+      if (reservedOnTransfer.has(imei.imei1)) {
+        return {
+          error: `${imei.imei1} is on a shop-to-shop transfer waiting for accept or reject. It cannot be sold yet.`,
+        }
+      }
+      if (reservedOnSwap.has(imei.imei1)) {
+        return {
+          error: `${imei.imei1} is on a Swap Deal waiting for approval. It cannot be sold yet.`,
+        }
+      }
       shelfWantByProduct.set(item.productId, (shelfWantByProduct.get(item.productId) ?? 0) + (item.quantity || 1))
     } else if (product._count.imeiRecords > 0) {
       return { error: `${product.name} must be sold with an IMEI from this shop.` }

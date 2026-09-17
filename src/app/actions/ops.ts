@@ -37,6 +37,44 @@ function parseTransferIds(raw: string) {
   return [...new Set(list.split(/[\s,;]+/).map((item) => item.trim()).filter((item) => item.length >= 4 && !item.includes(":")))]
 }
 
+/** IMEIs on transfers still waiting for the other shop to accept or reject. */
+export async function reservedTransferImeiSet(branchId?: string) {
+  const rows = await prisma.stockTransfer.findMany({
+    where: {
+      status: "PENDING",
+      ...(branchId ? { fromBranchId: branchId } : {}),
+    },
+    select: { notes: true },
+  })
+  return new Set(rows.flatMap((row) => parseTransferIds(row.notes ?? "")))
+}
+
+/** Shop devices on a Swap Deal still waiting for approval. Stock has not left yet. */
+export async function reservedSwapImeiSet(branchId?: string) {
+  const rows = await prisma.swap.findMany({
+    where: {
+      status: "PENDING",
+      ...(branchId ? { branchId } : {}),
+      newImeiId: { not: null },
+    },
+    select: { newImei: { select: { imei1: true, serialNumber: true } } },
+  })
+  const ids = new Set<string>()
+  for (const row of rows) {
+    if (row.newImei?.imei1) ids.add(row.newImei.imei1)
+    if (row.newImei?.serialNumber) ids.add(row.newImei.serialNumber)
+  }
+  return ids
+}
+
+function cleanDeviceId(raw: string) {
+  return String(raw || "").replace(/[\s-]/g, "").trim()
+}
+
+function looksLikeImei(value: string) {
+  return /^\d{14,17}$/.test(value)
+}
+
 function refreshOps() {
   for (const path of [
     "/purchases",
@@ -850,19 +888,57 @@ export async function getSwaps() {
 export async function createSwap(formData: FormData) {
   const user = await requireUser()
   if (!(await can(user.role, "action.swap"))) return { error: "You are not allowed to record a swap. Ask the main admin." }
-  const customerId = String(formData.get("customerId"))
-  const oldImei1 = String(formData.get("oldImei1") ?? "").trim()
-  const newImei1 = String(formData.get("newImei1") ?? "").replace(/[\s-]/g, "").trim()
+
+  const branchId = String(formData.get("branchId") || user.branchId || "")
+  const existingCustomerId = String(formData.get("customerId") || "").trim()
+  const customerName = String(formData.get("customerName") || "").trim()
+  const customerPhone = String(formData.get("customerPhone") || "").trim()
+  const oldDeviceId = cleanDeviceId(String(formData.get("oldDeviceId") || formData.get("oldImei1") || ""))
+  const newDeviceId = cleanDeviceId(String(formData.get("newDeviceId") || formData.get("newImei1") || ""))
   const newImeiId = String(formData.get("newImeiId") || "")
   const oldProductId = String(formData.get("oldProductId") || "")
   const tradeValue = Number(formData.get("tradeValue") || 0)
+  const givenRaw = formData.get("givenValue")
   const condition = String(formData.get("oldDeviceCondition")) as ProductCondition
-  const branchId = String(formData.get("branchId") || user.branchId || "")
 
-  if (oldImei1.length < 14) return { error: "Enter the customer device IMEI." }
-  if (!newImeiId && newImei1.length < 8) return { error: "Scan or type the shop phone IMEI going out." }
-  const exists = await prisma.imeiRecord.findFirst({ where: { OR: [{ imei1: oldImei1 }, { imei2: oldImei1 }] } })
-  if (exists) return { error: "That IMEI is already in the shop." }
+  if (!branchId) return { error: "Pick the shop for this Swap Deal." }
+  if (!existingCustomerId && (!customerName || !customerPhone)) {
+    return { error: "Pick a customer on the list, or type the customer name and phone." }
+  }
+  if (oldDeviceId.length < 5) return { error: "Enter the customer device IMEI or serial number." }
+  if (!newImeiId && newDeviceId.length < 5) return { error: "Scan or type the shop device IMEI or serial number going out." }
+  if (!oldProductId) return { error: "Pick what the customer is bringing in." }
+  if (tradeValue < 0) return { error: "Enter the value of the swap-in item." }
+
+  const scoped = await scopedBranchId(user.role, user.branchId)
+  if (scoped && branchId !== scoped) return { error: "You can only record a swap for your own shop." }
+
+  let customer = existingCustomerId
+    ? await prisma.customer.findUnique({ where: { id: existingCustomerId } })
+    : customerPhone
+      ? await prisma.customer.findUnique({ where: { phone: customerPhone } })
+      : null
+
+  if (!customer) {
+    if (!customerName || !customerPhone) {
+      return { error: "Pick a customer on the list, or type the customer name and phone." }
+    }
+    customer = await prisma.customer.create({
+      data: { name: customerName, phone: customerPhone, branchId },
+    })
+  } else if (!existingCustomerId && customerName && customer.name !== customerName) {
+    return { error: `Phone ${customerPhone} already belongs to ${customer.name}. Pick them from the list.` }
+  }
+  if (scoped && customer.branchId !== scoped && customer.branchId !== branchId) {
+    return { error: "That customer belongs to another shop." }
+  }
+
+  const exists = await prisma.imeiRecord.findFirst({
+    where: {
+      OR: [{ imei1: oldDeviceId }, { imei2: oldDeviceId }, { serialNumber: oldDeviceId }],
+    },
+  })
+  if (exists) return { error: "That IMEI or serial number is already on this system." }
 
   const newImei = newImeiId
     ? await prisma.imeiRecord.findUnique({
@@ -873,34 +949,59 @@ export async function createSwap(formData: FormData) {
         where: {
           status: "IN_STOCK",
           branchId,
-          OR: [{ imei1: newImei1 }, { serialNumber: newImei1 }],
+          OR: [{ imei1: newDeviceId }, { serialNumber: newDeviceId }],
         },
         include: { product: true },
       })
-  if (!newImei || newImei.status !== "IN_STOCK") return { error: "That phone is not in the shop." }
-  if (newImei.branchId !== branchId) return { error: "That IMEI is not in the selected shop." }
+  if (!newImei || newImei.status !== "IN_STOCK") return { error: "That shop device is not In shop." }
+  if (newImei.branchId !== branchId) return { error: "That device is not in the selected shop." }
 
+  const reservedTransfer = await reservedTransferImeiSet(branchId)
+  const reservedSwap = await reservedSwapImeiSet(branchId)
+  if (
+    reservedTransfer.has(newImei.imei1) ||
+    (newImei.serialNumber && reservedTransfer.has(newImei.serialNumber))
+  ) {
+    return { error: "That shop device is on a shop-to-shop transfer waiting for accept or reject." }
+  }
+  if (
+    reservedSwap.has(newImei.imei1) ||
+    (newImei.serialNumber && reservedSwap.has(newImei.serialNumber))
+  ) {
+    return { error: "That shop device is already on another Swap Deal waiting for approval." }
+  }
+
+  const givenValue =
+    givenRaw !== null && String(givenRaw).trim() !== ""
+      ? Number(givenRaw)
+      : money(newImei.product.sellingPrice)
+  if (!Number.isFinite(givenValue) || givenValue < 0) {
+    return { error: "Enter the value of the shop item given out." }
+  }
+  const balance = givenValue - tradeValue
+
+  // Hold only: swap-in stays off the shelf, shop device stays In shop until approval.
   const incoming = await prisma.imeiRecord.create({
     data: {
-      imei1: oldImei1,
-      productId: oldProductId || newImei.productId,
+      imei1: oldDeviceId,
+      serialNumber: looksLikeImei(oldDeviceId) ? null : oldDeviceId,
+      productId: oldProductId,
       branchId,
-      customerId,
+      customerId: customer.id,
       status: "RECEIVED",
-      notes: `Swap Deal pending · ${condition} · value ${tradeValue}`,
+      notes: `Swap Deal waiting for approval · ${condition} · swap value ${tradeValue}`,
     },
   })
 
-  const balance = money(newImei.product.sellingPrice) - tradeValue
   const swap = await prisma.swap.create({
     data: {
       swapNumber: generateDocNumber("SWP"),
-      customerId,
+      customerId: customer.id,
       oldImeiId: incoming.id,
       oldDeviceCondition: condition,
       tradeValue: tradeValue.toFixed(2),
       newProductId: newImei.productId,
-      newProductPrice: newImei.product.sellingPrice,
+      newProductPrice: givenValue.toFixed(2),
       newImeiId: newImei.id,
       balanceAmount: balance.toFixed(2),
       branchId,
@@ -915,15 +1016,116 @@ export async function createSwap(formData: FormData) {
       entityId: swap.id,
       entityType: "Swap",
       requestedBy: user.id,
-      reason: `${swap.swapNumber}: trade-in ₦${tradeValue} vs ${newImei.product.name}`,
+      reason: `${swap.swapNumber}: swap-in ₦${tradeValue} · given ₦${givenValue} · ${
+        balance > 0 ? `Receivable ₦${balance}` : balance < 0 ? `Payable ₦${Math.abs(balance)}` : "Even"
+      } · ${newImei.product.name}`,
     },
   })
   const managers = await prisma.user.findMany({
-    where: { role: { in: ["CEO", "BRANCH_MANAGER"] }, isActive: true },
+    where: { role: { in: ["CEO", "BRANCH_MANAGER", "SUPER_ADMIN"] }, isActive: true },
   })
   for (const manager of managers) {
-    await notify(manager.id, "A swap is waiting for you to agree the trade-in value", swap.swapNumber, "/approvals", "APPROVAL_REQUEST")
+    await notify(manager.id, "A Swap Deal is waiting for approval", swap.swapNumber, "/approvals", "APPROVAL_REQUEST")
   }
+  refreshOps()
+  return { success: true }
+}
+
+/**
+ * After Needs approval says yes: swap-in hits In shop, shop device leaves.
+ * After no: cancel the hold and remove the pending swap-in record.
+ */
+export async function applySwapApprovalDecision(
+  swapId: string,
+  status: "APPROVED" | "REJECTED",
+  userId: string
+) {
+  const swap = await prisma.swap.findUnique({
+    where: { id: swapId },
+    include: { customer: true, newProduct: true, oldImei: true, newImei: true },
+  })
+  if (!swap) return { error: "We could not find that Swap Deal." }
+  if (swap.status !== "PENDING") return { error: "Somebody has already decided on this Swap Deal." }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      if (status === "REJECTED") {
+        await tx.swap.update({
+          where: { id: swap.id },
+          data: { status: "REJECTED", approvedBy: userId, approvedAt: new Date() },
+        })
+        await tx.imeiRecord.update({
+          where: { id: swap.oldImeiId },
+          data: {
+            status: "DISPOSED",
+            customerId: null,
+            notes: `Swap Deal rejected · ${swap.swapNumber}`,
+          },
+        })
+        await tx.auditLog.create({
+          data: {
+            userId,
+            action: "REJECT",
+            entityType: "Swap",
+            entityId: swap.swapNumber,
+            newValue: JSON.stringify({ status: "REJECTED" }),
+            branchId: swap.branchId,
+          },
+        })
+        return
+      }
+
+      if (!swap.newImeiId) throw new ConflictError("This Swap Deal has no shop device going out.")
+
+      await claimImei(tx, {
+        imeiId: swap.newImeiId,
+        branchId: swap.branchId,
+        label: "The shop device on this Swap Deal",
+        data: {
+          status: "SWAPPED",
+          customerId: swap.customerId,
+          notes: `Left on Swap Deal ${swap.swapNumber}`,
+        },
+      })
+      await drawStock(tx, {
+        productId: swap.newProductId,
+        branchId: swap.branchId,
+        quantity: 1,
+        label: swap.newProduct.name,
+      })
+      await tx.imeiRecord.update({
+        where: { id: swap.oldImeiId },
+        data: {
+          status: "IN_STOCK",
+          customerId: null,
+          notes: `Swap Deal from ${swap.customer.name} · ${swap.swapNumber}`,
+        },
+      })
+      await returnStock(tx, { productId: swap.oldImei.productId, branchId: swap.branchId, quantity: 1 })
+
+      await tx.swap.update({
+        where: { id: swap.id },
+        data: { status: "APPROVED", approvedBy: userId, approvedAt: new Date() },
+      })
+      await tx.auditLog.create({
+        data: {
+          userId,
+          action: "APPROVE",
+          entityType: "Swap",
+          entityId: swap.swapNumber,
+          newValue: JSON.stringify({
+            status: "APPROVED",
+            stockIn: swap.oldImei.imei1,
+            stockOut: swap.newImei?.imei1 ?? null,
+          }),
+          branchId: swap.branchId,
+        },
+      })
+    })
+  } catch (error) {
+    return { error: shopError(error, "Could not apply this Swap Deal decision.") }
+  }
+
   refreshOps()
   return { success: true }
 }
@@ -935,39 +1137,69 @@ export async function completeSwap(formData: FormData) {
   const method = String(formData.get("method") || "TRANSFER") as PaymentMethod
   const swap = await prisma.swap.findUnique({
     where: { id },
-    include: { customer: true, newProduct: true, oldImei: true },
+    include: { customer: true, newProduct: true, oldImei: true, newImei: true },
   })
   if (!swap || !swap.newImeiId) return { error: "We could not find that swap." }
   if (swap.status === "COMPLETED") return { error: "That swap is already finished." }
+  if (swap.status !== "APPROVED") {
+    return { error: "Wait for approval on Needs approval before settling the money." }
+  }
   const opening = await prisma.openingStock.findUnique({ where: { branchId: swap.branchId }, select: { status: true } })
   if (opening?.status === "OPEN") {
     return { error: "This shop's opening stock is still being counted. Finish the swap once it is closed." }
   }
-  if (swap.status !== "APPROVED" && !(await canApprove(user.role))) {
-    return { error: "Wait for a manager to say yes on this Swap Deal before collecting the money." }
-  }
 
   const invoiceNumber = generateDocNumber("INV")
   const balance = money(swap.balanceAmount)
-  const collected = Math.min(paid, Math.max(balance, 0))
+  const receivable = Math.max(balance, 0)
+  const payable = Math.max(-balance, 0)
+  const collected = Math.min(Math.max(0, paid), receivable || payable)
 
   let invoice: { id: string }
   try {
   invoice = await prisma.$transaction(async (tx) => {
-    // Seal the swap first. Without this, two clicks on Complete raised two
-    // invoices and sold the same replacement phone twice.
     const sealed = await tx.swap.updateMany({
-      where: { id, status: { not: "COMPLETED" } },
+      where: { id, status: "APPROVED" },
       data: {
         status: "COMPLETED",
-        approvedBy: user.id,
-        approvedAt: new Date(),
         completedAt: new Date(),
         notes: [swap.notes, `Invoice ${invoiceNumber}`].filter(Boolean).join(" · "),
       },
     })
     if (sealed.count !== 1) {
       throw new ConflictError(`${swap.swapNumber} was already completed by someone else. Refresh to see it.`)
+    }
+
+    // Legacy path: older swaps may still have stock waiting if approval only flipped status.
+    if (swap.oldImei.status === "RECEIVED") {
+      await tx.imeiRecord.update({
+        where: { id: swap.oldImeiId },
+        data: {
+          status: "IN_STOCK",
+          customerId: null,
+          notes: `Swap Deal from ${swap.customer.name} · ${swap.swapNumber}`,
+        },
+      })
+      await returnStock(tx, { productId: swap.oldImei.productId, branchId: swap.branchId, quantity: 1 })
+    }
+    if (swap.newImei?.status === "IN_STOCK") {
+      await claimImei(tx, {
+        imeiId: swap.newImeiId!,
+        branchId: swap.branchId,
+        label: "The shop device on this Swap Deal",
+        data: { status: "SOLD", customerId: swap.customerId },
+      })
+      await drawStock(tx, {
+        productId: swap.newProductId,
+        branchId: swap.branchId,
+        quantity: 1,
+        label: swap.newProduct.name,
+      })
+    } else {
+      await tx.imeiRecord.update({
+        where: { id: swap.newImeiId! },
+        data: { status: "SOLD", customerId: swap.customerId },
+      })
     }
 
     const sale = await tx.sale.create({
@@ -978,11 +1210,11 @@ export async function completeSwap(formData: FormData) {
         customerId: swap.customerId,
         saleType: "RETAIL",
         status: "COMPLETED",
-        subtotal: Math.max(balance, 0).toFixed(2),
+        subtotal: receivable.toFixed(2),
         discount: money(swap.tradeValue).toFixed(2),
-        totalAmount: Math.max(balance, 0).toFixed(2),
-        paidAmount: collected.toFixed(2),
-        paymentMethod: collected < balance ? "CREDIT" : method,
+        totalAmount: receivable.toFixed(2),
+        paidAmount: receivable > 0 ? collected.toFixed(2) : "0.00",
+        paymentMethod: receivable > 0 && collected < receivable ? "CREDIT" : method,
         notes: `Swap ${swap.swapNumber}`,
         items: {
           create: {
@@ -991,35 +1223,22 @@ export async function completeSwap(formData: FormData) {
             quantity: 1,
             unitPrice: money(swap.newProductPrice).toFixed(2),
             discount: money(swap.tradeValue).toFixed(2),
-            totalPrice: Math.max(balance, 0).toFixed(2),
+            totalPrice: receivable.toFixed(2),
           },
         },
         payments:
-          collected > 0
+          receivable > 0 && collected > 0
             ? { create: { amount: collected.toFixed(2), method } }
             : undefined,
       },
     })
 
-    await claimImei(tx, {
-      imeiId: swap.newImeiId!,
-      branchId: swap.branchId,
-      label: "The replacement phone",
-      data: { status: "SOLD", customerId: swap.customerId, saleId: sale.id },
-    })
     await tx.imeiRecord.update({
-      where: { id: swap.oldImeiId },
-      data: { status: "IN_STOCK", customerId: null, notes: `Swap Deal from ${swap.customer.name}` },
+      where: { id: swap.newImeiId! },
+      data: { saleId: sale.id },
     })
-    await drawStock(tx, {
-      productId: swap.newProductId,
-      branchId: swap.branchId,
-      quantity: 1,
-      label: swap.newProduct.name,
-    })
-    await returnStock(tx, { productId: swap.oldImei.productId, branchId: swap.branchId, quantity: 1 })
 
-    const due = Math.max(balance - collected, 0)
+    const due = Math.max(receivable - collected, 0)
     if (due > 0) {
       const after = await shiftCustomerBalance(tx, swap.customerId, due)
       await tx.ledgerEntry.create({
@@ -1029,11 +1248,11 @@ export async function completeSwap(formData: FormData) {
           amount: due.toFixed(2),
           balance: money(after.currentBalance).toFixed(2),
           reference: invoiceNumber,
-          description: `Swap difference ${swap.swapNumber}`,
+          description: `Swap receivable ${swap.swapNumber}`,
         },
       })
     }
-    if (collected > 0) {
+    if (receivable > 0 && collected > 0) {
       await tx.financeEntry.create({
         data: {
           branchId: swap.branchId,
@@ -1041,7 +1260,20 @@ export async function completeSwap(formData: FormData) {
           type: "INCOME",
           amount: collected.toFixed(2),
           reference: invoiceNumber,
-          description: `Swap difference ${swap.swapNumber}`,
+          description: `Swap receivable ${swap.swapNumber}`,
+        },
+      })
+    }
+    if (payable > 0) {
+      const payOut = collected > 0 ? Math.min(collected, payable) : payable
+      await tx.financeEntry.create({
+        data: {
+          branchId: swap.branchId,
+          account: method === "CASH" ? "CASH" : "BANK",
+          type: "EXPENSE",
+          amount: payOut.toFixed(2),
+          reference: invoiceNumber,
+          description: `Swap payable to ${swap.customer.name} · ${swap.swapNumber}`,
         },
       })
     }
@@ -1052,7 +1284,7 @@ export async function completeSwap(formData: FormData) {
         action: "UPDATE",
         entityType: "Swap",
         entityId: swap.swapNumber,
-        newValue: JSON.stringify({ invoiceNumber, collected, balance }),
+        newValue: JSON.stringify({ invoiceNumber, collected, receivable, payable }),
         branchId: swap.branchId,
       },
     })
@@ -1253,18 +1485,35 @@ export async function createTransfer(formData: FormData): Promise<{
   const scoped = await scopedBranchId(user.role, user.branchId)
   if (scoped && fromBranchId !== scoped) return { error: "You can only send from your own shop." }
 
-  const file = formData.get("file")
-  if (!(file instanceof File) || file.size === 0) return { error: "Choose the CSV file of goods leaving this shop." }
-  if (file.size > 2_000_000) return { error: "That file is too big. Use a file under 2 MB." }
-
-  let rows: Record<string, string>[]
+  const selectedImeis = [
+    ...new Set(
+      String(formData.get("selectedImeis") || "")
+        .split(/[\s,;]+/)
+        .map((row) => row.trim())
+        .filter(Boolean)
+    ),
+  ]
+  let accessoryPicks: Array<{ productId: string; quantity: number }> = []
   try {
-    rows = await readTableFile(file)
+    const raw = String(formData.get("accessoryLines") || "").trim()
+    if (raw) {
+      const parsed = JSON.parse(raw) as Array<{ productId?: string; quantity?: number }>
+      accessoryPicks = parsed
+        .map((row) => ({
+          productId: String(row.productId || ""),
+          quantity: Math.floor(Number(row.quantity) || 0),
+        }))
+        .filter((row) => row.productId && row.quantity > 0)
+    }
   } catch {
-    return { error: "We could not read that file. Save it as CSV or Excel and try again." }
+    return { error: "The selected accessory lines could not be read. Try again." }
   }
-  if (!rows.length) return { error: "There is nothing under the header line in that file." }
-  if (rows.length > 200) return { error: "Send up to 200 lines at a time." }
+
+  const file = formData.get("file")
+  const hasFile = file instanceof File && file.size > 0
+  if (!selectedImeis.length && !accessoryPicks.length && !hasFile) {
+    return { error: "Select the items to send, or upload a CSV list." }
+  }
 
   const products = await prisma.product.findMany({ where: { isActive: true } })
   const bySku = new Map(products.map((row) => [row.sku.toLowerCase(), row]))
@@ -1276,91 +1525,149 @@ export async function createTransfer(formData: FormData): Promise<{
     byName.set(key, list)
   }
 
-  // One read for every code on the sheet. This loop used to fire a query per
-  // line, so a 200 line transfer meant 200 round trips before anything moved.
-  const codes = rows
-    .map((row) => cell(row, "imei", "imei1", "phone") || cell(row, "serial", "serial_number", "sn"))
-    .filter(Boolean)
-  const codeRecords = codes.length
-    ? await prisma.imeiRecord.findMany({
-        where: {
-          OR: [{ imei1: { in: codes } }, { imei2: { in: codes } }, { serialNumber: { in: codes } }],
-        },
-        include: { product: true },
-      })
-    : []
-  const byCode = new Map<string, (typeof codeRecords)[number]>()
-  for (const record of codeRecords) {
-    for (const key of [record.imei1, record.imei2, record.serialNumber]) {
-      if (key && !byCode.has(key)) byCode.set(key, record)
-    }
-  }
-
   type PhoneLine = { imei1: string; productId: string; color: string; extra: string }
   const phones: PhoneLine[] = []
   const accessoryQty = new Map<string, number>()
   const seen = new Set<string>()
   const errors: string[] = []
 
-  for (let index = 0; index < rows.length; index += 1) {
-    const row = rows[index]
-    const line = index + 2
-    const imei = cell(row, "imei", "imei1", "phone")
-    const serial = cell(row, "serial", "serial_number", "sn")
-    const sku = cell(row, "item_code", "sku", "code")
-    const name = cell(row, "name", "product", "item")
-    const color = cell(row, "color")
-    const extra = cell(row, "notes", "note", "remark")
-    const qtyRaw = cell(row, "quantity", "qty", "pieces")
-    const code = imei || serial
+  if (selectedImeis.length || accessoryPicks.length) {
+    if (selectedImeis.length) {
+      const records = await prisma.imeiRecord.findMany({
+        where: {
+          OR: [{ imei1: { in: selectedImeis } }, { serialNumber: { in: selectedImeis } }],
+        },
+        include: { product: true },
+      })
+      const byCode = new Map<string, (typeof records)[number]>()
+      for (const record of records) {
+        for (const key of [record.imei1, record.serialNumber]) {
+          if (key && !byCode.has(key)) byCode.set(key, record)
+        }
+      }
+      for (const code of selectedImeis) {
+        if (seen.has(code)) {
+          errors.push(`${code} is listed twice.`)
+          continue
+        }
+        seen.add(code)
+        const record = byCode.get(code)
+        if (!record) {
+          errors.push(`${code} is not on this system.`)
+          continue
+        }
+        if (record.status !== "IN_STOCK" || record.branchId !== fromBranchId) {
+          errors.push(`${record.imei1} is not In shop at the sending shop.`)
+          continue
+        }
+        phones.push({ imei1: record.imei1, productId: record.productId, color: "", extra: "" })
+      }
+    }
+    for (const pick of accessoryPicks) {
+      const product = products.find((row) => row.id === pick.productId)
+      if (!product) {
+        errors.push("One selected accessory is not on the active list.")
+        continue
+      }
+      if (product.tracking !== "NONE") {
+        errors.push(`${product.name} needs an IMEI. Select the phone number instead.`)
+        continue
+      }
+      accessoryQty.set(product.id, (accessoryQty.get(product.id) ?? 0) + pick.quantity)
+    }
+  } else if (hasFile && file instanceof File) {
+    if (file.size > 2_000_000) return { error: "That file is too big. Use a file under 2 MB." }
+    let rows: Record<string, string>[]
+    try {
+      rows = await readTableFile(file)
+    } catch {
+      return { error: "We could not read that file. Save it as CSV or Excel and try again." }
+    }
+    if (!rows.length) return { error: "There is nothing under the header line in that file." }
+    if (rows.length > 200) return { error: "Send up to 200 lines at a time." }
 
-    if (!code && !sku && !name) continue
-
-    if (code) {
-      if (seen.has(code)) {
-        errors.push(`Line ${line}: ${code} is listed twice.`)
-        continue
+    const codes = rows
+      .map((row) => cell(row, "imei", "imei1", "phone") || cell(row, "serial", "serial_number", "sn"))
+      .filter(Boolean)
+    const codeRecords = codes.length
+      ? await prisma.imeiRecord.findMany({
+          where: {
+            OR: [{ imei1: { in: codes } }, { imei2: { in: codes } }, { serialNumber: { in: codes } }],
+          },
+          include: { product: true },
+        })
+      : []
+    const byCode = new Map<string, (typeof codeRecords)[number]>()
+    for (const record of codeRecords) {
+      for (const key of [record.imei1, record.imei2, record.serialNumber]) {
+        if (key && !byCode.has(key)) byCode.set(key, record)
       }
-      seen.add(code)
-      const record = byCode.get(code)
-      if (!record) {
-        errors.push(`Line ${line}: ${code} is not on this system.`)
-        continue
-      }
-      if (record.status !== "IN_STOCK" || record.branchId !== fromBranchId) {
-        errors.push(`Line ${line}: ${record.imei1} is not In shop at the sending shop.`)
-        continue
-      }
-      if (sku && record.product.sku.toLowerCase() !== sku.toLowerCase()) {
-        errors.push(`Line ${line}: ${record.imei1} belongs to ${record.product.sku}, not ${sku}.`)
-        continue
-      }
-      phones.push({ imei1: record.imei1, productId: record.productId, color, extra })
-      continue
     }
 
-    const product =
-      (sku ? bySku.get(sku.toLowerCase()) : undefined) ??
-      (name && (byName.get(name.toLowerCase())?.length === 1) ? byName.get(name.toLowerCase())![0] : undefined)
-    if (!product) {
-      errors.push(`Line ${line}: pick a known item code for this accessory, or put an IMEI on a phone line.`)
-      continue
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index]
+      const line = index + 2
+      const imei = cell(row, "imei", "imei1", "phone")
+      const serial = cell(row, "serial", "serial_number", "sn")
+      const sku = cell(row, "item_code", "sku", "code")
+      const name = cell(row, "name", "product", "item")
+      const color = cell(row, "color")
+      const extra = cell(row, "notes", "note", "remark")
+      const qtyRaw = cell(row, "quantity", "qty", "pieces")
+      const code = imei || serial
+
+      if (!code && !sku && !name) continue
+
+      if (code) {
+        if (seen.has(code)) {
+          errors.push(`Line ${line}: ${code} is listed twice.`)
+          continue
+        }
+        seen.add(code)
+        const record = byCode.get(code)
+        if (!record) {
+          errors.push(`Line ${line}: ${code} is not on this system.`)
+          continue
+        }
+        if (record.status !== "IN_STOCK" || record.branchId !== fromBranchId) {
+          errors.push(`Line ${line}: ${record.imei1} is not In shop at the sending shop.`)
+          continue
+        }
+        if (sku && record.product.sku.toLowerCase() !== sku.toLowerCase()) {
+          errors.push(`Line ${line}: ${record.imei1} belongs to ${record.product.sku}, not ${sku}.`)
+          continue
+        }
+        phones.push({ imei1: record.imei1, productId: record.productId, color, extra })
+        continue
+      }
+
+      const product =
+        (sku ? bySku.get(sku.toLowerCase()) : undefined) ??
+        (name && byName.get(name.toLowerCase())?.length === 1 ? byName.get(name.toLowerCase())![0] : undefined)
+      if (!product) {
+        errors.push(`Line ${line}: pick a known item code for this accessory, or put an IMEI on a phone line.`)
+        continue
+      }
+      if (product.tracking !== "NONE") {
+        errors.push(`Line ${line}: ${product.name} needs an IMEI or serial. Put the number in the IMEI or serial column.`)
+        continue
+      }
+      const quantity = Number(qtyRaw || 0)
+      if (!Number.isFinite(quantity) || quantity < 1) {
+        errors.push(`Line ${line}: type how many ${product.name} pieces are leaving.`)
+        continue
+      }
+      accessoryQty.set(product.id, (accessoryQty.get(product.id) ?? 0) + quantity)
     }
-    if (product.tracking !== "NONE") {
-      errors.push(`Line ${line}: ${product.name} needs an IMEI or serial. Put the number in the IMEI or serial column.`)
-      continue
-    }
-    const quantity = Number(qtyRaw || 0)
-    if (!Number.isFinite(quantity) || quantity < 1) {
-      errors.push(`Line ${line}: type how many ${product.name} pieces are leaving.`)
-      continue
-    }
-    accessoryQty.set(product.id, (accessoryQty.get(product.id) ?? 0) + quantity)
   }
 
   if (errors.length) return { error: errors[0], errors }
   if (!phones.length && accessoryQty.size === 0) {
-    return { error: "That file has no phone or accessory to send." }
+    return { error: "Select at least one phone or accessory to transfer." }
+  }
+
+  if (phones.length + [...accessoryQty.values()].reduce((sum, n) => sum + n, 0) > 200) {
+    return { error: "Send up to 200 units at a time." }
   }
 
   const qtyByProduct = new Map<string, number>()
@@ -1384,11 +1691,17 @@ export async function createTransfer(formData: FormData): Promise<{
   }
 
   const imeis = phones.map((row) => row.imei1)
+  const reserved = await reservedTransferImeiSet(fromBranchId)
+  for (const imei1 of imeis) {
+    if (reserved.has(imei1)) {
+      return { error: `${imei1} is already on a shop-to-shop transfer waiting for the other shop to accept or reject.` }
+    }
+  }
+
   const transferNumber = generateDocNumber("TRF")
 
-  // The transfer record used to be written before the stock moved. When the
-  // stock write then failed, the shop was left with a transfer showing goods in
-  // transit that had never left the shelf. Both now stand or fall together.
+  // Stock stays In shop at the sending shop until the receiving shop accepts.
+  // Reject cancels with no shelf move. Accept is when the stock leaves.
   let transfer: { transferNumber: string }
   try {
     transfer = await prisma.$transaction(async (tx) => {
@@ -1398,42 +1711,16 @@ export async function createTransfer(formData: FormData): Promise<{
           fromBranchId,
           toBranchId,
           userId: user.id,
-          status: "IN_TRANSIT",
-          sentAt: new Date(),
-          notes: imeis.length ? `IMEIs: ${imeis.join(",")}` : String(formData.get("notes") || "") || `CSV ${file.name}`,
+          status: "PENDING",
+          sentAt: null,
+          notes: imeis.length
+            ? `IMEIs: ${imeis.join(",")}`
+            : String(formData.get("notes") || "") || "Shop to shop transfer",
           items: {
             create: [...qtyByProduct.entries()].map(([productId, quantity]) => ({ productId, quantity })),
           },
         },
       })
-
-      // Every phone on the list must still be In shop here. If one was sold
-      // while the sheet was being prepared, the whole send is refused rather
-      // than silently shipping a phone the shop no longer holds.
-      await claimImeis(tx, { imei1s: imeis, branchId: fromBranchId, data: { status: "TRANSFERRED" } })
-
-      for (const phone of phones) {
-        if (!phone.color && !phone.extra) continue
-        const current = await tx.imeiRecord.findUnique({
-          where: { imei1: phone.imei1 },
-          select: { notes: true },
-        })
-        await tx.imeiRecord.update({
-          where: { imei1: phone.imei1 },
-          data: {
-            notes: [current?.notes, phone.color ? `Color ${phone.color}` : "", phone.extra].filter(Boolean).join(" · "),
-          },
-        })
-      }
-
-      for (const [productId, quantity] of qtyByProduct) {
-        await drawStock(tx, {
-          productId,
-          branchId: fromBranchId,
-          quantity,
-          label: products.find((row) => row.id === productId)?.name ?? "This item",
-        })
-      }
 
       await tx.auditLog.create({
         data: {
@@ -1441,21 +1728,34 @@ export async function createTransfer(formData: FormData): Promise<{
           action: "CREATE",
           entityType: "StockTransfer",
           entityId: created.transferNumber,
-          newValue: JSON.stringify({ fromBranchId, toBranchId, file: file.name, imeis, items: [...qtyByProduct.entries()] }),
+          newValue: JSON.stringify({
+            fromBranchId,
+            toBranchId,
+            status: "PENDING",
+            imeis,
+            items: [...qtyByProduct.entries()],
+            note: "Submitted. Stock stays In shop at the sending shop until accept or reject.",
+          }),
           branchId: fromBranchId,
         },
       })
       return created
     })
   } catch (error) {
-    return { error: shopError(error, "Could not send these goods. Nothing left the shop.") }
+    return { error: shopError(error, "Could not submit this transfer. Nothing left the shop.") }
   }
 
   const destStaff = await prisma.user.findMany({
     where: { branchId: toBranchId, isActive: true },
   })
   for (const staff of destStaff) {
-    await notify(staff.id, "Goods sent to another of our shops", `${transfer.transferNumber} · confirm IMEIs on arrival`, "/transfers", "TRANSFER")
+    await notify(
+      staff.id,
+      "Shop to shop transfer waiting",
+      `${transfer.transferNumber} · accept or reject. Stock is still In shop at the sending shop.`,
+      "/transfers",
+      "TRANSFER"
+    )
   }
   refreshOps()
   return { success: true }
@@ -1467,81 +1767,183 @@ export async function receiveTransfer(formData: FormData) {
   const id = String(formData.get("id") || "")
   const transfer = await prisma.stockTransfer.findUnique({
     where: { id },
-    include: { items: true, toBranch: true },
+    include: { items: { include: { product: true } }, toBranch: true, fromBranch: true },
   })
   if (!transfer) return { error: "We could not find that send." }
-  if (transfer.status === "RECEIVED") return { error: "This send has already been received." }
+  if (transfer.status === "RECEIVED") return { error: "This transfer has already been accepted." }
+  if (transfer.status === "CANCELLED") return { error: "This transfer was rejected. Nothing to accept." }
   if (!(await canSeeAllBranches(user.role)) && user.branchId && user.branchId !== transfer.toBranchId) {
-    return { error: `Only ${transfer.toBranch.name} (or head office) can receive this.` }
+    return { error: `Only ${transfer.toBranch.name} (or head office) can accept this.` }
   }
 
   const expected = parseTransferIds(transfer.notes ?? "")
   const confirmed = parseTransferIds(String(formData.get("imeis") || ""))
   if (expected.length) {
     if (confirmed.length !== expected.length || expected.some((imei) => !confirmed.includes(imei))) {
-      return { error: "Scan or paste every IMEI from the list that actually arrived." }
+      return { error: "Scan or paste every IMEI on this transfer that actually arrived." }
     }
   }
 
+  const pendingStyle = transfer.status === "PENDING"
+
   try {
-  await prisma.$transaction(async (tx) => {
-    // Mark it received first and only from In transit. Two people confirming
-    // the same delivery used to add the goods to the shelf twice.
-    const received = await tx.stockTransfer.updateMany({
-      where: { id, status: { not: "RECEIVED" } },
-      data: { status: "RECEIVED", receivedAt: new Date() },
-    })
-    if (received.count !== 1) {
-      throw new ConflictError(`${transfer.transferNumber} was already received by someone else. Refresh to see it.`)
-    }
-    if (expected.length) {
-      const landed = await tx.imeiRecord.updateMany({
-        where: { imei1: { in: expected }, status: "TRANSFERRED" },
-        data: { status: "IN_STOCK", branchId: transfer.toBranchId },
+    await prisma.$transaction(async (tx) => {
+      const accepted = await tx.stockTransfer.updateMany({
+        where: { id, status: { in: ["PENDING", "IN_TRANSIT"] } },
+        data: { status: "RECEIVED", receivedAt: new Date(), sentAt: transfer.sentAt ?? new Date() },
       })
-      if (landed.count !== expected.length) {
-        throw new ConflictError(
-          `${expected.length - landed.count} of these phones are not showing as sent. Check the list with the sending shop before receiving.`
-        )
+      if (accepted.count !== 1) {
+        throw new ConflictError(`${transfer.transferNumber} was already closed by someone else. Refresh to see it.`)
       }
-      for (const imei1 of expected) {
-        await tx.auditLog.create({
-          data: {
-            userId: user.id,
-            action: "UPDATE",
-            entityType: "IMEIRecord",
-            entityId: imei1,
-            oldValue: "TRANSFERRED",
-            newValue: JSON.stringify({ status: "IN_STOCK", branchId: transfer.toBranchId, transfer: transfer.transferNumber }),
-            branchId: transfer.toBranchId,
-          },
+
+      if (expected.length) {
+        if (pendingStyle) {
+          await claimImeis(tx, {
+            imei1s: expected,
+            branchId: transfer.fromBranchId,
+            from: "IN_STOCK",
+            data: { status: "IN_STOCK", branchId: transfer.toBranchId },
+          })
+        } else {
+          const landed = await tx.imeiRecord.updateMany({
+            where: { imei1: { in: expected }, status: "TRANSFERRED" },
+            data: { status: "IN_STOCK", branchId: transfer.toBranchId },
+          })
+          if (landed.count !== expected.length) {
+            throw new ConflictError(
+              `${expected.length - landed.count} of these phones are not showing as sent. Check the list with the sending shop before accepting.`
+            )
+          }
+        }
+        for (const imei1 of expected) {
+          await tx.auditLog.create({
+            data: {
+              userId: user.id,
+              action: "UPDATE",
+              entityType: "IMEIRecord",
+              entityId: imei1,
+              oldValue: pendingStyle ? "IN_STOCK" : "TRANSFERRED",
+              newValue: JSON.stringify({
+                status: "IN_STOCK",
+                branchId: transfer.toBranchId,
+                transfer: transfer.transferNumber,
+              }),
+              branchId: transfer.toBranchId,
+            },
+          })
+        }
+      }
+
+      for (const item of transfer.items) {
+        await tx.transferItem.update({
+          where: { id: item.id },
+          data: { receivedQty: item.quantity },
+        })
+        if (pendingStyle) {
+          await drawStock(tx, {
+            productId: item.productId,
+            branchId: transfer.fromBranchId,
+            quantity: item.quantity,
+            label: item.product.name,
+          })
+        }
+        await returnStock(tx, {
+          productId: item.productId,
+          branchId: transfer.toBranchId,
+          quantity: item.quantity,
         })
       }
-    }
-    for (const item of transfer.items) {
-      await tx.transferItem.update({
-        where: { id: item.id },
-        data: { receivedQty: item.quantity },
+
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "UPDATE",
+          entityType: "StockTransfer",
+          entityId: transfer.transferNumber,
+          newValue: JSON.stringify({ status: "RECEIVED", imeis: expected }),
+          branchId: transfer.toBranchId,
+        },
       })
-      await returnStock(tx, {
-        productId: item.productId,
-        branchId: transfer.toBranchId,
-        quantity: item.quantity,
-      })
-    }
-    await tx.auditLog.create({
-      data: {
-        userId: user.id,
-        action: "UPDATE",
-        entityType: "StockTransfer",
-        entityId: transfer.transferNumber,
-        newValue: JSON.stringify({ status: "RECEIVED", imeis: expected }),
-        branchId: transfer.toBranchId,
-      },
     })
-  })
   } catch (error) {
-    return { error: shopError(error, "Could not receive this transfer.") }
+    return { error: shopError(error, "Could not accept this transfer.") }
+  }
+  refreshOps()
+  return { success: true }
+}
+
+export async function rejectTransfer(formData: FormData) {
+  const user = await requireUser()
+  if (!(await can(user.role, "action.transfer"))) {
+    return { error: "You are not allowed to reject a shop-to-shop transfer. Ask the main admin." }
+  }
+  const id = String(formData.get("id") || "")
+  const transfer = await prisma.stockTransfer.findUnique({
+    where: { id },
+    include: { items: { include: { product: true } }, toBranch: true, fromBranch: true },
+  })
+  if (!transfer) return { error: "We could not find that transfer." }
+  if (transfer.status === "RECEIVED") return { error: "This transfer was already accepted." }
+  if (transfer.status === "CANCELLED") return { error: "This transfer was already rejected." }
+  if (
+    !(await canSeeAllBranches(user.role)) &&
+    user.branchId &&
+    user.branchId !== transfer.toBranchId &&
+    user.branchId !== transfer.fromBranchId
+  ) {
+    return { error: "Only the sending shop, the receiving shop, or head office can reject this." }
+  }
+
+  const expected = parseTransferIds(transfer.notes ?? "")
+  const wasInTransit = transfer.status === "IN_TRANSIT"
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const closed = await tx.stockTransfer.updateMany({
+        where: { id, status: { in: ["PENDING", "IN_TRANSIT"] } },
+        data: { status: "CANCELLED" },
+      })
+      if (closed.count !== 1) {
+        throw new ConflictError(`${transfer.transferNumber} was already closed. Refresh to see it.`)
+      }
+
+      // Legacy in-transit sends had already left the shelf. Put them back.
+      if (wasInTransit) {
+        if (expected.length) {
+          await claimImeis(tx, {
+            imei1s: expected,
+            branchId: transfer.fromBranchId,
+            from: "TRANSFERRED",
+            data: { status: "IN_STOCK", branchId: transfer.fromBranchId },
+          })
+        }
+        for (const item of transfer.items) {
+          await returnStock(tx, {
+            productId: item.productId,
+            branchId: transfer.fromBranchId,
+            quantity: item.quantity,
+          })
+        }
+      }
+
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "UPDATE",
+          entityType: "StockTransfer",
+          entityId: transfer.transferNumber,
+          newValue: JSON.stringify({
+            status: "CANCELLED",
+            note: wasInTransit
+              ? "Rejected. Stock returned to the sending shop."
+              : "Rejected. Stock never left the sending shop In shop record.",
+          }),
+          branchId: user.branchId ?? transfer.toBranchId,
+        },
+      })
+    })
+  } catch (error) {
+    return { error: shopError(error, "Could not reject this transfer.") }
   }
   refreshOps()
   return { success: true }

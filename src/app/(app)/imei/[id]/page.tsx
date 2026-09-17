@@ -2,6 +2,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { getImeiDetail } from "@/app/actions/imei"
 import { ImeiConditionForm } from "@/app/(app)/imei/condition-form"
+import { ImeiShelfStateForm } from "@/app/(app)/imei/shelf-state-form"
 import { PageHeader, StatusBadge } from "@/components/shared"
 import { WorkflowSteps } from "@/components/workflow-steps"
 import { formatCurrency, formatDateTime, money } from "@/lib/utils"
@@ -127,12 +128,17 @@ export default async function ImeiDetailPage({ params }: { params: Promise<{ id:
         </div>
       </div>
       <div className="surface-card p-5">
-        <h3 className="mb-3 font-semibold">Change the condition and the photo</h3>
+        <h3 className="mb-3 font-semibold">Good (sellable) or Damaged</h3>
+        <ImeiShelfStateForm id={record.id} status={record.status} />
+      </div>
+      <div className="surface-card p-5">
+        <h3 className="mb-3 font-semibold">Change how it looks and the photo</h3>
         <ImeiConditionForm
           id={record.id}
           cosmeticGrade={record.cosmeticGrade}
           conditionNotes={record.conditionNotes}
           photoData={record.photoData}
+          status={record.status}
         />
       </div>
     </div>

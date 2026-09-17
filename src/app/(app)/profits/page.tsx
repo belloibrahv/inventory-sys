@@ -159,9 +159,9 @@ export default async function ProfitsPage() {
           )}
         </div>
         <div className="surface-card overflow-hidden">
-          <h3 className="border-b border-border px-5 py-4 font-semibold">Neighbor shop fills</h3>
+          <h3 className="border-b border-border px-5 py-4 font-semibold">Stock Outsourcing (Neighbour shop fill)</h3>
           {data.neighborLines.length === 0 ? (
-            <p className="px-5 py-4 text-sm text-muted-foreground">No neighbor fill sales in this period yet.</p>
+            <p className="px-5 py-4 text-sm text-muted-foreground">No stock outsourcing sales in this period yet.</p>
           ) : (
             <table className="w-full text-sm">
               <thead className="text-left text-foreground/80">

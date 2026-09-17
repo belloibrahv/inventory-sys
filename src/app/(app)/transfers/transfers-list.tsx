@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import Link from "next/link"
-import { receiveTransfer } from "@/app/actions/ops"
+import { receiveTransfer, rejectTransfer } from "@/app/actions/ops"
 import { ActionForm } from "@/components/action-form"
 import { StatusBadge } from "@/components/shared"
 import { TablePager, usePagedRows } from "@/components/table-pager"
@@ -48,22 +48,24 @@ export function TransfersList({ transfers }: { transfers: TransferRow[] }) {
         onSelect={setStatus}
         steps={[
           { key: "all", label: "All", count: counts.all },
-          { key: "PENDING", label: "Waiting to send", count: counts.PENDING ?? 0 },
+          { key: "PENDING", label: "Waiting for accept", count: counts.PENDING ?? 0 },
           { key: "IN_TRANSIT", label: "On the way", count: counts.IN_TRANSIT ?? 0 },
-          { key: "RECEIVED", label: "Received", count: counts.RECEIVED ?? 0 },
+          { key: "RECEIVED", label: "Accepted", count: counts.RECEIVED ?? 0 },
+          { key: "CANCELLED", label: "Rejected", count: counts.CANCELLED ?? 0 },
         ]}
       />
 
       <div className="space-y-3">
         {pager.pageRows.map((transfer) => {
           const when = transfer.receivedAt ?? transfer.sentAt ?? transfer.createdAt
+          const open = transfer.status === "PENDING" || transfer.status === "IN_TRANSIT"
           return (
             <div key={transfer.id} className="surface-card p-5">
               <div className="flex justify-between gap-3">
                 <div>
                   <p className="font-semibold">{transfer.transferNumber}</p>
                   <p className="text-sm text-muted-foreground">
-                    {transfer.fromBranch.code} → {transfer.toBranch.code}
+                    From {transfer.fromBranch.name} → To {transfer.toBranch.name}
                     {transfer.items.map((item) => ` · ${item.product.name} × ${item.quantity}`).join("")}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2 text-sm">
@@ -73,32 +75,74 @@ export function TransfersList({ transfers }: { transfers: TransferRow[] }) {
                       </Link>
                     ))}
                   </div>
+                  {transfer.status === "PENDING" ? (
+                    <p className="mt-2 text-xs text-amber-800">
+                      Stock is still In shop at {transfer.fromBranch.name}. It leaves only when {transfer.toBranch.name} accepts.
+                    </p>
+                  ) : null}
                 </div>
                 <div className="text-right">
                   <StatusBadge value={transfer.status} />
                   <p className="mt-2 text-xs font-medium tabular-nums text-muted-foreground">
-                    {transfer.receivedAt ? "Received" : transfer.sentAt ? "Sent" : "Booked"} {formatShopWhen(when)}
+                    {transfer.status === "RECEIVED"
+                      ? "Accepted"
+                      : transfer.status === "CANCELLED"
+                        ? "Rejected"
+                        : transfer.status === "PENDING"
+                          ? "Submitted"
+                          : "Sent"}{" "}
+                    {formatShopWhen(when)}
                   </p>
                 </div>
               </div>
-              {transfer.status !== "RECEIVED" ? (
-                <div className="mt-4 border-t border-border pt-4">
-                  <p className="mb-2 text-sm text-muted-foreground">
-                    {transfer.toBranch.name} confirms arrival.
+              {open ? (
+                <div className="mt-4 space-y-4 border-t border-border pt-4">
+                  <p className="text-sm text-muted-foreground">
+                    {transfer.toBranch.name} accepts or rejects this transfer.
                   </p>
-                  <ActionForm action={receiveTransfer} submit="Confirm they arrived" enterDoesNotSubmit className="space-y-2">
+                  <ActionForm
+                    action={receiveTransfer}
+                    submit="Accept transfer"
+                    successMessage="Transfer accepted. Stock is now In shop at the receiving branch."
+                    enterDoesNotSubmit
+                    className="space-y-2"
+                    confirmModal={{
+                      title: "Accept this transfer?",
+                      description: `Stock will leave ${transfer.fromBranch.name} and land In shop at ${transfer.toBranch.name}.`,
+                      confirmLabel: "Accept transfer",
+                      tone: "warning",
+                    }}
+                  >
                     <input type="hidden" name="id" value={transfer.id} />
                     {transfer.imeis.length ? (
                       <ScanList name="imeis" />
                     ) : (
-                      <p className="text-sm text-muted-foreground">
-                        No IMEI on this send. Confirm the pieces arrived.
-                      </p>
+                      <p className="text-sm text-muted-foreground">No IMEI on this transfer. Confirm the pieces arrived.</p>
                     )}
                   </ActionForm>
+                  <ActionForm
+                    action={rejectTransfer}
+                    submit="Reject transfer"
+                    successMessage="Transfer rejected. Stock stays In shop at the sending branch."
+                    variant="outline"
+                    className="space-y-2"
+                    confirmModal={{
+                      title: "Reject this transfer?",
+                      description:
+                        transfer.status === "PENDING"
+                          ? `Nothing leaves ${transfer.fromBranch.name}. The In shop record stays as it is.`
+                          : `Stock returns to ${transfer.fromBranch.name}.`,
+                      confirmLabel: "Reject transfer",
+                      tone: "danger",
+                    }}
+                  >
+                    <input type="hidden" name="id" value={transfer.id} />
+                  </ActionForm>
                 </div>
-              ) : (
+              ) : transfer.status === "RECEIVED" ? (
                 <p className="mt-2 text-xs text-success">In shop at {transfer.toBranch.name}.</p>
+              ) : (
+                <p className="mt-2 text-xs text-muted-foreground">Rejected. Stock stayed at {transfer.fromBranch.name}.</p>
               )}
             </div>
           )
@@ -106,7 +150,7 @@ export function TransfersList({ transfers }: { transfers: TransferRow[] }) {
         {filtered.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
             {transfers.length === 0
-              ? "No shop-to-shop sends yet."
+              ? "No shop-to-shop transfers yet."
               : "Nothing in this stage. Tap another stage above."}
           </p>
         ) : (

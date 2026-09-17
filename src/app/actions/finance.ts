@@ -525,22 +525,21 @@ export async function decideApproval(id: string, status: "APPROVED" | "REJECTED"
     if (result && "error" in result && result.error) return result
   }
 
+  if (approval.entityType === "Swap" || approval.type === "SWAP") {
+    const swap = await prisma.swap.findFirst({
+      where: { OR: [{ id: approval.entityId }, { swapNumber: approval.entityId }] },
+    })
+    if (swap) {
+      const { applySwapApprovalDecision } = await import("@/app/actions/ops")
+      const result = await applySwapApprovalDecision(swap.id, status, user.id)
+      if (result && "error" in result && result.error) return result
+    }
+  }
+
   await prisma.approval.update({
     where: { id },
     data: { status, approvedBy: user.id, approvedAt: new Date() },
   })
-
-  if (approval.entityType === "Swap" || approval.type === "SWAP") {
-    const swap = await prisma.swap.findFirst({
-      where: { OR: [{ id: approval.entityId }, { swapNumber: approval.entityId }, { oldImei: { imei1: approval.entityId } }] },
-    })
-    if (swap) {
-      await prisma.swap.update({
-        where: { id: swap.id },
-        data: { status: status === "APPROVED" ? "APPROVED" : "REJECTED", approvedBy: user.id, approvedAt: new Date() },
-      })
-    }
-  }
 
   if (approval.entityType === "Return" || approval.type === "RETURN") {
     const record = await prisma.stockReturn.findFirst({

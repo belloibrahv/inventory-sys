@@ -146,8 +146,8 @@ export const navGroups: NavGroup[] = [
   {
     label: "Daily work",
     items: [
-      { name: "Shop to shop", href: "/transfers", icon: ArrowLeftRight },
-      { name: "Neighbor shop fill", href: "/neighbor-fills", icon: Handshake },
+      { name: "Shop to shop (Stock Transfer)", href: "/transfers", icon: ArrowLeftRight },
+      { name: "Stock Outsourcing (Neighbour shop fill)", href: "/neighbor-fills", icon: Handshake },
       { name: "Returns", href: "/returns", icon: Undo2 },
       { name: "Swap Deal", href: "/swaps", icon: Repeat2 },
       { name: "Repairs", href: "/repairs", icon: Wrench },

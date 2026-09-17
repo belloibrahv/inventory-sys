@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client"
 import { MARKED_PAID_ON_UPLOAD, OPENING_STOCK_METHOD } from "@/lib/upload-purchase"
 import { displayPartyName, partyNameKey } from "@/lib/party-key"
-import { money } from "@/lib/utils"
+import { formatCurrency, money } from "@/lib/utils"
 
 /**
  * Opening stock is the shop's starting value. It is never money owed.
@@ -22,6 +22,25 @@ export function isOpeningStockPurchase(row: {
 export function isTrueOpeningStockNotes(notes?: string | null) {
   const text = notes ?? ""
   return /opening stock/i.test(text) && /not a supplier bill/i.test(text)
+}
+
+/** +₦x when the house owes Abu Twins after stock return. */
+export function formatValueOwingPlus(amount: number) {
+  const n = Math.max(0, Number(amount) || 0)
+  return n > 0 ? `+${formatCurrency(n)}` : formatCurrency(0)
+}
+
+/** -₦x when Abu Twins still owes the house. */
+export function formatValueOwingMinus(amount: number) {
+  const n = Math.max(0, Number(amount) || 0)
+  return n > 0 ? `-${formatCurrency(n)}` : formatCurrency(0)
+}
+
+/** Balance cell: surplus as +, still owed as -. */
+export function formatPurchaseBalanceCell(owed: number, surplus: number) {
+  if (surplus > 0) return formatValueOwingPlus(surplus)
+  if (owed > 0) return formatValueOwingMinus(owed)
+  return formatCurrency(0)
 }
 
 /** What is still owed, or surplus the supplier owes us, after send-backs. */

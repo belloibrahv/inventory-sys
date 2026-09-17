@@ -14,7 +14,7 @@ import { requestParkedFlush } from "@/lib/flush-parked"
 import { applyParkedToTillSnapshot, readTillSnapshot, saveTillSnapshot, type TillBranch, type TillCustomer, type TillImei, type TillProduct, type TillSellLock, type TillSnapshot } from "@/lib/till-catalog"
 import { formatCurrency, money } from "@/lib/utils"
 import { formatCondition } from "@/lib/status"
-import { phoneLookLabel } from "@/lib/phone-look"
+import { phoneLookLabel, isBlockedFromSell } from "@/lib/phone-look"
 import { Trash2, RotateCcw, PlusCircle } from "lucide-react"
 import { useDecision } from "@/hooks/use-decision"
 
@@ -308,6 +308,10 @@ export function PosClient({
   }
 
   function addImei(item: TillImei) {
+    if (isBlockedFromSell({ cosmeticGrade: item.cosmeticGrade, productCondition: item.product.condition })) {
+      toast.error("That phone is Damaged. It cannot be sold. Open All phones and Set Good (sellable) if it is fixed.")
+      return
+    }
     const price = money(item.product.sellingPrice)
     setCart((current) => [
       ...current,
@@ -330,6 +334,10 @@ export function PosClient({
   }
 
   function addAccessory(product: TillProduct) {
+    if (isBlockedFromSell({ productCondition: product.condition })) {
+      toast.error(`${product.name} is Damaged and cannot be sold.`)
+      return
+    }
     const price = money(product.sellingPrice)
     setCart((current) => {
       const existing = current.find((line) => !line.imeiId && line.productId === product.id)
@@ -621,7 +629,11 @@ export function PosClient({
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{line.imei ?? "-"}</td>
                   <td className="px-4 py-3">
-                    <Select
+                    <Input
+                      type="number"
+                      min={0}
+                      step={1}
+                      className="h-8 w-28"
                       value={String(line.warrantyDays ?? 0)}
                       onChange={(event) => {
                         const val = Math.max(0, Number(event.target.value) || 0)
@@ -629,17 +641,10 @@ export function PosClient({
                           current.map((row, i) => (i === index ? { ...row, warrantyDays: val } : row))
                         )
                       }}
-                      className="h-8 text-xs w-32"
-                    >
-                      <option value="0">0 days (No warranty)</option>
-                      <option value="3">3 days testing</option>
-                      <option value="7">7 days (1 week)</option>
-                      <option value="14">14 days (2 weeks)</option>
-                      <option value="21">21 days (3 weeks)</option>
-                      <option value="30">30 days (1 month)</option>
-                      <option value="60">60 days (2 months)</option>
-                      <option value="90">90 days (3 months)</option>
-                    </Select>
+                      aria-label={`Warranty days for ${line.name}`}
+                      placeholder="0"
+                    />
+                    <p className="mt-0.5 text-[10px] text-muted-foreground">Days of cover. Starts at 0.</p>
                   </td>
                   <td className="px-4 py-3">
                     <Input

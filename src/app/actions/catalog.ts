@@ -22,14 +22,17 @@ export async function getProductLookups() {
 export async function getProducts(search?: string) {
   await requireUser()
   return prisma.product.findMany({
-    where: search
-      ? {
-          OR: [
-            { name: { contains: search } },
-            { sku: { contains: search } },
-          ],
-        }
-      : undefined,
+    where: {
+      isActive: true,
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search } },
+              { sku: { contains: search } },
+            ],
+          }
+        : {}),
+    },
     include: {
       brand: true,
       category: true,
@@ -675,5 +678,293 @@ export async function deleteCategory(formData: FormData) {
   revalidatePath("/products")
   revalidatePath("/products/brands")
   revalidatePath("/products/new")
+  return { success: true }
+}
+
+export async function updateProduct(formData: FormData) {
+  const user = await requireUser()
+  if (!(await canManageCatalog(user.role))) return { error: "You are not allowed to edit items. Ask the main admin." }
+  const id = String(formData.get("id") || "")
+  if (!id) return { error: "Item ID missing." }
+
+  const name = String(formData.get("name") || "").trim()
+  const sku = String(formData.get("sku") || "").trim()
+  const storage = String(formData.get("storage") || "").trim() || null
+  const color = String(formData.get("color") || "").trim() || null
+  const condition = String(formData.get("condition") || "UK_USED") as ProductCondition
+  const costPrice = Number(formData.get("costPrice") || 0)
+  const sellingPrice = Number(formData.get("sellingPrice") || 0)
+  const minimumPrice = Number(formData.get("minimumPrice") || sellingPrice)
+
+  if (!name || !sku) return { error: "Name and Item Code (SKU) are required." }
+
+  const existing = await prisma.product.findUnique({ where: { id } })
+  if (!existing) return { error: "Item not found." }
+
+  if (sku !== existing.sku) {
+    const clash = await prisma.product.findUnique({ where: { sku } })
+    if (clash) return { error: "That item code is already used by another item." }
+  }
+
+  await prisma.product.update({
+    where: { id },
+    data: {
+      name,
+      sku,
+      storage,
+      color,
+      condition,
+      costPrice: costPrice.toFixed(2),
+      minimumPrice: minimumPrice.toFixed(2),
+      sellingPrice: sellingPrice.toFixed(2),
+    },
+  })
+
+  await prisma.auditLog.create({
+    data: {
+      userId: user.id,
+      action: "UPDATE",
+      entityType: "Product",
+      entityId: id,
+      oldValue: JSON.stringify({ name: existing.name, costPrice: existing.costPrice, sellingPrice: existing.sellingPrice }),
+      newValue: JSON.stringify({ name, costPrice, sellingPrice, storage, color, condition, note: `Product details modified: ${name} (${sku})` }),
+      branchId: user.branchId,
+    },
+  })
+
+  revalidatePath("/products")
+  revalidatePath("/inventory")
+  revalidatePath("/pos")
+  return { success: true }
+}
+
+export async function reduceInventoryStock(formData: FormData) {
+  const user = await requireUser()
+  if (!(await canManageCatalog(user.role))) return { error: "You are not allowed to adjust stock. Ask the main admin." }
+  const productId = String(formData.get("productId") || "")
+  const branchId = String(formData.get("branchId") || "")
+  const reason = String(formData.get("reason") || "").trim()
+  const imeiBlob = String(formData.get("imeis") || "").trim()
+
+  if (!productId || !branchId) return { error: "Pick the item and the shop." }
+  if (!reason) return { error: "Write why you are reducing stock, for example damaged, lost, or count correction." }
+
+  const [inv, product] = await Promise.all([
+    prisma.inventory.findUnique({
+      where: { productId_branchId: { productId, branchId } },
+      include: { branch: true },
+    }),
+    prisma.product.findUnique({ where: { id: productId } }),
+  ])
+
+  if (!inv || !product) return { error: "That item is not on the shelf list for this shop." }
+
+  const tracked = product.tracking === "IMEI" || product.tracking === "SERIAL"
+
+  if (tracked) {
+    const codes = imeiBlob
+      .split(/[\n,;]+/)
+      .map((row) => row.replace(/[\s-]/g, "").trim())
+      .filter(Boolean)
+    if (!codes.length) {
+      return {
+        error:
+          "This item uses IMEI or serial. Scan or type each unit you are writing off. You cannot reduce phones by a piece count alone.",
+      }
+    }
+    const unique = [...new Set(codes)]
+    if (unique.length !== codes.length) return { error: "The same IMEI or serial is listed twice. Remove the copy." }
+
+    const records = await prisma.imeiRecord.findMany({
+      where: {
+        productId,
+        branchId,
+        status: "IN_STOCK",
+        OR: unique.flatMap((code) => [{ imei1: code }, { serialNumber: code }]),
+      },
+    })
+    if (records.length !== unique.length) {
+      const found = new Set(records.flatMap((row) => [row.imei1, row.serialNumber].filter(Boolean) as string[]))
+      const missing = unique.filter((code) => !found.has(code))
+      return {
+        error: `These numbers are not In shop for this item at ${inv.branch.name}: ${missing.join(", ")}.`,
+      }
+    }
+    if (records.length > inv.quantity) {
+      return { error: `Shop stock for ${product.name} at ${inv.branch.name} is only ${inv.quantity}. Count again.` }
+    }
+
+    const nextQty = Math.max(0, inv.quantity - records.length)
+    await prisma.$transaction([
+      ...records.map((row) =>
+        prisma.imeiRecord.update({
+          where: { id: row.id },
+          data: { status: "DISPOSED", notes: reason },
+        })
+      ),
+      prisma.inventory.update({
+        where: { productId_branchId: { productId, branchId } },
+        data: { quantity: nextQty },
+      }),
+      prisma.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "UPDATE",
+          entityType: "Inventory",
+          entityId: inv.id,
+          oldValue: String(inv.quantity),
+          newValue: JSON.stringify({
+            quantity: nextQty,
+            wroteOff: records.length,
+            reason,
+            numbers: records.map((row) => row.imei1),
+            shop: inv.branch.name,
+            product: product.name,
+          }),
+          branchId,
+          risk: "MEDIUM",
+        },
+      }),
+    ])
+
+    revalidatePath("/products")
+    revalidatePath("/inventory")
+    revalidatePath("/imei")
+    revalidatePath("/pos")
+    return { success: true }
+  }
+
+  const reduceBy = Number(formData.get("reduceBy") || 0)
+  if (!Number.isFinite(reduceBy) || reduceBy <= 0) return { error: "Enter how many pieces to take off the shelf." }
+  if (reduceBy > inv.quantity) {
+    return { error: `You cannot reduce by ${reduceBy}. ${inv.branch.name} only has ${inv.quantity} on the shelf.` }
+  }
+
+  const nextQty = Math.max(0, inv.quantity - reduceBy)
+
+  await prisma.$transaction([
+    prisma.inventory.update({
+      where: { productId_branchId: { productId, branchId } },
+      data: { quantity: nextQty },
+    }),
+    prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "UPDATE",
+        entityType: "Inventory",
+        entityId: inv.id,
+        oldValue: String(inv.quantity),
+        newValue: JSON.stringify({
+          quantity: nextQty,
+          reducedBy: reduceBy,
+          reason,
+          shop: inv.branch.name,
+          product: product.name,
+        }),
+        branchId,
+        risk: "MEDIUM",
+      },
+    }),
+  ])
+
+  revalidatePath("/products")
+  revalidatePath("/inventory")
+  revalidatePath("/pos")
+  return { success: true }
+}
+
+export async function deleteProduct(formData: FormData) {
+  const user = await requireUser()
+  if (!(await canManageCatalog(user.role))) return { error: "You are not allowed to delete items. Ask the main admin." }
+  const id = String(formData.get("id") || "")
+  if (!id) return { error: "Item ID missing." }
+
+  const product = await prisma.product.findUnique({
+    where: { id },
+    include: {
+      _count: {
+        select: {
+          saleItems: true,
+          purchaseItems: true,
+          imeiRecords: true,
+          swaps: true,
+        },
+      },
+      inventory: true,
+    },
+  })
+  if (!product) return { error: "Item not found." }
+
+  const totalStock = product.inventory.reduce((sum, row) => sum + row.quantity, 0)
+  const hasHistory =
+    product._count.saleItems > 0 ||
+    product._count.purchaseItems > 0 ||
+    product._count.imeiRecords > 0 ||
+    product._count.swaps > 0
+
+  if (hasHistory || totalStock > 0) {
+    await prisma.product.update({
+      where: { id },
+      data: { isActive: false },
+    })
+    await prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "UPDATE",
+        entityType: "Product",
+        entityId: id,
+        newValue: JSON.stringify({
+          isActive: false,
+          note: `Deactivated item ${product.name} (${product.sku}) with historical transactions or remaining stock.`,
+        }),
+        branchId: user.branchId,
+      },
+    })
+    revalidatePath("/products")
+    revalidatePath("/inventory")
+    revalidatePath("/pos")
+    return { success: true, message: "Item has historical records, so it was deactivated and hidden from the active catalog." }
+  }
+
+  await prisma.$transaction([
+    prisma.inventory.deleteMany({ where: { productId: id } }),
+    prisma.product.delete({ where: { id } }),
+    prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "DELETE",
+        entityType: "Product",
+        entityId: id,
+        newValue: JSON.stringify({ note: `Permanently deleted unused item ${product.name} (${product.sku}).` }),
+        branchId: user.branchId,
+      },
+    }),
+  ])
+
+  revalidatePath("/products")
+  revalidatePath("/inventory")
+  revalidatePath("/pos")
+  return { success: true, message: "Item permanently deleted." }
+}
+
+export async function resetAllProductWarrantiesToZero() {
+  const user = await requireUser()
+  if (!(await canManageCatalog(user.role))) return { error: "You are not allowed to update warranty settings. Ask the main admin." }
+  await prisma.product.updateMany({
+    data: { warrantyDays: 0 },
+  })
+  await prisma.auditLog.create({
+    data: {
+      userId: user.id,
+      action: "UPDATE",
+      entityType: "Product",
+      entityId: "ALL",
+      newValue: JSON.stringify({ warrantyDays: 0, note: "Reset all product warranties to 0 days per company policy" }),
+      branchId: user.branchId,
+    },
+  })
+  revalidatePath("/products")
+  revalidatePath("/products/warranty")
+  revalidatePath("/pos")
   return { success: true }
 }

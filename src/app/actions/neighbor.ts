@@ -112,7 +112,9 @@ export async function createNeighborFill(formData: FormData) {
   if (!(await canRecordNeighbor(user.role))) return { error: "You are not allowed to record a buy from next door. Ask the main admin." }
 
   const branchId = String(formData.get("branchId") || user.branchId || "")
-  const customerId = String(formData.get("customerId") || "")
+  const existingCustomerId = String(formData.get("customerId") || "").trim()
+  const customerName = String(formData.get("customerName") || "").trim()
+  const customerPhone = String(formData.get("customerPhone") || "").trim()
   const productId = String(formData.get("productId") || "")
   const neighborName = String(formData.get("neighborName") || "").trim()
   const neighborPhone = String(formData.get("neighborPhone") || "").trim()
@@ -122,8 +124,11 @@ export async function createNeighborFill(formData: FormData) {
   const sellPrice = Number(formData.get("sellPrice") || 0)
   const notes = String(formData.get("notes") || "").trim()
 
-  if (!branchId || !customerId || !productId || !neighborName) {
-    return { error: "Pick our shop, the named customer, the item, and the neighboring shop." }
+  if (!branchId || !productId || !neighborName) {
+    return { error: "Pick our shop, the item, and the neighboring shop." }
+  }
+  if (!existingCustomerId && (!customerName || !customerPhone)) {
+    return { error: "Pick a customer on the list, or type the customer name and phone." }
   }
   if (neighborCost < 0 || sellPrice <= 0) return { error: "Enter what the neighbor is owed and what the customer will pay." }
   if (sellPrice < neighborCost) return { error: "You are selling it for less than what we must pay the neighboring shop. Check the numbers again." }
@@ -131,12 +136,33 @@ export async function createNeighborFill(formData: FormData) {
   const scoped = await scopedBranchId(user.role, user.branchId)
   if (scoped && branchId !== scoped) return { error: "You can only record a fill for your own shop." }
 
-  const [customer, product] = await Promise.all([
-    prisma.customer.findUnique({ where: { id: customerId } }),
-    prisma.product.findUnique({ where: { id: productId } }),
-  ])
-  if (!customer) return { error: "Pick a named customer. Do not invent a buyer." }
+  const product = await prisma.product.findUnique({ where: { id: productId } })
   if (!product) return { error: "Pick the item the customer wants." }
+
+  let customer = existingCustomerId
+    ? await prisma.customer.findUnique({ where: { id: existingCustomerId } })
+    : customerPhone
+      ? await prisma.customer.findUnique({ where: { phone: customerPhone } })
+      : null
+
+  if (!customer) {
+    if (!customerName || !customerPhone) {
+      return { error: "Pick a customer on the list, or type the customer name and phone." }
+    }
+    customer = await prisma.customer.create({
+      data: {
+        name: customerName,
+        phone: customerPhone,
+        branchId,
+      },
+    })
+  } else if (!existingCustomerId && customerName && customer.name !== customerName) {
+    return { error: `Phone ${customerPhone} already belongs to ${customer.name}. Pick them from the list.` }
+  }
+  if (scoped && customer.branchId !== scoped && customer.branchId !== branchId) {
+    return { error: "That customer belongs to another shop." }
+  }
+  const customerId = customer.id
 
   const settings = await getAppSettings()
   const canOverrideFloor = settings.allowBelowMinimum || (await can(user.role, "action.override_floor"))

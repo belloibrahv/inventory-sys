@@ -11,6 +11,7 @@ import { recentWatDays, watBounds } from "@/lib/lagos-day"
 import { IMEI_LIFE } from "@/lib/imei-life"
 import { displayPartyName } from "@/lib/party-key"
 import { findDuplicateSupplier } from "@/lib/supplier-identity"
+import { money } from "@/lib/utils"
 
 function whenBounds(when?: string) {
   if (!when || when === "all") return null
@@ -104,13 +105,40 @@ export async function intakeImei(formData: FormData) {
   const productId = String(formData.get("productId") ?? "")
   const branchId = String(formData.get("branchId") ?? user.branchId ?? "")
 
-  if (!imei1 || imei1.length < 14) return { error: "Type the full IMEI. It must be at least 14 digits." }
   if (!productId || !branchId) return { error: "Pick the item and the shop." }
 
-  const duplicate = await prisma.imeiRecord.findFirst({
-    where: { OR: [{ imei1 }, { imei2: imei1 }] },
-  })
-  if (duplicate) return { error: "That IMEI is already in the shop." }
+  const product = await prisma.product.findUnique({ where: { id: productId } })
+  if (!product || !product.isActive) return { error: "That item is not on the active list." }
+
+  const tracked = product.tracking !== "NONE"
+  const quantityRaw = Number(formData.get("quantity") || (tracked ? 1 : 0))
+  const quantity = tracked ? 1 : Math.floor(quantityRaw)
+  if (!tracked && (!Number.isFinite(quantity) || quantity < 1)) {
+    return { error: "Enter how many pieces you are putting on the shelf." }
+  }
+  if (tracked && (!imei1 || imei1.length < 14)) {
+    return { error: "Type the full IMEI. It must be at least 14 digits." }
+  }
+
+  const costPrice = Number(formData.get("costPrice") || 0)
+  const minimumPrice = Number(formData.get("minimumPrice") || 0)
+  const sellingPrice = Number(formData.get("sellingPrice") || 0)
+  if (![costPrice, minimumPrice, sellingPrice].every((value) => Number.isFinite(value) && value >= 0)) {
+    return { error: "Enter cost, lowest sell, and selling price as numbers." }
+  }
+  if (minimumPrice < costPrice) {
+    return { error: "Lowest sell cannot sit below cost." }
+  }
+  if (sellingPrice < minimumPrice) {
+    return { error: "Selling price cannot sit below the lowest sell." }
+  }
+
+  if (tracked) {
+    const duplicate = await prisma.imeiRecord.findFirst({
+      where: { OR: [{ imei1 }, { imei2: imei1 }] },
+    })
+    if (duplicate) return { error: "That IMEI is already in the shop." }
+  }
 
   let supplierId = String(formData.get("supplierId") || "").trim()
   if (supplierId === "__new__") supplierId = ""
@@ -131,42 +159,84 @@ export async function intakeImei(formData: FormData) {
     revalidatePath("/suppliers")
   }
 
-  await prisma.imeiRecord.create({
-    data: {
-      imei1,
-      imei2: String(formData.get("imei2") || "") || null,
-      serialNumber: String(formData.get("serialNumber") || "") || null,
-      productId,
-      supplierId: supplierId || null,
-      branchId,
-      status: "IN_STOCK",
-      notes: String(formData.get("notes") || "") || null,
-      cosmeticGrade: String(formData.get("cosmeticGrade") || "") || null,
-      batteryHealth: null,
-      conditionNotes: String(formData.get("conditionNotes") || "") || null,
-      photoData: String(formData.get("photoData") || "") || null,
-    },
-  })
+  const cosmeticGrade = String(formData.get("cosmeticGrade") || "") || null
+  const isFaulty = cosmeticGrade === "FAULTY"
+  const status = isFaulty ? "FAULTY" : "IN_STOCK"
+  const priceChanged =
+    money(product.costPrice) !== costPrice ||
+    money(product.minimumPrice) !== minimumPrice ||
+    money(product.sellingPrice) !== sellingPrice
 
-  await prisma.inventory.upsert({
-    where: { productId_branchId: { productId, branchId } },
-    update: { quantity: { increment: 1 } },
-    create: { productId, branchId, quantity: 1 },
-  })
+  await prisma.$transaction(async (tx) => {
+    if (priceChanged) {
+      await tx.product.update({
+        where: { id: productId },
+        data: {
+          costPrice: costPrice.toFixed(2),
+          minimumPrice: minimumPrice.toFixed(2),
+          sellingPrice: sellingPrice.toFixed(2),
+        },
+      })
+    }
 
-  await prisma.auditLog.create({
-    data: {
-      userId: user.id,
-      action: "CREATE",
-      entityType: "IMEIRecord",
-      entityId: imei1,
-      newValue: JSON.stringify({ productId, branchId, status: "IN_STOCK" }),
-      branchId,
-    },
+    if (tracked) {
+      await tx.imeiRecord.create({
+        data: {
+          imei1,
+          imei2: String(formData.get("imei2") || "") || null,
+          serialNumber: String(formData.get("serialNumber") || "") || null,
+          productId,
+          supplierId: supplierId || null,
+          branchId,
+          status,
+          notes: String(formData.get("notes") || "") || null,
+          cosmeticGrade,
+          batteryHealth: null,
+          conditionNotes: String(formData.get("conditionNotes") || "") || null,
+          photoData: String(formData.get("photoData") || "") || null,
+        },
+      })
+    }
+
+    const addQty = tracked ? (isFaulty ? 0 : 1) : quantity
+    if (addQty > 0) {
+      await tx.inventory.upsert({
+        where: { productId_branchId: { productId, branchId } },
+        update: { quantity: { increment: addQty } },
+        create: { productId, branchId, quantity: addQty },
+      })
+    }
+
+    await tx.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "CREATE",
+        entityType: tracked ? "IMEIRecord" : "Inventory",
+        entityId: tracked ? imei1 : productId,
+        newValue: JSON.stringify({
+          productId,
+          branchId,
+          status: tracked ? status : "IN_STOCK",
+          cosmeticGrade,
+          quantity: tracked ? 1 : quantity,
+          costPrice,
+          minimumPrice,
+          sellingPrice,
+          note: isFaulty && tracked
+            ? "Received as Faulty. Not added to sellable In shop stock."
+            : priceChanged
+              ? "Received on One phone at a time. Item prices updated."
+              : "Received on One phone at a time.",
+        }),
+        branchId,
+      },
+    })
   })
 
   revalidatePath("/imei")
   revalidatePath("/inventory")
+  revalidatePath("/products")
+  revalidatePath("/pos")
   return { success: true }
 }
 
@@ -176,12 +246,50 @@ export async function updateImeiCondition(formData: FormData) {
     return { error: "You are not allowed to change the condition of a phone. Ask the main admin." }
   }
   const id = String(formData.get("id") || "")
+  if (!id) return { error: "Phone record missing." }
+
+  const current = await prisma.imeiRecord.findUnique({ where: { id } })
+  if (!current) return { error: "We could not find that phone." }
+
+  if (current.status !== "IN_STOCK" && current.status !== "FAULTY") {
+    return { error: "Only In shop or Damaged phones can change how they look here." }
+  }
+
+  const nextGrade = String(formData.get("cosmeticGrade") || "") || null
+  const willBeDamaged = nextGrade === "FAULTY"
+  const conditionNotes = String(formData.get("conditionNotes") || "") || null
+  const photoData = String(formData.get("photoData") || "") || null
+
+  // Picking Damaged / Faulty look moves shelf state with it. Picking a good look
+  // while Damaged puts the phone back on sellable In shop stock.
+  if (willBeDamaged && current.status === "IN_STOCK") {
+    return applyShelfState({
+      userId: user.id,
+      current,
+      shelfState: "DAMAGED",
+      cosmeticGrade: "FAULTY",
+      conditionNotes,
+      photoData,
+    })
+  }
+
+  if (!willBeDamaged && current.status === "FAULTY") {
+    return applyShelfState({
+      userId: user.id,
+      current,
+      shelfState: "GOOD",
+      cosmeticGrade: nextGrade,
+      conditionNotes,
+      photoData,
+    })
+  }
+
   await prisma.imeiRecord.update({
     where: { id },
     data: {
-      cosmeticGrade: String(formData.get("cosmeticGrade") || "") || null,
-      conditionNotes: String(formData.get("conditionNotes") || "") || null,
-      photoData: String(formData.get("photoData") || "") || null,
+      cosmeticGrade: nextGrade,
+      conditionNotes,
+      photoData,
     },
   })
   await prisma.auditLog.create({
@@ -190,12 +298,128 @@ export async function updateImeiCondition(formData: FormData) {
       action: "UPDATE",
       entityType: "IMEIRecord",
       entityId: id,
-      newValue: JSON.stringify({ cosmeticGrade: String(formData.get("cosmeticGrade") || "") }),
+      newValue: JSON.stringify({ cosmeticGrade: nextGrade }),
       branchId: user.branchId,
     },
   })
+
   revalidatePath("/imei")
   revalidatePath(`/imei/${id}`)
+  revalidatePath("/inventory")
+  revalidatePath("/pos")
+  return { success: true }
+}
+
+export async function setImeiShelfState(formData: FormData) {
+  const user = await requireUser()
+  if (!(await can(user.role, "action.intake")) && !(await can(user.role, "action.repair"))) {
+    return { error: "You are not allowed to change Good or Damaged on a phone. Ask the main admin." }
+  }
+  const id = String(formData.get("id") || "")
+  const shelfState = String(formData.get("shelfState") || "").toUpperCase()
+  if (!id) return { error: "Phone record missing." }
+  if (shelfState !== "GOOD" && shelfState !== "DAMAGED") {
+    return { error: "Pick Good (sellable) or Damaged." }
+  }
+
+  const current = await prisma.imeiRecord.findUnique({ where: { id } })
+  if (!current) return { error: "We could not find that phone." }
+  if (current.status !== "IN_STOCK" && current.status !== "FAULTY") {
+    return { error: "Only In shop or Damaged phones can switch between Good and Damaged." }
+  }
+
+  return applyShelfState({
+    userId: user.id,
+    current,
+    shelfState: shelfState as "GOOD" | "DAMAGED",
+    cosmeticGrade: shelfState === "DAMAGED" ? "FAULTY" : current.cosmeticGrade === "FAULTY" ? "UK" : current.cosmeticGrade,
+  })
+}
+
+async function applyShelfState(input: {
+  userId: string
+  current: {
+    id: string
+    productId: string
+    branchId: string
+    status: string
+    cosmeticGrade: string | null
+    imei1: string
+  }
+  shelfState: "GOOD" | "DAMAGED"
+  cosmeticGrade?: string | null
+  conditionNotes?: string | null
+  photoData?: string | null
+}) {
+  const { userId, current, shelfState } = input
+  const nextStatus = shelfState === "DAMAGED" ? "FAULTY" : "IN_STOCK"
+  const nextGrade =
+    input.cosmeticGrade !== undefined
+      ? input.cosmeticGrade
+      : shelfState === "DAMAGED"
+        ? "FAULTY"
+        : current.cosmeticGrade === "FAULTY"
+          ? "UK"
+          : current.cosmeticGrade
+
+  if (current.status === nextStatus && (current.cosmeticGrade ?? null) === (nextGrade ?? null)) {
+    return { success: true }
+  }
+
+  const leavingSellable = current.status === "IN_STOCK" && nextStatus === "FAULTY"
+  const returningSellable = current.status === "FAULTY" && nextStatus === "IN_STOCK"
+
+  await prisma.$transaction(async (tx) => {
+    await tx.imeiRecord.update({
+      where: { id: current.id },
+      data: {
+        status: nextStatus,
+        cosmeticGrade: nextGrade,
+        ...(input.conditionNotes !== undefined ? { conditionNotes: input.conditionNotes } : {}),
+        ...(input.photoData !== undefined ? { photoData: input.photoData } : {}),
+      },
+    })
+
+    if (leavingSellable) {
+      await tx.inventory.updateMany({
+        where: { productId: current.productId, branchId: current.branchId, quantity: { gt: 0 } },
+        data: { quantity: { decrement: 1 } },
+      })
+    }
+    if (returningSellable) {
+      await tx.inventory.upsert({
+        where: { productId_branchId: { productId: current.productId, branchId: current.branchId } },
+        update: { quantity: { increment: 1 } },
+        create: { productId: current.productId, branchId: current.branchId, quantity: 1 },
+      })
+    }
+
+    await tx.auditLog.create({
+      data: {
+        userId,
+        action: "UPDATE",
+        entityType: "IMEIRecord",
+        entityId: current.id,
+        oldValue: JSON.stringify({ status: current.status, cosmeticGrade: current.cosmeticGrade }),
+        newValue: JSON.stringify({
+          status: nextStatus,
+          cosmeticGrade: nextGrade,
+          shelfState,
+          note:
+            shelfState === "DAMAGED"
+              ? "Set Damaged. Taken off sellable In shop stock."
+              : "Set Good (sellable). Back on In shop stock for Sell now.",
+        }),
+        branchId: current.branchId,
+        risk: "MEDIUM",
+      },
+    })
+  })
+
+  revalidatePath("/imei")
+  revalidatePath(`/imei/${current.id}`)
+  revalidatePath("/inventory")
+  revalidatePath("/pos")
   return { success: true }
 }
 

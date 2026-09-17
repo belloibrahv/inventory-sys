@@ -1,8 +1,13 @@
 "use client"
 
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { useTransition } from "react"
+import { toast } from "sonner"
+import { setImeiShelfState } from "@/app/actions/imei"
 import { StatusBadge } from "@/components/shared"
 import { TablePager, usePagedRows } from "@/components/table-pager"
+import { Button } from "@/components/ui/button"
 import { formatShopWhen } from "@/lib/lagos-day"
 import { warrantyState } from "@/lib/warranty"
 
@@ -18,6 +23,41 @@ type ImeiRow = {
   customer: { name: string } | null
   supplier: { name: string } | null
   sale: { saleDate: Date } | null
+}
+
+function ShelfToggle({ id, status }: { id: string; status: string }) {
+  const router = useRouter()
+  const [pending, startTransition] = useTransition()
+  if (status !== "IN_STOCK" && status !== "FAULTY") return null
+
+  const go = (shelfState: "GOOD" | "DAMAGED") => {
+    startTransition(async () => {
+      const formData = new FormData()
+      formData.set("id", id)
+      formData.set("shelfState", shelfState)
+      const result = await setImeiShelfState(formData)
+      if (result && "error" in result && result.error) {
+        toast.error(result.error)
+        return
+      }
+      toast.success(shelfState === "GOOD" ? "Set to Good (sellable)" : "Set to Damaged")
+      router.refresh()
+    })
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {status === "FAULTY" ? (
+        <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => go("GOOD")}>
+          Set Good (sellable)
+        </Button>
+      ) : (
+        <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => go("DAMAGED")}>
+          Set Damaged
+        </Button>
+      )}
+    </div>
+  )
 }
 
 export function ImeiTable({
@@ -62,6 +102,7 @@ export function ImeiTable({
                       Sold {formatShopWhen(row.sale.saleDate)} · {warrantyState(row.sale.saleDate, row.product.warrantyDays).label}
                     </p>
                   ) : null}
+                  <ShelfToggle id={row.id} status={row.status} />
                 </td>
                 <td className="px-4 py-3">
                   <p className="font-medium tabular-nums">{formatShopWhen(row.updatedAt)}</p>
@@ -88,7 +129,7 @@ export function ImeiTable({
         end={pager.end}
         onPageChange={pager.setPage}
         onPageSizeChange={pager.setPageSize}
-        noun="phone numbers"
+        noun="phones"
       />
     </>
   )

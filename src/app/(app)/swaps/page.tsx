@@ -12,14 +12,19 @@ export default async function SwapsPage() {
       <div>
         <PageHeader
           title="Swap Deal"
-          description="Old phone in, new phone out, settle the money, print the bill."
+          description="Old device in, shop device out. Values, balance, approval, then stock moves."
         />
         <SwapsList swaps={swaps} />
       </div>
       <div className="surface-card p-5">
         <h3 className="mb-4 font-semibold">Start swap</h3>
         <SwapForm
-          customers={lookups.customers.map((customer) => ({ id: customer.id, name: customer.name }))}
+          customers={lookups.customers.map((customer) => ({
+            id: customer.id,
+            name: customer.name,
+            phone: customer.phone,
+            branchId: customer.branchId,
+          }))}
           products={products.map((product) => ({ id: product.id, name: product.name }))}
           branches={lookups.branches.map((branch) => ({ id: branch.id, name: branch.name }))}
           defaultBranchId={lookups.branchId}

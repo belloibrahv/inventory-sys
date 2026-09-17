@@ -9,12 +9,16 @@ import { TablePager, usePagedRows } from "@/components/table-pager"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { formatCurrency } from "@/lib/utils"
+import { ProductManageDialog } from "./product-manage-dialog"
+import { Settings2 } from "lucide-react"
 
 export type PriceRow = {
   id: string
   sku: string
   name: string
+  brandId?: string
   brand: string
+  categoryId?: string
   color: string | null
   storage: string | null
   tracking: string
@@ -24,6 +28,7 @@ export type PriceRow = {
   sellingPrice: number
   warrantyDays: number
   units: number
+  inventory?: Array<{ branchId: string; branchName: string; quantity: number }>
 }
 
 function trackingLabel(tracking: string) {
@@ -47,6 +52,7 @@ export function ProductPriceList({
   const [prices, setPrices] = useState<Record<string, string>>({})
   const [reason, setReason] = useState("")
   const [busy, setBusy] = useState(false)
+  const [managingProduct, setManagingProduct] = useState<PriceRow | null>(null)
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -168,6 +174,7 @@ export function ProductPriceList({
               {canEdit ? <th className="px-4 py-3">New sell price</th> : null}
               <th className="px-4 py-3">Warranty</th>
               <th className="px-4 py-3">Units</th>
+              {canEdit ? <th className="px-4 py-3 text-right">Actions</th> : null}
             </tr>
           </thead>
           <tbody>
@@ -218,12 +225,26 @@ export function ProductPriceList({
                   ) : null}
                   <td className="px-4 py-3">{product.warrantyDays} days</td>
                   <td className="px-4 py-3">{product.units}</td>
+                  {canEdit ? (
+                    <td className="px-4 py-3 text-right">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-8 gap-1.5 text-xs font-semibold hover:border-primary hover:text-primary"
+                        onClick={() => setManagingProduct(product)}
+                      >
+                        <Settings2 className="h-3.5 w-3.5" />
+                        <span>Change or remove</span>
+                      </Button>
+                    </td>
+                  ) : null}
                 </tr>
               )
             })}
             {visible.length === 0 ? (
               <tr>
-                <td className="px-4 py-8 text-sm text-muted-foreground" colSpan={canEdit ? 7 : 5}>
+                <td className="px-4 py-8 text-sm text-muted-foreground" colSpan={canEdit ? 8 : 5}>
                   No items match the specified search parameters.
                 </td>
               </tr>
@@ -258,6 +279,11 @@ export function ProductPriceList({
           </Button>
         </div>
       ) : null}
+      <ProductManageDialog
+        product={managingProduct}
+        open={Boolean(managingProduct)}
+        onOpenChange={(open) => !open && setManagingProduct(null)}
+      />
     </div>
   )
 }

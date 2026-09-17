@@ -8,7 +8,9 @@ export function toPriceRow(product: Awaited<ReturnType<typeof getProducts>>[numb
     id: product.id,
     sku: product.sku,
     name: product.name,
+    brandId: product.brandId,
     brand: product.brand.name,
+    categoryId: product.categoryId,
     color: product.color,
     storage: product.storage,
     tracking: product.tracking,
@@ -18,5 +20,10 @@ export function toPriceRow(product: Awaited<ReturnType<typeof getProducts>>[numb
     sellingPrice: money(product.sellingPrice),
     warrantyDays: product.warrantyDays,
     units: product.inventory.reduce((sum, row) => sum + row.quantity, 0),
+    inventory: product.inventory.map((inv) => ({
+      branchId: inv.branchId,
+      branchName: inv.branch.name,
+      quantity: inv.quantity,
+    })),
   }
 }

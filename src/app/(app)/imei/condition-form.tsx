@@ -18,10 +18,19 @@ export function ImeiConditionForm({
   batteryHealth?: number | null
   conditionNotes?: string | null
   photoData?: string | null
+  status?: string | null
 }) {
   return (
-    <ActionForm action={updateImeiCondition} submit="Save condition" className="space-y-3">
+    <ActionForm
+      action={updateImeiCondition}
+      submit="Save how it looks"
+      successMessage="How the phone looks was saved"
+      className="space-y-3"
+    >
       <input type="hidden" name="id" value={id} />
+      <p className="text-xs text-muted-foreground">
+        Pick Damaged here and the phone leaves Sell now. Pick any other look while it is Damaged and it goes back to Good (sellable). Or use Good / Damaged above.
+      </p>
       <Select name="cosmeticGrade" defaultValue={cosmeticGrade ?? ""}>
         <option value="">How the phone looks</option>
         {PHONE_LOOK_OPTIONS.map((row) => (

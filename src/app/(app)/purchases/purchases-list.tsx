@@ -182,17 +182,21 @@ export function PurchasesList({
               ) : (
                 <div className="mt-3 grid gap-3 border-t border-border pt-3 text-sm sm:grid-cols-3">
                   <span>
-                    <span className="eyebrow block">Bill value</span>
+                    <span className="eyebrow block">Invoice value</span>
                     <strong className="num">{formatCurrency(totalVal)}</strong>
                   </span>
                   <span>
-                    <span className="eyebrow block">We have paid</span>
+                    <span className="eyebrow block">Payment</span>
                     <strong className="num text-success">{formatCurrency(paidVal)}</strong>
                   </span>
                   <span>
-                    <span className="eyebrow block">{surplusVal > 0 ? "They owe us" : "Still owed"}</span>
+                    <span className="eyebrow block">Value owing</span>
                     <strong className={`num ${owedVal > 0 ? "text-warning" : "text-success"}`}>
-                      {formatCurrency(surplusVal > 0 ? surplusVal : owedVal)}
+                      {surplusVal > 0
+                        ? `+${formatCurrency(surplusVal)}`
+                        : owedVal > 0
+                          ? `-${formatCurrency(owedVal)}`
+                          : formatCurrency(0)}
                     </strong>
                   </span>
                 </div>

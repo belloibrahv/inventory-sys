@@ -1,0 +1,284 @@
+"use client"
+
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { deleteProduct, reduceInventoryStock, updateProduct } from "@/app/actions/catalog"
+import { ActionForm } from "@/components/action-form"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Select } from "@/components/ui/select"
+import { PHONE_LOOK_OPTIONS } from "@/lib/phone-look"
+import type { PriceRow } from "./price-list"
+import { AlertTriangle, Edit3, MinusCircle, Trash2 } from "lucide-react"
+
+export function ProductManageDialog({
+  product,
+  open,
+  onOpenChange,
+}: {
+  product: PriceRow | null
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const router = useRouter()
+  const [tab, setTab] = useState<"edit" | "stock" | "delete">("edit")
+
+  if (!product) return null
+
+  const branches = product.inventory ?? []
+  const tracked = product.tracking === "IMEI" || product.tracking === "SERIAL"
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-bold">Change or remove: {product.name}</DialogTitle>
+          <DialogDescription>
+            Item code {product.sku}. Brand {product.brand}. {product.units} on the shelf across shops.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex gap-1 rounded-xl border border-border bg-muted/60 p-1">
+          <button
+            type="button"
+            onClick={() => setTab("edit")}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-all ${
+              tab === "edit"
+                ? "bg-primary text-primary-foreground shadow-xs"
+                : "text-muted-foreground hover:bg-card hover:text-foreground"
+            }`}
+          >
+            <Edit3 className="h-3.5 w-3.5" />
+            <span>Change details</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("stock")}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-all ${
+              tab === "stock"
+                ? "bg-primary text-primary-foreground shadow-xs"
+                : "text-muted-foreground hover:bg-card hover:text-foreground"
+            }`}
+          >
+            <MinusCircle className="h-3.5 w-3.5" />
+            <span>Reduce stock</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("delete")}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-all ${
+              tab === "delete"
+                ? "bg-danger text-danger-foreground shadow-xs"
+                : "text-muted-foreground hover:bg-card hover:text-danger"
+            }`}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            <span>Remove item</span>
+          </button>
+        </div>
+
+        {tab === "edit" ? (
+          <ActionForm
+            action={async (formData) => {
+              const res = await updateProduct(formData)
+              if (res && "success" in res && res.success) {
+                onOpenChange(false)
+                router.refresh()
+              }
+              return res
+            }}
+            submit="Save item details"
+            successMessage="Item details saved"
+            className="space-y-3 pt-2"
+          >
+            <input type="hidden" name="id" value={product.id} />
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Name</label>
+              <Input name="name" defaultValue={product.name} required className="mt-1" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Item code</label>
+                <Input name="sku" defaultValue={product.sku} required className="mt-1 font-mono" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Storage</label>
+                <Input name="storage" defaultValue={product.storage ?? ""} placeholder="128GB or 256GB" className="mt-1" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Color</label>
+                <Input name="color" defaultValue={product.color ?? ""} placeholder="Blue or Black" className="mt-1" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Condition</label>
+                <Select name="condition" defaultValue={product.condition} className="mt-1">
+                  {PHONE_LOOK_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                  <option value="REFURBISHED">Refurbished</option>
+                  <option value="OPEN_BOX">Open box</option>
+                  <option value="UK_USED">UK used</option>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Cost</label>
+                <Input name="costPrice" type="number" step="0.01" defaultValue={product.costPrice} required className="mt-1" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Lowest price</label>
+                <Input name="minimumPrice" type="number" step="0.01" defaultValue={product.minimumPrice} required className="mt-1" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Selling price</label>
+                <Input name="sellingPrice" type="number" step="0.01" defaultValue={product.sellingPrice} required className="mt-1" />
+              </div>
+            </div>
+          </ActionForm>
+        ) : null}
+
+        {tab === "stock" ? (
+          <div className="space-y-4 pt-2">
+            <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs">
+              <p className="font-semibold text-foreground mb-1.5">On the shelf now</p>
+              {branches.length ? (
+                <div className="space-y-1">
+                  {branches.map((b) => (
+                    <div key={b.branchId} className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">{b.branchName}</span>
+                      <span className="font-bold tabular-nums">{b.quantity} in shop</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground">No shop has this item on the shelf yet.</p>
+              )}
+              {tracked ? (
+                <p className="mt-2 text-muted-foreground leading-relaxed">
+                  This item uses IMEI or serial. Scan or type each unit you are writing off. The shelf count moves with those numbers.
+                </p>
+              ) : (
+                <p className="mt-2 text-muted-foreground leading-relaxed">
+                  Type how many pieces to take off the shelf, and why.
+                </p>
+              )}
+            </div>
+
+            <ActionForm
+              action={async (formData) => {
+                const res = await reduceInventoryStock(formData)
+                if (res && "success" in res && res.success) {
+                  onOpenChange(false)
+                  router.refresh()
+                }
+                return res
+              }}
+              submit="Reduce stock now"
+              successMessage="Stock reduced"
+              className="space-y-3"
+            >
+              <input type="hidden" name="productId" value={product.id} />
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Shop</label>
+                <Select name="branchId" required className="mt-1">
+                  <option value="">Pick the shop</option>
+                  {branches.map((b) => (
+                    <option key={b.branchId} value={b.branchId}>
+                      {b.branchName} ({b.quantity} on shelf)
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              {tracked ? (
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">IMEI or serial to write off</label>
+                  <textarea
+                    name="imeis"
+                    required
+                    rows={4}
+                    placeholder="One IMEI or serial per line"
+                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Pieces to take off</label>
+                  <Input
+                    name="reduceBy"
+                    type="number"
+                    min={1}
+                    required
+                    placeholder="How many pieces"
+                    className="mt-1"
+                  />
+                </div>
+              )}
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Why</label>
+                <Input
+                  name="reason"
+                  required
+                  placeholder="Damaged screen, lost unit, or count correction"
+                  className="mt-1"
+                />
+              </div>
+            </ActionForm>
+          </div>
+        ) : null}
+
+        {tab === "delete" ? (
+          <div className="space-y-4 pt-2">
+            <div className="rounded-xl border border-danger/30 bg-danger-soft p-4 text-xs text-danger">
+              <div className="flex items-center gap-2 font-bold mb-1">
+                <AlertTriangle className="h-4 w-4" />
+                <span>Remove this item from the active list</span>
+              </div>
+              <p className="leading-relaxed">
+                If this item has sales, purchases, phone numbers, or stock left, it is hidden from Sell now and the price list so the books stay complete.
+              </p>
+              <p className="mt-1.5 leading-relaxed">
+                If it was added by mistake and never used, it is deleted for good.
+              </p>
+            </div>
+
+            <ActionForm
+              action={async (formData) => {
+                const res = await deleteProduct(formData)
+                if (res && "success" in res && res.success) {
+                  onOpenChange(false)
+                  router.refresh()
+                }
+                return res
+              }}
+              submit="Remove this item"
+              successMessage="Item removed from the active list"
+              confirmModal={{
+                title: `Remove ${product.name}?`,
+                description: "If it has history or stock, it is hidden. If it was never used, it is deleted for good.",
+                confirmLabel: "Remove this item",
+                tone: "danger",
+              }}
+              className="space-y-3"
+            >
+              <input type="hidden" name="id" value={product.id} />
+              <p className="text-xs text-muted-foreground">
+                Removing <strong>{product.name}</strong> ({product.sku}).
+              </p>
+            </ActionForm>
+          </div>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  )
+}

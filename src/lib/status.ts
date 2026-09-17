@@ -80,7 +80,7 @@ const labels: Record<string, string> = {
   REJECTED: "No",
   CANCELLED: "Cancelled",
   REFUNDED: "Refunded",
-  FAULTY: "Faulty",
+  FAULTY: "Damaged",
   DISPOSED: "Written off",
   OVERDUE: "Overdue",
   SOLD: "Sold",

@@ -10,14 +10,16 @@ export default async function TransfersPage() {
     <div className="page-split">
       <div>
         <PageHeader
-          title="Shop to shop"
-          description="Send to another Abu Twins shop. They must confirm arrival."
+          title="Shop to shop (Stock Transfer)"
+          description="From one Abu Twins branch to another. Stock stays In shop at the sending branch until the receiving branch accepts."
         />
         <TransfersList transfers={transfers} />
       </div>
       <div className="surface-card p-5">
-        <h3 className="mb-2 font-semibold">Send to another shop</h3>
-        <p className="mb-4 text-sm text-muted-foreground">IMEIs for phones. Piece count for cords.</p>
+        <h3 className="mb-1 font-semibold">Start a stock transfer</h3>
+        <p className="mb-4 text-sm text-muted-foreground">
+          From branch, To branch, select the items, then submit. Wait for accept or reject before the sending In shop record changes.
+        </p>
         <TransferForm
           branches={lookups.branches}
           products={lookups.products}

@@ -202,7 +202,7 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
     return { error: "We could not read that Excel file. Save it again and try one more time." }
   }
 
-  const plan = planOpeningStock(sheets)
+  const plan = planOpeningStock(sheets, { allowMissingPrices: true })
   if (plan.problems.length) {
     return {
       error: `${plan.problems.length} line(s) need fixing. Nothing was loaded.`,

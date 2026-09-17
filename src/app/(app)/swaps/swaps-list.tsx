@@ -17,14 +17,23 @@ type SwapRow = {
   swapNumber: string
   status: string
   tradeValue: unknown
+  newProductPrice: unknown
   balanceAmount: unknown
   createdAt: Date
   approvedAt: Date | null
   completedAt: Date | null
   customer: { name: string }
-  oldImei: { imei1: string; product: { name: string } }
+  oldImei: { imei1: string; serialNumber?: string | null; product: { name: string } }
   newProduct: { name: string }
+  newImei?: { imei1: string; serialNumber?: string | null } | null
   invoice: { id: string; invoiceNumber: string } | null
+}
+
+function deviceLabel(row: { imei1: string; serialNumber?: string | null }) {
+  if (row.serialNumber && row.serialNumber !== row.imei1) {
+    return `${row.imei1} · serial ${row.serialNumber}`
+  }
+  return row.imei1
 }
 
 export function SwapsList({ swaps }: { swaps: SwapRow[] }) {
@@ -53,7 +62,7 @@ export function SwapsList({ swaps }: { swaps: SwapRow[] }) {
         steps={[
           { key: "all", label: "All swaps", count: counts.all, hint: "Every trade-in" },
           { key: "PENDING", label: "Waiting", count: counts.PENDING ?? 0, hint: "Need a yes" },
-          { key: "APPROVED", label: "Approved", count: counts.APPROVED ?? 0, hint: "Collect the balance" },
+          { key: "APPROVED", label: "Approved", count: counts.APPROVED ?? 0, hint: "Settle the balance" },
           { key: "COMPLETED", label: "Done", count: counts.COMPLETED ?? 0, hint: "Invoice closed" },
         ]}
       />
@@ -61,18 +70,30 @@ export function SwapsList({ swaps }: { swaps: SwapRow[] }) {
       <div className="space-y-3">
         {pager.pageRows.map((swap) => {
           const when = swap.completedAt ?? swap.approvedAt ?? swap.createdAt
+          const balance = money(swap.balanceAmount)
+          const receivable = Math.max(balance, 0)
+          const payable = Math.max(-balance, 0)
+          const givenOut = swap.newImei ? deviceLabel(swap.newImei) : swap.newProduct.name
           return (
             <div key={swap.id} className="surface-card p-5">
               <div className="flex justify-between gap-3">
                 <div>
                   <p className="font-semibold">{swap.swapNumber}</p>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    {swap.customer.name} trades {swap.oldImei.imei1} ({swap.oldImei.product.name}) for{" "}
-                    {swap.newProduct.name}
+                    {swap.customer.name} brings {deviceLabel(swap.oldImei)} ({swap.oldImei.product.name}) and takes{" "}
+                    {givenOut}
                   </p>
                   <p className="mt-1 text-sm">
-                    Trade {formatCurrency(money(swap.tradeValue))} · customer pays{" "}
-                    {formatCurrency(money(swap.balanceAmount))}
+                    Swap-in value {formatCurrency(money(swap.tradeValue))}
+                    {" · "}
+                    Shop item value {formatCurrency(money(swap.newProductPrice))}
+                  </p>
+                  <p className="mt-1 text-sm font-medium">
+                    {receivable > 0
+                      ? `Receivable (customer pays us): ${formatCurrency(receivable)}`
+                      : payable > 0
+                        ? `Payable (we pay the customer): ${formatCurrency(payable)}`
+                        : "Balance: even"}
                   </p>
                   {swap.invoice ? (
                     <p className="mt-2 text-sm">
@@ -92,16 +113,31 @@ export function SwapsList({ swaps }: { swaps: SwapRow[] }) {
                 </div>
               </div>
               {swap.status === "PENDING" ? (
-                <p className="mt-3 text-xs text-warning">
-                  Waiting for the CEO or the manager to say yes. Only they can collect the money now.
+                <p className="mt-3 text-sm text-warning">
+                  Waiting for approval. Stock does not move until Needs approval says yes.
                 </p>
               ) : null}
-              {swap.status === "APPROVED" || swap.status === "PENDING" ? (
+              {swap.status === "APPROVED" ? (
                 <div className="mt-4 border-t border-border pt-4">
-                  <p className="mb-2 text-sm font-medium">Collect the difference and finish</p>
-                  <ActionForm action={completeSwap} submit="Collect & invoice" className="grid gap-2 md:grid-cols-3">
+                  <p className="mb-2 text-sm font-medium">
+                    {receivable > 0
+                      ? "Stock has moved. Collect the receivable and finish the invoice."
+                      : payable > 0
+                        ? "Stock has moved. Pay the customer the payable and finish the invoice."
+                        : "Stock has moved. Finish the invoice. No money either way."}
+                  </p>
+                  <ActionForm
+                    action={completeSwap}
+                    submit={receivable > 0 ? "Collect & invoice" : payable > 0 ? "Pay & invoice" : "Finish invoice"}
+                    className="grid gap-2 md:grid-cols-3"
+                  >
                     <input type="hidden" name="id" value={swap.id} />
-                    <Input name="paidAmount" type="number" defaultValue={money(swap.balanceAmount)} />
+                    <Input
+                      name="paidAmount"
+                      type="number"
+                      defaultValue={receivable > 0 ? receivable : payable}
+                      placeholder={receivable > 0 ? "Amount received" : payable > 0 ? "Amount paid out" : "0"}
+                    />
                     <Select name="method" defaultValue="TRANSFER">
                       <option value="CASH">Cash</option>
                       <option value="TRANSFER">Transfer</option>

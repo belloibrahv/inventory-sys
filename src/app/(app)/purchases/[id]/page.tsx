@@ -128,7 +128,7 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
           <p className="text-sm text-muted-foreground">Never scanned {trace.shortVsBill}</p>
         </div>
         <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">{isOpening ? "Not a bill to pay" : surplus > 0 ? "They owe us" : "Still owed"}</p>
+          <p className="text-sm text-muted-foreground">{isOpening ? "Not a bill to pay" : surplus > 0 ? "Value owing (+)" : "Value owing (-)"}</p>
           <p className="text-xl font-semibold text-success">
             {isOpening ? "Value only" : formatCurrency(surplus > 0 ? surplus : due)}
           </p>

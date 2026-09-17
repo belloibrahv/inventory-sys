@@ -15,7 +15,7 @@ export default async function NeighborFillsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Neighbor shop fill"
+        title="Stock Outsourcing (Neighbour shop fill)"
         description="Buy from next door for a named customer. Sell here. Keep the profit."
       />
       <div className="grid gap-4 md:grid-cols-3">
@@ -36,7 +36,7 @@ export default async function NeighborFillsPage() {
         <div className="space-y-3">
           {rows.length === 0 ? (
             <div className="surface-card p-5 text-sm text-muted-foreground">
-              No neighbor shop fills yet. Use this when you collect one unit from next door for a named customer.
+              No stock outsourcing yet. Use this when you collect one unit from next door for a named customer.
             </div>
           ) : null}
           {rows.map((row) => {
@@ -110,7 +110,7 @@ export default async function NeighborFillsPage() {
         </div>
         <div className="surface-card p-5">
           <h3 className="mb-2 font-semibold">Collect from next door</h3>
-          <p className="mb-4 text-sm text-muted-foreground">Named customer. Neighbor cost. Sell here.</p>
+          <p className="mb-4 text-sm text-muted-foreground">Pick or type the customer. Neighbor cost. Sell here.</p>
           <NeighborFillForm
             customers={lookups.customers}
             products={lookups.products}

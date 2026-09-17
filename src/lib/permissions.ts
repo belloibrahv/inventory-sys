@@ -18,7 +18,7 @@ export const VIEW_PERMS = [
   { key: "view.customers", label: "Customers & money owed", href: "/customers" },
   { key: "view.suppliers", label: "Suppliers", href: "/suppliers" },
   { key: "view.transfers", label: "Shop to shop", href: "/transfers" },
-  { key: "view.neighbor-fills", label: "Neighbor shop fill", href: "/neighbor-fills" },
+  { key: "view.neighbor-fills", label: "Stock Outsourcing (Neighbour shop fill)", href: "/neighbor-fills" },
   { key: "view.returns", label: "Returns", href: "/returns" },
   { key: "view.swaps", label: "Swap Deal", href: "/swaps" },
   { key: "view.repairs", label: "Repairs", href: "/repairs" },

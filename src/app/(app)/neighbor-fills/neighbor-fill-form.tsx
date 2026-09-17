@@ -28,17 +28,22 @@ export function NeighborFillForm({
 }) {
   const [branchId, setBranchId] = useState(defaultBranchId || branches[0]?.id || "")
   const [supplierId, setSupplierId] = useState("")
+  const [customerId, setCustomerId] = useState("")
   const [productId, setProductId] = useState(products[0]?.id || "")
   const [cost, setCost] = useState("")
   const [sell, setSell] = useState(String(products[0]?.sellingPrice || ""))
   const product = useMemo(() => products.find((row) => row.id === productId), [products, productId])
   const shopCustomers = customers.filter((row) => row.branchId === branchId)
   const profit = Number(sell || 0) - Number(cost || 0)
-  const picked = neighbors.find((row) => row.id === supplierId)
+  const pickedNeighbor = neighbors.find((row) => row.id === supplierId)
+  const pickedCustomer = shopCustomers.find((row) => row.id === customerId)
 
   return (
-    <ActionForm action={createNeighborFill} submit="Save this neighbor fill" className="space-y-3">
-      <Select name="branchId" value={branchId} onChange={(event) => setBranchId(event.target.value)} required>
+    <ActionForm action={createNeighborFill} submit="Save this stock outsourcing" className="space-y-3">
+      <Select name="branchId" value={branchId} onChange={(event) => {
+        setBranchId(event.target.value)
+        setCustomerId("")
+      }} required>
         {branches.map((branch) => (
           <option key={branch.id} value={branch.id}>{branch.name}</option>
         ))}
@@ -46,10 +51,7 @@ export function NeighborFillForm({
       <Select
         name="supplierId"
         value={supplierId}
-        onChange={(event) => {
-          const next = event.target.value
-          setSupplierId(next)
-        }}
+        onChange={(event) => setSupplierId(event.target.value)}
       >
         <option value="">The neighboring shop is not on the list. Type the name below.</option>
         {neighbors.map((row) => (
@@ -58,26 +60,41 @@ export function NeighborFillForm({
       </Select>
       <Input
         name="neighborName"
-        defaultValue={picked?.name ?? ""}
+        defaultValue={pickedNeighbor?.name ?? ""}
         placeholder="Neighboring shop name"
         required
         key={`name-${supplierId}`}
       />
       <Input
         name="neighborPhone"
-        defaultValue={picked?.phone ?? ""}
+        defaultValue={pickedNeighbor?.phone ?? ""}
         placeholder="Neighboring shop phone"
         key={`phone-${supplierId}`}
       />
-      <Select name="customerId" required emptyLabel="This shop has no customer yet. Add one on Customers first.">
-        <option value="">Named customer who wants this item</option>
+      <Select
+        name="customerId"
+        value={customerId}
+        onChange={(event) => setCustomerId(event.target.value)}
+      >
+        <option value="">The customer is not on the list. Type the name below.</option>
         {shopCustomers.map((row) => (
           <option key={row.id} value={row.id}>{row.name} · {row.phone}</option>
         ))}
       </Select>
-      {!shopCustomers.length ? (
-        <p className="text-sm text-danger">Add the customer first. Never make up a buyer on this page.</p>
-      ) : null}
+      <Input
+        name="customerName"
+        defaultValue={pickedCustomer?.name ?? ""}
+        placeholder="Customer name"
+        required
+        key={`customer-name-${customerId}-${branchId}`}
+      />
+      <Input
+        name="customerPhone"
+        defaultValue={pickedCustomer?.phone ?? ""}
+        placeholder="Customer phone"
+        required
+        key={`customer-phone-${customerId}-${branchId}`}
+      />
       <Select
         name="productId"
         value={productId}

@@ -3,7 +3,12 @@ import { notFound } from "next/navigation"
 import { getSupplier } from "@/app/actions/parties"
 import { PageHeader, StatCard, StatGrid, StatusBadge } from "@/components/shared"
 import { formatCurrency, formatDate, money } from "@/lib/utils"
-import { purchaseBalance } from "@/lib/purchase-money"
+import {
+  formatPurchaseBalanceCell,
+  formatValueOwingMinus,
+  formatValueOwingPlus,
+  purchaseBalance,
+} from "@/lib/purchase-money"
 
 export default async function SupplierDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -37,20 +42,20 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
           href="#supplier-bills"
         />
         <StatCard
-          label="We have paid them"
+          label="Payment"
           value={formatCurrency(totalPaid)}
           tone="success"
           href="#supplier-bills"
         />
         <StatCard
-          label="We still owe them"
-          value={formatCurrency(totalOwed)}
+          label="Value owing"
+          value={formatValueOwingMinus(totalOwed)}
           tone={totalOwed > 0 ? "warning" : "neutral"}
           href="#supplier-bills"
         />
         <StatCard
-          label="They owe us"
-          value={formatCurrency(totalSurplus)}
+          label="Value owing"
+          value={formatValueOwingPlus(totalSurplus)}
           tone={totalSurplus > 0 ? "success" : "neutral"}
           href="#supplier-bills"
         />
@@ -71,9 +76,9 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
               <tr className="border-b border-border">
                 <th className="px-5 py-3">Bill number</th>
                 <th className="px-3 py-3">Shop</th>
-                <th className="px-3 py-3 text-right">Bill value</th>
-                <th className="px-3 py-3 text-right">We have paid</th>
-                <th className="px-3 py-3 text-right">Sent back</th>
+                <th className="px-3 py-3 text-right">Invoice value</th>
+                <th className="px-3 py-3 text-right">Payment</th>
+                <th className="px-3 py-3 text-right">Stock return</th>
                 <th className="px-4 py-3 text-right">Balance</th>
                 <th className="px-5 py-3 text-center">Status</th>
               </tr>
@@ -110,7 +115,7 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
                     </td>
 
                     <td className="px-4 py-3 text-right tabular-nums font-mono font-bold text-foreground">
-                      {bal.surplus > 0 ? `They owe us ${formatCurrency(bal.surplus)}` : formatCurrency(bal.owed)}
+                      {formatPurchaseBalanceCell(bal.owed, bal.surplus)}
                     </td>
 
                     <td className="px-5 py-3 text-center">

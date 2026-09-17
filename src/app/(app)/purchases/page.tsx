@@ -72,15 +72,14 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
           hint={`${regularPurchases.length} supplier bill${regularPurchases.length === 1 ? "" : "s"}`}
         />
         <StatCard
-          label="We have paid"
+          label="Payment"
           value={formatCurrency(paid)}
           tone="success"
         />
         <StatCard
-          label="Still owed"
-          value={formatCurrency(owed)}
-          hint={surplus > 0 ? `They owe us ${formatCurrency(surplus)}` : undefined}
-          tone={owed > 0 ? "warning" : "neutral"}
+          label="Value owing"
+          value={owed > 0 ? `-${formatCurrency(owed)}` : surplus > 0 ? `+${formatCurrency(surplus)}` : formatCurrency(0)}
+          tone={owed > 0 ? "warning" : surplus > 0 ? "success" : "neutral"}
         />
         <StatCard
           label="Never scanned in"

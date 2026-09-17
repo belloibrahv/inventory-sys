@@ -6,8 +6,13 @@ import { ChevronDown, Coins, HandCoins, Undo2, Users, Wallet } from "lucide-reac
 import { StatCard, StatGrid, StatusBadge, TableEmpty, TableShell, TonePill } from "@/components/shared"
 import { TablePager, usePagedRows } from "@/components/table-pager"
 import { groupByPartyIdentity } from "@/lib/party-key"
-import { purchaseBalance } from "@/lib/purchase-money"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import {
+  formatPurchaseBalanceCell,
+  formatValueOwingMinus,
+  formatValueOwingPlus,
+  purchaseBalance,
+} from "@/lib/purchase-money"
 
 export type SupplierBillRow = {
   id: string
@@ -101,9 +106,9 @@ function buildHouses(suppliers: SupplierRow[]): House[] {
 const FILTER_LABEL: Record<HouseFilter, string> = {
   all: "Every house",
   bought: "Houses we bought from",
-  paid: "Houses we have paid",
-  owing: "Houses we still owe",
-  credit: "Houses who owe us",
+  paid: "Houses with payment",
+  owing: "Houses with - value owing",
+  credit: "Houses with + value owing",
 }
 
 export function SuppliersList({ suppliers }: { suppliers: SupplierRow[] }) {
@@ -155,22 +160,22 @@ export function SuppliersList({ suppliers }: { suppliers: SupplierRow[] }) {
           onClick={() => pickFilter("bought")}
         />
         <StatCard
-          label="We have paid them"
+          label="Payment"
           value={formatCurrency(totalPaid)}
           icon={<HandCoins className="h-4 w-4" />}
           tone="success"
           onClick={() => pickFilter("paid")}
         />
         <StatCard
-          label="We still owe"
-          value={formatCurrency(totalOwed)}
+          label="Value owing"
+          value={formatValueOwingMinus(totalOwed)}
           icon={<Wallet className="h-4 w-4" />}
           tone={totalOwed > 0 ? "warning" : "neutral"}
           onClick={() => pickFilter("owing")}
         />
         <StatCard
-          label="They owe us"
-          value={formatCurrency(totalSurplus)}
+          label="Value owing"
+          value={formatValueOwingPlus(totalSurplus)}
           icon={<Undo2 className="h-4 w-4" />}
           tone={totalSurplus > 0 ? "success" : "neutral"}
           onClick={() => pickFilter("credit")}
@@ -188,7 +193,7 @@ export function SuppliersList({ suppliers }: { suppliers: SupplierRow[] }) {
           { label: "Supplier" },
           { label: "From" },
           { label: "Bought from them", align: "right" },
-          { label: "We have paid", align: "right" },
+          { label: "Payment", align: "right" },
           { label: "Balance", align: "right" },
           { label: "", align: "center" },
         ]}
@@ -274,15 +279,15 @@ function HouseRows({
         <td className="text-right num font-medium">{formatCurrency(house.purchased)}</td>
         <td className="text-right num text-success">{formatCurrency(house.paid)}</td>
         <td className="text-right num font-semibold">
-          {house.surplus > 0 ? formatCurrency(house.surplus) : formatCurrency(house.owed)}
+          {formatPurchaseBalanceCell(house.owed, house.surplus)}
         </td>
         <td className="text-center">
           {house.surplus > 0 ? (
-            <TonePill tone="success">They owe us</TonePill>
+            <TonePill tone="success">{formatValueOwingPlus(house.surplus)}</TonePill>
           ) : house.owed === 0 ? (
             <TonePill tone="success">Settled</TonePill>
           ) : (
-            <TonePill tone="warning">Owing</TonePill>
+            <TonePill tone="warning">{formatValueOwingMinus(house.owed)}</TonePill>
           )}
         </td>
       </tr>
@@ -337,9 +342,9 @@ function HouseBreakdown({ house }: { house: House }) {
               <tr>
                 <th className="px-3 py-2 font-medium">Bill</th>
                 <th className="px-3 py-2 font-medium">Shop</th>
-                <th className="px-3 py-2 text-right font-medium">Bill value</th>
-                <th className="px-3 py-2 text-right font-medium">We have paid</th>
-                <th className="px-3 py-2 text-right font-medium">Sent back</th>
+                <th className="px-3 py-2 text-right font-medium">Invoice value</th>
+                <th className="px-3 py-2 text-right font-medium">Payment</th>
+                <th className="px-3 py-2 text-right font-medium">Stock return</th>
                 <th className="px-3 py-2 text-right font-medium">Balance</th>
                 <th className="px-3 py-2 text-center font-medium">Status</th>
               </tr>
@@ -360,7 +365,7 @@ function HouseBreakdown({ house }: { house: House }) {
                     <td className="px-3 py-2 text-right num text-success">{formatCurrency(bill.paidAmount)}</td>
                     <td className="px-3 py-2 text-right num">{formatCurrency(bal.sentBack)}</td>
                     <td className="px-3 py-2 text-right num font-semibold">
-                      {bal.surplus > 0 ? `They owe us ${formatCurrency(bal.surplus)}` : formatCurrency(bal.owed)}
+                      {formatPurchaseBalanceCell(bal.owed, bal.surplus)}
                     </td>
                     <td className="px-3 py-2 text-center">
                       <StatusBadge value={bill.status} />
