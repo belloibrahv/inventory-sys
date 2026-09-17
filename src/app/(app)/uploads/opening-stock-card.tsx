@@ -30,7 +30,7 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
   return (
     <SectionCard
       title="Load a whole shop from the opening stock Excel sheet"
-      description="Use this once per shop for the stock already on the shelf. Later cartons use Supplier bill, where payment belongs."
+      description="Once per shop for stock already on the shelf. Later cartons use Supplier bill."
     >
       <p className="text-sm leading-relaxed text-muted-foreground">
         One file for one shop, with tabs for PHONES, ACCESSORIES, SCREEN and LAPTOPS. Pick the shop and the supplier

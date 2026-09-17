@@ -487,7 +487,7 @@ function AddItemModal({
       router.refresh()
     } catch {
       setBusy(false)
-      toast.error("Could not add item to opening stock. Please try again.")
+      toast.error("Could not add this item. Try again.")
     }
   }
 
@@ -495,20 +495,20 @@ function AddItemModal({
     <DrilldownModal
       open={open}
       onClose={onClose}
-      eyebrow="Opening Stock Mop-Up"
-      title="Add Unlisted Item to Opening Stock"
+      eyebrow="Opening stock"
+      title="Add a missing item"
       width="narrow"
     >
       <form onSubmit={submit} className="space-y-4 p-5">
         <p className="text-xs text-muted-foreground">
-          Found an item on the shelf that was not in the initial opening sheet? Register it here directly with its physical count, cost and selling prices.
+          On the shelf, missing from the sheet. Add count, cost, and sell price.
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <label className="block text-xs font-medium text-muted-foreground">Product Name *</label>
+            <label className="block text-xs font-medium text-muted-foreground">Item name</label>
             <Input
               required
-              placeholder="e.g. iPhone 13 Pro Max"
+              placeholder="Example: iPhone 13 Pro Max"
               value={form.name}
               onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
               className="mt-1"

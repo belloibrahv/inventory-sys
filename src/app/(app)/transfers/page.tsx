@@ -17,9 +17,7 @@ export default async function TransfersPage() {
       </div>
       <div className="surface-card p-5">
         <h3 className="mb-2 font-semibold">Send to another shop</h3>
-        <p className="mb-4 text-sm text-muted-foreground">
-          Pick the shop sending and the shop receiving. Use IMEIs for phones, or a quantity for cords and chargers.
-        </p>
+        <p className="mb-4 text-sm text-muted-foreground">IMEIs for phones. Piece count for cords.</p>
         <TransferForm
           branches={lookups.branches}
           products={lookups.products}

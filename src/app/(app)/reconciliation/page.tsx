@@ -77,15 +77,15 @@ export default async function ReconciliationPage() {
 
                 <div className="grid grid-cols-3 gap-2 text-sm">
                   <div>
-                    <p className="eyebrow">Perpetual Ledger</p>
+                    <p className="eyebrow">On the system</p>
                     <p className="num font-medium">{formatCurrency(expected)}</p>
                   </div>
                   <div>
-                    <p className="eyebrow">Physical Count</p>
+                    <p className="eyebrow">Counted</p>
                     <p className="num font-medium">{formatCurrency(counted)}</p>
                   </div>
                   <div>
-                    <p className="eyebrow">Variance</p>
+                    <p className="eyebrow">Difference</p>
                     <p className={`num font-semibold ${variance > 0 ? "text-success" : variance < 0 ? "text-danger" : ""}`}>
                       {variance > 0 ? `+${formatCurrency(variance)}` : formatCurrency(variance)}
                     </p>
@@ -117,7 +117,7 @@ export default async function ReconciliationPage() {
             <div className="md:col-span-2">
               <EmptyState
                 title="No stock counts yet"
-                hint="Count a shop above and send it for a manager to say yes. Past counts will show here."
+                hint="Count a shop above. Past counts show here."
               />
             </div>
           ) : null}

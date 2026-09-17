@@ -228,108 +228,108 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
   const papers = [
     {
       ok: integrity.ok,
-      label: "The trail of who did what",
+      label: "Who did what stays locked",
       detail: integrity.ok
-        ? `Audit chain verified — ${integrity.checked} locked records checked. No tampering detected.`
-        : "A locked audit record has been altered. This is a critical integrity alert.",
+        ? `${integrity.checked} locked steps checked. Nothing changed after the fact.`
+        : "A locked step was changed. Treat this as serious.",
       fix: integrity.ok
         ? null
-        : "Go to Audit Trail → look for rows flagged as changed. Identify who made the change and when. If data was tampered with, restore from the last backup. This flag clears automatically once the audit chain is re-verified.",
+        : "Open Who did what. Find the changed row. Restore from backup if needed.",
       href: "/audit",
     },
     {
       ok: unclosed.length === 0,
       label: "Till counted every day",
       detail: unclosed.length
-        ? `${unclosed.length} previous business day(s) with sales have not been closed yet.`
-        : "All previous days with sales have been closed and counted.",
+        ? `${unclosed.length} past day${unclosed.length === 1 ? "" : "s"} with sales still open.`
+        : "Every past day with sales is closed.",
       fix: unclosed.length
-        ? `Go to Close the day. Pick each open day. If cash came in, count the till and type cash remitted. If the day was transfer and POS only, just click Close the day. This flag clears once every past day with sales is closed.`
+        ? "Open Close the day for each open day. Count cash only when cash came in."
         : null,
       href: "/finance/close",
     },
     {
       ok: span !== "day" || now.count === 0 || Boolean(closeForDay),
-      label: "Business day closed",
+      label: "Day closed",
       detail:
         span !== "day"
-          ? `${closes.length} day(s) closed in this period.`
+          ? `${closes.length} day${closes.length === 1 ? "" : "s"} closed in this stretch.`
           : closeForDay
-            ? `Day closed — ₦${money(closeForDay.countedCash).toFixed(0)} remitted. Expected cash: ₦${expectedCash.toFixed(0)}.`
+            ? `Day closed. Cash remitted ₦${money(closeForDay.countedCash).toFixed(0)}. Expected ₦${expectedCash.toFixed(0)}.`
             : now.count
-              ? "Today has transactions but the end-of-day register has not been closed yet."
-              : "No transactions recorded for this business day.",
+              ? "This day has sales and is not closed yet."
+              : "No sales on this day.",
       fix:
         span === "day" && !closeForDay && now.count
-          ? `Go to Finance → Close Day → select today's date → count the physical cash in the till, enter the amount → click "Close Day". This flag clears once today's register is closed.`
+          ? "Open Close the day, count the till if cash came in, then close."
           : null,
       href: `/finance/close?date=${day}`,
     },
     {
       ok: closeVariances.length === 0,
-      label: "Cash drawer reconciled with cash sales",
+      label: "Till cash matches",
       detail: closeVariances.length
-        ? `${closeVariances.length} closed day(s) show a cash shortage or overage between the till count and expected cash sales.`
-        : "All closed day registers match expected cash with zero variance.",
+        ? `${closeVariances.length} closed day${closeVariances.length === 1 ? "" : "s"} show a shortage or overage.`
+        : "Closed days match expected cash.",
       fix: closeVariances.length
-        ? "Go to Finance → Close Day → review the days showing a variance. Recount the physical cash for those days and update the remittance amount. If there is a genuine shortage, record it as an approved expense. This flag clears once all closed days show zero variance."
+        ? "Open Close the day. Recount cash on those days. If money is truly short, write a shop expense after yes."
         : null,
       href: "/finance/close",
     },
     {
       ok: imeiGaps.length === 0,
-      label: "Serialized devices match IMEI registry",
+      label: "IMEI vs shop count",
       detail: imeiGaps.length
-        ? `${imeiGaps.length} product(s) have a mismatch between physical stock count and the IMEI records on the system.`
-        : "Physical serialized inventory matches all IMEI records perfectly.",
+        ? `${imeiGaps.length} item${imeiGaps.length === 1 ? "" : "s"} do not match the IMEI list.`
+        : "Shop count matches the IMEI list.",
       fix: imeiGaps.length
-        ? "Go to Inventory → IMEI Records → compare the physical device count on the shelf against the system count. For missing devices, mark them as sold or lost. For extra devices, register the new IMEIs. This flag clears once all counts match."
+        ? "Open Home IMEI vs shop count. Count the shelf. Use Stock count if numbers must change."
         : null,
       href: "/dashboard#imei-check",
     },
     {
       ok: parked.sitting === 0 && parked.vanished === 0,
-      label: "Held / Draft transactions",
+      label: "Waiting sales",
       detail:
         parked.sitting || parked.vanished
-          ? `${parked.sitting} active hold(s) on the POS. ${parked.vanished} draft(s) were discarded without completing.`
-          : "No stale or abandoned hold transactions on the POS.",
+          ? `${parked.sitting} waiting on a till. ${parked.vanished} vanished without finishing.`
+          : "No waiting sales.",
       fix:
         parked.sitting || parked.vanished
-          ? "Go to POS → review any held (parked) sales → either complete the transaction or cancel it. For discarded drafts, check the Audit Trail for the HIGH-risk events. This flag clears once all holds are resolved."
+          ? "Open Sell now for waiting sales. Open Who did what for vanished ones."
           : null,
       href: parked.vanished ? "/audit?risk=HIGH" : "/pos",
     },
     {
       ok: walkIns === 0,
-      label: "Customer identity KYC on transactions",
+      label: "Named buyers",
       detail: walkIns
-        ? `${walkIns} transaction(s) were recorded without a registered customer (walk-in / unidentified buyer).`
-        : "All transactions in this period are assigned to registered customer accounts.",
+        ? `${walkIns} sale${walkIns === 1 ? "" : "s"} with no customer name.`
+        : "Every sale names a buyer.",
       fix: walkIns
-        ? "Go to Sales → filter by 'Walk-in' customer → for each unidentified sale, open the invoice and update the customer field with the correct registered customer. This flag clears once all transactions have a known customer assigned."
+        ? "Open Sales. Attach a real name on each walk-in invoice."
         : null,
       href: "/sales",
     },
     {
       ok: failedLogins === 0,
-      label: "User authentication security",
+      label: "Failed sign-ins",
       detail: failedLogins
-        ? `${failedLogins} failed login attempt(s) recorded in this period.`
-        : "No failed authentication attempts detected.",
+        ? `${failedLogins} failed sign-in${failedLogins === 1 ? "" : "s"} in this stretch.`
+        : "No failed sign-ins.",
       fix: failedLogins
-        ? "Go to Audit Trail → filter by Action: LOGIN and Result: Failed → check if the attempts are from a known staff member who forgot their password (reset it via Staff settings) or from an unknown source (change the affected account's password immediately and review access). This flag clears when no new failed logins occur in the next report period."
+        ? "Open Who did what for failed sign-ins. Reset a known staff password, or lock a strange login."
         : null,
       href: "/audit?result=failed&action=LOGIN",
     },
     {
       ok: highRisk === 0,
-      label: "High-severity audit events",
+      label: "High risk steps",
       detail: highRisk
-        ? `${highRisk} high-severity operational event(s) logged in this period.`
-        : "No high-severity audit anomalies detected.",
+        ? `${highRisk} high risk step${highRisk === 1 ? "" : "s"} in this stretch.`
+        : "No high risk steps.",
       fix: highRisk
-        ? "Go to Audit Trail → filter by Risk: HIGH → review each flagged event and confirm whether it was an authorised action. If unauthorised, escalate to the Managing Director and consider a security review. This flag clears when no HIGH-risk events are logged in the next report period."
+        ? "Open Who did what, high risk. Confirm each step was allowed."
         : null,
       href: "/audit?risk=HIGH",
     },

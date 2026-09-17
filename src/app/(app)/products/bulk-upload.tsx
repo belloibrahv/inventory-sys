@@ -42,7 +42,7 @@ export function BulkProductUpload() {
     <div className="surface-card p-5">
       <h3 className="mb-2 font-semibold">Upload many items at once</h3>
       <p className="mb-4 text-sm text-muted-foreground">
-        Download the sample, fill it in Excel, then upload the file. This adds the item list only. It does not put stock in the shop. Use Goods on the way when the goods are coming.
+        Sample, fill, upload. Names only. Stock comes later on Goods on the way.
       </p>
       <div className="mb-4">
         <ExportCsv filename="abu-twins-products-sample.csv" rows={SAMPLE} label="Download an example file" />

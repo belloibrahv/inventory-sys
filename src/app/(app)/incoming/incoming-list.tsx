@@ -90,21 +90,21 @@ export function IncomingList({
               <div className="min-w-0">
                 <p className="font-semibold">{lot.lotNumber}</p>
                 <p className="text-sm text-muted-foreground">
-                  Destination: {lot.branch.name}
-                  {lot.supplier ? ` · Supplier: ${lot.supplier.name}` : ""}
-                  {lot.purchase ? ` · PO #${lot.purchase.invoiceNumber}` : ""}
-                  {lot.expectedDate ? ` · ETA: ${formatShopWhen(lot.expectedDate)}` : ""}
+                  {lot.branch.name}
+                  {lot.supplier ? ` · ${lot.supplier.name}` : ""}
+                  {lot.purchase ? ` · bill ${lot.purchase.invoiceNumber}` : ""}
+                  {lot.expectedDate ? ` · due ${formatShopWhen(lot.expectedDate)}` : ""}
                 </p>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-2">
                 <div className="flex items-center gap-2">
                   <Badge variant={lot.visible ? "info" : "muted"}>
-                    {lot.visible ? "Published" : "Restricted"}
+                    {lot.visible ? "Shown to staff" : "Hidden"}
                   </Badge>
                   <StatusBadge value={lot.status} />
                 </div>
                 <p className="text-xs font-medium tabular-nums text-muted-foreground">
-                  Registered {formatShopWhen(lot.createdAt)}
+                  Booked {formatShopWhen(lot.createdAt)}
                 </p>
               </div>
             </div>
@@ -119,18 +119,18 @@ export function IncomingList({
                     <span className="shrink-0 text-xs text-muted-foreground">
                       {received != null ? (
                         <>
-                          Expected: {expected} · Received: {received}
+                          On bill {expected} · In shop {received}
                           {short !== 0 ? (
                             <span className="text-warning">
                               {" "}
-                              · {short > 0 ? `Variance: -${short}` : `Surplus: +${-short}`}
+                              · {short > 0 ? `short ${short}` : `extra ${-short}`}
                             </span>
                           ) : null}
                         </>
                       ) : (
                         <>
-                          {expected} units ·{" "}
-                          {item.identity === "IMEI" ? "Phone, IMEI" : item.identity === "SERIAL" ? "Serial" : "No number"}
+                          {expected} ·{" "}
+                          {item.identity === "IMEI" ? "IMEI" : item.identity === "SERIAL" ? "Serial" : "No number"}
                         </>
                       )}
                     </span>
@@ -140,7 +140,7 @@ export function IncomingList({
             </ul>
             {lot.status === "PENDING_APPROVAL" ? (
               <p className="mt-2 rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-warning">
-                Intake is counted. A manager must say yes on Needs approval before these units sit on Shop stock.
+                Counted. Waiting for yes on Needs approval before Shop stock rises.
               </p>
             ) : null}
             {lot.status === "ARRIVED" &&
@@ -149,7 +149,7 @@ export function IncomingList({
               return item.receivedQuantity != null && item.receivedQuantity !== expected
             }) ? (
               <p className="mt-2 rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-warning">
-                This consignment arrived with receiving variances against expected PO quantities. Variance logs have been generated.
+                Count does not match the bill. Check Who did what for the short or extra units.
               </p>
             ) : null}
             {lot.notes ? <p className="mt-2 text-xs text-muted-foreground">{lot.notes}</p> : null}
@@ -158,7 +158,7 @@ export function IncomingList({
               {isAdmin && lot.status === "COMING" ? (
                 <ActionForm
                   action={setIncomingVisible}
-                  submit={lot.visible ? "Restrict Visibility" : "Publish to Branch Staff"}
+                  submit={lot.visible ? "Hide from staff" : "Show to staff"}
                   variant="outline"
                   size="sm"
                   buttonClassName=""
@@ -172,7 +172,7 @@ export function IncomingList({
         ))}
         {lots.length > 0 && filtered.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
-            No consignments match this status filter. Select another stage above.
+            Nothing in this stage. Tap another stage above.
           </p>
         ) : null}
         {filtered.length > 0 ? (
@@ -186,7 +186,7 @@ export function IncomingList({
               end={pager.end}
               onPageChange={pager.setPage}
               onPageSizeChange={pager.setPageSize}
-              noun="consignments"
+              noun="cartons"
             />
           </div>
         ) : null}

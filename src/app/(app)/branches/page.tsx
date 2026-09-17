@@ -37,26 +37,26 @@ function ShopCard({
           )}
         </div>
         <Badge variant={!branch.isActive ? "danger" : branch.isHq ? "info" : "success"}>
-          {!branch.isActive ? "Inactive" : branch.isHq ? "Headquarters (HQ)" : "Active"}
+          {!branch.isActive ? "Closed" : branch.isHq ? "Head office" : "Open"}
         </Badge>
       </div>
       <p className="mt-4 text-sm text-muted-foreground">
-        {branch._count.users} staff · {branch._count.sales} transactions · {branch._count.imeiRecords} serialized units
+        {branch._count.users} staff · {branch._count.sales} sales · {branch._count.imeiRecords} phones
       </p>
       {canEdit ? (
         <div className="mt-3 space-y-3">
           <form action={toggle}>
             <input type="hidden" name="id" value={branch.id} />
             <Button size="sm" variant="outline">
-              {branch.isActive ? "Deactivate Location" : "Activate Location"}
+              {branch.isActive ? "Close this shop" : "Open this shop"}
             </Button>
           </form>
           <details className="rounded-lg border border-border px-3 py-2">
-            <summary className="cursor-pointer text-sm font-medium">Configure Branch Metadata</summary>
+            <summary className="cursor-pointer text-sm font-medium">Edit shop details</summary>
             <ActionForm
               action={updateBranch}
               className="mt-3 space-y-2"
-              submit="Save Changes"
+              submit="Save shop details"
               successMessage="Branch details updated"
               resetOnSuccess={false}
               buttonClassName="mt-2"
@@ -111,7 +111,7 @@ export default async function BranchesPage() {
           <div className="mt-8">
             <h3 className="mb-2 text-sm font-semibold text-muted-foreground">Closed shops</h3>
             <p className="mb-3 text-sm text-muted-foreground">
-              Closed shops keep their old sales and stock for the books. They do not appear on Sell now or goods intake.
+              Old sales stay. Closed shops do not show on Sell now.
             </p>
             <div className="grid gap-3 md:grid-cols-2">
               {closed.map((branch) => (

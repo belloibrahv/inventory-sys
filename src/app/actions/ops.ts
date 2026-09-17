@@ -944,7 +944,7 @@ export async function completeSwap(formData: FormData) {
     return { error: "This shop's opening stock is still being counted. Finish the swap once it is closed." }
   }
   if (swap.status !== "APPROVED" && !(await canApprove(user.role))) {
-    return { error: "Wait for management to approve the trade-in valuation before collecting the balance." }
+    return { error: "Wait for a manager to say yes on this Swap Deal before collecting the money." }
   }
 
   const invoiceNumber = generateDocNumber("INV")

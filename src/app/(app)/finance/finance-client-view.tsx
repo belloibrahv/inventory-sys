@@ -356,13 +356,13 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
                   ...account.entries.map((entry) => [
                     new Date(entry.date).toISOString().slice(0, 10),
                     entry.branch,
-                    entry.type === "IN" ? "Credit" : "Debit",
+                    entry.type === "IN" ? "In" : "Out",
                     entry.category,
                     entry.description,
                     entry.amount,
                   ]),
                   [],
-                  ["Ending Ledger Balance", "", "", "", "", account.balance],
+                  ["Balance now", "", "", "", "", account.balance],
                 ],
               }
             : undefined
@@ -371,10 +371,10 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
           account ? (
             <>
               <span>
-                {account.entries.length} transaction{account.entries.length === 1 ? "" : "s"} across {days.length} business day
+                {account.entries.length} move{account.entries.length === 1 ? "" : "s"} across {days.length} day
                 {days.length === 1 ? "" : "s"}
               </span>
-              <span className="font-semibold text-foreground">Ending Balance: {formatCurrency(account.balance)}</span>
+              <span className="font-semibold text-foreground">Balance now {formatCurrency(account.balance)}</span>
             </>
           ) : null
         }
@@ -385,8 +385,8 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
               <div className="flex flex-wrap items-center justify-between gap-3 bg-muted/40 px-5 py-2">
                 <p className="text-sm font-semibold">{day.label}</p>
                 <div className="flex flex-wrap items-center gap-4 text-xs">
-                  <span className="text-success">Credits {formatCurrency(day.moneyIn)}</span>
-                  <span className="text-danger">Debits {formatCurrency(day.moneyOut)}</span>
+                  <span className="text-success">Money in {formatCurrency(day.moneyIn)}</span>
+                  <span className="text-danger">Money out {formatCurrency(day.moneyOut)}</span>
                   <span className="font-semibold text-foreground">Net {formatCurrency(day.net)}</span>
                 </div>
               </div>

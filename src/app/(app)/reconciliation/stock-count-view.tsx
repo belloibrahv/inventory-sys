@@ -132,17 +132,17 @@ export function StockCountView({
           String(counted),
           diff > 0 ? `+${diff}` : String(diff),
           (diff * cost).toFixed(2),
-          diff > 0 ? "Surplus" : diff < 0 ? "Deficit / Shrinkage" : "Reconciled",
+          diff > 0 ? "Extra" : diff < 0 ? "Short" : "Match",
         ]
       }),
       [],
-      ["Perpetual Ledger Valuation", summary.systemValue.toFixed(2)],
-      ["Physical Count Valuation", summary.countedValue.toFixed(2)],
-      ["Net Inventory Variance", summary.netValue.toFixed(2)],
+      ["On the system", summary.systemValue.toFixed(2)],
+      ["Counted on the shelf", summary.countedValue.toFixed(2)],
+      ["Difference", summary.netValue.toFixed(2)],
     ]
   }
 
-  const fileBase = `inventory-audit-${selectedBranch?.name?.replace(/\s+/g, "-").toLowerCase() ?? branchId}-${new Date()
+  const fileBase = `stock-count-${selectedBranch?.name?.replace(/\s+/g, "-").toLowerCase() ?? branchId}-${new Date()
     .toISOString()
     .slice(0, 10)}`
 

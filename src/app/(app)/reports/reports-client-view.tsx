@@ -213,7 +213,7 @@ export function ReportsClientView({
       ["Total", "", "", "", pack.totals.collected],
     ],
     EXPENSES: () => [
-      ["Voucher", "Category", "What it was for", "Shop", "Date", "Amount"],
+      ["Bill number", "Category", "What it was for", "Shop", "Date", "Amount"],
       ...expenses.map((expense) => [
         expense.expenseNumber,
         expense.category.replace(/_/g, " ").toLowerCase(),
@@ -576,8 +576,8 @@ export function ReportsClientView({
                 <h2 className="text-sm font-semibold tracking-tight">Customers who still owe us</h2>
                 <div className="flex items-center gap-2">
                   <TableDownload
-                    filename={`${fileScope}-receivables`}
-                    rows={() => [["Customer", "Shop", "Balance Due"], ...pack.debtors.map((row) => [row.name, row.shop, row.amount])]}
+                    filename={`${fileScope}-customers-still-owe`}
+                    rows={() => [["Customer", "Shop", "Still owed"], ...pack.debtors.map((row) => [row.name, row.shop, row.amount])]}
                   />
                   <Button asChild variant="ghost" size="sm">
                     <Link href="/customers">All customers</Link>
@@ -967,7 +967,7 @@ export function ReportsClientView({
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Voucher</th>
+                  <th>Bill number</th>
                   <th>Category</th>
                   <th>What it was for</th>
                   <th>Shop</th>

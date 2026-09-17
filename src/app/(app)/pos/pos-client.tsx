@@ -486,7 +486,7 @@ export function PosClient({
           <ScanField
             onScan={takeScan}
             placeholder="Scan IMEI to sell, then Enter"
-            hint="A USB or Bluetooth scanner types the number and presses Enter. That adds the phone to this sale. It does not complete the sale."
+            hint="Scan adds the phone. It does not finish the sale."
           />
           <Input
             value={query}

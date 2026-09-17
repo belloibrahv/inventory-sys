@@ -245,10 +245,10 @@ export function NetworkStatusIndicator() {
             <Database className="h-5 w-5 text-primary" />
             <div>
               <p className="text-sm font-semibold">
-                {queue.length} Offline Record{queue.length === 1 ? "" : "s"} Stored Locally
+                {queue.length} waiting sale{queue.length === 1 ? "" : "s"} on this phone
               </p>
               <p className="text-xs text-muted-foreground">
-                Internet is online. Records are ready to be published to the cloud ledger.
+                The line is up. Send them when you are ready.
               </p>
             </div>
           </div>
@@ -260,7 +260,7 @@ export function NetworkStatusIndicator() {
               onClick={() => setDrawerOpen(true)}
               className="text-xs"
             >
-              Review Queue
+              See waiting sales
             </Button>
             <Button
               type="button"
@@ -270,7 +270,7 @@ export function NetworkStatusIndicator() {
               className="text-xs"
             >
               <Send className="mr-1.5 h-3.5 w-3.5" />
-              Sync Now
+              Send waiting work now
             </Button>
           </div>
         </div>
