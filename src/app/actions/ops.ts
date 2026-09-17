@@ -600,6 +600,7 @@ export async function getReturns() {
     include: {
       customer: true,
       imei: { include: { product: true } },
+      replacementImei: { include: { product: true } },
       branch: true,
       user: true,
     },
@@ -631,6 +632,23 @@ export async function getSoldImeis() {
   })
 }
 
+/** In shop units staff may give out on a Replace return. */
+export async function getInStockForReplace() {
+  const user = await requireUser()
+  const branchId = await scopedBranchId(user.role, user.branchId)
+  return prisma.imeiRecord.findMany({
+    where: {
+      status: "IN_STOCK",
+      NOT: { cosmeticGrade: "FAULTY" },
+      product: { condition: { not: "FAULTY" } },
+      ...(branchId ? { branchId } : {}),
+    },
+    include: { product: true },
+    orderBy: { updatedAt: "desc" },
+    take: 200,
+  })
+}
+
 export async function createReturn(formData: FormData) {
   const user = await requireUser()
   if (!(await can(user.role, "action.return"))) return { error: "You are not allowed to record a return. Ask the main admin." }
@@ -652,8 +670,38 @@ export async function createReturn(formData: FormData) {
     if (!cover.active) return { error: cover.label + ". Pick another return reason. Do not change the old sale." }
   }
 
+  const outcome = String(formData.get("outcome")) as ReturnOutcome
   const line = imei.sale?.items.find((item) => item.imeiId === imei.id)
-  const asked = formData.get("refundAmount") ? Number(formData.get("refundAmount")) : 0
+  const suggested = money(line?.totalPrice) || money(imei.product.sellingPrice)
+  const returnRaw = formData.get("returnValue") ?? formData.get("refundAmount")
+  const returnValue = returnRaw !== null && String(returnRaw).trim() !== "" ? Number(returnRaw) : suggested
+  if (!Number.isFinite(returnValue) || returnValue < 0) {
+    return { error: "Enter the return item value." }
+  }
+
+  let replacementImeiId: string | null = null
+  let replacementValue: number | null = null
+  let balanceAmount: number | null = null
+
+  if (outcome === "REPLACEMENT") {
+    replacementImeiId = String(formData.get("replacementImeiId") || "").trim() || null
+    const replacementValueRaw = formData.get("replacementValue")
+    if (!replacementImeiId) return { error: "Pick the shop item to give out as the replacement." }
+    const fresh = await prisma.imeiRecord.findUnique({
+      where: { id: replacementImeiId },
+      include: { product: true },
+    })
+    if (!fresh || fresh.status !== "IN_STOCK") return { error: "That replacement is not In shop." }
+    if (fresh.branchId !== imei.branchId) return { error: "The replacement must be in the same shop as the return." }
+    replacementValue =
+      replacementValueRaw !== null && String(replacementValueRaw).trim() !== ""
+        ? Number(replacementValueRaw)
+        : money(fresh.product.sellingPrice)
+    if (!Number.isFinite(replacementValue) || replacementValue! < 0) {
+      return { error: "Enter the value of the replacement given out." }
+    }
+    balanceAmount = replacementValue! - returnValue
+  }
 
   const record = await prisma.stockReturn.create({
     data: {
@@ -664,11 +712,15 @@ export async function createReturn(formData: FormData) {
       branchId: imei.branchId,
       userId: user.id,
       reason,
-      outcome: String(formData.get("outcome")) as ReturnOutcome,
+      outcome,
       faultClass: String(formData.get("faultClass") || "FAULTY_STOCK") as FaultClass,
       notes: String(formData.get("notes") || "") || null,
       supplierId: imei.supplierId,
-      refundAmount: (asked > 0 ? asked : money(line?.totalPrice) || money(imei.product.sellingPrice)).toFixed(2),
+      returnValue: returnValue.toFixed(2),
+      refundAmount: returnValue.toFixed(2),
+      replacementImeiId,
+      replacementValue: replacementValue != null ? replacementValue.toFixed(2) : null,
+      balanceAmount: balanceAmount != null ? balanceAmount.toFixed(2) : null,
     },
   })
   await prisma.imeiRecord.update({ where: { id: imei.id }, data: { status: "RETURNED" } })
@@ -678,11 +730,16 @@ export async function createReturn(formData: FormData) {
       entityId: record.id,
       entityType: "Return",
       requestedBy: user.id,
-      reason: `${record.returnNumber}: ${record.reason}`,
+      reason:
+        outcome === "REPLACEMENT" && balanceAmount != null
+          ? `${record.returnNumber}: replace · return ₦${returnValue} · given ₦${replacementValue} · ${
+              balanceAmount > 0 ? `Receivable ₦${balanceAmount}` : balanceAmount < 0 ? `Payable ₦${Math.abs(balanceAmount)}` : "Even"
+            }`
+          : `${record.returnNumber}: ${record.reason} · return value ₦${returnValue}`,
     },
   })
   const managers = await prisma.user.findMany({
-    where: { role: { in: ["CEO", "BRANCH_MANAGER", "AUDITOR", "ACCOUNTANT"] }, isActive: true },
+    where: { role: { in: ["CEO", "BRANCH_MANAGER", "AUDITOR", "ACCOUNTANT", "SUPER_ADMIN"] }, isActive: true },
   })
   for (const manager of managers) {
     await notify(manager.id, "A return is waiting for you to say yes", `${record.returnNumber} for IMEI ${imei1}`, "/approvals", "APPROVAL_REQUEST")
@@ -706,6 +763,7 @@ export async function completeReturn(formData: FormData) {
           purchase: { include: { items: true, openingStock: true } },
         },
       },
+      replacementImei: { include: { product: true } },
     },
   })
   if (!record) return { error: "We could not find that return." }
@@ -717,16 +775,27 @@ export async function completeReturn(formData: FormData) {
     ? await prisma.sale.findUnique({ where: { id: record.saleId } })
     : null
 
-  const replacementImei = String(formData.get("replacementImei") || "").trim()
-  if (record.outcome === "REPLACEMENT" && replacementImei.length < 14) {
-    return { error: "Enter the replacement IMEI from stock." }
+  const method = String(formData.get("method") || "CASH") as PaymentMethod
+  const paidAmount = Number(formData.get("paidAmount") || 0)
+  let replacementImeiId = record.replacementImeiId || String(formData.get("replacementImeiId") || "").trim() || null
+  const typedImei = String(formData.get("replacementImei") || "").replace(/[\s-]/g, "").trim()
+
+  if (record.outcome === "REPLACEMENT") {
+    if (!replacementImeiId && typedImei) {
+      const byCode = await prisma.imeiRecord.findFirst({
+        where: {
+          status: "IN_STOCK",
+          branchId: record.branchId,
+          OR: [{ imei1: typedImei }, { serialNumber: typedImei }],
+        },
+      })
+      replacementImeiId = byCode?.id ?? null
+    }
+    if (!replacementImeiId) return { error: "Pick or enter the replacement from In shop stock." }
   }
 
   try {
   await prisma.$transaction(async (tx) => {
-    // Close the return before any money or stock moves. Two clicks on Complete
-    // used to pay the refund twice and put the phone back on the shelf twice,
-    // because both reads saw the return still open.
     const sealed = await tx.stockReturn.updateMany({
       where: { id, status: { not: "COMPLETED" } },
       data: {
@@ -736,6 +805,7 @@ export async function completeReturn(formData: FormData) {
         completedAt: new Date(),
         sentToSupplierAt: record.outcome === "SEND_TO_SUPPLIER" ? new Date() : record.sentToSupplierAt,
         supplierId: record.supplierId || record.imei?.supplierId || null,
+        replacementImeiId: replacementImeiId || record.replacementImeiId,
       },
     })
     if (sealed.count !== 1) {
@@ -743,7 +813,7 @@ export async function completeReturn(formData: FormData) {
     }
 
     if (record.outcome === "REFUND" || record.outcome === "CREDIT_NOTE") {
-      const asked = money(record.refundAmount) || (record.imei ? money(record.imei.product.sellingPrice) : 0)
+      const asked = money(record.returnValue) || money(record.refundAmount) || (record.imei ? money(record.imei.product.sellingPrice) : 0)
       const salePaid = sale ? money(sale.paidAmount) : asked
       const saleDue = sale ? Math.max(0, money(sale.totalAmount) - salePaid) : 0
       const cashOut = record.outcome === "REFUND" ? Math.min(asked, salePaid || asked) : 0
@@ -802,10 +872,36 @@ export async function completeReturn(formData: FormData) {
     }
 
     if (record.outcome === "REPLACEMENT") {
-      const fresh = await tx.imeiRecord.findUnique({ where: { imei1: replacementImei } })
+      const fresh = await tx.imeiRecord.findUnique({
+        where: { id: replacementImeiId! },
+        include: { product: true },
+      })
       if (!fresh || fresh.status !== "IN_STOCK") {
-        throw new ConflictError("Replacement IMEI must be in stock.")
+        throw new ConflictError("Replacement must be In shop.")
       }
+      if (fresh.branchId !== record.branchId) {
+        throw new ConflictError("Replacement must be in the same shop.")
+      }
+
+      const returnValue = money(record.returnValue) || money(record.refundAmount) || (record.imei ? money(record.imei.product.sellingPrice) : 0)
+      const replacementValue =
+        record.replacementValue != null ? money(record.replacementValue) : money(fresh.product.sellingPrice)
+      const balance = record.balanceAmount != null ? money(record.balanceAmount) : replacementValue - returnValue
+      const receivable = Math.max(balance, 0)
+      const payable = Math.max(-balance, 0)
+      const collected = Math.min(Math.max(0, paidAmount), receivable || payable)
+
+      await tx.stockReturn.update({
+        where: { id: record.id },
+        data: {
+          replacementImeiId: fresh.id,
+          replacementValue: replacementValue.toFixed(2),
+          balanceAmount: balance.toFixed(2),
+          returnValue: returnValue.toFixed(2),
+          refundAmount: returnValue.toFixed(2),
+        },
+      })
+
       await claimImei(tx, {
         imeiId: fresh.id,
         branchId: fresh.branchId,
@@ -816,7 +912,7 @@ export async function completeReturn(formData: FormData) {
         productId: fresh.productId,
         branchId: fresh.branchId,
         quantity: 1,
-        label: replacementImei,
+        label: fresh.product.name,
       })
       if (record.imeiId) {
         await tx.imeiRecord.update({
@@ -826,6 +922,46 @@ export async function completeReturn(formData: FormData) {
         if (record.faultClass === "GOOD_STOCK") {
           await returnStock(tx, { productId: record.imei!.productId, branchId: record.branchId, quantity: 1 })
         }
+      }
+
+      if (receivable > 0 && collected > 0) {
+        await tx.financeEntry.create({
+          data: {
+            branchId: record.branchId,
+            account: method === "CASH" ? "CASH" : "BANK",
+            type: "INCOME",
+            amount: collected.toFixed(2),
+            reference: record.returnNumber,
+            description: `Return receivable · ${record.customer.name} · ${record.returnNumber}`,
+          },
+        })
+      }
+      const due = Math.max(receivable - collected, 0)
+      if (due > 0) {
+        const after = await shiftCustomerBalance(tx, record.customerId, due)
+        await tx.ledgerEntry.create({
+          data: {
+            customerId: record.customerId,
+            type: "SALE",
+            amount: due.toFixed(2),
+            balance: money(after.currentBalance).toFixed(2),
+            reference: record.returnNumber,
+            description: `Return receivable still owed · ${record.returnNumber}`,
+          },
+        })
+      }
+      if (payable > 0) {
+        const payOut = collected > 0 ? Math.min(collected, payable) : payable
+        await tx.financeEntry.create({
+          data: {
+            branchId: record.branchId,
+            account: method === "CASH" ? "CASH" : "BANK",
+            type: "EXPENSE",
+            amount: payOut.toFixed(2),
+            reference: record.returnNumber,
+            description: `Return payable to ${record.customer.name} · ${record.returnNumber}`,
+          },
+        })
       }
     }
 
@@ -848,7 +984,13 @@ export async function completeReturn(formData: FormData) {
         action: "UPDATE",
         entityType: "Return",
         entityId: record.returnNumber,
-        newValue: JSON.stringify({ outcome: record.outcome, faultClass: record.faultClass }),
+        newValue: JSON.stringify({
+          outcome: record.outcome,
+          faultClass: record.faultClass,
+          returnValue: record.returnValue,
+          replacementValue: record.replacementValue,
+          balanceAmount: record.balanceAmount,
+        }),
         branchId: record.branchId,
       },
     })

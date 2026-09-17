@@ -39,9 +39,14 @@ export default async function OpeningStockBookPage({
     <div className="space-y-6">
       <PageHeader
         title="Correct & close opening stock"
-        description="Count the shelf. Close it when the numbers match."
+        description="Count the shelf. Fill missing cost or sell prices and piece counts here before Close."
       />
 
+      {selected.status === "OPEN" ? (
+        <p className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm">
+          Opening stock is still open. You can type cost, lowest sell, and selling price on each line, and fix accessory piece counts. Rows skipped on the Excel (blank quantity) can be added with Add a missing item. Close only when the shelf and the prices are right.
+        </p>
+      ) : null}
       <nav className="flex flex-wrap gap-2" aria-label="Shops">
         {shops.map((shop) => (
           <Link

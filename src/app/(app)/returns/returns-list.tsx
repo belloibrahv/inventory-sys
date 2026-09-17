@@ -8,8 +8,16 @@ import { StatusBadge } from "@/components/shared"
 import { TablePager, usePagedRows } from "@/components/table-pager"
 import { WorkflowSteps } from "@/components/workflow-steps"
 import { Input } from "@/components/ui/input"
+import { Select } from "@/components/ui/select"
 import { formatShopWhen } from "@/lib/lagos-day"
 import { formatCurrency, money } from "@/lib/utils"
+
+type DeviceRef = {
+  id: string
+  imei1: string
+  serialNumber?: string | null
+  productName?: string
+}
 
 type ReturnRow = {
   id: string
@@ -18,16 +26,42 @@ type ReturnRow = {
   reason: string
   outcome: string
   faultClass: string
+  returnValue: number | null
   refundAmount: unknown
+  replacementValue: number | null
+  balanceAmount: number | null
   createdAt: Date
   approvedAt: Date | null
   completedAt: Date | null
   customer: { id: string; name: string }
-  imei: { id: string; imei1: string } | null
+  imei: DeviceRef | null
+  replacementImei: DeviceRef | null
   invoice: { id: string; invoiceNumber: string } | null
 }
 
-export function ReturnsList({ rows }: { rows: ReturnRow[] }) {
+type StockUnit = {
+  id: string
+  imei1: string
+  serialNumber: string | null
+  branchId: string
+  product: { name: string; sellingPrice: number }
+}
+
+function deviceLabel(row: { imei1: string; serialNumber?: string | null }) {
+  if (row.serialNumber && row.serialNumber !== row.imei1) return `${row.imei1} · serial ${row.serialNumber}`
+  return row.imei1
+}
+
+function outcomeLabel(outcome: string) {
+  if (outcome === "REPLACEMENT") return "Replace from our stock"
+  if (outcome === "REFUND") return "Refund"
+  if (outcome === "CREDIT_NOTE") return "Credit note"
+  if (outcome === "SEND_TO_SUPPLIER") return "Send back to the supplier"
+  if (outcome === "REPAIR") return "Repair"
+  return outcome
+}
+
+export function ReturnsList({ rows, stock }: { rows: ReturnRow[]; stock: StockUnit[] }) {
   const [status, setStatus] = useState("all")
 
   const filtered = useMemo(
@@ -61,6 +95,10 @@ export function ReturnsList({ rows }: { rows: ReturnRow[] }) {
       <div className="space-y-3">
         {pager.pageRows.map((row) => {
           const when = row.completedAt ?? row.approvedAt ?? row.createdAt
+          const returnValue = row.returnValue ?? money(row.refundAmount)
+          const balance = row.balanceAmount ?? 0
+          const receivable = Math.max(balance, 0)
+          const payable = Math.max(-balance, 0)
           return (
             <div key={row.id} className="surface-card p-5">
               <div className="flex justify-between gap-3">
@@ -73,7 +111,8 @@ export function ReturnsList({ rows }: { rows: ReturnRow[] }) {
                     {" · "}
                     {row.imei ? (
                       <Link href={`/imei/${row.imei.id}`} className="text-primary">
-                        {row.imei.imei1}
+                        {deviceLabel(row.imei)}
+                        {row.imei.productName ? ` · ${row.imei.productName}` : ""}
                       </Link>
                     ) : (
                       "No IMEI"
@@ -88,9 +127,26 @@ export function ReturnsList({ rows }: { rows: ReturnRow[] }) {
                     ) : null}
                   </p>
                   <p className="mt-1 text-sm">
-                    {row.reason} → {row.outcome}
-                    {row.refundAmount ? ` · ${formatCurrency(money(row.refundAmount))}` : ""}
+                    {outcomeLabel(row.outcome)}
+                    {returnValue ? ` · Return value ${formatCurrency(returnValue)}` : ""}
                   </p>
+                  {row.outcome === "REPLACEMENT" ? (
+                    <p className="mt-1 text-sm">
+                      {row.replacementImei
+                        ? `Replacement: ${deviceLabel(row.replacementImei)}${row.replacementImei.productName ? ` · ${row.replacementImei.productName}` : ""}`
+                        : "Replacement not locked yet"}
+                      {row.replacementValue != null ? ` · Replacement value ${formatCurrency(row.replacementValue)}` : ""}
+                    </p>
+                  ) : null}
+                  {row.outcome === "REPLACEMENT" && row.balanceAmount != null ? (
+                    <p className="mt-1 text-sm font-medium">
+                      {receivable > 0
+                        ? `Receivable (customer pays us): ${formatCurrency(receivable)}`
+                        : payable > 0
+                          ? `Payable (we pay / refund the customer): ${formatCurrency(payable)}`
+                          : "Balance: even"}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="text-right">
                   <StatusBadge value={row.status} />
@@ -99,10 +155,9 @@ export function ReturnsList({ rows }: { rows: ReturnRow[] }) {
                   </p>
                 </div>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">Fault class: {row.faultClass}</p>
               {row.status === "PENDING" ? (
-                <p className="mt-3 text-xs text-warning">
-                  Awaiting management approval. Item is locked from point of sale until resolved.
+                <p className="mt-3 text-sm text-warning">
+                  Waiting for approval. Stock and money do not move until Needs approval says yes.
                 </p>
               ) : null}
               {row.status === "APPROVED" ? (
@@ -110,9 +165,42 @@ export function ReturnsList({ rows }: { rows: ReturnRow[] }) {
                   <ActionForm action={completeReturn} submit="Apply outcome" className="space-y-2">
                     <input type="hidden" name="id" value={row.id} />
                     {row.outcome === "REPLACEMENT" ? (
-                      <Input name="replacementImei" placeholder="In-stock replacement IMEI" />
+                      <>
+                        {!row.replacementImei ? (
+                          <Select name="replacementImeiId" required emptyLabel="No In shop unit is ready.">
+                            <option value="">Pick the shop item to give out</option>
+                            {stock.map((unit) => (
+                              <option key={unit.id} value={unit.id}>
+                                {deviceLabel(unit)} · {unit.product.name} · {formatCurrency(unit.product.sellingPrice)}
+                              </option>
+                            ))}
+                          </Select>
+                        ) : (
+                          <input type="hidden" name="replacementImeiId" value={row.replacementImei.id} />
+                        )}
+                        <Input
+                          name="paidAmount"
+                          type="number"
+                          defaultValue={receivable > 0 ? receivable : payable}
+                          placeholder={
+                            receivable > 0
+                              ? "Amount received from customer"
+                              : payable > 0
+                                ? "Amount paid to customer"
+                                : "0"
+                          }
+                        />
+                        <Select name="method" defaultValue="CASH">
+                          <option value="CASH">Cash</option>
+                          <option value="TRANSFER">Transfer</option>
+                          <option value="POS">POS</option>
+                        </Select>
+                        <p className="text-sm text-muted-foreground">
+                          Stock moves on Apply. Collect Receivable or pay Payable so the books match the event.
+                        </p>
+                      </>
                     ) : (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-sm text-muted-foreground">
                         This will{" "}
                         {row.outcome === "REFUND"
                           ? "give back cash from what they already paid"

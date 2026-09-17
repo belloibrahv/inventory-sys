@@ -212,8 +212,8 @@ const children = [
       ["Prepared by", "Product Team, Techvaults Limited"],
       ["Document type", "User guide and test plan"],
       ["Date", "17 September 2026"],
-      ["Version", "1.46"],
-      ["Status", "Updated: Swap Deal values, approval before stock, IMEI or serial"],
+      ["Version", "1.47"],
+      ["Status", "Updated: Returns show return value, replacement value, Receivable or Payable"],
     ].map(([k, v]) =>
       new TableRow({
         children: [
@@ -267,6 +267,7 @@ const children = [
   body("Shop to shop is now Shop to shop (Stock Transfer). Staff pick From (Branch), To (Pick the branch), select the items, and Submit the transfer. Stock stays In shop at the sending branch until the receiving branch Accepts or Rejects. Sell now refuses phones on a waiting transfer."),
   body("Neighbor shop fill is now Stock Outsourcing (Neighbour shop fill). Staff can type a new customer name and phone on that page when the buyer is not on the list yet, the same way they type a new neighboring shop."),
   body("Swap Deal now takes a typed customer if they are new, accepts IMEI or serial for phones and laptops, records swap-in value and shop-item value with Receivable or Payable, and only moves stock after Needs approval says yes."),
+  body("Returns now show the return item value, and on Replace from our stock staff pick the In shop unit and its value. Receivable or Payable appears so money matches the event, not quantity alone. Stock and money still wait for Needs approval."),
   body("The system has grown steadily since we began. Section 16 lists what each release added, in order, if you want that history. You do not need to read it to use the system."),
   para("", { after: 160 }),
   para("Product Team", { bold: true, after: 40 }),
@@ -826,21 +827,21 @@ h1("5. Words we use"),
 
   ...feature({
     title: "10.14 Returns",
-    what: "A return starts from a sold IMEI. You say why it came back. A manager approves. Then you refund, give credit, send to repair, replace, or send the unit back to the supplier. The old invoice is not rewritten. Tap Waiting, Approved, or Done to cut the list. Each card shows when it was asked, approved, or finished in Lagos time.",
-    why: "If staff edit the old sale, the day’s cash lies. A return is a new story that points at the old invoice.",
-    story: "A buyer returns a faulty Camon 30. The cashier enters the IMEI and the reason. The shop manager approves. The phone comes back to the shop or goes to repair. The original invoice still shows the sale.",
+    what: "A return starts from a sold IMEI or serial. You record the return item value from the original sale. If the outcome is Replace from our stock, you pick the In shop unit and its value. The balance is Receivable if the replacement is worth more, or Payable if the returned item is worth more. Save sends Needs approval. After yes, Apply moves stock and settles the money. The old invoice is not rewritten. Tap Waiting, Approved, or Done to cut the list.",
+    why: "If staff only write a quantity, the true money of the return is hidden. A clearer return shows stock and value together.",
+    story: "A buyer returns a phone bought for 450,000 and takes a higher phone as replacement. The cashier logs return value 450,000, picks the In shop phone at 520,000, and sees Receivable 70,000. The manager says yes. Apply moves stock and collects the difference. The original invoice still shows the first sale.",
     steps: [
-      "Open a sold invoice that has a named buyer.",
       "Click Returns.",
-      "Enter the sold IMEI and the reason.",
-      "Ask a manager to open Needs approval and say yes.",
-      "Complete the return outcome.",
+      "Pick the sold device. Confirm return item value.",
+      "Pick Replace from our stock when giving another unit. Pick the In shop unit and its value. Confirm Receivable or Payable.",
+      "Save for approval. A manager says yes on Needs approval.",
+      "Apply outcome. Collect or pay the balance on a Replace.",
     ],
     expect: [
-      "Walk-in sales block the return until a buyer name is attached.",
+      "Log a return shows the goods and the money, not quantity alone.",
+      "Replace uses a dropdown of In shop units with values.",
+      "Stock and money wait until Needs approval says yes.",
       "The old invoice does not change.",
-      "The IMEI status can become Returned, move to repair, or become Sent back to supplier.",
-      "A refund is a new money record, not an erase.",
     ],
   }),
 
@@ -1751,6 +1752,7 @@ h1("5. Words we use"),
   body("Version 1.44 reshapes Shop to shop (Stock Transfer). From branch, To branch, select items, Submit. Stock stays In shop at the sending shop until Accept or Reject. Waiting transfers cannot be sold."),
   body("Version 1.45 renames Neighbor shop fill to Stock Outsourcing (Neighbour shop fill). Staff can type a new customer name and phone on that page when the buyer is not on the list yet, the same way they type a new neighboring shop."),
   body("Version 1.46 reshapes Swap Deal. Staff can type a new customer, enter IMEI or serial for phones and laptops, record swap-in value and shop-item value with Receivable or Payable, and save for approval. Stock hits and leaves only after Needs approval says yes. Then settle the money and print."),
+  body("Version 1.47 makes Returns show true value. Log a return records return item value. Replace from our stock picks an In shop unit and its value, with Receivable or Payable. After approval, Apply moves stock and settles the money. Correct and close opening stock remains the place to fill zero prices and missing piece counts before Close."),
 
   h1("17. Short close"),
   body("You now have one system for two Ibadan shops, ready for more shops in Nigeria. Goods can be booked before they arrive. Shelf stock and coming stock stay apart. Every sale prints an invoice. Each job sees only what the main admin or the CEO allows."),
