@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { PlusCircle, Trash2, CheckCircle2, Loader2, PackagePlus } from "lucide-react"
+import { PlusCircle, Trash2, CheckCircle2, PackagePlus } from "lucide-react"
 import { toast } from "sonner"
 import { batchUploadStock, type BatchUploadItem, type BatchUploadPayload, type UploadResult } from "@/app/actions/uploads"
+import { BrandBusyOverlay } from "@/components/brand-busy-overlay"
 import { ItemNameSearch } from "@/components/item-name-search"
 import { preventEnterFromSubmitting } from "@/components/scan-field"
 import { Button } from "@/components/ui/button"
@@ -51,6 +52,14 @@ function blankLine(defaults?: { brandId?: string; categoryId?: string }): BatchU
   }
 }
 
+const SUPPLIER_BILL_PHASES = [
+  "Checking each IMEI and serial on this bill",
+  "Folding any duplicate numbers into one entry",
+  "Booking phones onto the shelf",
+  "Adding piece counts where there is no IMEI",
+  "Saving the supplier bill and what is still owed",
+]
+
 export function UploadStockWizard({
   shops,
   suppliers,
@@ -79,6 +88,7 @@ export function UploadStockWizard({
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
+  const [softNotes, setSoftNotes] = useState<string[]>([])
   const defaultBrandId = brands[0]?.id || ""
   const defaultCategoryId =
     categories.find((row) => /phone/i.test(row.name))?.id || categories[0]?.id || ""
@@ -300,6 +310,7 @@ export function UploadStockWizard({
     }
 
     setBusy(true)
+    setSoftNotes([])
     const payload: BatchUploadPayload = {
       branchId,
       supplierId: supplierMode === "existing" ? supplierId : undefined,
@@ -329,9 +340,22 @@ export function UploadStockWizard({
       return
     }
 
+    const soft = [
+      result.duplicates ? `${result.duplicates} duplicate number(s) counted once` : null,
+      result.skipped ? `${result.skipped} already on the system left as they are` : null,
+    ].filter(Boolean)
     toast.success(
-      `Stock uploaded successfully on ${result.invoiceNumber}! ${result.phones ? `${result.phones} phones booked` : ""} ${result.pieces ? `${result.pieces} pieces added` : ""}. ${result.paid ? "Fully settled." : `Owed: ${formatCurrency(result.balanceOwed ?? 0)}`}`
+      [
+        `Stock uploaded on ${result.invoiceNumber}`,
+        result.phones ? `${result.phones} phones booked` : null,
+        result.pieces ? `${result.pieces} pieces added` : null,
+        result.paid ? "Fully settled" : `Owed ${formatCurrency(result.balanceOwed ?? 0)}`,
+        ...soft,
+      ]
+        .filter(Boolean)
+        .join(". ") + "."
     )
+    setSoftNotes(result.problems ?? [])
 
     // Reset form with new PO
     setInvoiceNumber(generateDocNumber("PO"))
@@ -342,6 +366,8 @@ export function UploadStockWizard({
   }
 
   const unitCount = items.reduce((sum, item) => sum + (item.quantity || 0), 0)
+  const shop = shops.find((row) => row.id === branchId)
+  const shopLabel = shop ? `${shop.name} (${shop.code})` : "this shop"
 
   return (
     <form
@@ -349,6 +375,12 @@ export function UploadStockWizard({
       onKeyDown={preventEnterFromSubmitting}
       className="surface-card overflow-visible"
     >
+      <BrandBusyOverlay
+        open={busy}
+        title={`Uploading new stock to ${shopLabel}`}
+        detail={`Booking ${unitCount} unit${unitCount === 1 ? "" : "s"} on supplier bill ${invoiceNumber}.`}
+        phases={SUPPLIER_BILL_PHASES}
+      />
       {/*
         The bill the client described: supplier at the top, the generated bill
         number and the date beside it, the item lines with cost, quantity and an
@@ -765,6 +797,23 @@ export function UploadStockWizard({
         </section>
       </div>
 
+      {softNotes.length ? (
+        <div className="border-t border-border px-5 py-3">
+          <div className="rounded-lg border border-border bg-muted/40 p-3">
+            <p className="text-sm font-semibold text-foreground">
+              Upload completed. Duplicates were folded into one entry, or numbers already on the system were left as they are. You can edit stock later on Phones and items or Correct and close opening stock.
+            </p>
+            <ul className="mt-2 space-y-1">
+              {softNotes.map((note) => (
+                <li key={note} className="text-sm text-muted-foreground">
+                  {note}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      ) : null}
+
       <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-muted/40 px-5 py-3.5">
         <p className="text-sm text-muted-foreground">
           Ready to book <strong className="text-foreground">{unitCount}</strong> unit{unitCount === 1 ? "" : "s"} worth{" "}
@@ -772,9 +821,7 @@ export function UploadStockWizard({
         </p>
         <Button type="submit" size="lg" disabled={busy || totalInvoiceValue <= 0}>
           {busy ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Uploading this stock
-            </>
+            "Uploading this stock"
           ) : (
             <>
               <PackagePlus className="mr-2 h-4 w-4" /> Upload this stock

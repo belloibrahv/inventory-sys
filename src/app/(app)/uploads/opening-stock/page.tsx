@@ -44,7 +44,7 @@ export default async function OpeningStockPage() {
             There is no paid or unpaid on this sheet. The value is what the shop started with. New cartons with a bill
             go on Supplier bill, where payment belongs.
           </li>
-          <li>Phones that are already on the system are left exactly as they are. Nothing is doubled.</li>
+          <li>Phones that are already on the system stay as one entry. Repeats in the file are counted once. Nothing is doubled. Staff can edit later on Correct and close opening stock or Phones and items.</li>
           <li>
             After this first load, new cartons go on{" "}
             <Link href="/uploads" className="font-medium text-primary hover:underline">

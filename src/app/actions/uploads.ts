@@ -41,9 +41,12 @@ export type UploadResult = {
   success?: boolean
   added?: number
   skipped?: number
+  /** How many IMEI/serial repeats were folded into one entry. */
+  duplicates?: number
   products?: number
   phones?: number
   pieces?: number
+  /** Hard blockers when error is set; soft notices when success is set. */
   problems?: string[]
   invoiceNumber?: string
   purchaseId?: string
@@ -436,6 +439,12 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
       shop.id
     )
     revalidateStockViews()
+    const softNotes = [...plan.skipped]
+    if (unitPayload.length > 0) {
+      softNotes.push(
+        `${unitPayload.length} IMEI or serial number(s) were already on the system. Each stays as one entry and was not doubled. Staff can edit later on Correct and close opening stock or Phones and items.`
+      )
+    }
     return {
       success: true,
       added: productsAdded,
@@ -443,6 +452,8 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
       phones: 0,
       pieces: 0,
       skipped: unitPayload.length,
+      duplicates: plan.skipped.filter((row) => row.includes("twice") || row.includes("counted once")).length,
+      problems: softNotes.length ? softNotes.slice(0, 40) : undefined,
     }
   }
 
@@ -494,13 +505,23 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
   revalidatePath("/finance")
   revalidatePath("/suppliers")
 
+  const alreadyCount = unitPayload.length - phonesAdded
+  const softNotes = [...plan.skipped]
+  if (alreadyCount > 0) {
+    softNotes.push(
+      `${alreadyCount} IMEI or serial number(s) were already on the system. Each stays as one entry and was not doubled. Staff can edit later on Correct and close opening stock or Phones and items.`
+    )
+  }
+
   return {
     success: true,
     added: productsAdded + phonesAdded + pieceLines,
     products: productsAdded,
     phones: phonesAdded,
     pieces: pieceLines,
-    skipped: unitPayload.length - phonesAdded,
+    skipped: alreadyCount,
+    duplicates: plan.skipped.filter((row) => row.includes("twice") || row.includes("counted once")).length,
+    problems: softNotes.length ? softNotes.slice(0, 40) : undefined,
     invoiceNumber,
     purchaseId: purchase.id,
     submissionValue: billTotal,
@@ -582,12 +603,30 @@ export async function importImeis(formData: FormData): Promise<UploadResult> {
     added += batch.length
   }
 
-  await trail(user.id, "IMEIRecord", { added, alreadyOnSystem: already.size, file: name }, user.branchId)
+  const softNotes = [...(plan.notices ?? [])]
+  if (already.size > 0) {
+    softNotes.push(
+      `${already.size} IMEI(s) were already on the system and were left as one entry each (not doubled). Staff can edit later on Phones and items.`
+    )
+  }
+
+  await trail(
+    user.id,
+    "IMEIRecord",
+    { added, alreadyOnSystem: already.size, duplicatesInSheet: plan.notices?.length ?? 0, file: name },
+    user.branchId
+  )
   revalidatePath("/imei")
   revalidatePath("/inventory")
   revalidatePath("/uploads")
   revalidatePath("/dashboard")
-  return { success: true, added, skipped: already.size }
+  return {
+    success: true,
+    added,
+    skipped: already.size,
+    duplicates: plan.notices?.length ?? 0,
+    problems: softNotes.length ? softNotes.slice(0, 40) : undefined,
+  }
 }
 
 /**
@@ -945,8 +984,12 @@ export async function batchUploadStock(payload: BatchUploadPayload): Promise<Upl
     return { error: "Pick a supplier, or type the name of a new one." }
   }
 
-  // 2. Validate all items and identities (IMEIs)
-  const allIdentities: string[] = []
+  // 2. Validate items. Duplicate IMEI/serial in this upload or already on the
+  // system is kept as one entry — the upload continues; staff can edit later.
+  const softNotes: string[] = []
+  const seenInUpload = new Set<string>()
+  const normalizedItems: typeof payload.items = []
+
   for (let i = 0; i < payload.items.length; i++) {
     const item = payload.items[i]
     if (item.quantity <= 0) {
@@ -955,54 +998,115 @@ export async function batchUploadStock(payload: BatchUploadPayload): Promise<Upl
     if (item.costPrice < 0) {
       return { error: `Item #${i + 1} cost price cannot be negative.` }
     }
-    if (item.tracking === "IMEI" || item.tracking === "SERIAL") {
-      const ids = (item.identities || []).map((id) => cleanIdentity(id)).filter(Boolean)
-      if (ids.length !== item.quantity) {
-        return {
-          error: `Item #${i + 1} requires ${item.quantity} ${item.tracking === "IMEI" ? "IMEI(s)" : "serial number(s)"}, but received ${ids.length}.`,
-        }
+
+    if (item.tracking !== "IMEI" && item.tracking !== "SERIAL") {
+      normalizedItems.push({ ...item })
+      continue
+    }
+
+    const rawIds = (item.identities || []).map((id) => cleanIdentity(id)).filter(Boolean)
+    if (rawIds.length === 0) {
+      return {
+        error: `Item #${i + 1} needs ${item.tracking === "IMEI" ? "IMEI" : "serial"} numbers for the units you are loading.`,
       }
-      for (const id of ids) {
-        if (item.tracking === "IMEI") {
-          const digits = id.replace(/\D/g, "")
-          if (digits.length < 14) {
-            return { error: `IMEI '${id}' is too short (must be at least 14 digits).` }
-          }
-          allIdentities.push(digits)
-        } else {
-          if (id.length < 3) {
-            return { error: `Serial '${id}' is too short.` }
-          }
-          allIdentities.push(id)
+    }
+
+    const uniqueIds: string[] = []
+    for (const id of rawIds) {
+      let value = id
+      if (item.tracking === "IMEI") {
+        const digits = id.replace(/\D/g, "")
+        if (digits.length < 14) {
+          return { error: `IMEI '${id}' is too short (must be at least 14 digits).` }
         }
+        value = digits
+      } else if (id.length < 3) {
+        return { error: `Serial '${id}' is too short.` }
       }
+
+      if (seenInUpload.has(value)) {
+        softNotes.push(
+          `Item #${i + 1}: ${value} appears more than once in this upload, so it is counted once.`
+        )
+        continue
+      }
+      seenInUpload.add(value)
+      uniqueIds.push(value)
+    }
+
+    if (!uniqueIds.length) {
+      softNotes.push(`Item #${i + 1}: every number was a duplicate of another line, so this line was skipped.`)
+      continue
+    }
+
+    normalizedItems.push({
+      ...item,
+      identities: uniqueIds,
+      quantity: uniqueIds.length,
+    })
+  }
+
+  if (!normalizedItems.length) {
+    return {
+      error: "After removing duplicate numbers, there was nothing new to load. Check the IMEIs or serials.",
+      problems: softNotes.slice(0, 40),
     }
   }
 
-  // Check for duplicate IMEIs in input batch
-  const uniqueSet = new Set(allIdentities)
-  if (uniqueSet.size < allIdentities.length) {
-    return { error: "The same IMEI or serial number appears more than once in what you are uploading. Remove the repeat and try again." }
-  }
+  const allIdentities = normalizedItems.flatMap((item) =>
+    item.tracking === "IMEI" || item.tracking === "SERIAL" ? item.identities || [] : []
+  )
 
-  // Check for existing IMEIs in database
+  const alreadyOnSystem = new Set<string>()
   if (allIdentities.length > 0) {
     for (const batch of chunks(allIdentities, WRITE_CHUNK)) {
-      const existingInDb = await prisma.imeiRecord.findFirst({
+      const existingInDb = await prisma.imeiRecord.findMany({
         where: {
-          OR: [
-            { imei1: { in: batch } },
-            { serialNumber: { in: batch } },
-          ],
+          OR: [{ imei1: { in: batch } }, { serialNumber: { in: batch } }],
         },
         select: { imei1: true, serialNumber: true },
       })
-      if (existingInDb) {
-        const conflict = existingInDb.imei1 || existingInDb.serialNumber
-        return { error: `IMEI/Serial '${conflict}' is already registered in the system.` }
+      for (const row of existingInDb) {
+        if (row.imei1) alreadyOnSystem.add(row.imei1)
+        if (row.serialNumber) alreadyOnSystem.add(row.serialNumber)
       }
     }
   }
+
+  const itemsToLoad: typeof normalizedItems = []
+  let skippedExisting = 0
+  for (let i = 0; i < normalizedItems.length; i++) {
+    const item = normalizedItems[i]
+    if (item.tracking !== "IMEI" && item.tracking !== "SERIAL") {
+      itemsToLoad.push(item)
+      continue
+    }
+    const fresh = (item.identities || []).filter((id) => !alreadyOnSystem.has(id))
+    const dropped = (item.identities || []).length - fresh.length
+    if (dropped > 0) skippedExisting += dropped
+    if (!fresh.length) continue
+    itemsToLoad.push({ ...item, identities: fresh, quantity: fresh.length })
+  }
+  if (skippedExisting > 0) {
+    softNotes.push(
+      `${skippedExisting} IMEI or serial number(s) were already on the system. Each stays as one entry and was not doubled. Staff can edit stock later on Phones and items or Correct and close opening stock.`
+    )
+  }
+
+  if (!itemsToLoad.length) {
+    return {
+      success: true,
+      added: 0,
+      phones: 0,
+      pieces: 0,
+      skipped: skippedExisting || allIdentities.length,
+      duplicates: softNotes.filter((n) => n.includes("more than once") || n.includes("duplicate")).length,
+      problems: softNotes.slice(0, 40),
+    }
+  }
+
+  // Replace payload items with the deduped list for the rest of the upload.
+  payload = { ...payload, items: itemsToLoad }
 
   // 3. Process products (create new products if needed)
   const resolvedItems: Array<{
@@ -1172,6 +1276,9 @@ export async function batchUploadStock(payload: BatchUploadPayload): Promise<Upl
     pieces: totalPieces,
     products: totalProductsAdded,
     added: totalPhones + totalPieces,
+    skipped: skippedExisting,
+    duplicates: softNotes.filter((n) => n.includes("more than once") || n.includes("duplicate")).length,
+    problems: softNotes.length ? softNotes.slice(0, 40) : undefined,
   }
 }
 

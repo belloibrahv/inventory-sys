@@ -3,9 +3,17 @@
 import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Loader2, Upload } from "lucide-react"
+import { Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { BrandBusyOverlay } from "@/components/brand-busy-overlay"
 import type { UploadResult } from "@/app/actions/uploads"
+
+const SHEET_PHASES = [
+  "Opening your sheet",
+  "Checking every line from top to bottom",
+  "Folding any duplicate numbers into one entry",
+  "Saving the good lines onto the shop system",
+]
 
 /**
  * One step of the loading job.
@@ -39,9 +47,17 @@ export function UploadCard({
   const formRef = useRef<HTMLFormElement>(null)
   const [busy, setBusy] = useState(false)
   const [problems, setProblems] = useState<string[]>([])
+  const [softNotes, setSoftNotes] = useState<string[]>([])
 
   return (
     <div className="surface-card p-5">
+      <BrandBusyOverlay
+        open={busy}
+        title={`Loading ${title.toLowerCase()}`}
+        detail="Reading the sheet and writing only clean lines. Please keep this page open."
+        phases={SHEET_PHASES}
+      />
+
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
           <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
@@ -72,6 +88,7 @@ export function UploadCard({
           action={async (formData) => {
             setBusy(true)
             setProblems([])
+            setSoftNotes([])
             let result: UploadResult
             try {
               result = await action(formData)
@@ -86,8 +103,14 @@ export function UploadCard({
               setProblems(result.problems ?? [])
               return
             }
-            const skipped = result.skipped ? `, ${result.skipped} already on the system` : ""
-            toast.success(`${result.added?.toLocaleString("en-NG") ?? 0} row(s) loaded${skipped}.`)
+            const soft = [
+              result.duplicates ? `${result.duplicates} duplicate number(s) counted once` : null,
+              result.skipped ? `${result.skipped} already on the system left as they are` : null,
+            ].filter(Boolean)
+            toast.success(
+              `${result.added?.toLocaleString("en-NG") ?? 0} row(s) loaded${soft.length ? `. ${soft.join(" · ")}` : ""}.`
+            )
+            setSoftNotes(result.problems ?? [])
             formRef.current?.reset()
             router.refresh()
           }}
@@ -102,10 +125,7 @@ export function UploadCard({
           />
           <Button type="submit" disabled={busy} aria-busy={busy}>
             {busy ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                Loading the sheet
-              </>
+              "Loading the sheet"
             ) : (
               <>
                 <Upload className="h-4 w-4" aria-hidden />
@@ -125,6 +145,21 @@ export function UploadCard({
             {problems.map((problem) => (
               <li key={problem} className="text-xs text-danger">
                 {problem}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {softNotes.length ? (
+        <div className="mt-4 rounded-xl border border-border bg-muted/40 p-3">
+          <p className="text-sm font-semibold text-foreground">
+            Upload completed. Duplicates were folded into one entry, or numbers already on the system were left as they are. You can edit stock later on Phones and items.
+          </p>
+          <ul className="mt-2 space-y-1">
+            {softNotes.map((note) => (
+              <li key={note} className="text-xs text-muted-foreground">
+                {note}
               </li>
             ))}
           </ul>

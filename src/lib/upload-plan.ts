@@ -11,7 +11,7 @@ import { cell } from "@/lib/table-file"
 export type CatalogItem = { id: string; sku: string; name: string; tracking: "IMEI" | "SERIAL" | "NONE" }
 export type ShopRef = { id: string; name: string; code: string }
 
-export type Plan<T> = { rows: T[]; problems: string[] }
+export type Plan<T> = { rows: T[]; problems: string[]; /** Soft notes: upload still proceeds. */ notices?: string[] }
 
 export type ImeiLine = {
   imei1: string
@@ -85,6 +85,7 @@ export function planImeis(rows: Record<string, string>[], items: CatalogItem[], 
   const codes = shops.map((s) => s.code).join(", ")
   const out: ImeiLine[] = []
   const problems: string[] = []
+  const notices: string[] = []
   const seen = new Set<string>()
 
   rows.forEach((row, index) => {
@@ -102,7 +103,12 @@ export function planImeis(rows: Record<string, string>[], items: CatalogItem[], 
     if (imei1 && imei1.length < 14) {
       return void problems.push(`Line ${line}: ${imei1} is too short for an IMEI. Copy all the digits from the box.`)
     }
-    if (seen.has(code)) return void problems.push(`Line ${line}: ${code} is on this sheet twice.`)
+    if (seen.has(code)) {
+      notices.push(
+        `Line ${line}: ${code} is on this sheet twice, so it is counted once. Staff can edit later on Phones and items.`
+      )
+      return
+    }
     seen.add(code)
 
     const found = findItem(lookup, sku, name)
@@ -132,7 +138,7 @@ export function planImeis(rows: Record<string, string>[], items: CatalogItem[], 
     })
   })
 
-  return { rows: out, problems }
+  return { rows: out, problems, notices: notices.length ? notices : undefined }
 }
 
 export function planStock(rows: Record<string, string>[], items: CatalogItem[], shops: ShopRef[]): Plan<StockLine> {

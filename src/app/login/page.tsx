@@ -4,6 +4,7 @@ import { useState } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { BrandLockup, BrandMark } from "@/components/brand-mark"
+import { BrandBusyOverlay } from "@/components/brand-busy-overlay"
 import { LoginHero } from "@/components/login-hero"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,23 +17,39 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+  const [entering, setEntering] = useState(false)
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault()
     setLoading(true)
     setError("")
     const result = await signIn("credentials", { email, password, redirect: false })
-    setLoading(false)
     if (result?.error) {
+      setLoading(false)
       setError("That email or password is not correct, or this login is locked.")
       return
     }
+    setEntering(true)
     router.push("/dashboard")
     router.refresh()
   }
 
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.1fr_0.9fr]">
+      <BrandBusyOverlay
+        open={loading || entering}
+        title={entering ? "Opening your shop Home" : "Checking your details"}
+        detail={
+          entering
+            ? "Sign in worked. Loading the pages for your job."
+            : "Matching this email and password with the staff list."
+        }
+        phases={
+          entering
+            ? ["Opening Home", "Loading the pages for your job", "Almost ready"]
+            : ["Reading your email", "Checking this login is open", "Preparing the shop system"]
+        }
+      />
       <LoginHero />
       <div className="flex items-center justify-center bg-background px-6 py-12">
         <form onSubmit={onSubmit} className="w-full max-w-md space-y-6">
@@ -79,12 +96,16 @@ export default function LoginPage() {
             First time here? You will be asked to change your password after you sign in.
           </p>
           {error ? (
-            <p role="alert" aria-live="assertive" className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">
+            <p
+              role="alert"
+              aria-live="assertive"
+              className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-500/15 dark:text-rose-300"
+            >
               {error}
             </p>
           ) : null}
-          <Button className="w-full" disabled={loading} aria-busy={loading}>
-            {loading ? "Checking your details" : "Sign in"}
+          <Button className="w-full" disabled={loading || entering} aria-busy={loading || entering}>
+            {loading || entering ? "Checking your details" : "Sign in"}
           </Button>
           <p className="pt-2 text-center text-xs text-muted-foreground">
             Software by{" "}

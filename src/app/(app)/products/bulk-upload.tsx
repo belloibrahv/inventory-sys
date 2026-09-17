@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { importProducts } from "@/app/actions/catalog"
+import { BrandBusyOverlay } from "@/components/brand-busy-overlay"
 import { Button } from "@/components/ui/button"
 import { ExportCsv } from "@/components/export-csv"
 
@@ -40,6 +41,17 @@ export function BulkProductUpload() {
 
   return (
     <div className="surface-card p-5">
+      <BrandBusyOverlay
+        open={busy}
+        title="Uploading the item list"
+        detail="Adding product names only. Shelf stock comes later on Goods on the way."
+        phases={[
+          "Opening your sheet",
+          "Checking item codes and names",
+          "Adding new products to the price list",
+          "Leaving names that are already on the system",
+        ]}
+      />
       <h3 className="mb-2 font-semibold">Upload many items at once</h3>
       <p className="mb-4 text-sm text-muted-foreground">
         Sample, fill, upload. Names only. Stock comes later on Goods on the way.
@@ -53,12 +65,15 @@ export function BulkProductUpload() {
           type="file"
           accept=".csv,.xlsx,.xls"
           required
+          disabled={busy}
           className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-foreground"
         />
         <p className="text-xs text-muted-foreground">
           Columns: item code, name, brand, category, how we count it (IMEI, SERIAL, or NONE), condition, color, storage size, memory (RAM), cost, lowest price, sell price, warranty days, short note.
         </p>
-        <Button type="submit" disabled={busy}>{busy ? "Uploading the list" : "Upload the list"}</Button>
+        <Button type="submit" disabled={busy} aria-busy={busy}>
+          {busy ? "Uploading the list" : "Upload the list"}
+        </Button>
       </form>
       {result ? (
         <div className="mt-4 space-y-1 text-sm">

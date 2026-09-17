@@ -3,17 +3,27 @@
 import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Loader2, Upload } from "lucide-react"
+import { Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { SectionCard } from "@/components/shared"
+import { BrandBusyOverlay } from "@/components/brand-busy-overlay"
 import { importOpeningStock, type UploadResult } from "@/app/actions/uploads"
 import { listedSupplierClash } from "@/lib/party-key"
 import { formatCurrency } from "@/lib/utils"
 
 type Shop = { id: string; name: string; code: string }
 type Supplier = { id: string; name: string; phone?: string | null; city: string | null; country: string | null }
+
+const OPENING_PHASES = [
+  "Opening your Excel file",
+  "Checking every IMEI and serial",
+  "Folding any duplicate numbers into one entry",
+  "Booking phones and laptops In shop",
+  "Setting piece counts on the shelf",
+  "Saving the opening stock value",
+]
 
 /**
  * One Excel file per shop. Books what is already on the shelf as opening stock
@@ -23,15 +33,30 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
   const router = useRouter()
   const formRef = useRef<HTMLFormElement>(null)
   const [busy, setBusy] = useState(false)
+  const [busyShop, setBusyShop] = useState("")
   const [problems, setProblems] = useState<string[]>([])
+  const [softNotes, setSoftNotes] = useState<string[]>([])
   const [supplierChoice, setSupplierChoice] = useState(suppliers[0]?.id || "__new__")
+  const [branchId, setBranchId] = useState(shops[0]?.id || "")
   const addingNewSupplier = supplierChoice === "__new__"
+
+  const shopLabel =
+    shops.find((shop) => shop.id === branchId)?.name ||
+    shops.find((shop) => shop.id === branchId)?.code ||
+    "this shop"
 
   return (
     <SectionCard
       title="Load a whole shop from the opening stock Excel sheet"
       description="Once per shop for stock already on the shelf. Later cartons use Supplier bill."
     >
+      <BrandBusyOverlay
+        open={busy}
+        title={`Uploading opening stock to ${busyShop || shopLabel}`}
+        detail="Reading the Excel and booking what is on the shelf. This can take a minute for a full shop."
+        phases={OPENING_PHASES}
+      />
+
       <p className="text-sm leading-relaxed text-muted-foreground">
         One file for one shop, with tabs for PHONES, ACCESSORIES, SCREEN and LAPTOPS. Pick the shop and the supplier
         (or add a new one). The file books phones and laptops In shop, sets the piece counts, and stores the opening
@@ -60,8 +85,12 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
               return
             }
           }
+          const selectedId = String(formData.get("branchId") || branchId)
+          const selectedShop = shops.find((shop) => shop.id === selectedId)
+          setBusyShop(selectedShop ? `${selectedShop.name} (${selectedShop.code})` : shopLabel)
           setBusy(true)
           setProblems([])
+          setSoftNotes([])
           let result: UploadResult
           try {
             result = await importOpeningStock(formData)
@@ -83,17 +112,30 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
             result.pieces ? `${result.pieces} piece line${result.pieces === 1 ? "" : "s"}` : null,
             result.submissionValue != null ? `opening value ${formatCurrency(result.submissionValue)}` : null,
           ].filter(Boolean)
-          const skipped = result.skipped ? ` ${result.skipped} already on the system.` : ""
-          toast.success(`${parts.join(" · ") || "Nothing new to add"}.${skipped}`)
+          const skippedBits = [
+            result.duplicates ? `${result.duplicates} duplicate number(s) counted once` : null,
+            result.skipped ? `${result.skipped} already on the system left as they are` : null,
+          ].filter(Boolean)
+          toast.success(
+            `${parts.join(" · ") || "Nothing new to add"}${skippedBits.length ? `. ${skippedBits.join(" · ")}` : "."}`
+          )
+          setSoftNotes(result.problems ?? [])
           formRef.current?.reset()
           setSupplierChoice(suppliers[0]?.id || "__new__")
+          setBranchId(shops[0]?.id || "")
           router.refresh()
         }}
       >
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block text-sm">
             <span className="eyebrow mb-1 block">Which shop</span>
-            <Select name="branchId" required defaultValue={shops[0]?.id || ""} disabled={busy}>
+            <Select
+              name="branchId"
+              required
+              value={branchId}
+              onChange={(event) => setBranchId(event.target.value)}
+              disabled={busy}
+            >
               {shops.map((shop) => (
                 <option key={shop.id} value={shop.id}>
                   {shop.name} ({shop.code})
@@ -152,9 +194,7 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
           />
           <Button type="submit" disabled={busy || shops.length === 0} aria-busy={busy}>
             {busy ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading this shop from Excel
-              </>
+              "Uploading opening stock"
             ) : (
               <>
                 <Upload className="h-4 w-4" aria-hidden /> Upload opening stock
@@ -171,8 +211,23 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
           </p>
           <ul className="mt-2 space-y-1">
             {problems.map((problem) => (
-              <li key={problem} className="text-xs text-danger">
+              <li key={problem} className="text-sm text-danger">
                 {problem}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {softNotes.length ? (
+        <div className="mt-4 rounded-lg border border-border bg-muted/40 p-3">
+          <p className="text-sm font-semibold text-foreground">
+            Upload completed. Duplicates were folded into one entry, or numbers already on the system were left as they are. You can edit stock later on Correct and close opening stock or Phones and items.
+          </p>
+          <ul className="mt-2 space-y-1">
+            {softNotes.map((note) => (
+              <li key={note} className="text-sm text-muted-foreground">
+                {note}
               </li>
             ))}
           </ul>

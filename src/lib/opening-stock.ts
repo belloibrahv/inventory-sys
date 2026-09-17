@@ -371,7 +371,9 @@ export function planOpeningStock(
       }
 
       if (seenCodes.has(identity.value)) {
-        setAside.push(`${label}: ${identity.value} is on this workbook twice, so it is counted once.`)
+        setAside.push(
+          `${label}: ${identity.value} is on this workbook twice, so it is counted once. Staff can correct the shelf later on Correct and close opening stock or Phones and items.`
+        )
         continue
       }
       seenCodes.add(identity.value)

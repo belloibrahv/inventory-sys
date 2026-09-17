@@ -18,6 +18,7 @@ import {
 import { useUI } from "@/store/ui"
 import { ROLE_LABELS } from "@/lib/roles"
 import { ShopSwitch } from "@/components/shop-switch"
+import { BrandBusyOverlay } from "@/components/brand-busy-overlay"
 
 /**
  * The top bar carries the page name on the left and the few controls that are
@@ -172,9 +173,16 @@ export function Header({
         </DropdownMenu>
       </div>
       {leaving ? (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#001BCE] text-white" role="status" aria-busy>
-          <p className="text-lg font-semibold">Signing you out</p>
-        </div>
+        <BrandBusyOverlay
+          open
+          title="Signing you out"
+          detail="Closing this shop session and taking you to Sign in."
+          phases={[
+            "Saving nothing more on this screen",
+            "Closing your shop session",
+            "Opening Sign in",
+          ]}
+        />
       ) : null}
     </header>
   )

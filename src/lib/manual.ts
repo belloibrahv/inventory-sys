@@ -106,7 +106,8 @@ const PAGES: Array<
     ],
     watch: [
       "Nothing from Excel is saved until the whole file has been read. One bad line means nothing is loaded.",
-      "Sending the same phone twice is safe. A phone already on the system is left alone.",
+      "Sending the same phone twice is safe. A repeated IMEI or serial is counted once. A phone already on the system is left alone and is not doubled. Staff can edit later on Correct and close opening stock or Phones and items.",
+      "While a sheet or bill is uploading, a full-screen Abu Twins wait names the shop and shows a percent bar. Keep the page open until it finishes.",
       "Unpaid supplier bills appear on Finance as still owed. Opening stock never appears as money owed.",
       "Booking phones in also raises the shelf count, so Shop stock and Phone numbers (IMEI) agree from the start.",
       "A new supplier name or phone that is already on the books is refused. Pick the name already on the list.",

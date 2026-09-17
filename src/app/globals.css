@@ -2,6 +2,73 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Branded wait screens (stock upload, sign out, page open). */
+.brand-busy-glow {
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 35%, rgba(124, 255, 134, 0.22), transparent 60%),
+    radial-gradient(ellipse 50% 40% at 80% 80%, rgba(255, 255, 255, 0.08), transparent 55%);
+  opacity: 0.9;
+}
+.brand-busy-ring {
+  animation: brand-busy-pulse 2.4s ease-out infinite;
+}
+.brand-busy-ring-delayed {
+  animation: brand-busy-pulse 2.4s ease-out 0.7s infinite;
+}
+.brand-busy-mark {
+  animation: brand-busy-breathe 2.8s ease-in-out infinite;
+}
+.brand-busy-phase {
+  animation: brand-busy-fade 0.45s ease-out;
+}
+.brand-busy-bar {
+  transition: width 0.35s ease-out;
+}
+.brand-page-bar {
+  animation: brand-page-slide 1.4s ease-in-out infinite;
+}
+@keyframes brand-busy-pulse {
+  0% {
+    transform: scale(0.86);
+    opacity: 0.85;
+  }
+  70% {
+    transform: scale(1.18);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.18);
+    opacity: 0;
+  }
+}
+@keyframes brand-busy-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+@keyframes brand-busy-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes brand-page-slide {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(360%);
+  }
+}
+
 /*
  * One palette, one radius, one shadow scale.
  *
