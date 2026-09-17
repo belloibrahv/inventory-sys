@@ -7,6 +7,27 @@ import { UserRole } from "@prisma/client"
 import { alertWatchers, writeAudit } from "@/lib/audit"
 import { requestContext } from "@/lib/audit-meta"
 
+/**
+ * The sign-in secret signs every session token. A weak or shared secret means
+ * anyone who guesses it can mint a token for any staff — including the main
+ * admin — without a password. So in production we refuse to boot on a missing,
+ * short, or well-known development secret rather than run insecurely.
+ */
+function resolveAuthSecret() {
+  const secret = process.env.NEXTAUTH_SECRET ?? ""
+  const weak =
+    !secret ||
+    secret.length < 32 ||
+    secret.includes("change-in-prod") ||
+    secret.includes("replace-with")
+  if (weak && process.env.NODE_ENV === "production") {
+    throw new Error(
+      "NEXTAUTH_SECRET is missing or is the development placeholder. Set a strong random 32+ character secret before deploying (e.g. `openssl rand -base64 32`)."
+    )
+  }
+  return secret
+}
+
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
@@ -114,5 +135,5 @@ export const authOptions: NextAuthOptions = {
       return session
     },
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: resolveAuthSecret(),
 }

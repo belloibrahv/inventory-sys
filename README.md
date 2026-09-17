@@ -1,100 +1,109 @@
-# Abu Twins Softskills
+# AbuTwins Nexus
 
-Shop system for Abu Twins Softskills Investment. One record for IMEI, sales, swaps, returns, customer ledgers, finance, approvals, and stock counts.
+A multi-shop retail platform for a phone, laptop and power-accessory business.
+It unifies inventory (with per-unit IMEI / serial tracking), point of sale,
+customer ledgers, supplier purchasing, inter-branch transfers, repairs, swaps,
+returns, finance and day-close, staff & role administration, and a
+tamper-evident audit trail — across three branches, individually and combined.
 
 ## Stack
 
-Next.js · TypeScript · Tailwind · Prisma · SQLite (local) · Postgres (Railway) · NextAuth · TanStack Query · Recharts
+Next.js 16 (App Router, Server Actions) · TypeScript · Tailwind CSS · Prisma ORM
+· SQLite (local) / PostgreSQL (production) · NextAuth (JWT) · TanStack Query ·
+Recharts · Serwist (offline-capable PWA)
 
-## Setup
+## Architecture at a glance
+
+- **Server Actions are the API.** Almost all mutations and reads run as Next.js
+  Server Actions (only `/api/auth` and `/api/health` are conventional routes).
+  Every action authenticates with `requireUser()` and authorizes with
+  `can(role, permission)` — the client UI is never trusted as the access control.
+- **Multi-tenant by branch.** Staff are bound to one shop and see only that
+  shop's data; head-office roles can view any shop or all shops together.
+  Isolation is enforced server-side (`branchFilter`, `scopeRecord`,
+  `canReachBranch`).
+- **Auditability.** Privileged activity is written to a SHA-256 hash-chained
+  `AuditLog` that can be integrity-checked (`verifyAuditChain`).
+
+## Requirements
+
+- Node.js 20+
+- npm
+
+## Local setup
 
 ```bash
 npm install
-cp .env.example .env
-npm run setup
-npm run dev
+cp .env.example .env          # then set a strong NEXTAUTH_SECRET (see below)
+npx prisma generate
+npx prisma db push            # create the SQLite schema
+npm run db:seed               # branches, settings, role permissions
+npm run dev                   # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Generate a strong secret:
 
-## First login
+```bash
+openssl rand -base64 32
+```
 
-Super Admin is the only role that can grant screens, disable staff, and undo cash. Other roles only see what Super Admin ticks on **Who can see what**.
+### Demo data (throwaway environments only)
 
-These are **test logins** for the three Ibadan shops. They are seeded on every
-deploy so the shops can be exercised end to end before going live.
+To seed a full set of per-role demo logins for exercising the system end to end,
+run the seed with the demo flag. **Never enable this on a real deployment.**
 
-**Head office** (sees every shop, and can switch between them in the header)
+```bash
+SEED_DEMO_USERS=true npm run db:seed
+```
 
-| Role | Email | Password |
-| --- | --- | --- |
-| Super Admin | admin@abutwins.com | admin123 |
-| CEO | ceo@abutwins.com | ceo123 |
-| Auditor | auditor@abutwins.com | auditor123 |
-| Accountant | accountant@abutwins.com | accountant123 |
+Provision real staff (each gets a unique password and is forced to change it on
+first sign-in) with `npm run staff:apply`.
 
-**Iwo Road** (HQ)
+## Environment variables
 
-| Role | Email | Password |
-| --- | --- | --- |
-| Branch Manager | manager@abutwins.com | manager123 |
-| Vault Manager | vault@abutwins.com | vault123 |
-| Cashier | cashier@abutwins.com | cashier123 |
-| Sales | sales@abutwins.com | sales123 |
-| Engineer | engineer@abutwins.com | engineer123 |
-
-**Bodija**
-
-| Role | Email | Password |
-| --- | --- | --- |
-| Branch Manager | bodija.manager@abutwins.com | manager123 |
-| Vault Manager | bodija.vault@abutwins.com | vault123 |
-| Cashier | bodija.cashier@abutwins.com | cashier123 |
-| Sales | bodija.sales@abutwins.com | sales123 |
-| Engineer | bodija.engineer@abutwins.com | engineer123 |
-
-**Challenge**
-
-| Role | Email | Password |
-| --- | --- | --- |
-| Branch Manager | challenge.manager@abutwins.com | manager123 |
-| Vault Manager | challenge.vault@abutwins.com | vault123 |
-| Cashier | challenge.cashier@abutwins.com | cashier123 |
-| Sales | challenge.sales@abutwins.com | sales123 |
-| Engineer | challenge.engineer@abutwins.com | engineer123 |
-
-> These passwords are public in this repository and are for testing only.
-> Before the shops trade on this system for real, delete every test login above
-> and create the real staff with `npm run staff:apply`, which issues each person
-> their own password and forces a change on first sign in.
-
-## Which shop you are looking at
-
-Shop staff only ever see their own shop's stock, sales, customers and money.
-Head office roles get a shop selector in the header: **All shops together**,
-or one of Iwo Road, Bodija and Challenge on its own. Picking one shop changes
-what every screen reports without limiting what head office can correct.
-
-## Railway
-
-Production is the Railway project **inventory-sys**, deployed from this repo (`belloibrahv/inventory-sys`, branch `main`).
-
-Local stays on SQLite. Railway switches Prisma to Postgres at build, then pushes the schema and seeds one login for every role on start.
-
-Live URL: https://inventory-sys-production.up.railway.app
-
-Set these on the **inventory-sys** service (do not put them in git):
-
-| Variable | Value |
+| Variable | Purpose |
 | --- | --- |
-| `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
-| `NEXTAUTH_SECRET` | a long random string |
-| `NEXTAUTH_URL` | `https://inventory-sys-production.up.railway.app` |
-| `NEXT_PUBLIC_APP_URL` | same public URL |
-| `NEXT_PUBLIC_APP_NAME` | `Abu Twins Softskills` |
+| `DATABASE_URL` | Prisma connection string (SQLite locally; PostgreSQL in production) |
+| `NEXTAUTH_SECRET` | Session-token signing key — **must** be a random 32+ char value in production |
+| `NEXTAUTH_URL` | Public base URL of the deployment |
+| `NEXT_PUBLIC_APP_NAME` | Display name |
+| `NEXT_PUBLIC_APP_URL` | Public URL for client-side use |
 
-After the first live boot, change every seeded password.
+Secrets belong in the environment, never in git. `.env` and all local databases
+are git-ignored.
 
-## What this replaces
+## Common scripts
 
-Staff used to edit old invoices to record later payments. This system posts a **customer ledger entry** instead and leaves history intact. Every phone has IMEI 1 / IMEI 2 / serial, and stock never silently crosses shops.
+| Script | Does |
+| --- | --- |
+| `npm run dev` / `build` / `start` | Next.js dev / production build / serve |
+| `npm run lint` | ESLint |
+| `npm run db:push` | Apply the Prisma schema |
+| `npm run db:seed` | Seed branches, settings, permissions (demo users behind `SEED_DEMO_USERS`) |
+| `npm run staff:apply` | Provision real staff with unique first passwords |
+
+## Security
+
+This codebase underwent a white-box security audit and access-control review;
+see **[`SECURITY-AUDIT.md`](./SECURITY-AUDIT.md)** for the full report. Highlights:
+
+- Server-side authorization on every action; consistent multi-branch isolation;
+  hash-chained audit log; bcrypt password storage; no SQL-injection, XSS, or
+  `eval` surface.
+- Hardening applied in this branch: dual-control enforcement on stock-receipt
+  approvals, production-time rejection of weak JWT secrets, branch-scoped
+  supplier lookups, HTTP security headers, upload prototype-pollution guards, and
+  a consistent password policy.
+- Operational follow-ups: upgrade `xlsx` to the SheetJS patched build, add login
+  rate limiting / lockout, and implement or remove the dormant 2FA fields.
+
+## Deployment
+
+Production runs on PostgreSQL. Set `DATABASE_URL` to the managed Postgres URL,
+provide a strong `NEXTAUTH_SECRET` and the correct `NEXTAUTH_URL`, then build and
+start. **Rotate every seeded password immediately after the first boot**, and do
+not deploy with `SEED_DEMO_USERS` enabled.
+
+## License
+
+ISC. Proprietary to the business owner; not for redistribution.

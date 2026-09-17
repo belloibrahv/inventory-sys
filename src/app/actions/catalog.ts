@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/session"
 import { canManageCatalog } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { shopError } from "@/lib/shop-speak"
+import { UNSAFE_KEYS } from "@/lib/table-file"
 
 export async function getProductLookups() {
   await requireUser()
@@ -316,6 +317,7 @@ function rowsFromSheet(text: string) {
   return table.slice(1).map((line) => {
     const row: Record<string, string> = {}
     headers.forEach((header, index) => {
+      if (UNSAFE_KEYS.has(header)) return
       row[header] = line[index] ?? ""
     })
     return row
@@ -330,7 +332,11 @@ async function readUpload(file: File) {
     const sheet = workbook.Sheets[workbook.SheetNames[0]]
     if (!sheet) return []
     return XLSX.utils.sheet_to_json<Record<string, string | number>>(sheet, { defval: "" }).map((row) =>
-      Object.fromEntries(Object.entries(row).map(([key, value]) => [String(key), String(value ?? "").trim()]))
+      Object.fromEntries(
+        Object.entries(row)
+          .filter(([key]) => !UNSAFE_KEYS.has(key))
+          .map(([key, value]) => [String(key), String(value ?? "").trim()])
+      )
     )
   }
   return rowsFromSheet(await file.text())

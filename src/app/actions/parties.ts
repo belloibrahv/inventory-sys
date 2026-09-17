@@ -103,17 +103,23 @@ export async function getSuppliers() {
 }
 
 export async function getSupplier(id: string) {
-  await requireUser()
+  const user = await requireUser()
   await healOpeningStockBills()
+  // Suppliers are shared, but their bills and phones carry cost prices per shop.
+  // Shop staff must only see their own shop's dealings with a supplier, so scope
+  // the included bills and IMEIs; head office (viewBranchFilter -> undefined for
+  // "All shops") sees every shop.
+  const branchId = await viewBranchFilter(user)
   return prisma.supplier.findUnique({
     where: { id },
     include: {
       purchases: {
-        where: payablePurchaseWhere,
+        where: { ...payablePurchaseWhere, ...(branchId ? { branchId } : {}) },
         include: { branch: true, items: { include: { product: true } } },
         orderBy: { createdAt: "desc" },
       },
       imeiRecords: {
+        where: branchId ? { branchId } : undefined,
         include: { product: true, branch: true },
         orderBy: { createdAt: "desc" },
         take: 40,

@@ -787,8 +787,8 @@ export async function createStaff(formData: FormData) {
   if (role === "SUPER_ADMIN" && !isSuperAdmin(user.role)) {
     return { error: "Only the main admin can create another main admin." }
   }
-  if (!name || !email || password.length < 6) {
-    return { error: "Type the name, the email, and a password of at least 6 letters or numbers." }
+  if (!name || !email || password.length < 8) {
+    return { error: "Type the name, the email, and a password of at least 8 letters or numbers." }
   }
   const exists = await prisma.user.findUnique({ where: { email } })
   if (exists) return { error: "Somebody on staff already uses that email." }

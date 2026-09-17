@@ -2,6 +2,23 @@ export function keyName(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")
 }
 
+/**
+ * Keys a crafted spreadsheet could use to reach into every object in the app
+ * (prototype pollution). The xlsx parser will happily create a column called
+ * "__proto__"; we drop such columns before they become object keys, so a
+ * poisoned sheet cannot change how unrelated code behaves.
+ */
+export const UNSAFE_KEYS = new Set(["__proto__", "prototype", "constructor"])
+
+function safeRow(row: Record<string, string | number>) {
+  const clean: Record<string, string | number> = Object.create(null)
+  for (const [key, value] of Object.entries(row)) {
+    if (UNSAFE_KEYS.has(key)) continue
+    clean[key] = value
+  }
+  return clean
+}
+
 export function cell(row: Record<string, string>, ...names: string[]) {
   const wanted = new Set(names.map(keyName))
   for (const [key, value] of Object.entries(row)) {
@@ -60,6 +77,7 @@ function rowsFromSheet(text: string) {
   return table.slice(1).map((line) => {
     const row: Record<string, string> = {}
     headers.forEach((header, index) => {
+      if (UNSAFE_KEYS.has(header)) return
       row[header] = line[index] ?? ""
     })
     return row
@@ -67,7 +85,13 @@ function rowsFromSheet(text: string) {
 }
 
 function cellsAsStrings(row: Record<string, string | number>) {
-  return Object.fromEntries(Object.entries(row).map(([key, value]) => [String(key), String(value ?? "").trim()]))
+  const source = safeRow(row)
+  const out: Record<string, string> = {}
+  for (const [key, value] of Object.entries(source)) {
+    if (UNSAFE_KEYS.has(key)) continue
+    out[String(key)] = String(value ?? "").trim()
+  }
+  return out
 }
 
 export async function readTableFile(file: File) {

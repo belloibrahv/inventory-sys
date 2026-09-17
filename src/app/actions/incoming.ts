@@ -4,7 +4,7 @@ import { IncomingIdentity, IncomingStatus, type Prisma } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { can, isShopOwner } from "@/lib/permissions"
-import { scopedBranchId } from "@/lib/rbac"
+import { canApprove, scopedBranchId } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { generateDocNumber, money } from "@/lib/utils"
 import { shopError } from "@/lib/shop-speak"
@@ -620,15 +620,29 @@ async function finalizeStagedIncomingLot(
   })
 }
 
-export async function completeIncomingReceiveApproval(lotNumber: string, deciderId: string) {
+export async function completeIncomingReceiveApproval(lotNumber: string, _deciderId?: string) {
+  // This is an exported server action, so it is reachable on its own, not only
+  // through decideApproval. It must therefore prove the caller may approve and
+  // is not the same person who checked the carton in — otherwise dual control
+  // on received goods can be skipped by posting straight to this action.
+  const user = await requireUser()
+  if (!(await canApprove(user.role))) {
+    return { error: "You are not allowed to say yes to a carton. Ask your manager." }
+  }
   const lot = await prisma.incomingLot.findFirst({
     where: { lotNumber, status: "PENDING_APPROVAL" },
   })
   if (!lot) return { error: "That carton is not waiting for a second yes." }
+  const approval = await prisma.approval.findFirst({
+    where: { entityId: lotNumber, type: "INCOMING_RECEIVE", status: "PENDING" },
+  })
+  if (approval && approval.requestedBy === user.id) {
+    return { error: "Someone else must say yes. You already checked this carton." }
+  }
 
   try {
     await prisma.$transaction(async (tx) => {
-      await finalizeStagedIncomingLot(tx, { lotId: lot.id, userId: deciderId })
+      await finalizeStagedIncomingLot(tx, { lotId: lot.id, userId: user.id })
     })
   } catch (error) {
     return { error: shopError(error, "Could not finish receiving this carton.") }
@@ -645,12 +659,22 @@ export async function completeIncomingReceiveApproval(lotNumber: string, decider
   return { success: true }
 }
 
-export async function rejectIncomingReceiveApproval(lotNumber: string, deciderId: string) {
+export async function rejectIncomingReceiveApproval(lotNumber: string, _deciderId?: string) {
+  const user = await requireUser()
+  if (!(await canApprove(user.role))) {
+    return { error: "You are not allowed to say no to a carton. Ask your manager." }
+  }
   const lot = await prisma.incomingLot.findFirst({
     where: { lotNumber, status: "PENDING_APPROVAL" },
     include: { items: true },
   })
   if (!lot) return { error: "That carton is not waiting for a second yes." }
+  const approval = await prisma.approval.findFirst({
+    where: { entityId: lotNumber, type: "INCOMING_RECEIVE", status: "PENDING" },
+  })
+  if (approval && approval.requestedBy === user.id) {
+    return { error: "Someone else must decide. You already checked this carton." }
+  }
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -671,7 +695,7 @@ export async function rejectIncomingReceiveApproval(lotNumber: string, deciderId
       })
       await tx.auditLog.create({
         data: {
-          userId: deciderId,
+          userId: user.id,
           action: "REJECT",
           entityType: "IncomingLot",
           entityId: lot.lotNumber,

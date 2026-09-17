@@ -8,7 +8,7 @@ import { requireUser } from "@/lib/session"
 import { recentWatDays, shiftWatDay, watBounds, watDayKey } from "@/lib/lagos-day"
 import { money } from "@/lib/utils"
 import { saleTenders } from "@/lib/sale-money"
-import { viewBranchFilter } from "@/lib/branch-scope"
+import { canReachBranch, viewBranchFilter } from "@/lib/branch-scope"
 import { healDuplicateDayCloses } from "@/lib/day-close-heal"
 
 async function resolveShop(user: { role: Parameters<typeof scopedBranchId>[0]; branchId: string | null }, requested?: string) {
@@ -36,6 +36,11 @@ async function closedDates(branchId: string) {
 }
 
 export async function getUnclosedBusinessDays(branchId: string) {
+  // Exported from a "use server" file, so this is a reachable endpoint on its
+  // own. Require a signed-in user and keep it to shops they may see, so a hand
+  // -typed branch id cannot reveal another shop's trading days.
+  const user = await requireUser()
+  if (!(await canReachBranch(user, branchId))) return []
   const today = watDayKey()
   const window = recentWatDays(21).filter((day) => day !== today)
   if (!window.length) return []
