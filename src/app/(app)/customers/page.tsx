@@ -33,7 +33,7 @@ export default async function CustomersPage() {
       <CachePageData pageKey="customers" title="Customers & money owed" data={customers} />
       <PageHeader
         title="Customers & money owed"
-        description="Everyone who has bought from us. See what they bought, what they paid, and what they still owe. Tap Still owing when you need to call people."
+        description="Who bought, what they paid, and what they still owe."
       />
 
       <div className="page-split">

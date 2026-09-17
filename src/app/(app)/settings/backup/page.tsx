@@ -11,21 +11,16 @@ export default async function SettingsBackupPage() {
     <div className="space-y-6">
       <PageHeader
         title="Shop backup"
-        description="A copy of everything the system knows, in one file you keep yourself."
+        description="One file copy of what the system knows."
       />
 
       {isShopOwner(me.role) ? (
-        <SectionCard title="Shop backup">
-          <p className="mb-4 text-sm text-muted-foreground">
-            Downloads a copy of shops, staff emails (not passwords), stock, IMEIs, sales, and purchases. Keep that file
-            off this computer.
-          </p>
+        <SectionCard title="Shop backup" description="Keep the file off this computer.">
           <BackupButton />
         </SectionCard>
       ) : (
         <div className="surface-card p-5 text-sm text-muted-foreground">
-          Only the main admin or the CEO can download a backup. The file holds every sale, every customer and every staff email in
-          the business, so it is kept to the people who own the shop.
+          Only the main admin or the CEO can download a backup.
         </div>
       )}
     </div>

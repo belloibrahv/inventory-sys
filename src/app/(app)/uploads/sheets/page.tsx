@@ -24,7 +24,7 @@ export default async function UploadSheetsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Old Excel & CSV sheets"
-        description="Use this when the item names are already in the system and you just want to add more from a simple sheet. For day-one stock with a supplier bill, use Supplier bill or Opening stock sheet."
+        description="Add more names from a simple sheet."
       />
 
       <div className="space-y-4">

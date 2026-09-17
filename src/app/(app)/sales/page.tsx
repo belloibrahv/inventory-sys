@@ -13,7 +13,7 @@ export default async function SalesPage() {
       <CachePageData pageKey="sales" title="Sales" data={sales} />
       <PageHeader
         title="Sales"
-        description="Every sale stays as it was. Open the bill to collect the rest of the money. Never change an old sale."
+        description="Every sale stays as written. Collect the rest on the bill."
         actions={
           <Button asChild>
             <Link href="/pos">Sell now</Link>

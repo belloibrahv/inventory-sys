@@ -111,7 +111,7 @@ export function ReportsPdfButton({ data }: { data: ReportsPack }) {
       })
       y += 34
 
-      section("Branch Performance Breakdown")
+      section("Sales by shop")
       doc.setTextColor(...MUTED)
       doc.setFontSize(7)
       doc.text("Branch", left + 1, y)

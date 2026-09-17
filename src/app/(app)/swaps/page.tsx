@@ -12,7 +12,7 @@ export default async function SwapsPage() {
       <div>
         <PageHeader
           title="Swap Deal"
-          description="A buyer brings an old phone. Agree what it is worth, wait for yes, hand over the new phone, settle the money, then print the bill."
+          description="Old phone in, new phone out, settle the money, print the bill."
         />
         <SwapsList swaps={swaps} />
       </div>

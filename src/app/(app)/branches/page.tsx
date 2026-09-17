@@ -63,23 +63,23 @@ function ShopCard({
             >
               <input type="hidden" name="id" value={branch.id} />
               <label className="block text-xs text-muted-foreground">
-                Location Name
+                Shop name
                 <Input name="name" defaultValue={branch.name} required className="mt-1" />
               </label>
               <label className="block text-xs text-muted-foreground">
-                Location Code
+                Short code
                 <Input name="code" defaultValue={branch.code} required className="mt-1" />
               </label>
               <label className="block text-xs text-muted-foreground">
-                Physical Address
+                Address
                 <Input name="address" defaultValue={branch.address} required className="mt-1" />
               </label>
               <label className="block text-xs text-muted-foreground">
-                Telephone
+                Phone
                 <Input name="phone" defaultValue={branch.phone ?? ""} className="mt-1" />
               </label>
               <label className="block text-xs text-muted-foreground">
-                Official Email
+                Email
                 <Input name="email" defaultValue={branch.email ?? ""} className="mt-1" />
               </label>
             </ActionForm>
@@ -100,7 +100,7 @@ export default async function BranchesPage() {
       <div>
         <PageHeader
           title="Shops"
-          description="The Abu Twins shops. Open or close a shop. Each shop keeps its own stock, sales, and customers."
+          description="Open or close a shop. Each shop keeps its own records."
         />
         <div className="grid gap-3 md:grid-cols-2">
           {open.map((branch) => (
@@ -123,18 +123,17 @@ export default async function BranchesPage() {
       </div>
       {isShopOwner(me.role) ? (
         <div className="surface-card p-5">
-          <h3 className="mb-4 font-semibold">Provision Branch Location</h3>
-          <p className="mb-3 text-sm text-muted-foreground">Register a new retail branch store or distribution warehouse location.</p>
-          <ActionForm action={createBranch} submit="Create Location" className="space-y-3">
-            <Input name="name" placeholder="Location Name e.g. Bodija Distribution Hub" required />
-            <Input name="code" placeholder="Branch Code e.g. BDJ" required />
-            <Input name="address" placeholder="Physical Address" required />
-            <Input name="phone" placeholder="Telephone" />
-            <Input name="email" placeholder="Official Email" />
+          <h3 className="mb-4 font-semibold">Open a shop</h3>
+          <ActionForm action={createBranch} submit="Save this shop" className="space-y-3">
+            <Input name="name" placeholder="Shop name, such as Bodija" required />
+            <Input name="code" placeholder="Short shop code, such as BDJ" required />
+            <Input name="address" placeholder="Address" required />
+            <Input name="phone" placeholder="Phone" />
+            <Input name="email" placeholder="Email" />
           </ActionForm>
         </div>
       ) : (
-        <div className="surface-card p-5 text-sm text-muted-foreground">System Administrator privileges required to manage branch locations.</div>
+        <div className="surface-card p-5 text-sm text-muted-foreground">Only the main admin or the CEO can open or close a shop.</div>
       )}
     </div>
   )

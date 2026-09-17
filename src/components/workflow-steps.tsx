@@ -70,11 +70,6 @@ export function WorkflowSteps({
               ) : null}
             </span>
             {step.hint ? <span className="mt-1 block text-[11px] font-normal opacity-80">{step.hint}</span> : null}
-            {step.href || (onSelect && step.key !== undefined) ? (
-              <span className="mt-1 block text-[10px] font-medium uppercase tracking-wide opacity-70">
-                {isActive ? "Showing now" : "Tap to show"}
-              </span>
-            ) : null}
           </>
         )
 

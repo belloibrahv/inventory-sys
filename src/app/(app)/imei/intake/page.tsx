@@ -24,7 +24,7 @@ export default async function ImeiIntakePage() {
     <div className="space-y-6">
       <PageHeader
         title="One phone at a time"
-        description="Put a phone that is already in your hands onto the shelf. It goes in as In shop. For a carton with a supplier bill, use Upload stock · Supplier bill instead."
+        description="Put a phone in your hands onto the shelf as In shop."
       />
 
       <StatGrid>

@@ -31,7 +31,7 @@ export function OpeningMoneyPanel({
   return (
     <SectionCard
       title="Money we started with"
-      description="Cash in the till and money in each bank on the day the shops started using this software. This is not opening stock. Opening stock is phones and pieces on the shelf. Sales, expenses, and supplier payments sit on top of these figures."
+      description="Cash and banks already there when this software started. Not opening stock."
     >
       <div className="space-y-6">
         <div className="flex flex-wrap gap-4 text-sm">

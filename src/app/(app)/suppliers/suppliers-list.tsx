@@ -143,14 +143,13 @@ export function SuppliersList({ suppliers }: { suppliers: SupplierRow[] }) {
         <StatCard
           label="Suppliers on the books"
           value={String(houses.length)}
-          hint={`${owingCount} we still owe something to`}
+          hint={owingCount > 0 ? `${owingCount} we still owe` : undefined}
           icon={<Users className="h-4 w-4" />}
           onClick={() => pickFilter("all")}
         />
         <StatCard
           label="Bought from them, all time"
           value={formatCurrency(totalInvoiced)}
-          hint="Total value of every carton billed to us"
           icon={<Coins className="h-4 w-4" />}
           tone="primary"
           onClick={() => pickFilter("bought")}
@@ -158,7 +157,6 @@ export function SuppliersList({ suppliers }: { suppliers: SupplierRow[] }) {
         <StatCard
           label="We have paid them"
           value={formatCurrency(totalPaid)}
-          hint="Money already sent out against those bills"
           icon={<HandCoins className="h-4 w-4" />}
           tone="success"
           onClick={() => pickFilter("paid")}
@@ -166,7 +164,6 @@ export function SuppliersList({ suppliers }: { suppliers: SupplierRow[] }) {
         <StatCard
           label="We still owe"
           value={formatCurrency(totalOwed)}
-          hint="Money we have not paid them yet"
           icon={<Wallet className="h-4 w-4" />}
           tone={totalOwed > 0 ? "warning" : "neutral"}
           onClick={() => pickFilter("owing")}
@@ -174,7 +171,6 @@ export function SuppliersList({ suppliers }: { suppliers: SupplierRow[] }) {
         <StatCard
           label="They owe us"
           value={formatCurrency(totalSurplus)}
-          hint="Send-backs that flipped the house into credit"
           icon={<Undo2 className="h-4 w-4" />}
           tone={totalSurplus > 0 ? "success" : "neutral"}
           onClick={() => pickFilter("credit")}
@@ -186,9 +182,6 @@ export function SuppliersList({ suppliers }: { suppliers: SupplierRow[] }) {
         caption={
           <p id="supplier-houses" className="text-sm text-muted-foreground">
             {FILTER_LABEL[filter]}
-            {filter === "all"
-              ? ". Click a house to open its bills. Click a box above to see only the houses that make that number."
-              : `. These houses make up that box. Click a house to open the bills inside it.`}
           </p>
         }
         columns={[

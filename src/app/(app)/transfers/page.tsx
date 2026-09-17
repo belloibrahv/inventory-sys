@@ -11,7 +11,7 @@ export default async function TransfersPage() {
       <div>
         <PageHeader
           title="Shop to shop"
-          description="Send phones and items from one Abu Twins shop to another. The other shop must confirm they arrived before they sit on that shelf."
+          description="Send to another Abu Twins shop. They must confirm arrival."
         />
         <TransfersList transfers={transfers} />
       </div>

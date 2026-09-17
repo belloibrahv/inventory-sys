@@ -14,7 +14,7 @@ export default async function BulkProductsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Add items from a sheet"
-        description="For a long list of new models. Download the sample, fill it, and upload it. Item codes already on the system are left alone."
+        description="New models from a sheet. Names already on the system stay."
       />
       <BulkProductUpload />
     </div>

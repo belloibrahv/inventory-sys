@@ -99,10 +99,7 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
 
   return (
     <div className="space-y-5">
-      <Toolbar className="justify-between">
-        <p className="text-sm text-muted-foreground">
-          Cash is the till. Bank is each named account plus transfer and POS. Opening figures are the money already there when this software started.
-        </p>
+      <Toolbar className="justify-end">
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline" size="sm">
             <Link href="/finance/close">
@@ -136,7 +133,6 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
         <StatCard
           label="Shop expenses"
           value={formatCurrency(data.expenditure)}
-          hint="Fuel, rent, salary, light bill, and other shop bills"
           icon={<TrendingDown className="h-4 w-4" />}
           tone="danger"
           href="/expenses"
@@ -144,7 +140,6 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
         <StatCard
           label="Paid to suppliers"
           value={formatCurrency(data.supplierPayments)}
-          hint="Money sent to suppliers for goods"
           icon={<Banknote className="h-4 w-4" />}
           tone="warning"
           href="/suppliers"
@@ -152,7 +147,6 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
         <StatCard
           label={data.netCashFlow >= 0 ? "Money left after expenses" : "Money short after expenses"}
           value={formatCurrency(data.netCashFlow)}
-          hint="Sales collected minus shop expenses and supplier payments. Opening cash and opening banks sit on the boxes below, not in this figure."
           icon={<Scale className="h-4 w-4" />}
           tone={data.netCashFlow >= 0 ? "success" : "danger"}
         />
@@ -168,7 +162,7 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
               <div className="text-left">
                 <p className="text-sm font-semibold">Cash in the till</p>
                 <p className="text-xs text-muted-foreground">
-                  Started with {formatCurrency(data.openingCash)}. Cash sales in, shop expenses out.
+                  Started with {formatCurrency(data.openingCash)}
                 </p>
               </div>
             </div>
@@ -178,9 +172,6 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
             <span className="text-xs text-muted-foreground">Balance now</span>
             <span className="text-2xl font-semibold num">{formatCurrency(data.cashAccount.balance)}</span>
           </div>
-          <p className="mt-1 text-right text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
-            Open the day list
-          </p>
         </button>
 
         <button type="button" onClick={() => setLedger("BANK")} className="surface-card-interactive group p-5">
@@ -193,7 +184,7 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
                 <p className="text-sm font-semibold">Bank, transfer, and POS</p>
                 <p className="text-xs text-muted-foreground">
                   Started with {formatCurrency(data.openingBank)} across {data.bankAccounts.length} bank
-                  {data.bankAccounts.length === 1 ? "" : "s"}. Transfer and POS in, money to suppliers out.
+                  {data.bankAccounts.length === 1 ? "" : "s"}
                 </p>
               </div>
             </div>
@@ -203,9 +194,6 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
             <span className="text-xs text-muted-foreground">Balance now</span>
             <span className="text-2xl font-semibold num">{formatCurrency(data.bankAccount.balance)}</span>
           </div>
-          <p className="mt-1 text-right text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
-            Open the day list
-          </p>
         </button>
       </div>
 
@@ -442,7 +430,7 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
           ))}
           {days.length === 0 ? (
             <p className="px-5 py-12 text-center text-sm text-muted-foreground">
-              No transaction activity recorded for this ledger account.
+              No money moved on this account yet.
             </p>
           ) : null}
         </div>

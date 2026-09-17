@@ -16,7 +16,7 @@ export default async function RepairsPage() {
       <div>
         <PageHeader
           title="Repairs"
-          description="Take the phone, find the fault, wait for parts if needed, fix it, then give it back."
+          description="Take the phone, find the fault, fix it, give it back."
         />
         <RepairsList rows={rows} />
       </div>

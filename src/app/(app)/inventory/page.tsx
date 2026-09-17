@@ -47,7 +47,7 @@ export default async function InventoryPage() {
       <CachePageData pageKey="inventory" title="Shop stock" data={formattedRows} />
       <PageHeader
         title="Shop stock"
-        description="What is on the shelf now, at cost and at selling price. Pick a shop and how the phone looks to shorten the list."
+        description="On the shelf now, at cost and sell price."
       />
 
       <InventoryClientView

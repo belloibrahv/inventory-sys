@@ -25,7 +25,7 @@ export default async function StaffPage() {
       <div className="min-w-0">
         <PageHeader
           title="Staff"
-          description="The main admin and the CEO decide what each person can see. You can also move someone to another shop or change their job without creating a new login."
+          description="People, their shop, and their job."
         />
         <div className="space-y-3">
           {staff.map((user) => {

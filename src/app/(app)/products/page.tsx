@@ -23,7 +23,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
     <div className="space-y-6">
       <PageHeader
         title="Price list"
-        description="Names, cost, lowest price, and selling price for every item the shops sell."
+        description="Names, cost, lowest price, and selling price."
       />
       {!canEdit ? (
         <div className="surface-card p-5 text-sm text-muted-foreground">

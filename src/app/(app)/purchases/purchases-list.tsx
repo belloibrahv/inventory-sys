@@ -169,22 +169,14 @@ export function PurchasesList({
                 </div>
               </div>
               {isOpening ? (
-                <div className="mt-3 grid gap-3 border-t border-border pt-3 text-sm sm:grid-cols-3">
+                <div className="mt-3 grid gap-3 border-t border-border pt-3 text-sm sm:grid-cols-2">
                   <span>
-                    <span className="eyebrow block">Asset Valuation</span>
+                    <span className="eyebrow block">Value</span>
                     <strong className="num">{formatCurrency(totalVal)}</strong>
                   </span>
-                  <span>
-                    <span className="eyebrow block">Payment Model</span>
-                    <span className="text-xs font-medium text-muted-foreground">
-                      None (Independent Asset)
-                    </span>
-                  </span>
-                  <span>
-                    <span className="eyebrow block">Accounting Nature</span>
-                    <span className="text-xs font-semibold text-success">
-                      Opening Capital Equity
-                    </span>
+                  <span className="sm:col-span-2">
+                    <span className="eyebrow block">Not a bill to pay</span>
+                    <span className="text-xs font-medium text-muted-foreground">Opening stock. Value only.</span>
                   </span>
                 </div>
               ) : (

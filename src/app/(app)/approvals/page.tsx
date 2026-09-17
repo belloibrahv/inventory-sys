@@ -12,7 +12,7 @@ export default async function ApprovalsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Needs approval"
-        description={`${pending} waiting. Say yes or no to Swap Deal values, refunds, shop expenses, stock counts, and goods received.`}
+        description={`${pending} waiting. Say yes or no.`}
       />
       <ApprovalsList rows={rows} canDecide={canDecide} />
     </div>

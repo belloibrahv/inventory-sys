@@ -69,24 +69,19 @@ export function IncomingList({
         activeKey={status}
         onSelect={setStatus}
         steps={[
-          { key: "all", label: "All Consignments", count: counts.all, hint: "All registered shipments" },
-          { key: "COMING", label: "In Transit", count: counts.COMING ?? 0, hint: "En route / Pending receipt" },
-          {
-            key: "PENDING_APPROVAL",
-            label: "Pending Approval",
-            count: counts.PENDING_APPROVAL ?? 0,
-            hint: "Received; awaits supervisor sign-off",
-          },
-          { key: "ARRIVED", label: "Received & Stocked", count: counts.ARRIVED ?? 0, hint: "Verified and stocked" },
-          { key: "CANCELLED", label: "Cancelled", count: counts.CANCELLED ?? 0, hint: "Shipment voided" },
+          { key: "all", label: "All", count: counts.all },
+          { key: "COMING", label: "Coming", count: counts.COMING ?? 0 },
+          { key: "PENDING_APPROVAL", label: "Waiting for yes", count: counts.PENDING_APPROVAL ?? 0 },
+          { key: "ARRIVED", label: "In shop", count: counts.ARRIVED ?? 0 },
+          { key: "CANCELLED", label: "Cancelled", count: counts.CANCELLED ?? 0 },
         ]}
       />
 
       <div className="space-y-3">
         {lots.length === 0 ? (
           <EmptyState
-            title="No inbound consignments found"
-            hint="Register an inbound consignment on the right. Serial numbers or quantity counts will remain en route until warehouse intake."
+            title="No goods on the way"
+            hint="Book a carton on the right."
           />
         ) : null}
         {pager.pageRows.map((lot) => (

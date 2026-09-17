@@ -24,7 +24,7 @@ export default async function UploadsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Upload stock · Supplier bill"
-        description="Add phones that came with a supplier bill. Type the product name, pick it, then fill condition, storage, cost, and how many."
+        description="Add phones that came with a supplier bill."
       />
 
       <div className="grid gap-3 md:grid-cols-3">

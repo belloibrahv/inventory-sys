@@ -44,7 +44,7 @@ export default async function BooksCheckPage({
       <div className="books-chrome space-y-6 print:hidden">
         <PageHeader
           title="Check the books"
-          description="The official money paper for one shop and one stretch of days. It reprints sales, cash, transfer, POS, credit sales, and the till close. It does not change any invoice."
+          description="Official money paper. It does not change any sale."
           actions={
             <div className="flex flex-wrap gap-2">
               <BooksPdfButton data={data} />

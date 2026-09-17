@@ -66,47 +66,26 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
         title={purchase.invoiceNumber}
         description={
           isOpening
-            ? `Opening Stock Inventory Baseline · ${purchase.branch.name} · Loaded ${formatDate(purchase.createdAt)}`
-            : `${purchase.supplier.name}${origin ? ` from ${origin}` : ""} → ${purchase.branch.name} · ${formatDate(purchase.createdAt)}`
+            ? `Opening stock · ${purchase.branch.name} · ${formatDate(purchase.createdAt)}`
+            : `${purchase.supplier.name}${origin ? ` from ${origin}` : ""} · ${purchase.branch.name} · ${formatDate(purchase.createdAt)}`
         }
       />
       {isOpening ? (
         <div className="surface-card space-y-3 p-5 text-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="font-semibold text-base">Opening Stock Inventory Baseline</p>
+            <p className="font-semibold">Opening stock {formatCurrency(money(purchase.totalAmount))}</p>
             <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-              Independent Asset Valuation · No Payment Model
+              Value only. Not a bill to pay.
             </span>
-          </div>
-          <p className="text-muted-foreground">
-            This record represents the initial physical stock-on-hand loaded into the software.
-            As an opening balance asset valuation, it stands independently and carries no supplier debt, accounts payable, or payment model.
-          </p>
-          <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-3">
-            <div>
-              <p className="eyebrow">Asset Value (At Cost)</p>
-              <p className="num text-lg font-semibold">{formatCurrency(money(purchase.totalAmount))}</p>
-            </div>
-            <div>
-              <p className="eyebrow">Inventory Status</p>
-              <p className="num text-lg font-semibold text-success">In Stock On Hand</p>
-            </div>
-            <div>
-              <p className="eyebrow">Accounting Classification</p>
-              <p className="num text-lg font-semibold text-primary">Asset Equity Baseline</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Independent value contents — no supplier payment obligation.
-              </p>
-            </div>
           </div>
           {purchase.notes ? <p className="text-muted-foreground">{purchase.notes}</p> : null}
           {opening ? (
-            <div className="border-t border-border pt-2 text-xs">
-              This is {purchase.branch.name}&apos;s opening stock ({opening.status === "OPEN" ? "open for counting & mop-up" : "closed & locked"}).{" "}
+            <p className="text-sm">
+              {opening.status === "OPEN" ? "Still being counted. " : "Closed. "}
               <Link href={`/opening-stock?branchId=${opening.branchId}`} className="font-medium text-primary hover:underline">
-                {opening.status === "OPEN" ? "Review, mop-up & close it →" : "See the locked opening stock →"}
+                {opening.status === "OPEN" ? "Count and close" : "See opening stock"}
               </Link>
-            </div>
+            </p>
           ) : null}
         </div>
       ) : null}
@@ -114,32 +93,22 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
         current={step}
         steps={
           isOpening
-            ? ["Initial Sheet Ingestion", "Shelf Physical Count & Mop-Up", "Locked Accounting Baseline"]
-            : ["On the supplier bill", "Booked as Coming", "Checked in this shop", "Pay the supplier"]
+            ? ["Loaded", "Counted", "Closed"]
+            : ["On the bill", "Coming", "In this shop", "Paid"]
         }
       />
-      <div className="surface-card space-y-2 p-5 text-sm">
-        <p>
-          {isOpening
-            ? "This opening stock record tracks the physical items and serialized assets (IMEIs) initialized on system onboarding."
-            : "This bill helps you find missing goods. On the supplier bill is what they sent. Scanned into the shop is what we booked here. Sold already has an invoice. Still on our shelf is what we still think is here."}
-        </p>
-        {trace.shortVsBill > 0 ? (
-          <p className="text-warning">
-            {trace.shortVsBill} unit{trace.shortVsBill === 1 ? "" : "s"} on this bill were never scanned. They may still be in a carton, or they arrived and left without a number on this system.
-          </p>
-        ) : null}
-        {trace.inShop > 0 ? (
-          <p>
-            Count the shelf against Still on our shelf ({trace.inShop}). If the shelf is short, those units may have been sold without a sale. Do not type a new shop number by hand. Use Stock count.
-          </p>
-        ) : null}
-        {trace.tracking === "NONE" ? (
-          <p className="text-muted-foreground">
-            This item has no unique number. Sold is every finished till sale of this item in this shop since the bill date. That can mix more than one carton.
-          </p>
-        ) : null}
-      </div>
+      {trace.shortVsBill > 0 || trace.tracking === "NONE" ? (
+        <div className="surface-card space-y-2 p-5 text-sm">
+          {trace.shortVsBill > 0 ? (
+            <p className="text-warning">
+              {trace.shortVsBill} unit{trace.shortVsBill === 1 ? "" : "s"} on this bill were never scanned.
+            </p>
+          ) : null}
+          {trace.tracking === "NONE" ? (
+            <p className="text-muted-foreground">This item has no unique number. Sold can mix more than one carton.</p>
+          ) : null}
+        </div>
+      ) : null}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="surface-card p-5">
           <p className="text-sm text-muted-foreground">Status</p>
@@ -159,25 +128,24 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
           <p className="text-sm text-muted-foreground">Never scanned {trace.shortVsBill}</p>
         </div>
         <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">{isOpening ? "Payment Model" : surplus > 0 ? "They owe us" : "Supplier still owed"}</p>
+          <p className="text-sm text-muted-foreground">{isOpening ? "Not a bill to pay" : surplus > 0 ? "They owe us" : "Still owed"}</p>
           <p className="text-xl font-semibold text-success">
-            {isOpening ? "Independent Asset" : formatCurrency(surplus > 0 ? surplus : due)}
+            {isOpening ? "Value only" : formatCurrency(surplus > 0 ? surplus : due)}
           </p>
-          <p className="text-xs text-muted-foreground">
-            {isOpening
-              ? "No payment model required"
-              : `Paid ${formatCurrency(money(purchase.paidAmount))}${billMoney.sentBack > 0 ? ` · sent back ${formatCurrency(billMoney.sentBack)}` : ""}`}
-          </p>
+          {isOpening ? null : (
+            <p className="text-xs text-muted-foreground">
+              Paid {formatCurrency(money(purchase.paidAmount))}
+              {billMoney.sentBack > 0 ? ` · sent back ${formatCurrency(billMoney.sentBack)}` : ""}
+            </p>
+          )}
         </div>
         <div className="surface-card p-5">
           <p className="text-sm text-muted-foreground">Coming</p>
           <p className="text-2xl font-semibold">{trace.coming}</p>
-          <p className="text-sm text-muted-foreground">Booked, but not yet in the shop.</p>
         </div>
         <div className="surface-card p-5">
           <p className="text-sm text-muted-foreground">Still on our shelf</p>
           <p className="text-2xl font-semibold">{trace.inShop}</p>
-          <p className="text-sm text-muted-foreground">What we still think is on the shelf.</p>
         </div>
         <div className="surface-card p-5">
           <p className="text-sm text-muted-foreground">Sold</p>
@@ -200,9 +168,7 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
         <div className="grid gap-4 xl:grid-cols-2">
           <div className="surface-card p-5">
             <h3 className="mb-2 font-semibold">Book as coming</h3>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Scan the IMEIs on the waybill. They stay as Coming until someone confirms they are in the shop. Stock does not rise yet.
-            </p>
+            <p className="mb-4 text-sm text-muted-foreground">Scan the waybill. Stock does not rise yet.</p>
             <ActionForm action={bookPurchaseAsComing} submit="Book as goods on the way" enterDoesNotSubmit className="space-y-3">
               <input type="hidden" name="id" value={purchase.id} />
               <ScanList name="imeis" required={item?.product.tracking !== "NONE"} />
@@ -210,9 +176,7 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
           </div>
           <div className="surface-card p-5">
             <h3 className="mb-2 font-semibold">Already in this shop</h3>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Use this only if the boxes are on the counter now. Receiving stock does not pay the supplier.
-            </p>
+            <p className="mb-4 text-sm text-muted-foreground">Boxes on the counter now. This does not pay the supplier.</p>
             <ActionForm action={receivePurchaseImeis} submit={`Add ${remaining} unit(s) to shop`} enterDoesNotSubmit className="space-y-3">
               <input type="hidden" name="id" value={purchase.id} />
               <label className="block text-sm">
@@ -239,7 +203,7 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
         </div>
       ) : (
         <div className="surface-card p-5 text-sm text-success">
-          Goods received into {purchase.branch.name}. These units can now be sold, sent Shop to shop, or later sent back to this supplier if they fail.
+          Goods received into {purchase.branch.name}.
         </div>
       )}
       {purchase.imeiRecords.length ? (
@@ -247,9 +211,7 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border p-5">
             <div>
               <h3 className="font-semibold">Every unit from this bill</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Search this list by IMEI on Goods from supplier or in the top bar. Sold rows have the invoice. In shop rows with no matching phone on the shelf may have left without recording.
-              </p>
+              <p className="mt-1 text-sm text-muted-foreground">Sold rows have the invoice.</p>
             </div>
             <ExportCsv filename={`${purchase.invoiceNumber}-units.csv`} rows={csvRows} label="Download this bill as CSV" />
           </div>
@@ -296,23 +258,13 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
         </div>
       ) : (
         <div className="surface-card p-5 text-sm text-muted-foreground">
-          No unique numbers are tied to this bill yet. Book Coming IMEIs or confirm arrival so each unit can be traced later.
+          No unique numbers on this bill yet. Book Coming IMEIs or confirm arrival.
         </div>
       )}
-      {isOpening ? (
-        <div className="surface-card p-5 text-sm text-muted-foreground">
-          <p className="font-semibold text-foreground">Independent Inventory Valuation Baseline</p>
-          <p className="mt-1">
-            Opening stock represents inventory already owned by Abu Twins at system onboarding.
-            It stands independently as an asset valuation baseline and has no payment model or supplier debt.
-          </p>
-        </div>
-      ) : due > 0 ? (
+      {isOpening ? null : due > 0 ? (
         <div className="surface-card p-5">
           <h3 className="mb-2 font-semibold">Pay supplier</h3>
-          <p className="mb-4 text-sm text-muted-foreground">
-            Goods and IMEIs stay as received. This only records money leaving the shop.
-          </p>
+          <p className="mb-4 text-sm text-muted-foreground">This records money leaving. Goods stay as received.</p>
           <ActionForm action={payPurchase} submit="Send payment" className="grid gap-3 md:grid-cols-[1fr_160px_auto] md:items-end">
             <input type="hidden" name="id" value={purchase.id} />
             <Input name="amount" type="number" defaultValue={due} required />
@@ -325,11 +277,7 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
         </div>
       ) : surplus > 0 ? (
         <p className="text-sm text-muted-foreground">
-          This house owes us {formatCurrency(surplus)} after phones were sent back. Do not pay more on this bill.
-        </p>
-      ) : surplus > 0 ? (
-        <p className="text-sm text-muted-foreground">
-          This house owes us {formatCurrency(surplus)} after phones were sent back. Do not pay more on this bill.
+          This house owes us {formatCurrency(surplus)} after send-backs. Do not pay more on this bill.
         </p>
       ) : (
         <p className="text-sm text-muted-foreground">This supplier bill is fully paid.</p>
@@ -337,7 +285,7 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
       {!isOpening && isShopOwner(me.role) && money(purchase.paidAmount) > 0 ? (
         <div className="surface-card p-5">
           <h3 className="mb-2 font-semibold">Undo last supplier payment</h3>
-          <p className="mb-3 text-sm text-muted-foreground">Main admin or CEO. The stock and the phone numbers (IMEIs) do not change. Who did what keeps this step.</p>
+          <p className="mb-3 text-sm text-muted-foreground">Stock and IMEIs stay. Who did what keeps this.</p>
           <ActionForm action={reverseSupplierPayment} submit="Reverse last payment" variant="outline">
             <input type="hidden" name="id" value={purchase.id} />
           </ActionForm>

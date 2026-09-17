@@ -67,8 +67,8 @@ export function SupplierReturnForm() {
         onScan={(code) => {
           void add(code)
         }}
-        placeholder="Scan IMEI, then Enter. Scan the next phone the same way."
-        hint="Do not pick the supplier. The IMEI names the phone, the house, and the cost. Scan as many phones as are going back in this one send-back."
+        placeholder="Scan IMEI, then Enter"
+        hint="Scan every phone for this one send-back. The IMEI names the house."
       />
       <textarea
         name="imeis"

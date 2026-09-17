@@ -30,7 +30,7 @@ export default async function NewProductPage() {
       <PageHeader
         backHref="/products"
         title="Add one item"
-        description="A new model the shop has started selling. The lowest price is the line staff must not go under, so set it carefully."
+        description="A new model. Set the lowest price with care."
       />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)]">

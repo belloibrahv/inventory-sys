@@ -33,16 +33,13 @@ export default async function SuppliersPage() {
     <div className="space-y-6">
       <PageHeader
         title="Suppliers"
-        description="What we bought from each supplier, what we paid, what we still owe, and what they owe us after send-backs. Click a box to see the houses that make that number. Click a house to open its bills. Each house is one name and one phone."
+        description="Bought, paid, still owed, and they owe us."
       />
 
       <div className="page-split">
         <SuppliersList suppliers={suppliers} />
 
-        <SectionCard title="Add a supplier">
-          <p className="mb-3 text-sm text-muted-foreground">
-            Use one name for one house. A second spelling of the same name, or the same phone with extra spaces, is refused. Pick the name already on the list instead.
-          </p>
+        <SectionCard title="Add a supplier" description="One name and one phone for one house.">
           <ActionForm action={createSupplier} submit="Save this supplier" className="space-y-3">
             <Select name="kind" defaultValue="SUPPLIER">
               <option value="SUPPLIER">Supplier of cartons</option>

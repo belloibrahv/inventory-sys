@@ -12,7 +12,7 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       {data.tasks.length ? (
-        <SectionCard title="Do these next" description="Work that still needs a person in the shops you can see.">
+        <SectionCard title="Do these next">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {data.tasks.map((task) => (
               <a
@@ -60,14 +60,12 @@ export default async function DashboardPage() {
         <StatCard
           label="Needs approval"
           value={String(data.exceptions.pendingApprovals)}
-          hint="Waiting for a manager to say yes or no"
           href="/approvals"
           tone={data.exceptions.pendingApprovals > 0 ? "warning" : "neutral"}
         />
         <StatCard
           label="Sales with no customer name"
           value={String(data.exceptions.walkIns)}
-          hint="Invoices that did not name the buyer"
           href="/sales"
           tone={data.exceptions.walkIns > 0 ? "warning" : "neutral"}
         />
@@ -76,42 +74,22 @@ export default async function DashboardPage() {
           value={formatCurrency(data.exceptions.creditorOwed)}
           hint={
             data.exceptions.supplierCredit > 0
-              ? `They owe us ${formatCurrency(data.exceptions.supplierCredit)} after send-backs`
-              : "Unpaid supplier bills for the shops you can see"
+              ? `They owe us ${formatCurrency(data.exceptions.supplierCredit)}`
+              : undefined
           }
           href="/suppliers"
         />
         <StatCard
           label="Shop count vs IMEI"
           value={String(data.exceptions.imeiGaps)}
-          hint={
-            data.exceptions.imeiGaps === 0
-              ? "Shop count matches the IMEI list"
-              : "Some phones do not match the IMEI list"
-          }
           href="#imei-check"
           tone={data.exceptions.imeiGaps > 0 ? "danger" : "success"}
         />
       </StatGrid>
 
-      <p className="text-sm text-muted-foreground">
-        Open{" "}
-        <a href="/audit/books" className="font-medium text-primary hover:underline">
-          Check the books
-        </a>{" "}
-        for the signed money paper, stock value, and who still owes.
-      </p>
-
       <div id="imei-check" className="surface-card overflow-hidden">
         <div className="flex items-center justify-between px-6 py-5">
-          <div>
-            <h3 className="font-semibold">IMEI vs shop count</h3>
-            <p className="text-sm text-muted-foreground">
-              {data.exceptions.imeiGaps === 0
-                ? "Shop count matches the IMEI list for every phone and laptop."
-                : `${data.exceptions.imeiGaps} item${data.exceptions.imeiGaps === 1 ? "" : "s"} do not match the IMEI list.`}
-            </p>
-          </div>
+          <h3 className="font-semibold">IMEI vs shop count</h3>
           <Badge variant={data.exceptions.imeiGaps ? "danger" : "success"}>
             {data.exceptions.imeiGaps ? "Gap" : "Match"}
           </Badge>
@@ -209,13 +187,9 @@ export default async function DashboardPage() {
 
         <div className="space-y-4 xl:col-span-3">
           <div className="surface-card p-6">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="font-semibold">Stock at cost</h3>
-              <Badge variant="muted">Now</Badge>
-            </div>
-            <p className="text-sm text-muted-foreground">What is on the shelf, at cost</p>
+            <h3 className="mb-3 font-semibold">Stock at cost</h3>
             <p className="text-3xl font-semibold num">{formatCurrency(data.kpis.stockValue)}</p>
-            <p className="mt-1 text-xs text-success">Customers still owe: {formatCurrency(data.kpis.outstanding)}</p>
+            <p className="mt-1 text-xs text-success">Customers still owe {formatCurrency(data.kpis.outstanding)}</p>
             <div className="mt-4 space-y-3">
               {data.stock.map((row) => (
                 <div key={row.id} className="flex items-center justify-between text-sm">

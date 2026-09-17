@@ -24,7 +24,7 @@ export default async function IncomingPage() {
       <div>
         <PageHeader
           title="Goods on the way"
-          description="Book phones and pieces that have left the supplier but have not been counted into this shop yet. They stay Coming until someone says they have arrived."
+          description="Left the supplier. Not counted into this shop yet."
         />
         <div className="mt-5">
           <IncomingList lots={lots} canBook={canBook} isAdmin={isShopOwner(me.role)} />
@@ -32,11 +32,8 @@ export default async function IncomingPage() {
       </div>
       <SectionCard
         title="Book goods still coming"
-        description="Shop stock does not go up until someone confirms the carton has arrived."
+        description="Scan IMEIs or type pieces. Stock rises only when they arrive."
       >
-        <p className="mb-4 text-sm text-muted-foreground">
-          Scan IMEIs or type how many pieces. You can attach this to a supplier bill if you already have one.
-        </p>
         {canBook ? (
           <IncomingForm
             key={lots[0]?.id ?? "empty"}
@@ -47,9 +44,7 @@ export default async function IncomingPage() {
             defaultBranchId={me.branchId}
           />
         ) : (
-          <p className="text-sm text-muted-foreground">
-            Displaying authorized inbound consignments. Contact your system administrator to request receiving permissions or update visibility flags.
-          </p>
+          <p className="text-sm text-muted-foreground">You can read goods on the way. A goods intake person books new cartons.</p>
         )}
       </SectionCard>
     </div>

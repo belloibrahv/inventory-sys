@@ -39,28 +39,24 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
         <StatCard
           label="We have paid them"
           value={formatCurrency(totalPaid)}
-          hint="Money we have sent to them so far"
           tone="success"
           href="#supplier-bills"
         />
         <StatCard
           label="We still owe them"
           value={formatCurrency(totalOwed)}
-          hint={totalOwed === 0 ? "We owe them nothing" : "Money we have not paid yet"}
           tone={totalOwed > 0 ? "warning" : "neutral"}
           href="#supplier-bills"
         />
         <StatCard
           label="They owe us"
           value={formatCurrency(totalSurplus)}
-          hint={totalSurplus === 0 ? "They owe us nothing" : "Send-backs that left a surplus on this house"}
           tone={totalSurplus > 0 ? "success" : "neutral"}
           href="#supplier-bills"
         />
         <StatCard
           label="Phones we collected"
           value={String(supplier.imeiRecords.length)}
-          hint="Phones and serial items booked in from them. Open a bill below to follow each IMEI."
           href="#supplier-bills"
         />
       </StatGrid>

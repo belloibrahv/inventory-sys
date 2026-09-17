@@ -66,7 +66,7 @@ export function PageHeader({
           <h1 className="text-xl font-semibold tracking-tight md:text-2xl">{title}</h1>
         </div>
         {description ? (
-          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">{description}</p>
+          <p className="mt-1 max-w-2xl text-sm leading-snug text-muted-foreground">{description}</p>
         ) : null}
       </div>
       {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
@@ -147,12 +147,7 @@ export function StatCard({
         ) : null}
       </div>
       <p className={cn("mt-2 text-[1.7rem] font-semibold leading-tight tracking-tight num", toneText[tone])}>{value}</p>
-      {hint ? <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{hint}</p> : null}
-      {interactive ? (
-        <p className="mt-2 text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
-          See the rows that make this number &rarr;
-        </p>
-      ) : null}
+      {hint ? <p className="mt-1 text-xs leading-snug text-muted-foreground">{hint}</p> : null}
     </>
   )
 

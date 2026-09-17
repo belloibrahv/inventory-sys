@@ -13,7 +13,7 @@ export default async function SettingsRulesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Selling rules"
-        description="Lowest price staff must not go under, the low-stock warning, and default warranty days."
+        description="Lowest price, low-stock warning, and warranty days."
       />
       {!canEdit ? (
         <div className="surface-card p-5 text-sm text-muted-foreground">

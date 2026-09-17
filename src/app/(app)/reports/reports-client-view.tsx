@@ -282,13 +282,13 @@ export function ReportsClientView({
       ["Customer", "Shop", "Amount Owed (NGN)"],
       ...pack.debtors.map((row) => [row.name, row.shop, row.amount]),
       [],
-      ["Total Receivables", "", pack.totals.owing],
+      ["Total still owed by customers", "", pack.totals.owing],
     ],
     CREDITORS: () => [
       ["Bill / Invoice", "Supplier", "Shop", "Amount Owed (NGN)"],
       ...pack.creditors.map((row) => [row.invoice, row.supplier, row.shop, row.owed]),
       [],
-      ["Total Payables", "", "", supplierOwed],
+      ["Total still owed to suppliers", "", "", supplierOwed],
     ],
     SWAPS: () => [
       ["Swap Number", "Customer", "Shop", "Item Swapped For", "Swap Deal Value", "Balance Paid", "Date"],
@@ -425,13 +425,11 @@ export function ReportsClientView({
           </div>
         </div>
 
-        {/* Every headline figure opens the rows that add up to it. */}
-        {/* Every headline figure opens the rows that add up to it. */}
         <StatGrid>
           <StatCard
             label="Total sales"
             value={formatCurrency(pack.totals.revenue)}
-            hint={`${sales.length} transaction${sales.length === 1 ? "" : "s"} in this period`}
+            hint={`${sales.length} sale${sales.length === 1 ? "" : "s"}`}
             icon={<TrendingUp className="h-4 w-4" />}
             tone="neutral"
             onClick={() => setDrilldown("REVENUE")}
@@ -439,7 +437,6 @@ export function ReportsClientView({
           <StatCard
             label="Total payments received"
             value={formatCurrency(pack.totals.collected)}
-            hint="Cash received plus Transfer received plus POS received. Credit still owed is not in this figure."
             icon={<Banknote className="h-4 w-4" />}
             tone="success"
             onClick={() => setDrilldown("RECEIVED")}
@@ -447,15 +444,15 @@ export function ReportsClientView({
           <StatCard
             label="Approved expenses"
             value={formatCurrency(pack.totals.expenses)}
-            hint={`${expenses.length} approved expense${expenses.length === 1 ? "" : "s"}`}
+            hint={`${expenses.length} expense${expenses.length === 1 ? "" : "s"}`}
             icon={<TrendingDown className="h-4 w-4" />}
             tone="danger"
             onClick={() => setDrilldown("EXPENSES")}
           />
           <StatCard
-            label="Inventory valuation (Cost)"
+            label="Stock at cost"
             value={formatCurrency(pack.totals.stock)}
-            hint={`${inventory.length} unit${inventory.length === 1 ? "" : "s"} currently in stock`}
+            hint={`${inventory.length} unit${inventory.length === 1 ? "" : "s"}`}
             icon={<Package className="h-4 w-4" />}
             tone="warning"
             onClick={() => setDrilldown("STOCK")}
@@ -483,28 +480,28 @@ export function ReportsClientView({
             onClick={() => setDrilldown("OPENING")}
           />
           <StatCard
-            label="Procurement after opening stock"
+            label="Bought after opening"
             value={formatCurrency(boughtValue)}
-            hint={`${opening.boughtSince.length} supplier bill${opening.boughtSince.length === 1 ? "" : "s"}, excluding opening stock`}
+            hint={`${opening.boughtSince.length} supplier bill${opening.boughtSince.length === 1 ? "" : "s"}`}
             icon={<PackagePlus className="h-4 w-4" />}
             onClick={() => setDrilldown("BOUGHT")}
           />
           <StatCard
-            label="Receivables"
+            label="Customers still owe"
             value={formatCurrency(pack.totals.owing)}
-            hint={`${pack.debtors.length} customer${pack.debtors.length === 1 ? "" : "s"} with outstanding balance`}
+            hint={`${pack.debtors.length} customer${pack.debtors.length === 1 ? "" : "s"}`}
             onClick={() => setDrilldown("DEBTORS")}
           />
           <StatCard
-            label="Suppliers payment (Payables)"
+            label="Still owed to suppliers"
             value={formatCurrency(supplierOwed)}
-            hint={`${owedHouses.length} supplier house${owedHouses.length === 1 ? "" : "s"} still owed`}
+            hint={`${owedHouses.length} house${owedHouses.length === 1 ? "" : "s"}`}
             onClick={() => setDrilldown("CREDITORS")}
           />
           <StatCard
             label="They owe us"
             value={formatCurrency(supplierCredit)}
-            hint="Send-backs that left a surplus on the house"
+            hint={supplierCredit > 0 ? "After send-backs" : undefined}
           />
         </StatGrid>
 
@@ -512,13 +509,11 @@ export function ReportsClientView({
           <StatCard
             label="Swap Deal value"
             value={formatCurrency(pack.totals.swaps)}
-            hint="Cash difference collected on Swap Deal sales"
             onClick={() => setDrilldown("SWAPS")}
           />
           <StatCard
             label="Returned products"
             value={String(pack.totals.returns)}
-            hint="Products returned within this accounting period"
             onClick={() => setDrilldown("RETURNS")}
           />
         </StatGrid>
@@ -527,7 +522,7 @@ export function ReportsClientView({
           <TableShell
             caption={
               <>
-                <h2 className="text-sm font-semibold tracking-tight">Branch Performance Breakdown</h2>
+                <h2 className="text-sm font-semibold tracking-tight">Sales by shop</h2>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">
                     {pack.byShop.length} branch location{pack.byShop.length === 1 ? "" : "s"}
@@ -803,7 +798,7 @@ export function ReportsClientView({
             </>
           ) : drilldown === "EXPENSES" ? (
             <>
-              <span>{expenses.length} vouchers</span>
+              <span>{expenses.length} shop bill{expenses.length === 1 ? "" : "s"}</span>
               <span className="font-semibold text-foreground">{formatCurrency(pack.totals.expenses)}</span>
             </>
           ) : drilldown === "OPENING" ? (

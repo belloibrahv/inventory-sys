@@ -19,7 +19,7 @@ export default async function WarrantyPage() {
     <div className="space-y-6">
       <PageHeader
         title="Warranty days"
-        description="How many days an item is covered after it is sold. Returns and repairs read this number, so keep it honest."
+        description="Days covered after a sale."
       />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,460px)_minmax(0,1fr)]">

@@ -44,7 +44,7 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
     <div className="space-y-6">
       <PageHeader
         title="Goods from supplier"
-        description="Supplier procurement bills and vendor accounts payable. Track expected cartons, received stock, and vendor disbursements."
+        description="Supplier bills, what we paid, and what is still owed."
       />
 
       <form className="grid gap-2 md:grid-cols-[1fr_auto]">
@@ -55,13 +55,11 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
       {openingPurchases.length > 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary-soft p-4 text-sm text-foreground">
           <div className="space-y-0.5">
-            <p className="font-semibold text-primary">Independent Opening Stock Valuation ({formatCurrency(openingValue)})</p>
-            <p className="text-xs text-muted-foreground">
-              Opening inventory stands independently as an asset valuation baseline. It requires no supplier payments and carries zero trade debt.
-            </p>
+            <p className="font-semibold text-primary">Opening stock {formatCurrency(openingValue)}</p>
+            <p className="text-xs text-muted-foreground">Value only. Not a bill to pay.</p>
           </div>
           <Button asChild variant="outline" size="sm">
-            <Link href="/opening-stock">View &amp; Audit Opening Stock &rarr;</Link>
+            <Link href="/opening-stock">Count and close opening stock</Link>
           </Button>
         </div>
       ) : null}
@@ -76,35 +74,33 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
         <StatCard
           label="We have paid"
           value={formatCurrency(paid)}
-          hint="Money we have already sent for these bills"
           tone="success"
         />
         <StatCard
           label="Still owed"
           value={formatCurrency(owed)}
-          hint={surplus > 0 ? `They owe us ${formatCurrency(surplus)} after send-backs` : "It shows on Money in and out until we pay it"}
+          hint={surplus > 0 ? `They owe us ${formatCurrency(surplus)}` : undefined}
           tone={owed > 0 ? "warning" : "neutral"}
         />
         <StatCard
           label="Never scanned in"
           value={String(shortVsBill)}
-          hint="Units the supplier charged us for that never entered the shop record"
+          hint={shortVsBill > 0 ? "On the bill, never entered this shop" : undefined}
           tone={shortVsBill > 0 ? "danger" : "success"}
         />
       </StatGrid>
 
       <StatGrid>
-        <StatCard label="On these bills" value={String(expected)} hint="Units the supplier put on the bill" />
-        <StatCard label="Scanned into the shop" value={String(recorded)} hint="Phone numbers (IMEIs) or pieces booked in" />
+        <StatCard label="On these bills" value={String(expected)} />
+        <StatCard label="Scanned into the shop" value={String(recorded)} />
         <StatCard
           label="Sold from these cartons"
           value={String(sold)}
-          hint={soldToday ? `${soldToday} of them sold today (Lagos day)` : "Already on an invoice"}
+          hint={soldToday ? `${soldToday} sold today` : undefined}
         />
         <StatCard
           label="Still on our shelf"
           value={String(inShop)}
-          hint="If the shelf has less, count the stock. Never type a new number by hand."
           href="/reconciliation"
         />
       </StatGrid>
@@ -112,10 +108,7 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
       <div className="page-split">
         <PurchasesList purchases={purchases} search={q} />
         <div className="space-y-4">
-          <SectionCard title="Book expected goods">
-            <p className="mb-4 text-sm text-muted-foreground">
-              This is a supplier carton, not a send from Iwo Road to Challenge. After you save, open the bill to book IMEIs as Coming, then confirm arrival when the boxes are on the counter. That bill is the trail if a unit later goes missing.
-            </p>
+          <SectionCard title="Book expected goods" description="A supplier carton. After save, open the bill to scan IMEIs.">
             <PurchaseForm
               suppliers={houses.map((row) => ({
                 id: row.id,
@@ -128,10 +121,7 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
               defaultBranchId={me.branchId}
             />
           </SectionCard>
-          <SectionCard title="Send back to supplier">
-            <p className="mb-4 text-sm text-muted-foreground">
-              Scan each IMEI. The phone, the supplier, and the cost fill in from that number. Do not pick the house. Scan ten or twenty phones if they all go back to the same supplier in this one send-back. That cost comes off what we still owe. If we do not owe them, they owe us.
-            </p>
+          <SectionCard title="Send back to supplier" description="Scan IMEI. The house and cost fill in. Scan every phone for this one send-back.">
             {returnUnits.length ? (
               <ul className="mb-4 space-y-1 text-sm">
                 {returnUnits.slice(0, 8).map((row) => (
@@ -142,7 +132,7 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
                 ))}
               </ul>
             ) : (
-              <p className="mb-4 text-sm text-muted-foreground">No faulty phone and no returned phone is waiting to go back. You can still scan an In shop IMEI that must go back.</p>
+              <p className="mb-4 text-sm text-muted-foreground">No phone is waiting. You can still scan an In shop IMEI.</p>
             )}
             <SupplierReturnForm />
           </SectionCard>

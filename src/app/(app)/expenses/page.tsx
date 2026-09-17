@@ -18,36 +18,35 @@ export default async function ExpensesPage() {
   return (
     <div className="page-split">
       <div>
-        <PageHeader title="Shop expenses" description="Fuel, rent, salary, light bill, and other shop bills. Write the request here. A manager must say yes before the money leaves." />
+        <PageHeader title="Shop expenses" description="Write the bill. A manager must say yes before money leaves." />
         <ExpensesList expenses={finance.expenses} />
       </div>
       <div className="surface-card p-5">
-        <h3 className="mb-4 font-semibold">Submit Expense Requisition</h3>
-        <p className="mb-4 text-sm text-muted-foreground">Disbursements require supervisor approval before funds are released from the branch register.</p>
+        <h3 className="mb-4 font-semibold">Ask for this shop bill</h3>
         {canPost ? (
-        <ActionForm action={createExpense} submit="Submit Requisition" className="space-y-3">
+        <ActionForm action={createExpense} submit="Save this shop bill" className="space-y-3">
           <Select name="branchId" required>
             {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
           </Select>
           <Select name="category" defaultValue="MISCELLANEOUS">
             {[
-              ["TRANSPORT", "Logistics & Transport"],
-              ["FUEL", "Fuel & Energy"],
-              ["RENT", "Facility Lease & Rent"],
-              ["UTILITIES", "Utilities & Power"],
-              ["REPAIRS", "Maintenance & Repairs"],
-              ["SALARY", "Payroll & Staff Allowances"],
-              ["MARKETING", "Marketing & Promotions"],
-              ["MISCELLANEOUS", "General Operational Overhead"],
+              ["TRANSPORT", "Transport"],
+              ["FUEL", "Fuel"],
+              ["RENT", "Rent"],
+              ["UTILITIES", "Light bill"],
+              ["REPAIRS", "Repairs"],
+              ["SALARY", "Salary"],
+              ["MARKETING", "Marketing"],
+              ["MISCELLANEOUS", "Other shop bill"],
             ].map(([value, label]) => (
               <option key={value} value={value}>{label}</option>
             ))}
           </Select>
-          <Input name="amount" type="number" placeholder="Voucher Amount" required />
-          <Input name="description" placeholder="Business Purpose / Description" required />
+          <Input name="amount" type="number" placeholder="Amount in naira" required />
+          <Input name="description" placeholder="What this bill is for" required />
         </ActionForm>
         ) : (
-          <p className="text-sm text-muted-foreground">Read-only access to expense ledgers. Requisition privileges required to submit new expense vouchers.</p>
+          <p className="text-sm text-muted-foreground">You can read the list. A manager writes a new bill.</p>
         )}
       </div>
     </div>

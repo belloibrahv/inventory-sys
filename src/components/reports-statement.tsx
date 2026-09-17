@@ -15,7 +15,7 @@ export function ReportsStatement({ data }: { data: ReportsPack }) {
       <DocumentLetterhead
         brand={brand}
         documentKind="Executive summary"
-        documentTitle="Consolidated Branch Performance"
+        documentTitle="Sales by shop"
         meta={[data.statementRef, data.periodLabel, `Lagos time ${formatLagosStamp(new Date(data.preparedAt))}`]}
       >
         <div className="mt-4 grid gap-3 border-t border-white/15 pt-3 text-[12px] sm:grid-cols-3">
@@ -46,7 +46,7 @@ export function ReportsStatement({ data }: { data: ReportsPack }) {
       </div>
 
       <div className="px-6 py-4">
-        <h3 className="text-sm font-semibold">Branch Performance Breakdown</h3>
+        <h3 className="text-sm font-semibold">Sales by shop</h3>
         <table className="mt-2 w-full text-[11px]">
           <thead>
             <tr className="border-y border-slate-200 bg-slate-50 text-left text-[10px] uppercase tracking-wider text-slate-500">

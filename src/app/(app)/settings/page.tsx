@@ -34,7 +34,7 @@ export default async function SettingsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Shop details"
-        description="The logo, name, phone and address printed on every invoice, receipt and report."
+        description="Logo, name, phone, and address on invoices."
       />
       <LetterheadEditor brand={brand} canEdit={letterheadEdit} />
       {!canEdit ? (

@@ -183,9 +183,7 @@ export default async function SaleDetailPage({
       {!sale.customerId ? (
         <div className="surface-card p-5 print:hidden">
           <h3 className="mb-2 font-semibold">Attach named buyer</h3>
-          <p className="mb-3 text-sm text-muted-foreground">
-            Items, IMEIs, and prices stay as they are. Warranty and returns need a customer name. Any unpaid balance becomes what this customer owes.
-          </p>
+          <p className="mb-3 text-sm text-muted-foreground">Warranty and returns need a name. Items and prices stay as they are.</p>
           <ActionForm action={attachSaleCustomer} submit="Attach buyer" className="grid gap-3 md:grid-cols-2">
             <input type="hidden" name="saleId" value={sale.id} />
             <Select name="customerId" defaultValue="" className="md:col-span-2">
@@ -204,9 +202,7 @@ export default async function SaleDetailPage({
       {isShopOwner(me.role) && sale.payments.length ? (
         <div className="surface-card p-5 print:hidden">
           <h3 className="mb-2 font-semibold">Undo the last money collected</h3>
-          <p className="mb-3 text-sm text-muted-foreground">
-            Main admin or CEO. Items and IMEIs stay as they are. The last money collected is taken off the record. Who did what keeps this step.
-          </p>
+          <p className="mb-3 text-sm text-muted-foreground">Items and IMEIs stay. Who did what keeps this.</p>
           <ActionForm action={reverseInvoicePayment} submit="Reverse last payment" variant="outline">
             <input type="hidden" name="saleId" value={sale.id} />
           </ActionForm>

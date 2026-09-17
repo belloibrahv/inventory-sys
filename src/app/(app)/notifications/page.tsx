@@ -16,7 +16,7 @@ export default async function NotificationsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Alerts"
-        description="Short messages: items running low, work waiting for a yes, money that is due, goods moving between shops, and returns."
+        description="Low stock, work waiting, money due, and returns."
         actions={
           <form action={markAllRead}>
             <Button>I have read all of them</Button>

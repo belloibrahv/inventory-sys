@@ -5,6 +5,7 @@ import { FilterChips } from "@/components/filter-chips"
 import { StatusBadge } from "@/components/shared"
 import { TablePager, usePagedRows } from "@/components/table-pager"
 import { formatShopWhen } from "@/lib/lagos-day"
+import { statusLabel } from "@/lib/status"
 import { formatCurrency, money } from "@/lib/utils"
 
 type ExpenseRow = {
@@ -66,7 +67,7 @@ export function ExpensesList({ expenses }: { expenses: ExpenseRow[] }) {
             <tr className="border-b border-border">
               <th className="px-4 py-3">Expense</th>
               <th className="px-4 py-3">Category</th>
-              <th className="px-4 py-3">Branch</th>
+              <th className="px-4 py-3">Shop</th>
               <th className="px-4 py-3">Amount</th>
               <th className="px-4 py-3">Approval</th>
               <th className="px-4 py-3">When</th>
@@ -79,7 +80,7 @@ export function ExpensesList({ expenses }: { expenses: ExpenseRow[] }) {
                   <p className="font-medium">{expense.description}</p>
                   <p className="text-xs text-muted-foreground">{expense.expenseNumber}</p>
                 </td>
-                <td className="px-4 py-3">{expense.category}</td>
+                <td className="px-4 py-3">{statusLabel(expense.category)}</td>
                 <td className="px-4 py-3">{expense.branch.code}</td>
                 <td className="px-4 py-3">{formatCurrency(money(expense.amount))}</td>
                 <td className="px-4 py-3">

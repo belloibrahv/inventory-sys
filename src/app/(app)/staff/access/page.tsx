@@ -28,7 +28,7 @@ export default async function AccessPage() {
     <div className="space-y-6">
       <PageHeader
         title="Who can see what"
-        description="Tick which pages and actions each job may use. The main admin and the CEO always keep the right to change the shop. The Financial Accountant and records checker see every shop page, post money, and cannot sell or change this list."
+        description="Tick the pages each job may open."
       />
 
       <div className="space-y-6">

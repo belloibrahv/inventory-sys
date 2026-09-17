@@ -42,7 +42,7 @@ export default async function ReconciliationPage() {
     <div className="space-y-8">
       <PageHeader
         title="Stock count"
-        description="Count one shop with your hands. If the shelf and the IMEI list disagree, a manager must say yes before numbers change."
+        description="Count the shelf. A manager must say yes before numbers change."
       />
 
       {/* Stock count form and table */}
@@ -106,7 +106,7 @@ export default async function ReconciliationPage() {
                     </div>
                   ))}
                   {offLines.length === 0 ? (
-                    <p className="font-medium text-success">Zero variance detected. Physical count matches perpetual inventory ledger.</p>
+                    <p className="font-medium text-success">Count matches the system.</p>
                   ) : null}
                 </div>
               </div>

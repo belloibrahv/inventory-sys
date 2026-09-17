@@ -209,16 +209,16 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
           </div>
         </div>
         <div className="px-6 py-5">
-          <h3 className="text-sm font-semibold">Receivables, payables, and cash drawer</h3>
+          <h3 className="text-sm font-semibold">Who still owes, and cash in the till</h3>
           <div className="mt-3 space-y-1.5 text-[12px]">
             <p className="flex justify-between gap-3">
-              <span className="text-slate-500">Receivables</span>
+              <span className="text-slate-500">Customers still owe</span>
               <Link href="/customers" className="tabular-nums font-semibold text-primary hover:underline">
                 {formatCurrency(data.customersOwe)}
               </Link>
             </p>
             <p className="flex justify-between gap-3">
-              <span className="text-slate-500">Suppliers payment (Payables)</span>
+              <span className="text-slate-500">Still owed to suppliers</span>
               <Link href="/suppliers" className="tabular-nums font-semibold text-primary hover:underline">
                 {formatCurrency(data.supplierOwed)}
               </Link>
@@ -360,9 +360,9 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
         <div className="flex items-start gap-3">
           <ShieldCheck className="h-5 w-5 text-primary shrink-0 mt-0.5" />
           <div className="text-xs text-slate-600 space-y-1">
-            <p className="font-bold text-slate-900">Auditor Certification & Statutory Attestation</p>
+            <p className="font-bold text-slate-900">Records checker sign-off</p>
             <p>
-              I have examined the underlying cash registers, daily till reconciliations, serialized asset ledgers, and authorized disbursements for the stated period. In my professional opinion, this statement presents fairly, in all material respects, the financial position and inventory valuation of the enterprise.
+              I have read this shop&apos;s cash, till close, phones, and shop bills for these days. These numbers match the shop records.
             </p>
           </div>
         </div>

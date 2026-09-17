@@ -21,7 +21,7 @@ export default async function AuditPage({
     <div className="space-y-6">
       <PageHeader
         title="Who did what"
-        description="Who did an important action, when, and what changed, in shop words. Nothing here is deleted."
+        description="Who did an important action, when, and what changed."
         actions={
           <div className="flex flex-wrap gap-2">
             <a href="/audit/books" className="inline-flex min-h-11 items-center rounded-xl border border-border px-3 text-sm">

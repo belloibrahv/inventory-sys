@@ -2,7 +2,7 @@ import { getReportData } from "@/app/actions/finance"
 import { getOpeningReport } from "@/app/actions/opening-stock"
 import { getBranches } from "@/app/actions/parties"
 import { PageHeader } from "@/components/shared"
-import { formatLagosStamp, formatWatLong, watDayKey, type ShopRange } from "@/lib/lagos-day"
+import { formatWatLong, watDayKey, type ShopRange } from "@/lib/lagos-day"
 import type { ReportsPack } from "@/lib/reports-pack"
 import { getAppSettings, lowStockLimit } from "@/lib/settings"
 import { requireUser } from "@/lib/session"
@@ -123,7 +123,7 @@ export default async function ReportsPage({
     <div className="space-y-6">
       <PageHeader
         title="Reports"
-        description={`Sales, payments received, stock value, and who still owes for ${label}. Click a supplier house to see the bills inside. Prepared ${formatLagosStamp()}.`}
+        description={`Sales, money in, stock, and who still owes for ${label}.`}
       />
       <ReportsClientView
         pack={pack}

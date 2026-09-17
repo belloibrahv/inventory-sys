@@ -26,7 +26,7 @@ export default async function BrandsCategoriesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Brands & categories"
-        description="Add Samsung, Tecno, power banks, and the rest once. New items on the price list pick from this list — no more waiting on Excel or a seed."
+        description="Add Samsung, Tecno, and the rest once. New items pick from this list."
       />
 
       <div className="grid gap-4 lg:grid-cols-2">

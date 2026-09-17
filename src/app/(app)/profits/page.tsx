@@ -62,7 +62,7 @@ export default async function ProfitsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Profit"
-        description="What we sold, what it cost us, and what is left after shop bills. You can pull this list into Excel."
+        description="Sell price minus cost, after shop bills."
         actions={
           <ExportCsv
             filename={`profit-${new Date().toISOString().slice(0, 10)}.csv`}

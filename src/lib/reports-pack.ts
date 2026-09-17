@@ -39,9 +39,9 @@ export function reportsKpis(data: ReportsPack) {
     { label: "Total sales", value: data.totals.revenue, money: true },
     { label: "Total payments received", value: data.totals.collected, money: true },
     { label: "Approved expenses", value: data.totals.expenses, money: true },
-    { label: "Inventory valuation (Cost)", value: data.totals.stock, money: true },
+    { label: "Stock at cost", value: data.totals.stock, money: true },
     { label: "Sales volume", value: data.totals.invoices, money: false },
-    { label: "Receivables", value: data.totals.owing, money: true },
+    { label: "Customers still owe", value: data.totals.owing, money: true },
     { label: "Swap Deal value", value: data.totals.swaps, money: true },
     { label: "Returned products", value: data.totals.returns, money: false },
   ]

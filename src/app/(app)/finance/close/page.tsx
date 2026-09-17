@@ -37,7 +37,7 @@ export default async function DayClosePage({
       <div className="flex flex-wrap items-center justify-between gap-4">
         <PageHeader
           title="Close the day"
-          description="Total sales for the day, cash received, bank transfer, POS, and cash remittance. Cash remittance is needed only when cash came into the till."
+          description="Sales, cash, transfer, and POS for this shop day."
         />
         <Link
           href="/finance"

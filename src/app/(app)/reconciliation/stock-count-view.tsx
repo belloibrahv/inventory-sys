@@ -162,11 +162,11 @@ export function StockCountView({
         toast.error(result.error)
         return
       }
-      toast.success("Cycle count audit submitted for management review and approval.")
+      toast.success("This count is waiting for a manager to say yes.")
       router.refresh()
     } catch {
       setBusy(false)
-      toast.error("Failed to submit inventory audit. Please verify your connection and retry.")
+      toast.error("Could not save this count. Try again.")
     }
   }
 
@@ -174,29 +174,29 @@ export function StockCountView({
     <div className="space-y-5">
       <StatGrid className="print:hidden">
         <StatCard
-          label="Perpetual Ledger"
+          label="On the system"
           value={`${summary.systemQty} units`}
-          hint={`Valuation: ${formatCurrency(summary.systemValue)} at cost`}
+          hint={formatCurrency(summary.systemValue)}
           icon={<Scale className="h-4 w-4" />}
         />
         <StatCard
-          label="Physical Count"
+          label="Counted on the shelf"
           value={`${summary.countedQty} units`}
-          hint={`Valuation: ${formatCurrency(summary.countedValue)} at cost`}
+          hint={formatCurrency(summary.countedValue)}
           icon={<CheckCircle2 className="h-4 w-4" />}
           tone="primary"
         />
         <StatCard
-          label="Inventory Surplus"
+          label="Extra on the shelf"
           value={`+${summary.gainedUnits} units`}
-          hint={`Physical count exceeds ledger · +${formatCurrency(summary.gainedValue)}`}
+          hint={summary.gainedUnits > 0 ? formatCurrency(summary.gainedValue) : undefined}
           icon={<TrendingUp className="h-4 w-4" />}
           tone={summary.gainedUnits > 0 ? "success" : "neutral"}
         />
         <StatCard
-          label="Inventory Shrinkage"
+          label="Short on the shelf"
           value={`−${summary.lostUnits} units`}
-          hint={`Physical count below ledger · −${formatCurrency(summary.lostValue)}`}
+          hint={summary.lostUnits > 0 ? formatCurrency(summary.lostValue) : undefined}
           icon={<TrendingDown className="h-4 w-4" />}
           tone={summary.lostUnits > 0 ? "danger" : "neutral"}
         />
@@ -207,19 +207,19 @@ export function StockCountView({
         <DocumentLetterhead
           brand={brand}
           documentKind="Stock count"
-          documentTitle="Physical inventory worksheet"
+          documentTitle="Stock count"
           meta={[selectedBranch?.name || "", new Date().toLocaleDateString("en-NG")]}
         />
         <div className="border-b px-6 py-3 text-sm">
           <p>
-            Branch location: <strong>{selectedBranch?.name}</strong> · Date:{" "}
+            Shop: <strong>{selectedBranch?.name}</strong> · Date:{" "}
             <strong>{new Date().toLocaleDateString("en-NG")}</strong>
           </p>
           <p className="mt-1 text-xs">
-            Perpetual Ledger: {formatCurrency(summary.systemValue)} · Physical Count: {formatCurrency(summary.countedValue)} ·
-            Net Variance: {formatCurrency(summary.netValue)}
+            On the system: {formatCurrency(summary.systemValue)} · Counted: {formatCurrency(summary.countedValue)} ·
+            Difference: {formatCurrency(summary.netValue)}
           </p>
-          {notes.trim() ? <p className="mt-1 text-xs">Audit Remarks: {notes.trim()}</p> : null}
+          {notes.trim() ? <p className="mt-1 text-xs">Note: {notes.trim()}</p> : null}
         </div>
       </div>
 
@@ -227,7 +227,7 @@ export function StockCountView({
         <Toolbar className="justify-between print:hidden">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             <label className="flex items-center gap-2 text-sm">
-              <span className="eyebrow shrink-0">Location</span>
+              <span className="eyebrow shrink-0">Shop</span>
               <Select value={branchId} onChange={(event) => setBranchId(event.target.value)} disabled={busy} className="h-9 w-52">
                 {branches.map((branch) => (
                   <option key={branch.id} value={branch.id}>

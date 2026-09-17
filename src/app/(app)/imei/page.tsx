@@ -47,7 +47,7 @@ export default async function ImeiPage({
       <CachePageData pageKey="imei" title="All phones" data={{ records }} />
       <PageHeader
         title="All phones"
-        description="Every phone has a life: received, in shop, sold or moved, returned or repaired. Tap a stage to see only those phones. Time is Lagos time."
+        description="Every phone and where it is now."
       />
 
       <WorkflowSteps

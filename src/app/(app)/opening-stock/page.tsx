@@ -39,7 +39,7 @@ export default async function OpeningStockBookPage({
     <div className="space-y-6">
       <PageHeader
         title="Correct & close opening stock"
-        description="Count the shelf against what was loaded. Tap Phones, Accessories, Screen, or Laptop to give each person their own group. When the count is right, the CEO or main admin closes it so the shop can sell."
+        description="Count the shelf. Close it when the numbers match."
       />
 
       <nav className="flex flex-wrap gap-2" aria-label="Shops">

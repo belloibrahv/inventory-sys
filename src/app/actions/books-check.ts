@@ -375,8 +375,8 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
     papers,
     openCount: openPapers.length,
     verdict: openPapers.length
-      ? `${openPapers.length} exception(s) require auditor resolution before certifying ledger.`
-      : "All accounts, physical inventory, and audit controls are reconciled and certified.",
+      ? `${openPapers.length} still open. Finish them before this paper is signed.`
+      : "These books match. Ready to sign.",
     compare: {
       revenue: change(now.revenue, then.revenue),
       collected: change(now.collected, then.collected),
