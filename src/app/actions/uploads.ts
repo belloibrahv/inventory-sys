@@ -10,6 +10,8 @@ import { makeOpeningSku, planOpeningStock } from "@/lib/opening-stock"
 import { planCustomers, planImeis, planStock, type CatalogItem, type ShopRef } from "@/lib/upload-plan"
 import {
   OPENING_STOCK_METHOD,
+  OPENING_STOCK_SUPPLIER_OPTION,
+  OPENING_STOCK_SUPPLIER_PHONE,
   UPLOAD_STOCK_SOURCE,
   attachPurchaseLine,
   isMarkedPaidOnUpload,
@@ -17,7 +19,7 @@ import {
 import { generateDocNumber, money } from "@/lib/utils"
 import { mapBillCondition, normalizeStorage } from "@/lib/item-specs"
 import { displayPartyName } from "@/lib/party-key"
-import { findDuplicateSupplier } from "@/lib/supplier-identity"
+import { ensureOpeningStockSupplier, findDuplicateSupplier } from "@/lib/supplier-identity"
 import { resolveWritableShopId, viewBranchFilter } from "@/lib/branch-scope"
 
 /**
@@ -176,18 +178,31 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
   let supplierId = String(formData.get("supplierId") || "").trim()
   if (supplierId === "__new__") supplierId = ""
 
-  let supplier = supplierId
-    ? await prisma.supplier.findFirst({ where: { id: supplierId, isActive: true } })
-    : null
+  let supplier =
+    supplierId && supplierId !== OPENING_STOCK_SUPPLIER_OPTION
+      ? await prisma.supplier.findFirst({ where: { id: supplierId, isActive: true } })
+      : null
+
+  if (supplierId && supplierId !== OPENING_STOCK_SUPPLIER_OPTION && !supplier && !newSupplierName) {
+    return { error: "That supplier is not on the list, or it is locked. Pick Opening Stock, pick another name, or add a new supplier." }
+  }
+
+  // Default house when the real supplier is not known yet. No phone needed.
+  if (supplierId === OPENING_STOCK_SUPPLIER_OPTION || (!supplierId && !newSupplierName)) {
+    supplier = await ensureOpeningStockSupplier()
+  }
 
   if (newSupplierName) {
-    if (!newSupplierPhone) return { error: "Type the new supplier phone number." }
-    const clash = await findDuplicateSupplier({ name: newSupplierName, phone: newSupplierPhone })
+    if (!displayPartyName(newSupplierName)) {
+      return { error: "Type the new supplier name, or pick Opening Stock from the list." }
+    }
+    const phoneToStore = newSupplierPhone || OPENING_STOCK_SUPPLIER_PHONE
+    const clash = await findDuplicateSupplier({ name: newSupplierName, phone: newSupplierPhone || undefined })
     if (clash) return clash
     supplier = await prisma.supplier.create({
       data: {
         name: displayPartyName(newSupplierName),
-        phone: newSupplierPhone,
+        phone: phoneToStore,
         city: newSupplierCity || null,
         country: newSupplierCountry || null,
         kind: "SUPPLIER",
@@ -196,7 +211,11 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
     revalidatePath("/suppliers")
   }
 
-  if (!supplier) return { error: "Pick the supplier, or add a new one." }
+  if (!supplier) {
+    return {
+      error: "Pick Opening Stock when you do not know the house yet, pick a supplier from the list, or type a new supplier name.",
+    }
+  }
   if (supplier.kind === "NEIGHBOR") {
     return { error: "A neighboring shop is not a supplier carton. Use Buy from next door for that." }
   }
@@ -911,6 +930,18 @@ export async function getUploadProgress() {
       }),
     ])
 
+  const openingHouse = await ensureOpeningStockSupplier()
+  const suppliersForForm = [
+    {
+      id: openingHouse.id,
+      name: openingHouse.name,
+      phone: openingHouse.phone,
+      city: openingHouse.city,
+      country: openingHouse.country,
+    },
+    ...suppliers.filter((row) => row.id !== openingHouse.id),
+  ]
+
   const openUploadBill = openBill
     ? {
         id: openBill.id,
@@ -942,7 +973,7 @@ export async function getUploadProgress() {
       minimumPrice: money(row.minimumPrice),
       sellingPrice: money(row.sellingPrice),
     })),
-    suppliers,
+    suppliers: suppliersForForm,
     openUploadBill,
   }
 }

@@ -58,6 +58,7 @@ async function main() {
     neighborFill: await prisma.neighborFill.count(),
     parkedSale: await prisma.parkedSale.count(),
     dayClose: await prisma.dayClose.count(),
+    openingStock: await prisma.openingStock.count(),
     imeiRecord: await prisma.imeiRecord.count(),
     sale: await prisma.sale.count(),
     incomingItem: await prisma.incomingItem.count(),
@@ -131,6 +132,7 @@ async function main() {
   await prisma.sale.deleteMany()
   await prisma.incomingItem.deleteMany()
   await prisma.incomingLot.deleteMany()
+  await prisma.openingStock.deleteMany()
   await prisma.purchaseItem.deleteMany()
   await prisma.purchase.deleteMany()
   await prisma.transferItem.deleteMany()

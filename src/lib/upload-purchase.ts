@@ -6,6 +6,13 @@ export const MARKED_PAID_ON_UPLOAD = "MARKED_PAID_ON_UPLOAD"
 /** Opening stock is value only. Not a payable, not a payment. */
 export const OPENING_STOCK_METHOD = "OPENING_STOCK"
 
+/** System house for stock already on the shelf when the real supplier is not known yet. */
+export const OPENING_STOCK_SUPPLIER_NAME = "Opening Stock"
+/** Stored when no phone is needed. Digits-only phone checks ignore this. */
+export const OPENING_STOCK_SUPPLIER_PHONE = "not-required"
+/** Form value for the Opening Stock option on Many at once (Excel). */
+export const OPENING_STOCK_SUPPLIER_OPTION = "__opening_stock__"
+
 type Tx = Prisma.TransactionClient
 
 /**

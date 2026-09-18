@@ -1,5 +1,9 @@
 import { prisma } from "@/lib/prisma"
 import { displayPartyName, partyNameKey, partyPhoneKey } from "@/lib/party-key"
+import {
+  OPENING_STOCK_SUPPLIER_NAME,
+  OPENING_STOCK_SUPPLIER_PHONE,
+} from "@/lib/upload-purchase"
 
 export async function findDuplicateSupplier(input: {
   name: string
@@ -35,4 +39,34 @@ export async function findDuplicateSupplier(input: {
   }
 
   return null
+}
+
+/**
+ * One shared "Opening Stock" house for shelf goods when the real supplier is
+ * not known yet. Phone is not required for that house.
+ */
+export async function ensureOpeningStockSupplier() {
+  const rows = await prisma.supplier.findMany({
+    where: { kind: "SUPPLIER" },
+    select: { id: true, name: true, phone: true, isActive: true, city: true, country: true },
+  })
+  const existing = rows.find((row) => partyNameKey(row.name) === partyNameKey(OPENING_STOCK_SUPPLIER_NAME))
+  if (existing) {
+    if (!existing.isActive) {
+      return prisma.supplier.update({
+        where: { id: existing.id },
+        data: { isActive: true, phone: existing.phone || OPENING_STOCK_SUPPLIER_PHONE },
+      })
+    }
+    return prisma.supplier.findUniqueOrThrow({ where: { id: existing.id } })
+  }
+  return prisma.supplier.create({
+    data: {
+      name: OPENING_STOCK_SUPPLIER_NAME,
+      phone: OPENING_STOCK_SUPPLIER_PHONE,
+      kind: "SUPPLIER",
+      city: null,
+      country: null,
+    },
+  })
 }

@@ -11,6 +11,7 @@ import { SectionCard } from "@/components/shared"
 import { BrandBusyOverlay } from "@/components/brand-busy-overlay"
 import { importOpeningStock, type UploadResult } from "@/app/actions/uploads"
 import { listedSupplierClash } from "@/lib/party-key"
+import { OPENING_STOCK_SUPPLIER_NAME, OPENING_STOCK_SUPPLIER_OPTION } from "@/lib/upload-purchase"
 import { formatCurrency } from "@/lib/utils"
 
 type Shop = { id: string; name: string; code: string }
@@ -36,14 +37,23 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
   const [busyShop, setBusyShop] = useState("")
   const [problems, setProblems] = useState<string[]>([])
   const [softNotes, setSoftNotes] = useState<string[]>([])
-  const [supplierChoice, setSupplierChoice] = useState(suppliers[0]?.id || "__new__")
+  const openingHouse =
+    suppliers.find((row) => row.name.trim().toLowerCase() === OPENING_STOCK_SUPPLIER_NAME.toLowerCase()) || null
+  const [supplierChoice, setSupplierChoice] = useState(OPENING_STOCK_SUPPLIER_OPTION)
   const [branchId, setBranchId] = useState(shops[0]?.id || "")
   const addingNewSupplier = supplierChoice === "__new__"
+  const usingOpeningStock =
+    supplierChoice === OPENING_STOCK_SUPPLIER_OPTION ||
+    (openingHouse != null && supplierChoice === openingHouse.id)
 
   const shopLabel =
     shops.find((shop) => shop.id === branchId)?.name ||
     shops.find((shop) => shop.id === branchId)?.code ||
     "this shop"
+
+  const otherSuppliers = suppliers.filter(
+    (row) => row.name.trim().toLowerCase() !== OPENING_STOCK_SUPPLIER_NAME.toLowerCase()
+  )
 
   return (
     <SectionCard
@@ -58,9 +68,9 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
       />
 
       <p className="text-sm leading-relaxed text-muted-foreground">
-        One file for one shop, with tabs for PHONES, ACCESSORIES, SCREEN and LAPTOPS. Pick the shop and the supplier
-        (or add a new one). The file books phones and laptops In shop, sets the piece counts, and stores the opening
-        stock value from the unit costs. That value is not a bill to pay.
+        One file for one shop, with tabs for PHONES, ACCESSORIES, SCREEN and LAPTOPS. Pick the shop. If you do not know
+        every supplier yet, leave Supplier on Opening Stock. The file books phones and laptops In shop, sets the piece
+        counts, and stores the opening stock value from the unit costs. That value is not a bill to pay.
       </p>
 
       <ul className="mt-3 grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
@@ -74,17 +84,39 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
         ref={formRef}
         className="mt-5 space-y-4"
         action={async (formData) => {
+          if (!shops.length) {
+            toast.error("No shop is open on this login. Ask the main admin to open a shop first.")
+            return
+          }
+          if (!String(formData.get("branchId") || branchId).trim()) {
+            toast.error("Pick which shop this Excel belongs to.")
+            return
+          }
           if (addingNewSupplier) {
+            const newName = String(formData.get("newSupplierName") || "").trim()
+            if (!newName) {
+              toast.error("Type the new supplier name, or pick Opening Stock from the list.")
+              return
+            }
             const clash = listedSupplierClash(
               suppliers,
-              String(formData.get("newSupplierName") || ""),
+              newName,
               String(formData.get("newSupplierPhone") || ""),
             )
             if (clash) {
               toast.error(clash)
               return
             }
+          } else if (!String(formData.get("supplierId") || "").trim()) {
+            toast.error("Pick Opening Stock, pick a supplier from the list, or choose Add new supplier.")
+            return
           }
+          const file = formData.get("file")
+          if (!(file instanceof File) || file.size === 0) {
+            toast.error("Choose the opening stock Excel file first.")
+            return
+          }
+
           const selectedId = String(formData.get("branchId") || branchId)
           const selectedShop = shops.find((shop) => shop.id === selectedId)
           setBusyShop(selectedShop ? `${selectedShop.name} (${selectedShop.code})` : shopLabel)
@@ -121,7 +153,7 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
           )
           setSoftNotes(result.problems ?? [])
           formRef.current?.reset()
-          setSupplierChoice(suppliers[0]?.id || "__new__")
+          setSupplierChoice(OPENING_STOCK_SUPPLIER_OPTION)
           setBranchId(shops[0]?.id || "")
           router.refresh()
         }}
@@ -136,6 +168,7 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
               onChange={(event) => setBranchId(event.target.value)}
               disabled={busy}
             >
+              {!shops.length ? <option value="">No shop available</option> : null}
               {shops.map((shop) => (
                 <option key={shop.id} value={shop.id}>
                   {shop.name} ({shop.code})
@@ -153,7 +186,8 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
               value={supplierChoice}
               onChange={(event) => setSupplierChoice(event.target.value)}
             >
-              {suppliers.map((supplier) => (
+              <option value={OPENING_STOCK_SUPPLIER_OPTION}>Opening Stock</option>
+              {otherSuppliers.map((supplier) => (
                 <option key={supplier.id} value={supplier.id}>
                   {supplier.name}
                   {supplier.city || supplier.country
@@ -163,14 +197,22 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
               ))}
               <option value="__new__">Add new supplier</option>
             </Select>
+            {usingOpeningStock ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Use Opening Stock when the house that supplied these goods is not known yet. No phone number is needed.
+              </p>
+            ) : null}
           </label>
 
           {addingNewSupplier ? (
             <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3 sm:col-span-2">
               <p className="text-xs font-semibold text-foreground">New supplier</p>
+              <p className="text-xs text-muted-foreground">
+                Type the house name. Phone is optional on opening stock if you do not have it yet.
+              </p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Input name="newSupplierName" required placeholder="Supplier name" disabled={busy} />
-                <Input name="newSupplierPhone" required placeholder="Supplier phone number" disabled={busy} />
+                <Input name="newSupplierPhone" placeholder="Supplier phone number (optional)" disabled={busy} />
                 <Input name="newSupplierCity" placeholder="City (optional)" disabled={busy} />
                 <Input name="newSupplierCountry" placeholder="Country (optional)" disabled={busy} />
               </div>

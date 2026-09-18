@@ -212,8 +212,8 @@ const children = [
       ["Prepared by", "Product Team, Techvaults Limited"],
       ["Document type", "User guide and test plan"],
       ["Date", "17 September 2026"],
-      ["Version", "1.50"],
-      ["Status", "Updated: each shop keeps its own stock, sales, and values"],
+      ["Version", "1.51"],
+      ["Status", "Updated: Opening Stock supplier option when the house is not known yet"],
     ].map(([k, v]) =>
       new TableRow({
         children: [
@@ -1762,6 +1762,7 @@ h1("5. Words we use"),
   body("Version 1.48 makes every stock upload treat a repeated IMEI or serial as one entry. The upload still completes. Numbers already on the system are not doubled. Staff can correct the shelf later on Correct and close opening stock or Phones and items."),
   body("Version 1.49 puts a branded wait screen on long jobs. When you upload stock, sign in, sign out, or open a heavy page, the Abu Twins mark shows with a moving status line and a percent bar. Opening stock names the shop, for example Uploading opening stock to Iwo Road. Keep the page open until the bar reaches 100 percent."),
   body("Version 1.50 keeps each shop's stock and money apart. Uploading for Iwo Road books only Iwo Road. Sell now, expenses, and uploads for shop staff stay in their own shop. Head office can still pick a shop at the top and see that shop's real totals."),
+  body("Version 1.51 adds Opening Stock as a supplier choice on Many at once (Excel). Use it when stock is already on the shelf and the real house is not known yet. No phone number is required for that choice. Form checks speak in plain shop words when something is missing."),
 
   h1("17. Short close"),
   body("You now have one system for two Ibadan shops, ready for more shops in Nigeria. Goods can be booked before they arrive. Shelf stock and coming stock stay apart. Every sale prints an invoice. Each job sees only what the main admin or the CEO allows."),
