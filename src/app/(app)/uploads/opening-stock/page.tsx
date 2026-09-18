@@ -38,7 +38,7 @@ export default async function OpeningStockPage() {
       <div className="surface-card p-5">
         <h2 className="text-sm font-semibold">Before you upload</h2>
         <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
-          <li>One sheet covers one shop. Do the shops one after the other.</li>
+          <li>One sheet covers one shop. Do the shops one after the other. Stock for Iwo Road stays on Iwo Road only. It does not appear on Bodija or Challenge.</li>
           <li>The system makes its own opening stock number, so do not type one.</li>
           <li>
             There is no paid or unpaid on this sheet. The value is what the shop started with. New cartons with a bill

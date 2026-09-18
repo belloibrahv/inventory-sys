@@ -472,10 +472,11 @@ export async function getInventory() {
 }
 
 export async function getInStockImeiCounts() {
-  await requireUser()
+  const user = await requireUser()
+  const branchId = await viewBranchFilter(user)
   const rows = await prisma.imeiRecord.groupBy({
     by: ["productId", "branchId"],
-    where: { status: "IN_STOCK" },
+    where: { status: "IN_STOCK", ...(branchId ? { branchId } : {}) },
     _count: { _all: true },
   })
   return rows.map((row) => ({
@@ -486,10 +487,11 @@ export async function getInStockImeiCounts() {
 }
 
 export async function getIncomingImeiCounts() {
-  await requireUser()
+  const user = await requireUser()
+  const branchId = await viewBranchFilter(user)
   const rows = await prisma.imeiRecord.groupBy({
     by: ["productId", "branchId"],
-    where: { status: "INCOMING" },
+    where: { status: "INCOMING", ...(branchId ? { branchId } : {}) },
     _count: { _all: true },
   })
   return rows.map((row) => ({

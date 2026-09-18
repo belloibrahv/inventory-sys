@@ -212,8 +212,8 @@ const children = [
       ["Prepared by", "Product Team, Techvaults Limited"],
       ["Document type", "User guide and test plan"],
       ["Date", "17 September 2026"],
-      ["Version", "1.49"],
-      ["Status", "Updated: branded wait screens with percent and shop-named status"],
+      ["Version", "1.50"],
+      ["Status", "Updated: each shop keeps its own stock, sales, and values"],
     ].map(([k, v]) =>
       new TableRow({
         children: [
@@ -1641,6 +1641,7 @@ h1("5. Words we use"),
       ["73", "One phone at a time takes cost and lowest sell", "vault@abutwins.com or uploader@abutwins.com", "Open One phone at a time. Pick an item. Cost, lowest sell, and selling price fill from the list. Change them, scan an IMEI, save. The price list shows the new figures. Quantity stays 1 for a phone. A no-number item lets you type pieces."],
       ["74", "Duplicate IMEI on stock upload counted once", "uploader@abutwins.com or manager@abutwins.com", "On Supplier bill or Many at once (Excel), put the same IMEI twice. Upload still completes. That phone sits once. A number already on the system is not doubled. Soft notes name what was folded. Staff can edit later on Phones and items or Correct and close opening stock."],
       ["75", "Branded wait while stock uploads", "uploader@abutwins.com or manager@abutwins.com", "Start an opening stock or Supplier bill upload. The full screen shows the Abu Twins mark, a title that names the shop, moving status lines, and a percent bar. The page returns after 100 percent."],
+      ["76", "Iwo upload does not fill Challenge", "uploader@abutwins.com", "Upload opening stock for Iwo Road only. Challenge Shop stock stays empty for those units. Sell now at Challenge cannot scan Iwo IMEIs. Head office shop picker on Iwo shows Iwo totals only."],
     ],
     [600, 2800, 2600, 3360]
   ),
@@ -1760,6 +1761,7 @@ h1("5. Words we use"),
   body("Version 1.47 makes Returns show true value. Log a return records return item value. Replace from our stock picks an In shop unit and its value, with Receivable or Payable. After approval, Apply moves stock and settles the money. Correct and close opening stock remains the place to fill zero prices and missing piece counts before Close."),
   body("Version 1.48 makes every stock upload treat a repeated IMEI or serial as one entry. The upload still completes. Numbers already on the system are not doubled. Staff can correct the shelf later on Correct and close opening stock or Phones and items."),
   body("Version 1.49 puts a branded wait screen on long jobs. When you upload stock, sign in, sign out, or open a heavy page, the Abu Twins mark shows with a moving status line and a percent bar. Opening stock names the shop, for example Uploading opening stock to Iwo Road. Keep the page open until the bar reaches 100 percent."),
+  body("Version 1.50 keeps each shop's stock and money apart. Uploading for Iwo Road books only Iwo Road. Sell now, expenses, and uploads for shop staff stay in their own shop. Head office can still pick a shop at the top and see that shop's real totals."),
 
   h1("17. Short close"),
   body("You now have one system for two Ibadan shops, ready for more shops in Nigeria. Goods can be booked before they arrive. Shelf stock and coming stock stay apart. Every sale prints an invoice. Each job sees only what the main admin or the CEO allows."),

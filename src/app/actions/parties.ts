@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
-import { scopeRecord, viewBranchFilter } from "@/lib/branch-scope"
+import { resolveWritableShopId, scopeRecord, viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
 import { isShopOwner, scopedBranchId } from "@/lib/rbac"
 import { displayPartyName } from "@/lib/party-key"
@@ -51,8 +51,10 @@ export async function createCustomer(formData: FormData) {
   const user = await requireUser()
   const phone = String(formData.get("phone") ?? "").trim()
   const name = String(formData.get("name") ?? "").trim()
-  const branchId = String(formData.get("branchId") ?? user.branchId ?? "")
-  if (!name || !phone || !branchId) return { error: "Type the name and phone, and pick the shop." }
+  const shopGate = await resolveWritableShopId(user, String(formData.get("branchId") ?? user.branchId ?? ""))
+  if ("error" in shopGate) return { error: shopGate.error }
+  const branchId = shopGate.shopId
+  if (!name || !phone) return { error: "Type the name and phone, and pick the shop." }
 
   const exists = await prisma.customer.findUnique({ where: { phone } })
   if (exists) return { error: "A customer with this phone number is already on the system." }
@@ -152,8 +154,11 @@ export async function createSupplier(formData: FormData) {
 }
 
 export async function getBranches() {
-  await requireUser()
+  const user = await requireUser()
+  const { canSeeAllBranches } = await import("@/lib/rbac")
+  const canAll = await canSeeAllBranches(user.role)
   return prisma.branch.findMany({
+    where: canAll ? undefined : user.branchId ? { id: user.branchId } : { id: "__none__" },
     include: {
       _count: { select: { users: true, customers: true, imeiRecords: true, sales: true } },
     },

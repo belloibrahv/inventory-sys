@@ -16,7 +16,7 @@ import { canApprove, canManageFinance, canSeeAllBranches, scopedBranchId } from 
 import { can } from "@/lib/permissions"
 import { generateDocNumber, money } from "@/lib/utils"
 import { shopError } from "@/lib/shop-speak"
-import { canReachBranch, viewBranchFilter } from "@/lib/branch-scope"
+import { canReachBranch, resolveWritableShopId, viewBranchFilter } from "@/lib/branch-scope"
 import { ConflictError, claimImei, claimImeis, drawStock, returnStock, shiftCustomerBalance } from "@/lib/concurrency"
 import { warrantyState } from "@/lib/warranty"
 import { cell, readTableFile } from "@/lib/table-file"
@@ -289,11 +289,13 @@ export async function getPurchase(id: string) {
 export async function createPurchase(formData: FormData) {
   const user = await requireUser()
   const supplierId = String(formData.get("supplierId"))
-  const branchId = String(formData.get("branchId") || user.branchId || "")
+  const shopGate = await resolveWritableShopId(user, String(formData.get("branchId") || user.branchId || ""))
+  if ("error" in shopGate) return { error: shopGate.error }
+  const branchId = shopGate.shopId
   const productId = String(formData.get("productId"))
   const quantity = Number(formData.get("quantity") || 0)
   const costPrice = Number(formData.get("costPrice") || 0)
-  if (!supplierId || !branchId || !productId || quantity < 1) return { error: "Fill the form for the goods you are expecting." }
+  if (!supplierId || !productId || quantity < 1) return { error: "Fill the form for the goods you are expecting." }
 
   const supplier = await prisma.supplier.findUnique({ where: { id: supplierId } })
   if (!supplier) return { error: "Pick a supplier from the list." }

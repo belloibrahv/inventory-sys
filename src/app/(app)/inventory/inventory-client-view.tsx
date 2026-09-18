@@ -55,7 +55,7 @@ export function InventoryClientView({
   serializedIds: string[]
   lowStockThreshold: number
 }) {
-  const [selectedBranch, setSelectedBranch] = useState("ALL")
+  const [selectedBranch, setSelectedBranch] = useState(branches.length === 1 ? branches[0].id : "ALL")
   const [conditionFilter, setConditionFilter] = useState("ALL")
   const [search, setSearch] = useState("")
   const serialized = useMemo(() => new Set(serializedIds), [serializedIds])

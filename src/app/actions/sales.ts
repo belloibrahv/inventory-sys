@@ -4,13 +4,13 @@ import { revalidatePath } from "next/cache"
 import { PaymentMethod } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { requireUser } from "@/lib/session"
-import { canManageFinance, canSell, scopedBranchId } from "@/lib/rbac"
+import { canManageFinance, canSeeAllBranches, canSell, scopedBranchId } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { getAppSettings, lowStockLimit } from "@/lib/settings"
 import { letterheadFromSettings } from "@/lib/letterhead"
 import { generateDocNumber, money } from "@/lib/utils"
 import { ConflictError, claimImei, creditInvoice, drawStock, settle, shiftCustomerBalance } from "@/lib/concurrency"
-import { scopeRecord, viewBranchFilter } from "@/lib/branch-scope"
+import { resolveWritableShopId, scopeRecord, viewBranchFilter } from "@/lib/branch-scope"
 import { getSellLock } from "@/app/actions/day-close"
 import { markParkedPosted } from "@/app/actions/parked"
 import { isBlockedFromSell } from "@/lib/phone-look"
@@ -48,12 +48,18 @@ const POS_IMEI_SNAPSHOT = 400
 
 export async function getPosLookups() {
   const user = await requireUser()
+  const canAll = await canSeeAllBranches(user.role)
   const viewShop = await viewBranchFilter(user)
-  const branchId = (await scopedBranchId(user.role, user.branchId)) ?? user.branchId ?? viewShop ?? undefined
+  // Shop staff always sell in their own shop. Head office follows the shop picker.
+  const branchId = canAll ? viewShop || user.branchId || undefined : user.branchId || undefined
   const [products, customers, imeis, branches] = await Promise.all([
     prisma.product.findMany({
       where: { isActive: true, condition: { not: "FAULTY" } },
-      include: { brand: true, inventory: true, _count: { select: { imeiRecords: true } } },
+      include: {
+        brand: true,
+        inventory: branchId ? { where: { branchId } } : true,
+        _count: { select: { imeiRecords: true } },
+      },
       orderBy: { name: "asc" },
     }),
     prisma.customer.findMany({
@@ -71,9 +77,16 @@ export async function getPosLookups() {
       orderBy: { createdAt: "desc" },
       take: POS_IMEI_SNAPSHOT,
     }),
-    prisma.branch.findMany({ where: { isActive: true }, orderBy: [{ isHq: "desc" }, { name: "asc" }] }),
+    prisma.branch.findMany({
+      where: {
+        isActive: true,
+        ...(canAll ? {} : user.branchId ? { id: user.branchId } : { id: "__none__" }),
+      },
+      orderBy: [{ isHq: "desc" }, { name: "asc" }],
+    }),
   ])
   const settings = await getAppSettings()
+  const defaultBranchId = branchId || branches[0]?.id
   return {
     products: products.map((product) => ({
       id: product.id,
@@ -102,7 +115,7 @@ export async function getPosLookups() {
       name: branch.name,
       code: branch.code,
     })),
-    branchId,
+    branchId: defaultBranchId,
     allowBelowMinimum: settings.allowBelowMinimum,
     canOverrideFloor: settings.allowBelowMinimum || (await can(user.role, "action.override_floor")),
     lowStockThreshold: settings.lowStockThreshold,
@@ -156,12 +169,13 @@ export async function findInStockImei(code: string, branchId?: string) {
   const user = await requireUser()
   const cleaned = code.replace(/[\s-]/g, "").trim()
   if (!cleaned) return { error: "Scan or type an IMEI first." }
-  const viewShop = await viewBranchFilter(user)
-  const shop = branchId || (await scopedBranchId(user.role, user.branchId)) || user.branchId || viewShop || undefined
+  const shopGate = await resolveWritableShopId(user, branchId)
+  if ("error" in shopGate) return { error: shopGate.error }
+  const shop = shopGate.shopId
   const item = await prisma.imeiRecord.findFirst({
     where: {
       status: "IN_STOCK",
-      ...(shop ? { branchId: shop } : {}),
+      branchId: shop,
       OR: [{ imei1: cleaned }, { serialNumber: cleaned }],
     },
     include: { product: true },
@@ -229,9 +243,12 @@ export async function checkoutSale(input: {
 }) {
   const user = await requireUser()
   if (!(await canSell(user.role))) return { error: "You are not allowed to sell. Ask the main admin." }
+  const shopGate = await resolveWritableShopId(user, input.branchId)
+  if ("error" in shopGate) return { error: shopGate.error }
+  const saleShopId = shopGate.shopId
   if (!input.items.length) return { error: "Add at least one item." }
   if (!input.queuedAt || !input.offlineId) {
-    const lock = await getSellLock(input.branchId)
+    const lock = await getSellLock(saleShopId)
     if (lock.locked) return { error: lock.message }
   }
 
@@ -262,14 +279,14 @@ export async function checkoutSale(input: {
         })
       : Promise.resolve([]),
     prisma.inventory.findMany({
-      where: { branchId: input.branchId, productId: { in: input.items.map((item) => item.productId) } },
+      where: { branchId: saleShopId, productId: { in: input.items.map((item) => item.productId) } },
       select: { productId: true, quantity: true, minStock: true },
     }),
   ])
   const imeiById = new Map(cartImeis.map((row) => [row.id, row]))
   const stockByProduct = new Map(stockRows.map((row) => [row.productId, row]))
-  const reservedOnTransfer = await reservedTransferImeiSet(input.branchId)
-  const reservedOnSwap = await reservedSwapImeiSet(input.branchId)
+  const reservedOnTransfer = await reservedTransferImeiSet(saleShopId)
+  const reservedOnSwap = await reservedSwapImeiSet(saleShopId)
 
   // Pieces wanted per product, so a cart holding the same accessory on two lines
   // is checked against stock once, on the combined figure. Phone IMEI lines are
@@ -296,7 +313,7 @@ export async function checkoutSale(input: {
     if (item.imeiId) {
       const imei = imeiById.get(item.imeiId)
       if (!imei || imei.status !== "IN_STOCK") return { error: `IMEI ${imei?.imei1 ?? ""} is not available.` }
-      if (imei.branchId !== input.branchId) return { error: `${imei.imei1} is not in this shop.` }
+      if (imei.branchId !== saleShopId) return { error: `${imei.imei1} is not in this shop.` }
       if (isBlockedFromSell({ cosmeticGrade: imei.cosmeticGrade, productCondition: imei.product.condition })) {
         return { error: `${imei.imei1} is Damaged and cannot be sold.` }
       }
@@ -375,7 +392,7 @@ export async function checkoutSale(input: {
       const created = await tx.sale.create({
         data: {
           invoiceNumber,
-          branchId: input.branchId,
+          branchId: saleShopId,
           userId: user.id,
           customerId: input.customerId || null,
           saleType: input.wholesale ? "WHOLESALE" : "RETAIL",
@@ -428,7 +445,7 @@ export async function checkoutSale(input: {
         const label = claimed?.imei1 ?? "That phone"
         await claimImei(tx, {
           imeiId: item.imeiId,
-          branchId: input.branchId,
+          branchId: saleShopId,
           label,
           data: {
             status: "SOLD",
@@ -438,7 +455,7 @@ export async function checkoutSale(input: {
         })
         await drawStock(tx, {
           productId: item.productId,
-          branchId: input.branchId,
+          branchId: saleShopId,
           quantity: item.quantity || 1,
           label,
         })
@@ -450,7 +467,7 @@ export async function checkoutSale(input: {
             entityId: label,
             oldValue: "IN_STOCK",
             newValue: JSON.stringify({ status: "SOLD", invoice: invoiceNumber, shelfDrawn: item.quantity || 1 }),
-            branchId: input.branchId,
+            branchId: saleShopId,
           },
         })
       }
@@ -458,7 +475,7 @@ export async function checkoutSale(input: {
       for (const [productId, wanted] of wantByProduct) {
         await drawStock(tx, {
           productId,
-          branchId: input.branchId,
+          branchId: saleShopId,
           quantity: wanted,
           label: productById.get(productId)?.name ?? "This item",
         })
@@ -509,7 +526,7 @@ export async function checkoutSale(input: {
           for (const t of validSplits) {
             await tx.financeEntry.create({
               data: {
-                branchId: input.branchId,
+                branchId: saleShopId,
                 account: t.method === "CASH" ? "CASH" : "BANK",
                 type: "INCOME",
                 amount: t.amount.toFixed(2),
@@ -521,7 +538,7 @@ export async function checkoutSale(input: {
         } else {
           await tx.financeEntry.create({
             data: {
-              branchId: input.branchId,
+              branchId: saleShopId,
               account: receivedChannel === "CASH" ? "CASH" : "BANK",
               type: "INCOME",
               amount: paid.toFixed(2),
@@ -547,13 +564,13 @@ export async function checkoutSale(input: {
               ? { postedFromOffline: true, queuedAt: input.queuedAt, offlineId: input.offlineId ?? null }
               : {}),
           }),
-          branchId: input.branchId,
+          branchId: saleShopId,
         },
       })
 
       for (const [productId] of wantByProduct) {
         const stock = await tx.inventory.findUnique({
-          where: { productId_branchId: { productId, branchId: input.branchId } },
+          where: { productId_branchId: { productId, branchId: saleShopId } },
           select: { quantity: true, minStock: true },
         })
         if (!stock) continue
@@ -569,7 +586,7 @@ export async function checkoutSale(input: {
   const sale = posted.data
 
   await fanOutSaleAlerts({
-    branchId: input.branchId,
+    branchId: saleShopId,
     invoiceNumber,
     saleId: sale.id,
     due,

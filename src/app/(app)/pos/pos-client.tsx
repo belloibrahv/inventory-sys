@@ -688,16 +688,22 @@ export function PosClient({
         <h3 className="font-semibold">Finish sale</h3>
         <label className="block text-sm">
           <span className="mb-1 block text-muted-foreground">Shop</span>
-          <Select
-            value={branchId}
-            onChange={(event) => void handleBranchChange(event.target.value)}
-          >
-            {branches.map((branch) => (
-              <option key={branch.id} value={branch.id}>
-                {branch.name}
-              </option>
-            ))}
-          </Select>
+          {branches.length <= 1 ? (
+            <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm font-medium">
+              {branches[0]?.name || "Your shop"}
+            </p>
+          ) : (
+            <Select
+              value={branchId}
+              onChange={(event) => void handleBranchChange(event.target.value)}
+            >
+              {branches.map((branch) => (
+                <option key={branch.id} value={branch.id}>
+                  {branch.name}
+                </option>
+              ))}
+            </Select>
+          )}
         </label>
         <label className="block text-sm">
           <span className="mb-1 block text-muted-foreground">Customer</span>

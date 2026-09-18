@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 import { ExpenseCategory, UserRole } from "@prisma/client"
 import * as bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
-import { branchFilter, canReachBranch, OTHER_SHOP, viewBranchFilter } from "@/lib/branch-scope"
+import { branchFilter, canReachBranch, OTHER_SHOP, resolveWritableShopId, viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
 import { canApprove, canManageFinance, canManageStaff, canEditLetterhead, canSetOpeningMoney, isSuperAdmin, scopedBranchId } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
@@ -466,8 +466,10 @@ export async function createExpense(formData: FormData) {
     return { error: "You are not allowed to record an expense. Ask the main admin." }
   }
   const amount = Number(formData.get("amount") || 0)
-  const branchId = String(formData.get("branchId") || user.branchId || "")
-  if (amount <= 0 || !branchId) return { error: "Type the amount and pick the shop." }
+  const shopGate = await resolveWritableShopId(user, String(formData.get("branchId") || user.branchId || ""))
+  if ("error" in shopGate) return { error: shopGate.error }
+  const branchId = shopGate.shopId
+  if (amount <= 0) return { error: "Type the amount and pick the shop." }
 
   const expense = await prisma.expense.create({
     data: {

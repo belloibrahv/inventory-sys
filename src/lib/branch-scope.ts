@@ -86,6 +86,29 @@ export async function viewBranchFilter(viewer: Viewer) {
   return picked && picked !== "ALL" ? picked : undefined
 }
 
+/**
+ * The shop id that may be written for this person.
+ *
+ * Shop staff always write their own shop. A request for another shop is refused.
+ * Head office may pick any shop, but must pick one (no silent "all shops" write).
+ */
+export async function resolveWritableShopId(
+  viewer: Viewer,
+  requested?: string | null
+): Promise<{ shopId: string } | { error: string }> {
+  const asked = (requested || "").trim()
+  if (await canSeeAllBranches(viewer.role)) {
+    const shopId = asked || viewer.branchId || ""
+    if (!shopId) return { error: "Pick the shop." }
+    return { shopId }
+  }
+  if (!viewer.branchId) {
+    return { error: "Your login is not tied to a shop. Ask the main admin." }
+  }
+  if (asked && asked !== viewer.branchId) return { error: OTHER_SHOP }
+  return { shopId: viewer.branchId }
+}
+
 /** The shop head office has picked, for showing the selector in the header. */
 export async function activeViewShop(viewer: Viewer) {
   if (!(await canSeeAllBranches(viewer.role))) return viewer.branchId ?? null

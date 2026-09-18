@@ -18,6 +18,7 @@ import { generateDocNumber, money } from "@/lib/utils"
 import { mapBillCondition, normalizeStorage } from "@/lib/item-specs"
 import { displayPartyName } from "@/lib/party-key"
 import { findDuplicateSupplier } from "@/lib/supplier-identity"
+import { resolveWritableShopId, viewBranchFilter } from "@/lib/branch-scope"
 
 /**
  * Loading the shop system from a sheet or by hand.
@@ -150,7 +151,9 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
   if (file.size > MAX_BYTES) return { error: "That file is too big. Use a file under 25 MB." }
 
   const branchId = String(formData.get("branchId") || "")
-  const shop = await prisma.branch.findFirst({ where: { id: branchId, isActive: true } })
+  const shopGate = await resolveWritableShopId(user, branchId)
+  if ("error" in shopGate) return { error: shopGate.error }
+  const shop = await prisma.branch.findFirst({ where: { id: shopGate.shopId, isActive: true } })
   if (!shop) return { error: "Pick the shop this file belongs to: Iwo Road, Bodija, or Challenge." }
 
   // One opening stock per shop. Once it exists, the count sheet on Correct &
@@ -219,10 +222,9 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
     }
   }
 
-  const [brands, categories, activeShops] = await Promise.all([
+  const [brands, categories] = await Promise.all([
     prisma.brand.findMany(),
     prisma.category.findMany(),
-    prisma.branch.findMany({ where: { isActive: true }, select: { id: true } }),
   ])
   const brandIds = new Map(brands.map((row) => [row.name.toLowerCase(), row.id]))
   const categoryIds = new Map(categories.map((row) => [row.name.toLowerCase(), row.id]))
@@ -287,11 +289,10 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
         description: `Opening stock · ${draft.category}`,
       },
     })
-    if (activeShops.length) {
-      await prisma.inventory.createMany({
-        data: activeShops.map((row) => ({ productId: product.id, branchId: row.id, quantity: 0 })),
-      })
-    }
+    // Stock for this shop only. Other shops do not get a shelf row from this upload.
+    await prisma.inventory.create({
+      data: { productId: product.id, branchId: shop.id, quantity: 0 },
+    })
     productIdByKey.set(key, product.id)
     costByProductId.set(product.id, draft.costPrice)
     productsAdded += 1
@@ -654,10 +655,14 @@ export async function importStock(formData: FormData): Promise<UploadResult> {
   if (!plan.rows.length) return { error: "There is no shelf count on that sheet." }
 
   for (const row of plan.rows) {
+    const shopGate = await resolveWritableShopId(user, row.branchId)
+    if ("error" in shopGate) {
+      return { error: `A line for another shop was refused: ${shopGate.error}` }
+    }
     await prisma.inventory.upsert({
-      where: { productId_branchId: { productId: row.productId, branchId: row.branchId } },
+      where: { productId_branchId: { productId: row.productId, branchId: shopGate.shopId } },
       update: { quantity: row.quantity, ...(row.minStock !== null ? { minStock: row.minStock } : {}), lastStockCheck: new Date() },
-      create: { productId: row.productId, branchId: row.branchId, quantity: row.quantity, ...(row.minStock !== null ? { minStock: row.minStock } : {}) },
+      create: { productId: row.productId, branchId: shopGate.shopId, quantity: row.quantity, ...(row.minStock !== null ? { minStock: row.minStock } : {}) },
     })
   }
 
@@ -729,7 +734,7 @@ function billLineStorage(item: BatchUploadItem) {
 
 async function resolveBillProduct(
   item: BatchUploadItem,
-  activeShops: Array<{ id: string }>
+  targetShopId: string
 ): Promise<{ productId: string; productName: string; createdProduct: boolean } | { error: string }> {
   const name = billLineName(item)
   const condition = billLineCondition(item)
@@ -808,11 +813,9 @@ async function resolveBillProduct(
         description: "Added while loading stock",
       },
     })
-    if (activeShops.length) {
-      await prisma.inventory.createMany({
-        data: activeShops.map((shop) => ({ productId: created.id, branchId: shop.id, quantity: 0 })),
-      })
-    }
+    await prisma.inventory.create({
+      data: { productId: created.id, branchId: targetShopId, quantity: 0 },
+    })
     return { productId: created.id, productName: created.name, createdProduct: true }
   }
 
@@ -845,14 +848,18 @@ function revalidateStockViews() {
 export async function getUploadProgress() {
   const user = await requireUser()
   if (!(await can(user.role, "view.uploads"))) return null
+  const shopScope = await viewBranchFilter(user)
   const [items, withStock, phones, customers, branches, brands, categories, products, suppliers, openBill] =
     await Promise.all([
       prisma.product.count({ where: { isActive: true } }),
-      prisma.inventory.count({ where: { quantity: { gt: 0 } } }),
-      prisma.imeiRecord.count({ where: { status: "IN_STOCK" } }),
-      prisma.customer.count(),
+      prisma.inventory.count({ where: { quantity: { gt: 0 }, ...(shopScope ? { branchId: shopScope } : {}) } }),
+      prisma.imeiRecord.count({ where: { status: "IN_STOCK", ...(shopScope ? { branchId: shopScope } : {}) } }),
+      prisma.customer.count({ where: shopScope ? { branchId: shopScope } : undefined }),
       prisma.branch.findMany({
-        where: { isActive: true },
+        where: {
+          isActive: true,
+          ...(shopScope ? { id: shopScope } : {}),
+        },
         select: { id: true, name: true, code: true },
         orderBy: { name: "asc" },
       }),
@@ -882,7 +889,12 @@ export async function getUploadProgress() {
         orderBy: { name: "asc" },
       }),
       prisma.purchase.findFirst({
-        where: { userId: user.id, source: UPLOAD_STOCK_SOURCE, sessionOpen: true },
+        where: {
+          userId: user.id,
+          source: UPLOAD_STOCK_SOURCE,
+          sessionOpen: true,
+          ...(shopScope ? { branchId: shopScope } : {}),
+        },
         select: {
           id: true,
           invoiceNumber: true,
@@ -949,7 +961,9 @@ export async function batchUploadStock(payload: BatchUploadPayload): Promise<Upl
     return { error: "Pick the shop these goods are going to." }
   }
 
-  const shop = await prisma.branch.findFirst({ where: { id: payload.branchId, isActive: true } })
+  const shopGate = await resolveWritableShopId(user, payload.branchId)
+  if ("error" in shopGate) return { error: shopGate.error }
+  const shop = await prisma.branch.findFirst({ where: { id: shopGate.shopId, isActive: true } })
   if (!shop) return { error: "That shop does not exist, or it is closed." }
 
   if (!payload.items || payload.items.length === 0) {
@@ -1119,11 +1133,9 @@ export async function batchUploadStock(payload: BatchUploadPayload): Promise<Upl
     createdProduct: boolean
   }> = []
 
-  const activeShops = await prisma.branch.findMany({ where: { isActive: true }, select: { id: true } })
-
   for (let i = 0; i < payload.items.length; i++) {
     const item = payload.items[i]
-    const resolved = await resolveBillProduct(item, activeShops)
+    const resolved = await resolveBillProduct(item, shop.id)
     if ("error" in resolved) {
       return { error: `Item line #${i + 1}: ${resolved.error}` }
     }
