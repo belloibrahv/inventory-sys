@@ -54,6 +54,7 @@ type FinanceData = {
   creditors: Array<{ id: string; name: string; owed: number }>
   supplierCredits: Array<{ id: string; name: string; owed: number }>
   canSetOpening: boolean
+  canRemoveBank: boolean
   shops: OpeningCashShop[]
   bankAccounts: NamedBankRow[]
 }
@@ -118,6 +119,7 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
         shops={data.shops}
         bankAccounts={data.bankAccounts}
         canSet={data.canSetOpening}
+        canRemoveBank={data.canRemoveBank}
         openingCash={data.openingCash}
         openingBank={data.openingBank}
       />

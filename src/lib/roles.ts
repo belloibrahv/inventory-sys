@@ -26,6 +26,15 @@ export function isShopOwner(role: UserRole) {
 }
 
 /**
+ * Permanent remove / lock-from-system actions.
+ * Only the Managing Director (CEO) for now — even Super Admin and the
+ * all-shop auditor cannot wipe brands, items, banks, or disable staff logins.
+ */
+export function canHardDelete(role: UserRole) {
+  return role === "CEO"
+}
+
+/**
  * Who may change the name, logo and address printed on invoices.
  *
  * The client asked for the main admin, the CEO and the books desk

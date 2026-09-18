@@ -21,10 +21,12 @@ export function ProductManageDialog({
   product,
   open,
   onOpenChange,
+  canRemove = false,
 }: {
   product: PriceRow | null
   open: boolean
   onOpenChange: (open: boolean) => void
+  canRemove?: boolean
 }) {
   const router = useRouter()
   const [tab, setTab] = useState<"edit" | "stock" | "delete">("edit")
@@ -38,7 +40,9 @@ export function ProductManageDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-lg font-bold">Change or remove: {product.name}</DialogTitle>
+          <DialogTitle className="text-lg font-bold">
+            {canRemove ? `Change or remove: ${product.name}` : `Change: ${product.name}`}
+          </DialogTitle>
           <DialogDescription>
             Item code {product.sku}. Brand {product.brand}. {product.units} on the shelf across shops.
           </DialogDescription>
@@ -69,6 +73,7 @@ export function ProductManageDialog({
             <MinusCircle className="h-3.5 w-3.5" />
             <span>Reduce stock</span>
           </button>
+          {canRemove ? (
           <button
             type="button"
             onClick={() => setTab("delete")}
@@ -79,8 +84,9 @@ export function ProductManageDialog({
             }`}
           >
             <Trash2 className="h-3.5 w-3.5" />
-            <span>Remove item</span>
+            <span>Remove</span>
           </button>
+          ) : null}
         </div>
 
         {tab === "edit" ? (
@@ -237,7 +243,7 @@ export function ProductManageDialog({
           </div>
         ) : null}
 
-        {tab === "delete" ? (
+        {tab === "delete" && canRemove ? (
           <div className="space-y-4 pt-2">
             <div className="rounded-xl border border-danger/30 bg-danger-soft p-4 text-xs text-danger">
               <div className="flex items-center gap-2 font-bold mb-1">

@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { shiftCustomerBalance } from "@/lib/concurrency"
 import { requireUser } from "@/lib/session"
-import { booksDeskPartner, isBooksDesk, isShopOwner } from "@/lib/rbac"
+import { booksDeskPartner, canHardDelete, isBooksDesk, isShopOwner } from "@/lib/rbac"
 import { ALL_PERM_KEYS, ensureRolePermissions } from "@/lib/permissions"
 import { isOpeningStockPurchase } from "@/lib/purchase-money"
 
@@ -71,7 +71,9 @@ export async function saveRoleAccess(formData: FormData) {
 
 export async function setStaffActive(formData: FormData) {
   const user = await requireUser()
-  if (!isShopOwner(user.role)) return { error: "Only the main admin or the CEO can disable or restore staff." }
+  if (!canHardDelete(user.role)) {
+    return { error: "Only the Managing Director can disable or restore a staff login. Ask the CEO." }
+  }
   const id = String(formData.get("id") || "")
   const next = String(formData.get("active") || "") === "true"
   const target = await prisma.user.findUnique({ where: { id } })

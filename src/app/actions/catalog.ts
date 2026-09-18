@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 import { ProductCondition, ProductTracking } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { requireUser } from "@/lib/session"
-import { canManageCatalog } from "@/lib/rbac"
+import { canHardDelete, canManageCatalog } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { shopError } from "@/lib/shop-speak"
 import { UNSAFE_KEYS } from "@/lib/table-file"
@@ -559,6 +559,9 @@ export async function updateBrand(formData: FormData) {
 
 export async function deleteBrand(formData: FormData) {
   const user = await requireUser()
+  if (!canHardDelete(user.role)) {
+    return { error: "Only the Managing Director can permanently remove a brand. Ask the CEO." }
+  }
   if (!(await canManageCatalog(user.role))) return { error: "You are not allowed to remove brands. Ask the main admin." }
   const id = String(formData.get("id") || "")
   const brand = await prisma.brand.findUnique({
@@ -652,6 +655,9 @@ export async function updateCategory(formData: FormData) {
 
 export async function deleteCategory(formData: FormData) {
   const user = await requireUser()
+  if (!canHardDelete(user.role)) {
+    return { error: "Only the Managing Director can permanently remove a category. Ask the CEO." }
+  }
   if (!(await canManageCatalog(user.role))) return { error: "You are not allowed to remove categories. Ask the main admin." }
   const id = String(formData.get("id") || "")
   const category = await prisma.category.findUnique({
@@ -876,6 +882,9 @@ export async function reduceInventoryStock(formData: FormData) {
 export async function deleteProduct(formData: FormData) {
   const user = await requireUser()
   if (!(await canManageCatalog(user.role))) return { error: "You are not allowed to delete items. Ask the main admin." }
+  if (!canHardDelete(user.role)) {
+    return { error: "Only the Managing Director can remove or hide an item from the catalog. Ask the CEO." }
+  }
   const id = String(formData.get("id") || "")
   if (!id) return { error: "Item ID missing." }
 

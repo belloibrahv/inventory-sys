@@ -1,7 +1,7 @@
 import { getProducts } from "@/app/actions/catalog"
 import { ProductPriceList, type PriceRow } from "@/app/(app)/products/price-list"
 import { PageHeader } from "@/components/shared"
-import { canManageCatalog } from "@/lib/rbac"
+import { canHardDelete, canManageCatalog } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { toPriceRow } from "./to-price-row"
 
@@ -17,20 +17,25 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   const { q } = await searchParams
   const me = await requireUser()
   const [products, canEdit] = await Promise.all([getProducts(), canManageCatalog(me.role)])
+  const canRemove = canHardDelete(me.role)
   const rows: PriceRow[] = products.map(toPriceRow)
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Price list"
-        description="Names, cost, lowest price, and selling price. Use Change or remove on a line to edit details, reduce stock, or take an item off the active list."
+        description={
+          canRemove
+            ? "Names, cost, lowest price, and selling price. Use Change or remove on a line to edit details, reduce stock, or take an item off the active list."
+            : "Names, cost, lowest price, and selling price. Use Change on a line to edit details or reduce stock. Only the Managing Director can remove an item."
+        }
       />
       {!canEdit ? (
         <div className="surface-card p-5 text-sm text-muted-foreground">
           This list is read-only for your job. Super Admin or the stock uploader can add names and change prices.
         </div>
       ) : null}
-      <ProductPriceList products={rows} canEdit={canEdit} initialQuery={q} />
+      <ProductPriceList products={rows} canEdit={canEdit} canRemove={canRemove} initialQuery={q} />
     </div>
   )
 }

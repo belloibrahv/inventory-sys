@@ -6,7 +6,7 @@ import * as bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
 import { branchFilter, canReachBranch, OTHER_SHOP, resolveWritableShopId, viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
-import { canApprove, canManageFinance, canManageStaff, canEditLetterhead, canSetOpeningMoney, isSuperAdmin, scopedBranchId } from "@/lib/rbac"
+import { canApprove, canHardDelete, canManageFinance, canManageStaff, canEditLetterhead, canSetOpeningMoney, isSuperAdmin, scopedBranchId } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { isLetterheadKey } from "@/lib/letterhead"
 import { generateDocNumber, money } from "@/lib/utils"
@@ -39,6 +39,7 @@ function emptyFinance() {
     creditors: [] as Array<{ id: string; name: string; owed: number }>,
     supplierCredits: [] as Array<{ id: string; name: string; owed: number }>,
     canSetOpening: false,
+    canRemoveBank: false,
     shops: [] as OpeningCashShop[],
     bankAccounts: [] as NamedBankRow[],
   }
@@ -316,6 +317,7 @@ export async function getFinance() {
     creditors,
     supplierCredits,
     canSetOpening: canSetOpeningMoney(user.role),
+    canRemoveBank: canHardDelete(user.role),
     shops: openingCashShops,
     bankAccounts: namedBanks,
   }
@@ -439,6 +441,9 @@ export async function saveBankOpening(formData: FormData) {
 
 export async function takeBankOffTheBooks(formData: FormData) {
   const user = await requireUser()
+  if (!canHardDelete(user.role)) {
+    return { error: "Only the Managing Director can take a bank account off the books. Ask the CEO." }
+  }
   const id = String(formData.get("id") || "")
   if (!id) return { error: "We could not find that bank account." }
   const row = await prisma.bankAccount.findUnique({ where: { id } })

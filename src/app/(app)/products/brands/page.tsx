@@ -11,7 +11,7 @@ import { ActionForm } from "@/components/action-form"
 import { EmptyState, PageHeader, SectionCard } from "@/components/shared"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { canManageCatalog } from "@/lib/rbac"
+import { canHardDelete, canManageCatalog } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { CatalogLocked } from "../catalog-locked"
 
@@ -20,6 +20,7 @@ export default async function BrandsCategoriesPage() {
   const canEdit = await canManageCatalog(me.role)
   if (!canEdit) return <CatalogLocked title="Brands & categories" />
 
+  const canRemove = canHardDelete(me.role)
   const { brands, categories } = await getCatalogTaxonomy()
 
   return (
@@ -57,7 +58,7 @@ export default async function BrandsCategoriesPage() {
                     </p>
                   </div>
                   <details className="rounded-md border border-border px-3 py-2">
-                    <summary className="cursor-pointer text-xs font-medium">Edit or remove</summary>
+                    <summary className="cursor-pointer text-xs font-medium">{canRemove ? "Edit or remove" : "Edit name"}</summary>
                     <div className="mt-2 space-y-2">
                       <ActionForm
                         action={updateBrand}
@@ -71,6 +72,7 @@ export default async function BrandsCategoriesPage() {
                         <input type="hidden" name="id" value={brand.id} />
                         <Input name="name" defaultValue={brand.name} required className="min-w-[10rem] flex-1" />
                       </ActionForm>
+                      {canRemove ? (
                       <ActionForm
                         action={deleteBrand}
                         submit="Remove brand"
@@ -82,6 +84,7 @@ export default async function BrandsCategoriesPage() {
                       >
                         <input type="hidden" name="id" value={brand.id} />
                       </ActionForm>
+                      ) : null}
                     </div>
                   </details>
                 </li>
@@ -126,7 +129,7 @@ export default async function BrandsCategoriesPage() {
                     </p>
                   </div>
                   <details className="rounded-md border border-border px-3 py-2">
-                    <summary className="cursor-pointer text-xs font-medium">Edit or remove</summary>
+                    <summary className="cursor-pointer text-xs font-medium">{canRemove ? "Edit or remove" : "Edit category"}</summary>
                     <div className="mt-2 space-y-2">
                       <ActionForm
                         action={updateCategory}
@@ -146,6 +149,7 @@ export default async function BrandsCategoriesPage() {
                           placeholder="Short note"
                         />
                       </ActionForm>
+                      {canRemove ? (
                       <ActionForm
                         action={deleteCategory}
                         submit="Remove category"
@@ -157,6 +161,7 @@ export default async function BrandsCategoriesPage() {
                       >
                         <input type="hidden" name="id" value={category.id} />
                       </ActionForm>
+                      ) : null}
                     </div>
                   </details>
                 </li>

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { PasswordInput } from "@/components/ui/password-input"
 import { Select } from "@/components/ui/select"
-import { canManageStaff, isShopOwner, isSuperAdmin, ROLE_LABELS } from "@/lib/rbac"
+import { canManageStaff, canHardDelete, isShopOwner, isSuperAdmin, ROLE_LABELS } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { UserRole } from "@prisma/client"
 
@@ -17,6 +17,7 @@ export default async function StaffPage() {
   const canAdd = await canManageStaff(me.role)
   const admin = isSuperAdmin(me.role)
   const owner = isShopOwner(me.role)
+  const ceo = canHardDelete(me.role)
   const roles = (Object.keys(ROLE_LABELS) as UserRole[]).filter((role) => admin || role !== "SUPER_ADMIN")
   const activeShops = branches.filter((branch) => branch.isActive)
 
@@ -47,7 +48,7 @@ export default async function StaffPage() {
                       <span className="text-xs text-muted-foreground">{user.isActive ? "Active" : "Disabled"}</span>
                     </div>
                   </div>
-                  {owner && user.id !== me.id && (admin || user.role !== "SUPER_ADMIN") ? (
+                  {ceo && user.id !== me.id && (admin || user.role !== "SUPER_ADMIN") ? (
                     <ActionForm
                       action={setStaffActive}
                       submit={user.isActive ? "Disable" : "Restore"}

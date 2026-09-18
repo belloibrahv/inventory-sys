@@ -40,10 +40,12 @@ function trackingLabel(tracking: string) {
 export function ProductPriceList({
   products,
   canEdit,
+  canRemove = false,
   initialQuery = "",
 }: {
   products: PriceRow[]
   canEdit: boolean
+  canRemove?: boolean
   initialQuery?: string
 }) {
   const router = useRouter()
@@ -283,6 +285,7 @@ export function ProductPriceList({
         product={managingProduct}
         open={Boolean(managingProduct)}
         onOpenChange={(open) => !open && setManagingProduct(null)}
+        canRemove={canRemove}
       />
     </div>
   )

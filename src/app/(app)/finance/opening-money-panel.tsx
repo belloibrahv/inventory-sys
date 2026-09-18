@@ -19,12 +19,14 @@ export function OpeningMoneyPanel({
   shops,
   bankAccounts,
   canSet,
+  canRemoveBank = false,
   openingCash,
   openingBank,
 }: {
   shops: OpeningCashShop[]
   bankAccounts: NamedBankRow[]
   canSet: boolean
+  canRemoveBank?: boolean
   openingCash: number
   openingBank: number
 }) {
@@ -151,6 +153,7 @@ export function OpeningMoneyPanel({
                               className="w-40"
                             />
                           </ActionForm>
+                          {canRemoveBank ? (
                           <ActionForm
                             action={takeBankOffTheBooks}
                             submit="Take this bank off the books"
@@ -170,6 +173,7 @@ export function OpeningMoneyPanel({
                           >
                             <input type="hidden" name="id" value={row.id} />
                           </ActionForm>
+                          ) : null}
                         </div>
                       </td>
                     ) : null}
