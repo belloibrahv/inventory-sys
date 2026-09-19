@@ -13,7 +13,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   ENGINEER: "Hardware Diagnostics & Repair Engineer",
 }
 
-/** Internal Auditor and Accountant share financial oversight: ledgers, audit trail, and internal controls. */
+/** Internal Auditor has full shop oversight on the left menu. Accountant is money and books only. */
 export const BOOKS_DESK_ROLES: UserRole[] = ["AUDITOR", "ACCOUNTANT"]
 
 export function isSuperAdmin(role: UserRole) {

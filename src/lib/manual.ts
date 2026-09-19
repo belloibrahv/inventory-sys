@@ -34,11 +34,11 @@ const ROLE_JOB: Record<UserRole, { job: string; shops: string }> = {
     shops: "You see every shop.",
   },
   AUDITOR: {
-    job: "You oversee every shop page with the accountant. You read sales, stock, repairs, and money. You can post money and pay suppliers. You cannot sell, open repairs, load stock, approve shop work, or change Who can see what.",
+    job: "You oversee every shop page with admin-style oversight. You read sales, stock, repairs, and money. You can post money and pay suppliers. You cannot sell, open repairs, load stock, approve shop work, or change Who can see what.",
     shops: "You see every shop.",
   },
   ACCOUNTANT: {
-    job: "You oversee every shop page with the records checker. You read every workflow, post money, pay suppliers, and check the books. You cannot sell, open repairs, load stock, approve shop work, or change Who can see what.",
+    job: "You work the money and books pages: sales lists, customers, suppliers, Money in and out, Check the books, Reports, and Profit. You can post money and pay suppliers. You do not see Sell now, Upload stock, repairs, or other floor jobs on the left menu.",
     shops: "You see every shop.",
   },
   BRANCH_MANAGER: {

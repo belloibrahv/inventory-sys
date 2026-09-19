@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { shiftCustomerBalance } from "@/lib/concurrency"
 import { requireUser } from "@/lib/session"
-import { booksDeskPartner, canHardDelete, isBooksDesk, isShopOwner } from "@/lib/rbac"
+import { canHardDelete, isShopOwner } from "@/lib/rbac"
 import { ALL_PERM_KEYS, ensureRolePermissions } from "@/lib/permissions"
 import { isOpeningStockPurchase } from "@/lib/purchase-money"
 
@@ -27,29 +27,22 @@ export async function saveRoleAccess(formData: FormData) {
 
   await ensureRolePermissions()
 
-  // Records checker and accountant share one desk. Saving either copy writes
-  // the same ticks to both, so the key ring never drifts apart.
-  const rolesToWrite: UserRole[] = isBooksDesk(role)
-    ? [role, booksDeskPartner(role)!].filter(Boolean)
-    : [role]
-
-  for (const target of rolesToWrite) {
-    for (const key of ALL_PERM_KEYS) {
-      if (key === "view.access") {
-        await prisma.rolePermission.upsert({
-          where: { role_permKey: { role: target, permKey: key } },
-          update: { allowed: false },
-          create: { role: target, permKey: key, allowed: false },
-        })
-        continue
-      }
-      const allowed = formData.get(key) === "on"
+  // Each job keeps its own ticks. Auditor and accountant are no longer written together.
+  for (const key of ALL_PERM_KEYS) {
+    if (key === "view.access") {
       await prisma.rolePermission.upsert({
-        where: { role_permKey: { role: target, permKey: key } },
-        update: { allowed },
-        create: { role: target, permKey: key, allowed },
+        where: { role_permKey: { role, permKey: key } },
+        update: { allowed: false },
+        create: { role, permKey: key, allowed: false },
       })
+      continue
     }
+    const allowed = formData.get(key) === "on"
+    await prisma.rolePermission.upsert({
+      where: { role_permKey: { role, permKey: key } },
+      update: { allowed },
+      create: { role, permKey: key, allowed },
+    })
   }
 
   await prisma.auditLog.create({
@@ -57,10 +50,8 @@ export async function saveRoleAccess(formData: FormData) {
       userId: user.id,
       action: "UPDATE",
       entityType: "RolePermission",
-      entityId: isBooksDesk(role) ? "BOOKS_DESK" : role,
-      newValue: isBooksDesk(role)
-        ? "Books desk (records checker + accountant) was changed together"
-        : "Who can see what was changed",
+      entityId: role,
+      newValue: "Who can see what was changed",
       branchId: user.branchId,
     },
   })

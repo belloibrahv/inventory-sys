@@ -1,7 +1,7 @@
 import { cache } from "react"
 import { UserRole } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
-import { BOOKS_DESK_ROLES, isBooksDesk, isShopOwner, isSuperAdmin } from "@/lib/roles"
+import { isShopOwner, isSuperAdmin } from "@/lib/roles"
 
 export { isSuperAdmin, isShopOwner, isBooksDesk, BOOKS_DESK_ROLES } from "@/lib/roles"
 
@@ -63,18 +63,42 @@ const ALL = ALL_PERM_KEYS
 const V = (...keys: string[]) => keys
 
 /**
- * One key ring for the books desk (Financial Accountant and Internal Auditor).
- *
- * At Abu Twins the auditor also oversees every workflow, so both jobs may open
- * every shop page except Who can see what. They may post money and pay
- * suppliers. They may not sell, repair, approve shop work, load stock, or
- * change Settings — that stays with floor staff and Super Admin.
+ * Full shop oversight for the Internal Auditor (admin-style view of every page).
+ * They may post money and see every shop. They may not sell, load stock, approve
+ * floor work, or open Who can see what.
  */
-export const BOOKS_DESK_KEYS = V(
+export const AUDITOR_KEYS = V(
   ...VIEW_PERMS.filter((row) => row.key !== "view.access").map((row) => row.key),
   "action.finance",
   "action.all_branches"
 )
+
+/**
+ * Money and books only for the Financial Accountant. The left menu must not show
+ * till, repairs, stock load, or other floor jobs they cannot run.
+ */
+export const ACCOUNTANT_KEYS = V(
+  "view.dashboard",
+  "view.sales",
+  "view.customers",
+  "view.suppliers",
+  "view.purchases",
+  "view.products",
+  "view.imei",
+  "view.inventory",
+  "view.finance",
+  "view.expenses",
+  "view.profits",
+  "view.reports",
+  "view.audit",
+  "view.notifications",
+  "view.branches",
+  "action.finance",
+  "action.all_branches"
+)
+
+/** @deprecated Prefer AUDITOR_KEYS or ACCOUNTANT_KEYS. Kept for older call sites. */
+export const BOOKS_DESK_KEYS = AUDITOR_KEYS
 
 const DEFAULTS: Record<UserRole, string[]> = {
   SUPER_ADMIN: ALL,
@@ -82,8 +106,8 @@ const DEFAULTS: Record<UserRole, string[]> = {
   // money, staff, shops, settings, and Who can see what. They cannot take the
   // main admin job away, and nobody can secretly rewrite an old invoice.
   CEO: ALL,
-  AUDITOR: BOOKS_DESK_KEYS,
-  ACCOUNTANT: BOOKS_DESK_KEYS,
+  AUDITOR: AUDITOR_KEYS,
+  ACCOUNTANT: ACCOUNTANT_KEYS,
   BRANCH_MANAGER: V(
     "view.dashboard", "view.products", "view.uploads", "view.imei", "view.inventory", "view.incoming", "view.sales", "view.pos",
     "view.purchases", "view.customers", "view.suppliers", "view.transfers", "view.neighbor-fills", "view.returns",
@@ -175,20 +199,20 @@ export const ensureRolePermissions = cache(async () => {
     data: { allowed: true },
   })
 
-  // Books desk: open every shop page for oversight, keep money posting, and
-  // close floor actions that used to sit on this key ring by mistake.
-  const booksViews = VIEW_PERMS.filter((row) => row.key !== "view.access").map((row) => row.key)
+  // Internal Auditor: full shop oversight on the left menu (every page except
+  // Who can see what). Floor actions stay closed.
+  const auditorViews = VIEW_PERMS.filter((row) => row.key !== "view.access").map((row) => row.key)
   await prisma.rolePermission.updateMany({
     where: {
-      role: { in: ["AUDITOR", "ACCOUNTANT"] },
-      permKey: { in: [...booksViews, "action.finance", "action.all_branches"] },
+      role: "AUDITOR",
+      permKey: { in: [...auditorViews, "action.finance", "action.all_branches"] },
       allowed: false,
     },
     data: { allowed: true },
   })
   await prisma.rolePermission.updateMany({
     where: {
-      role: { in: ["AUDITOR", "ACCOUNTANT"] },
+      role: "AUDITOR",
       permKey: {
         in: [
           "view.access",
@@ -209,6 +233,26 @@ export const ensureRolePermissions = cache(async () => {
           "action.override_floor",
         ],
       },
+      allowed: true,
+    },
+    data: { allowed: false },
+  })
+
+  // Financial Accountant: money and books only. Close till, Sell now, repairs,
+  // stock load, and other floor pages so the left menu matches the job.
+  await prisma.rolePermission.updateMany({
+    where: {
+      role: "ACCOUNTANT",
+      permKey: { in: ACCOUNTANT_KEYS },
+      allowed: false,
+    },
+    data: { allowed: true },
+  })
+  const accountantDenied = ALL_PERM_KEYS.filter((key) => !ACCOUNTANT_KEYS.includes(key))
+  await prisma.rolePermission.updateMany({
+    where: {
+      role: "ACCOUNTANT",
+      permKey: { in: accountantDenied },
       allowed: true,
     },
     data: { allowed: false },
@@ -242,26 +286,6 @@ const loadPermissionMap = cache(async () => {
 export async function getAllowedKeys(role: UserRole) {
   if (role === "SUPER_ADMIN") return new Set(ALL_PERM_KEYS)
   const map = await loadPermissionMap()
-
-  // Books desk: records checker and accountant hold the same key ring.
-  // Whatever is ticked for either job is open to both, so one login can check
-  // the books and also post money without swapping accounts.
-  if (isBooksDesk(role)) {
-    const out = new Set<string>()
-    let anyConfigured = false
-    for (const deskRole of BOOKS_DESK_ROLES) {
-      const allowed = map.get(deskRole)
-      if (!allowed) {
-        for (const key of BOOKS_DESK_KEYS) out.add(key)
-        continue
-      }
-      anyConfigured = true
-      for (const key of allowed) out.add(key)
-    }
-    if (!anyConfigured) return new Set(BOOKS_DESK_KEYS)
-    return out
-  }
-
   const allowed = map.get(role)
   // No rows at all means Who can see what has never been set up for this role,
   // so fall back to what it ships with rather than locking the person out.
@@ -293,13 +317,18 @@ export function viewKeyForPath(pathname: string) {
 
 export function hrefsForKeys(keys: Set<string>) {
   const hrefs: string[] = VIEW_PERMS.filter((row) => keys.has(row.key)).map((row) => row.href)
+  // Close the day sits under Money in & out / Sell now for till staff.
   if ((keys.has("view.finance") || keys.has("view.pos")) && !hrefs.includes("/finance/close")) {
     hrefs.push("/finance/close")
   }
-  if ((keys.has("view.audit") || keys.has("view.finance") || keys.has("view.reports")) && !hrefs.includes("/audit/books")) {
+  // Check the books is an audit paper. Do not unlock it just because someone
+  // can open Money in & out (cashiers must not see that left-menu item).
+  if (keys.has("view.audit") && !hrefs.includes("/audit/books")) {
     hrefs.push("/audit/books")
   }
-  if ((keys.has("view.uploads") || keys.has("view.reports")) && !hrefs.includes("/opening-stock")) {
+  // Opening stock correction belongs to stock load / CEO-admin work, not every
+  // person who can open Reports.
+  if (keys.has("view.uploads") && !hrefs.includes("/opening-stock")) {
     hrefs.push("/opening-stock")
   }
   if (!hrefs.includes("/help")) hrefs.push("/help")

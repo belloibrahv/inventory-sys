@@ -36,17 +36,11 @@ export function pathIsAllowed(pathname: string, allowedHrefs: string[]) {
     return allowedHrefs.includes("/finance") || allowedHrefs.includes("/pos") || allowedHrefs.includes("/finance/close")
   }
   if (pathname === "/audit/books" || pathname.startsWith("/audit/books/")) {
-    return (
-      allowedHrefs.includes("/audit") ||
-      allowedHrefs.includes("/finance") ||
-      allowedHrefs.includes("/reports") ||
-      allowedHrefs.includes("/audit/books")
-    )
+    return allowedHrefs.includes("/audit") || allowedHrefs.includes("/audit/books")
   }
-  // The stock uploader corrects opening stock; the CEO, who has Reports but not
-  // Upload stock, reads it and closes it.
+  // Opening stock correction: Upload stock staff and owners who already have that door.
   if (pathname === "/opening-stock" || pathname.startsWith("/opening-stock/")) {
-    return allowedHrefs.includes("/uploads") || allowedHrefs.includes("/reports") || allowedHrefs.includes("/opening-stock")
+    return allowedHrefs.includes("/uploads") || allowedHrefs.includes("/opening-stock")
   }
   const view = VIEW_HREFS
     .slice()

@@ -32,7 +32,7 @@ export function Sidebar({ allowedHrefs }: { allowedHrefs: string[] }) {
     .map((group) => ({
       ...group,
       items: group.items
-        .filter((item) => allowedHrefs.includes(item.href))
+        .filter((item) => pathIsAllowed(item.href, allowedHrefs))
         .map((item) => ({
           ...item,
           // A section is only offered when the role may actually open it. The
