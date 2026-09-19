@@ -447,6 +447,12 @@ export async function checkoutSale(input: {
     if (!Number.isFinite(item.quantity) || item.quantity < 1) {
       return { error: `Enter how many ${product.name} the customer is buying.` }
     }
+    if (item.imeiId && item.quantity !== 1) {
+      return { error: "A phone with an IMEI or serial is always sold as 1 unit. Scan each unit separately." }
+    }
+    if (!item.imeiId && product.tracking !== "NONE") {
+      return { error: `${product.name} needs an IMEI or serial. Scan or find that unit on Sell now.` }
+    }
     if (!Number.isFinite(item.unitPrice) || item.unitPrice < 0) {
       return { error: `Enter a valid price for ${product.name}.` }
     }

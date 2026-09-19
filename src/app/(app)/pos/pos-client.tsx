@@ -95,6 +95,7 @@ export function PosClient({
       listPrice: number
       minPrice: number
       quantity: number
+      onHand?: number
       warrantyDays?: number
       storage?: string | null
       condition?: string | null
@@ -389,7 +390,6 @@ export function PosClient({
     }
     if (accessoryHits[0]) {
       addAccessory(accessoryHits[0])
-      toast.success("Added to this sale")
       return
     }
     await takeScan(typed)
@@ -425,37 +425,76 @@ export function PosClient({
     setRemoteAccessories([])
   }
 
-  function addAccessory(product: TillProduct) {
+  function syncPaid(nextCart: typeof cart) {
+    setPaidTo(nextCart.reduce((sum, row) => sum + row.unitPrice * row.quantity, 0))
+  }
+
+  function setLineQuantity(index: number, raw: number) {
+    setCart((current) => {
+      const next = current.map((row, i) => {
+        if (i !== index) return row
+        if (row.imeiId) return { ...row, quantity: 1 }
+        const max = row.onHand && row.onHand > 0 ? row.onHand : 9999
+        const quantity = Math.max(1, Math.min(max, Math.floor(Number.isFinite(raw) ? raw : 1) || 1))
+        return { ...row, quantity }
+      })
+      syncPaid(next)
+      return next
+    })
+  }
+
+  function addAccessory(product: TillProduct, pieces = 1) {
     if (isBlockedFromSell({ productCondition: product.condition })) {
       toast.error(`${product.name} is Damaged and cannot be sold.`)
       return
     }
+    const onHand = product.stock.find((row) => row.branchId === branchId)?.quantity ?? 0
+    if (onHand < 1) {
+      toast.error(`${product.name} has no pieces left in this shop.`)
+      return
+    }
     const price = money(product.sellingPrice)
+    const addQty = Math.max(1, Math.min(onHand, Math.floor(pieces) || 1))
     setCart((current) => {
       const existing = current.find((line) => !line.imeiId && line.productId === product.id)
+      let next
       if (existing) {
-        return current.map((line) =>
-          line === existing ? { ...line, quantity: line.quantity + 1 } : line
+        const quantity = Math.min(onHand, existing.quantity + addQty)
+        if (quantity === existing.quantity) {
+          toast.error(`Only ${onHand} piece${onHand === 1 ? "" : "s"} of ${product.name} left in this shop.`)
+          return current
+        }
+        next = current.map((line) =>
+          line === existing ? { ...line, quantity, onHand } : line
+        )
+        toast.success(`Pieces on this sale: ${quantity}`)
+      } else {
+        next = [
+          ...current,
+          {
+            productId: product.id,
+            name: product.name,
+            unitPrice: price,
+            listPrice: price,
+            minPrice: money(product.minimumPrice),
+            quantity: addQty,
+            onHand,
+            warrantyDays: 0,
+            storage: product.storage,
+            condition: product.condition,
+            color: product.color,
+            category: product.category?.name ?? null,
+          },
+        ]
+        toast.success(
+          addQty === 1
+            ? "Added to this sale. Change Pieces if you need more."
+            : `Added ${addQty} pieces to this sale.`
         )
       }
-      return [
-        ...current,
-        {
-          productId: product.id,
-          name: product.name,
-          unitPrice: price,
-          listPrice: price,
-          minPrice: money(product.minimumPrice),
-          quantity: 1,
-          warrantyDays: 0,
-          storage: product.storage,
-          condition: product.condition,
-          color: product.color,
-          category: product.category?.name ?? null,
-        },
-      ]
+      syncPaid(next)
+      return next
     })
-    setPaidTo(total + price)
     setQuery("")
     setRemoteImeis([])
     setRemoteAccessories([])
@@ -493,6 +532,20 @@ export function PosClient({
     if (!canOverrideFloor && cart.some((line) => line.unitPrice < line.minPrice)) {
       toast.error("One price is under the lowest price allowed. Raise it, or ask the main admin.")
       return
+    }
+    for (const line of cart) {
+      if (line.imeiId) continue
+      const product = products.find((row) => row.id === line.productId)
+      const onHand =
+        line.onHand ??
+        product?.stock.find((row) => row.branchId === branchId)?.quantity ??
+        0
+      if (line.quantity > onHand) {
+        toast.error(
+          `${line.name}: only ${onHand} piece${onHand === 1 ? "" : "s"} left in this shop. Lower Pieces on this sale.`
+        )
+        return
+      }
     }
 
     const splitTenders = method === "SPLIT_PAYMENT"
@@ -581,7 +634,7 @@ export function PosClient({
         <div className="surface-card space-y-3 p-4">
           <div className="flex items-center justify-between gap-2 mb-1">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Scan a phone or find an item
+              Scan a phone, or find a piece item
             </span>
             <button
               type="button"
@@ -605,8 +658,8 @@ export function PosClient({
                 void takeSearchEnter()
               }
             }}
-            placeholder="Find by IMEI, phone name, brand, category, storage, or accessory"
-            aria-label="Find by IMEI, phone name, brand, category, storage, or accessory"
+            placeholder="Find by IMEI, phone name, brand, category, or piece item (pouch, cord)"
+            aria-label="Find by IMEI, phone name, brand, category, or piece item"
           />
           {query ? (
             <div className="mt-3 space-y-2">
@@ -658,11 +711,14 @@ export function PosClient({
                     <span className="block text-sm font-medium">{product.name}</span>
                     <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
                       <span>
-                        Accessory · {product.stock.find((row) => row.branchId === branchId)?.quantity ?? 0} on hand
+                        Piece item · {product.stock.find((row) => row.branchId === branchId)?.quantity ?? 0} on hand
                         {product.brand?.name ? ` · ${product.brand.name}` : ""}
                       </span>
                       {parts.length ? <span className="text-foreground">{parts.join(" · ")}</span> : null}
                     </div>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      Tap to add. Then set Pieces on this sale.
+                    </p>
                   </div>
                   <span className="text-sm font-semibold">{formatCurrency(money(product.sellingPrice))}</span>
                 </button>
@@ -694,6 +750,7 @@ export function PosClient({
               <tr>
                 <th className="px-4 py-3">Device / Item</th>
                 <th className="px-4 py-3">IMEI / Serial</th>
+                <th className="px-4 py-3">Pieces</th>
                 <th className="px-4 py-3">Warranty</th>
                 <th className="px-4 py-3">Price</th>
                 <th className="px-4 py-3"></th>
@@ -702,12 +759,20 @@ export function PosClient({
             <tbody>
               {cart.map((line, index) => {
                 const parts = detailParts(line.storage, line.condition, line.color, line.category)
+                const isPieceLine = !line.imeiId
+                const onHand =
+                  line.onHand ??
+                  products.find((row) => row.id === line.productId)?.stock.find((row) => row.branchId === branchId)
+                    ?.quantity ??
+                  0
                 return (
                 <tr key={`${line.imeiId ?? line.productId}-${index}`} className="border-t border-border">
                   <td className="px-4 py-3">
-                    <p className="font-medium">{line.name}{line.quantity > 1 ? ` × ${line.quantity}` : ""}</p>
+                    <p className="font-medium">{line.name}</p>
                     {parts.length ? (
                       <p className="mt-0.5 text-xs text-muted-foreground">{parts.join(" · ")}</p>
+                    ) : isPieceLine ? (
+                      <p className="mt-0.5 text-xs text-muted-foreground">Sold by pieces</p>
                     ) : (
                       <p className="mt-0.5 text-xs text-danger">
                         Storage and how the phone looks are missing. Fix on Phones and items or Upload stock.
@@ -725,7 +790,28 @@ export function PosClient({
                       </p>
                     ) : null}
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">{line.imei ?? "-"}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{line.imei ?? "Piece item"}</td>
+                  <td className="px-4 py-3">
+                    {isPieceLine ? (
+                      <div>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={onHand > 0 ? onHand : undefined}
+                          step={1}
+                          className="h-9 w-24"
+                          value={String(line.quantity)}
+                          onChange={(event) => setLineQuantity(index, Number(event.target.value))}
+                          aria-label={`Pieces of ${line.name}`}
+                        />
+                        <p className="mt-0.5 text-[10px] text-muted-foreground">
+                          {onHand > 0 ? `${onHand} on hand in this shop` : "On hand not known"}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-sm font-medium">1</p>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <Input
                       type="number"
@@ -753,7 +839,7 @@ export function PosClient({
                         const unitPrice = Number(event.target.value)
                         setCart((current) => {
                           const next = current.map((row, i) => (i === index ? { ...row, unitPrice } : row))
-                          setPaidTo(next.reduce((sum, row) => sum + row.unitPrice * row.quantity, 0))
+                          syncPaid(next)
                           return next
                         })
                       }}
@@ -761,7 +847,13 @@ export function PosClient({
                     />
                     <p className="mt-0.5 text-[10px] text-muted-foreground">
                       List {formatCurrency(line.listPrice)}
+                      {isPieceLine ? ` · each` : ""}
                     </p>
+                    {isPieceLine && line.quantity > 1 ? (
+                      <p className="mt-0.5 text-xs font-medium">
+                        Line total {formatCurrency(line.unitPrice * line.quantity)}
+                      </p>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <Button
@@ -770,7 +862,7 @@ export function PosClient({
                       onClick={() => {
                         const next = cart.filter((_, i) => i !== index)
                         setCart(next)
-                        setPaidTo(next.reduce((sum, row) => sum + row.unitPrice * row.quantity, 0))
+                        syncPaid(next)
                       }}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -780,8 +872,8 @@ export function PosClient({
               )})}
               {cart.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
-                    Scan a phone IMEI. After you finish, this sale cannot be edited.
+                  <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
+                    Scan or find a phone by IMEI, or find a piece item such as a pouch or charger cord.
                   </td>
                 </tr>
               ) : null}
