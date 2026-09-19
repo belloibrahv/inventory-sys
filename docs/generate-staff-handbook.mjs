@@ -295,7 +295,7 @@ const children = [
   body("IMEI vs shop count sits on Home. Match means the phone list and the shelf count agree. A gap means find the missing unit before you sell."),
 
   h1("12. Safety and good habits"),
-  bullet("A sale must stay at or above the list sell price unless Super Admin overrides. Selling above the list is allowed. Amount received must match the new total."),
+  bullet("A sale must stay at or above the initial sell price uploaded for that item, unless the CEO or Super Admin overrides. Cashiers may raise the price for a walk-in buyer. The invoice and day books keep the price that was charged."),
   bullet("Never share your password on WhatsApp groups."),
   bullet("Sign out when you leave the counter."),
   bullet("Do not invent buyers or fake cash to close the day."),
