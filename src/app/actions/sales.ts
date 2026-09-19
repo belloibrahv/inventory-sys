@@ -391,6 +391,8 @@ export async function checkoutSale(input: {
   paidAmount: number
   /** Named bank when money came in by bank. Required for Bank sales with money received. */
   bankAccountId?: string
+  /** Cash or Bank channel for a credit-sale deposit. Ignored on full Cash / Bank sales. */
+  depositMethod?: "CASH" | "TRANSFER"
   /** Kept for older parked sales on phones. New till sales are Cash or Bank only. */
   splitTenders?: Array<{ method: "CASH" | "TRANSFER" | "POS"; amount: number }>
   notes?: string
@@ -519,14 +521,28 @@ export async function checkoutSale(input: {
     return { error: `${imeiById.get(duplicateImei)?.imei1 ?? "That phone"} is on this sale twice. Remove one line.` }
   }
 
-  const subtotal = input.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0)
+  const subtotal = input.items.reduce((sum, item) => {
+    const price = Number(item.unitPrice)
+    const qty = Number(item.quantity)
+    if (!Number.isFinite(price) || !Number.isFinite(qty) || price < 0 || qty < 1) return sum
+    return sum + price * qty
+  }, 0)
   const validSplits = (input.splitTenders ?? []).filter((t) => Number.isFinite(t.amount) && t.amount > 0)
   const isSplit = input.paymentMethod === "SPLIT_PAYMENT" || validSplits.length > 1
+  const isCreditTill = input.paymentMethod === "CREDIT"
+  // Cash or Bank on the till always takes the full sale total. Credit sales keep
+  // the typed deposit. That stops a lagged Amount paid from under-recording a raised price.
   const rawPaid = isSplit && validSplits.length > 0
     ? validSplits.reduce((sum, t) => sum + t.amount, 0)
-    : input.paidAmount
+    : isCreditTill
+      ? input.paidAmount
+      : input.paymentMethod === "CASH" ||
+          input.paymentMethod === "TRANSFER" ||
+          input.paymentMethod === "POS"
+        ? subtotal
+        : input.paidAmount
 
-  const paid = Math.min(Math.max(0, rawPaid), subtotal)
+  const paid = Math.min(Math.max(0, Number.isFinite(Number(rawPaid)) ? Number(rawPaid) : 0), subtotal)
   const due = subtotal - paid
   // Sale label: credit when anything is still owed; otherwise Cash or Bank (or an old split).
   const method: PaymentMethod =
@@ -534,27 +550,26 @@ export async function checkoutSale(input: {
       ? "CREDIT"
       : isSplit
         ? "SPLIT_PAYMENT"
-        : input.paymentMethod === "CREDIT"
+        : isCreditTill
           ? "CREDIT"
           : shopPayChannel(input.paymentMethod)
 
-  // Money that actually came in today: Cash or Bank. Old POS / split lines stay as stored.
+  // Money that actually came in today: Cash or Bank. Credit deposits use depositMethod.
   const receivedChannel: "CASH" | "TRANSFER" | "POS" =
     isSplit && validSplits[0]
       ? validSplits[0].method
       : input.paymentMethod === "POS"
         ? "POS"
-        : shopPayChannel(input.paymentMethod === "CREDIT" ? "TRANSFER" : input.paymentMethod)
+        : shopPayChannel(
+            isCreditTill
+              ? input.depositMethod || "TRANSFER"
+              : input.paymentMethod
+          )
 
   let bankAccountId: string | null = null
   // New Bank sales must name the account. Old POS lines and parked splits may have none.
-  const needsNamedBank =
-    paid > 0 &&
-    !isSplit &&
-    input.paymentMethod !== "POS" &&
-    input.paymentMethod !== "CASH" &&
-    input.paymentMethod !== "CREDIT" &&
-    shopPayChannel(input.paymentMethod) === "TRANSFER"
+  const moneyIsBank = receivedChannel !== "CASH"
+  const needsNamedBank = paid > 0 && !isSplit && moneyIsBank && input.paymentMethod !== "POS"
   if (needsNamedBank) {
     const wanted = String(input.bankAccountId || "").trim()
     if (!wanted) {

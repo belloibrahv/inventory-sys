@@ -323,13 +323,23 @@ export function PosClient({
     }
   }, [q, query, branchId])
 
-  const total = useMemo(() => cart.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0), [cart])
+  const total = useMemo(
+    () =>
+      cart.reduce((sum, line) => {
+        const price = Number.isFinite(line.unitPrice) ? line.unitPrice : 0
+        const qty = Number.isFinite(line.quantity) ? line.quantity : 0
+        return sum + price * qty
+      }, 0),
+    [cart]
+  )
   const customer = customers.find((row) => row.id === customerId)
   const shopBanks = useMemo(
     () => bankAccounts.filter((row) => row.branchId === branchId),
     [bankAccounts, branchId]
   )
-  const effectivePaid = paid
+  // Cash and Bank always pay the full sale total. Only Credit sales keep a separate
+  // "received now" figure. That stops Amount paid from lagging behind a raised price.
+  const effectivePaid = method === "CREDIT" ? Math.min(Math.max(0, paid), total) : total
   const due = Math.max(0, total - effectivePaid)
   const nextDebt = (customer?.currentBalance ?? 0) + due
   const sellLock = sellLocks?.[branchId]
@@ -345,6 +355,10 @@ export function PosClient({
       setBankAccountId(shopBanks[0].id)
     }
   }, [shopBanks, bankAccountId])
+
+  useEffect(() => {
+    if (method !== "CREDIT") setPaid(total)
+  }, [method, total])
 
   function setPaidTo(nextTotal: number) {
     if (method !== "CREDIT") setPaid(nextTotal)
@@ -441,25 +455,28 @@ export function PosClient({
       return
     }
     const floor = initialSellFloor(item.product.sellingPrice, item.product.minimumPrice)
-    setCart((current) => [
-      ...current,
-      {
-        productId: item.productId,
-        imeiId: item.id,
-        name: item.product.name,
-        imei: item.imei1,
-        unitPrice: floor,
-        listPrice: floor,
-        minPrice: floor,
-        quantity: 1,
-        warrantyDays: 0,
-        storage: item.product.storage,
-        condition: item.cosmeticGrade || item.product.condition,
-        color: item.product.color,
-        category: item.product.category ?? null,
-      },
-    ])
-    setPaidTo(total + floor)
+    setCart((current) => {
+      const next = [
+        ...current,
+        {
+          productId: item.productId,
+          imeiId: item.id,
+          name: item.product.name,
+          imei: item.imei1,
+          unitPrice: floor,
+          listPrice: floor,
+          minPrice: floor,
+          quantity: 1,
+          warrantyDays: 0,
+          storage: item.product.storage,
+          condition: item.cosmeticGrade || item.product.condition,
+          color: item.product.color,
+          category: item.product.category ?? null,
+        },
+      ]
+      syncPaid(next)
+      return next
+    })
     setQuery("")
     setRemoteImeis([])
     setRemoteAccessories([])
@@ -573,6 +590,14 @@ export function PosClient({
       toast.error("One price is under the initial sell price. Raise it for this buyer, or ask the CEO or Super Admin.")
       return
     }
+    if (cart.some((line) => !Number.isFinite(line.unitPrice) || line.unitPrice < 0)) {
+      toast.error("Every line needs a valid sell price before you complete the sale.")
+      return
+    }
+    if (!(total > 0) && cart.length > 0) {
+      toast.error("Sale total cannot be zero. Check the prices on this sale.")
+      return
+    }
     for (const line of cart) {
       if (line.imeiId) continue
       const product = products.find((row) => row.id === line.productId)
@@ -597,14 +622,16 @@ export function PosClient({
           ? "CASH"
           : "TRANSFER"
 
+    // Credit sales always send CREDIT. Cash / Bank send the tender and the full total.
     const checkoutMethod: "CASH" | "TRANSFER" | "CREDIT" =
-      method === "CREDIT" ? (effectivePaid > 0 ? depositChannel : "CREDIT") : depositChannel
+      method === "CREDIT" ? "CREDIT" : depositChannel
 
     const payload = {
       customerId: customerId || undefined,
       branchId,
       paymentMethod: checkoutMethod,
       paidAmount: effectivePaid,
+      depositMethod: method === "CREDIT" && effectivePaid > 0 ? depositChannel : undefined,
       bankAccountId: wantsBank ? bankAccountId : undefined,
       notes,
       wholesale,
@@ -612,7 +639,7 @@ export function PosClient({
         productId: line.productId,
         imeiId: line.imeiId,
         quantity: line.quantity,
-        unitPrice: line.unitPrice,
+        unitPrice: Number.isFinite(line.unitPrice) ? line.unitPrice : 0,
         warrantyDays: line.warrantyDays ?? 0,
       })),
     }
@@ -880,9 +907,11 @@ export function PosClient({
                     <Input
                       type="number"
                       className="h-9 w-28"
-                      value={line.unitPrice}
+                      value={Number.isFinite(line.unitPrice) ? line.unitPrice : ""}
                       onChange={(event) => {
-                        const unitPrice = Number(event.target.value)
+                        const raw = event.target.value
+                        const unitPrice = raw === "" ? 0 : Number(raw)
+                        if (!Number.isFinite(unitPrice) || unitPrice < 0) return
                         setCart((current) => {
                           const next = current.map((row, i) => (i === index ? { ...row, unitPrice } : row))
                           syncPaid(next)
@@ -895,11 +924,9 @@ export function PosClient({
                       Initial {formatCurrency(line.listPrice)}
                       {isPieceLine ? " · each" : ""} · raise for walk-in; not under without CEO or Super Admin
                     </p>
-                    {isPieceLine && line.quantity > 1 ? (
-                      <p className="mt-0.5 text-xs font-medium">
-                        Line total {formatCurrency(line.unitPrice * line.quantity)}
-                      </p>
-                    ) : null}
+                    <p className="mt-0.5 text-xs font-medium tabular-nums">
+                      Line total {formatCurrency((Number.isFinite(line.unitPrice) ? line.unitPrice : 0) * line.quantity)}
+                    </p>
                   </td>
                   <td className="px-4 py-3 text-right">
                     <Button
@@ -1013,14 +1040,38 @@ export function PosClient({
             <span className="mb-1 block text-muted-foreground">
               {method === "CREDIT" ? "Amount received now" : "Amount paid"}
             </span>
-            <Input
-              type="number"
-              min={0}
-              value={paid || ""}
-              placeholder="0"
-              onChange={(event) => setPaid(Math.max(0, Number(event.target.value) || 0))}
-            />
+            {method === "CREDIT" ? (
+              <Input
+                type="number"
+                min={0}
+                max={total || undefined}
+                value={paid || ""}
+                placeholder="0"
+                onChange={(event) => {
+                  const next = Math.max(0, Number(event.target.value) || 0)
+                  setPaid(Math.min(next, total || next))
+                }}
+              />
+            ) : (
+              <Input
+                type="number"
+                readOnly
+                tabIndex={-1}
+                value={total || ""}
+                className="bg-muted/40 font-semibold tabular-nums"
+                aria-label="Amount paid equals the sale total for Cash or Bank"
+              />
+            )}
           </label>
+          {method === "CREDIT" ? (
+            <p className="text-xs text-muted-foreground">
+              Cannot be more than the sale total ({formatCurrency(total)}). What is left is still owed.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Always matches the sale total when they pay Cash or Bank. Raise or lower a line price above and this figure updates with it.
+            </p>
+          )}
           {method === "CREDIT" && paid > 0 ? (
             <label className="block text-sm">
               <span className="mb-1 block text-muted-foreground">How they paid this amount</span>
@@ -1059,10 +1110,11 @@ export function PosClient({
         </label>
         <Input placeholder="Notes" value={notes} onChange={(event) => setNotes(event.target.value)} />
         <div className="rounded-lg bg-muted p-4">
-          <p className="text-sm text-muted-foreground">Total</p>
-          <p className="text-3xl font-semibold">{formatCurrency(total)}</p>
-          <p className="text-xs text-muted-foreground">
-            Due now {formatCurrency(due)}
+          <p className="text-sm text-muted-foreground">Sale total</p>
+          <p className="text-3xl font-semibold tabular-nums">{formatCurrency(total)}</p>
+          <p className="mt-1 text-sm tabular-nums text-muted-foreground">
+            Amount paid {formatCurrency(effectivePaid)}
+            {due > 0 ? ` · still owed ${formatCurrency(due)}` : " · paid in full"}
           </p>
           {customer && (method === "CREDIT" || due > 0) ? (
             <p className="mt-1 text-xs text-muted-foreground">After this sale they would owe {formatCurrency(nextDebt)}</p>

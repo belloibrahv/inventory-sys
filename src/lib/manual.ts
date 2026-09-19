@@ -233,7 +233,7 @@ const PAGES: Array<
       "Confirm you are in the shop you are standing in.",
       "In the one Scan or type box, scan the IMEI or type a name, serial, brand, category, or piece item, then Enter. Use camera if the browser allows it. Coming phones will not appear.",
       "Pick a named customer, or add one. A sale with no name must be paid in full.",
-      "For a full payment, pick Cash or Bank. If Bank, pick which shop bank account received the full amount, then finish.",
+      "For a full payment, pick Cash or Bank. Amount paid always matches the sale total, including after you raise a price. If Bank, pick which shop bank account received the full amount, then finish.",
       "For a part payment, pick Credit sales, type the amount received now, and pick Cash or Bank for that amount. The rest stays as credit sales.",
       "If the network goes off and the till is not locked, finish the sale anyway. It stays on this phone as a waiting sale and goes to the shop system when the network comes back.",
     ],

@@ -9,6 +9,7 @@ export type QueuedSale = {
     paymentMethod: "CASH" | "TRANSFER" | "POS" | "CREDIT" | "SPLIT_PAYMENT"
     paidAmount: number
     bankAccountId?: string
+    depositMethod?: "CASH" | "TRANSFER"
     splitTenders?: Array<{ method: "CASH" | "TRANSFER" | "POS"; amount: number }>
     notes?: string
     wholesale?: boolean
