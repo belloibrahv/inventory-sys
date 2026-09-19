@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { createCustomer } from "@/app/actions/parties"
 import { checkoutSale, findInStockImei, searchTillStock } from "@/app/actions/sales"
-import { ScanField } from "@/components/scan-field"
+import { TillLookup } from "@/components/till-lookup"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
@@ -378,8 +378,14 @@ export function PosClient({
   }
 
   async function takeScan(code: string) {
+    const cleaned = code.replace(/[\s-]/g, "").trim()
     const exact = branchImeis.find(
-      (item) => item.imei1 === code || item.serialNumber === code || item.imei1.endsWith(code)
+      (item) =>
+        item.imei1 === cleaned ||
+        item.serialNumber === cleaned ||
+        item.imei1 === code.trim() ||
+        item.serialNumber === code.trim() ||
+        item.imei1.endsWith(cleaned)
     )
     if (exact) {
       addImei(exact)
@@ -387,22 +393,36 @@ export function PosClient({
       return
     }
     if (typeof navigator !== "undefined" && navigator.onLine) {
-      const found = await findInStockImei(code, branchId)
+      const found = await findInStockImei(cleaned || code.trim(), branchId)
       if (found.imei) {
         addImei(found.imei)
         toast.success("Added to this sale")
         return
       }
-      toast.error(found.error || "That IMEI is not in this shop. Check Goods on the way, or check the shop.")
+      toast.error(found.error || "Nothing in this shop matches that scan. Check Goods on the way, or check the shop.")
       return
     }
     setQuery(code)
-    toast.error("That IMEI is not in the list saved on this phone. Scan a phone from the last In shop list, or wait for the network.")
+    toast.error("That number is not in the list saved on this phone. Scan from the last In shop list, or wait for the network.")
   }
 
-  async function takeSearchEnter() {
-    const typed = query.trim()
+  async function takeLookupCommit(raw: string) {
+    const typed = raw.trim()
     if (!typed) return
+    const cleaned = typed.replace(/[\s-]/g, "")
+    const exactLocal = branchImeis.find(
+      (item) =>
+        item.imei1 === cleaned ||
+        item.serialNumber === cleaned ||
+        item.imei1 === typed ||
+        item.serialNumber === typed ||
+        (cleaned.length >= 8 && item.imei1.endsWith(cleaned))
+    )
+    if (exactLocal) {
+      addImei(exactLocal)
+      toast.success("Added to this sale")
+      return
+    }
     if (filtered[0]) {
       addImei(filtered[0])
       toast.success("Added to this sale")
@@ -652,41 +672,37 @@ export function PosClient({
         </div>
       ) : null}
       <div className="space-y-4">
-        <div className="surface-card space-y-3 p-4">
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Scan a phone, or find a piece item
-            </span>
+        <div className="surface-card space-y-4 p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold tracking-tight">Add to this sale</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Phones and piece items use the same box.
+              </p>
+            </div>
             <button
               type="button"
               onClick={handleClearCart}
-              className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+              className="inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-primary hover:underline"
             >
-              <PlusCircle className="h-3.5 w-3.5" /> Start a new sale
+              <PlusCircle className="h-4 w-4" /> Start a new sale
             </button>
           </div>
-          <ScanField
-            onScan={takeScan}
-            placeholder="Scan IMEI to sell, then Enter"
-            hint="Scan adds the phone. It does not finish the sale."
-          />
-          <Input
+          <TillLookup
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault()
-                void takeSearchEnter()
-              }
-            }}
-            placeholder="Find by IMEI, phone name, brand, category, or piece item (pouch, cord)"
-            aria-label="Find by IMEI, phone name, brand, category, or piece item"
+            onChange={setQuery}
+            onCommit={takeLookupCommit}
+            searching={searchingRemote}
+            disabled={Boolean(sellLock?.locked)}
           />
           {query ? (
-            <div className="mt-3 space-y-2">
-              {searchingRemote ? (
-                <p className="px-3 text-xs text-muted-foreground">Looking across this shop stock</p>
-              ) : null}
+            <div className="overflow-hidden rounded-xl border border-border bg-muted/20">
+              <div className="border-b border-border px-3 py-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {searchingRemote ? "Looking across this shop stock" : "Matches in this shop"}
+                </p>
+              </div>
+              <div className="divide-y divide-border">
               {filtered.slice(0, 8).map((item) => {
                 const parts = detailParts(
                   item.product.storage,
@@ -697,13 +713,14 @@ export function PosClient({
                 return (
                 <button
                   key={item.id}
+                  type="button"
                   onClick={() => addImei(item)}
-                  className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left hover:bg-muted"
+                  className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left transition-colors hover:bg-background"
                 >
-                  <div>
-                    <span className="block text-sm font-medium">{item.product.name}</span>
-                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
-                      <span className="font-mono text-foreground font-semibold">{item.imei1}</span>
+                  <div className="min-w-0">
+                    <span className="block text-sm font-semibold">{item.product.name}</span>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+                      <span className="font-mono font-semibold text-foreground">{item.imei1}</span>
                       {item.serialNumber ? <span>· {item.serialNumber}</span> : null}
                       {parts.length ? (
                         <span className="text-foreground">{parts.join(" · ")}</span>
@@ -712,41 +729,43 @@ export function PosClient({
                       )}
                     </div>
                   </div>
-                  <span className="text-sm font-semibold">{formatCurrency(money(item.product.sellingPrice))}</span>
+                  <span className="shrink-0 text-sm font-semibold tabular-nums">{formatCurrency(money(item.product.sellingPrice))}</span>
                 </button>
               )})}
-              {accessoryHits.slice(0, 4).map((product) => {
+              {accessoryHits.slice(0, 6).map((product) => {
                 const parts = detailParts(
                   product.storage,
                   product.condition,
                   product.color,
                   product.category?.name
                 )
+                const onHand = product.stock.find((row) => row.branchId === branchId)?.quantity ?? 0
                 return (
                 <button
                   key={product.id}
+                  type="button"
                   onClick={() => addAccessory(product)}
-                  className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left hover:bg-muted"
+                  className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left transition-colors hover:bg-background"
                 >
-                  <div>
-                    <span className="block text-sm font-medium">{product.name}</span>
-                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
+                  <div className="min-w-0">
+                    <span className="block text-sm font-semibold">{product.name}</span>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
                       <span>
-                        Piece item · {product.stock.find((row) => row.branchId === branchId)?.quantity ?? 0} on hand
+                        {onHand} on hand
                         {product.brand?.name ? ` · ${product.brand.name}` : ""}
                       </span>
                       {parts.length ? <span className="text-foreground">{parts.join(" · ")}</span> : null}
                     </div>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">
-                      Tap to add. Then set Pieces on this sale.
-                    </p>
                   </div>
-                  <span className="text-sm font-semibold">{formatCurrency(money(product.sellingPrice))}</span>
+                  <span className="shrink-0 text-sm font-semibold tabular-nums">{formatCurrency(money(product.sellingPrice))}</span>
                 </button>
               )})}
               {filtered.length === 0 && accessoryHits.length === 0 && !searchingRemote ? (
-                <p className="px-3 py-4 text-sm text-muted-foreground">Nothing in this shop matches what you typed.</p>
+                <p className="px-3 py-5 text-sm text-muted-foreground">
+                  Nothing in this shop matches what you typed. Check the spelling, or scan the IMEI or serial.
+                </p>
               ) : null}
+              </div>
             </div>
           ) : null}
         </div>
@@ -900,7 +919,7 @@ export function PosClient({
               {cart.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
-                    Scan or find a phone by IMEI, or find a piece item such as a pouch or charger cord.
+                    Scan or type in the box above. IMEI, serial, phone name, brand, category, pouch, or charger cord all work in the same place.
                   </td>
                 </tr>
               ) : null}

@@ -222,11 +222,11 @@ const PAGES: Array<
     href: "/pos",
     title: "Sell now",
     needAction: "action.sell",
-    what: "The till. Scan or type an In shop IMEI or an accessory name, pick the buyer, take Cash or Bank (into a named bank account from Money in and out), or Credit sales, and finish. On credit sales you can still type money received now and say if it was Cash or Bank. What is left is credit sales. The system makes an invoice.",
+    what: "The till. One box to scan or type IMEI, serial, phone name, brand, category, or a piece item. Pick the buyer, take Cash or Bank (into a named bank account from Money in and out), or Credit sales, and finish. On credit sales you can still type money received now and say if it was Cash or Bank. What is left is credit sales. The system makes an invoice.",
     doThis: [
       "If you see Count the till, close that day first. Complete sale stays locked until you do, even for the main admin.",
       "Confirm you are in the shop you are standing in.",
-      "Scan the IMEI and press Enter, or use the camera if the browser allows it. Coming phones will not appear.",
+      "In the one Scan or type box, scan the IMEI or type a name, serial, brand, category, or piece item, then Enter. Use camera if the browser allows it. Coming phones will not appear.",
       "Pick a named customer, or add one. A sale with no name must be paid in full.",
       "For a full payment, pick Cash or Bank. If Bank, pick which shop bank account received the full amount, then finish.",
       "For a part payment, pick Credit sales, type the amount received now, and pick Cash or Bank for that amount. The rest stays as credit sales.",
