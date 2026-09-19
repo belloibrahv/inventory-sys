@@ -12,6 +12,8 @@ import { requireUser } from "@/lib/session"
 import { generateDocNumber, money } from "@/lib/utils"
 import { shopError } from "@/lib/shop-speak"
 import { getAppSettings } from "@/lib/settings"
+import { assertCashAvailable } from "@/lib/shop-cash"
+import { shopPayChannel } from "@/lib/sale-money"
 
 function refreshNeighbor() {
   for (const path of ["/neighbor-fills", "/sales", "/customers", "/finance", "/profits", "/imei", "/audit"]) {
@@ -376,6 +378,11 @@ export async function payNeighborFill(formData: FormData) {
   const nextPaid = money(fill.moneySentToNeighbor) + sent
   const settled = fill.status === "SOLD" && nextPaid >= money(fill.neighborCost)
   const payRef = generateDocNumber("NBPAY")
+  const payChannel = shopPayChannel(method)
+  if (payChannel === "CASH") {
+    const cashGate = await assertCashAvailable(fill.branchId, sent)
+    if (!cashGate.ok) return { error: cashGate.error }
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.neighborFill.update({
@@ -389,7 +396,7 @@ export async function payNeighborFill(formData: FormData) {
     await tx.financeEntry.create({
       data: {
         branchId: fill.branchId,
-        account: method === "CASH" ? "CASH" : "BANK",
+        account: payChannel === "CASH" ? "CASH" : "BANK",
         type: "EXPENSE",
         amount: sent.toFixed(2),
         reference: payRef,

@@ -20,6 +20,7 @@ import {
   displayBankName,
   listedBankClash,
 } from "@/lib/opening-money"
+import { assertCashAvailable } from "@/lib/shop-cash"
 
 function emptyFinance() {
   return {
@@ -142,7 +143,9 @@ export async function getFinance() {
   const cashRevenue = mix.cash
   const bankRevenue = mix.transfer + mix.pos
 
-  const expenditure = expenses.reduce((sum, e) => sum + money(e.amount), 0)
+  const expenditure = expenses
+    .filter((e) => e.approvedAt)
+    .reduce((sum, e) => sum + money(e.amount), 0)
   const supplierPayments = purchases.reduce((sum, p) => sum + money(p.paidAmount), 0)
   const netCashFlow = revenue - expenditure - supplierPayments
 
@@ -239,6 +242,7 @@ export async function getFinance() {
   }
 
   for (const exp of expenses) {
+    if (!exp.approvedAt) continue
     cashEntries.push({
       id: exp.id,
       date: exp.date,
@@ -247,6 +251,34 @@ export async function getFinance() {
       category: `Expense: ${exp.category}`,
       description: `${exp.expenseNumber} - ${exp.description}`,
       amount: money(exp.amount),
+    })
+  }
+
+  const approvedExpenseRefs = expenses.filter((e) => e.approvedAt).map((e) => e.expenseNumber)
+  const otherCashOuts = await prisma.financeEntry.findMany({
+    where: {
+      ...where,
+      account: "CASH",
+      type: "EXPENSE",
+      ...(approvedExpenseRefs.length
+        ? { OR: [{ reference: null }, { reference: { notIn: approvedExpenseRefs } }] }
+        : {}),
+    },
+    include: { branch: true },
+    orderBy: { createdAt: "desc" },
+  })
+  let otherCashOut = 0
+  for (const entry of otherCashOuts) {
+    const amount = money(entry.amount)
+    otherCashOut += amount
+    cashEntries.push({
+      id: entry.id,
+      date: entry.createdAt,
+      branch: entry.branch.name,
+      type: "OUT",
+      category: "Cash pay-out",
+      description: entry.description || entry.reference || "Cash pay-out",
+      amount,
     })
   }
 
@@ -314,7 +346,7 @@ export async function getFinance() {
   cashEntries.sort((a, b) => b.date.getTime() - a.date.getTime())
   bankEntries.sort((a, b) => b.date.getTime() - a.date.getTime())
 
-  const cashBalance = openingCash + cashRevenue - expenditure
+  const cashBalance = openingCash + cashRevenue - expenditure - otherCashOut
   const bankBalance = openingBank + bankRevenue - supplierPayments
 
   const seenHouses = new Set(purchases.map((row) => row.supplierId))
@@ -526,6 +558,9 @@ export async function createExpense(formData: FormData) {
   const branchId = shopGate.shopId
   if (amount <= 0) return { error: "Type the amount and pick the shop." }
 
+  const cashGate = await assertCashAvailable(branchId, amount)
+  if (!cashGate.ok) return { error: cashGate.error }
+
   const expense = await prisma.expense.create({
     data: {
       expenseNumber: generateDocNumber("EXP"),
@@ -590,6 +625,19 @@ export async function decideApproval(id: string, status: "APPROVED" | "REJECTED"
       const { applySwapApprovalDecision } = await import("@/app/actions/ops")
       const result = await applySwapApprovalDecision(swap.id, status, user.id)
       if (result && "error" in result && result.error) return result
+    }
+  }
+
+  // Cash expenses: check the till before marking yes, so a short till cannot be approved.
+  if ((approval.entityType === "Expense" || approval.type === "EXPENSE") && status === "APPROVED") {
+    const expense = await prisma.expense.findFirst({
+      where: { OR: [{ id: approval.entityId }, { expenseNumber: approval.entityId }] },
+    })
+    if (expense && !expense.approvedAt) {
+      const cashGate = await assertCashAvailable(expense.branchId, money(expense.amount), {
+        ignoreExpenseId: expense.id,
+      })
+      if (!cashGate.ok) return { error: cashGate.error }
     }
   }
 

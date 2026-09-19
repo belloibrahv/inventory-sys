@@ -26,6 +26,8 @@ import { getAppSettings } from "@/lib/settings"
 import { healOpeningStockBills } from "@/lib/opening-stock-money"
 import { isOpeningStockPurchase, purchaseBalance } from "@/lib/purchase-money"
 import { isSupplierReturnableStatus, supplierReturnMoneyPlan } from "@/lib/vendor-return"
+import { assertCashAvailable } from "@/lib/shop-cash"
+import { shopPayChannel } from "@/lib/sale-money"
 
 function parseImeis(raw: string) {
   return [...new Set(raw.split(/[\s,;]+/).map((item) => item.trim()).filter((item) => item.length >= 14))]
@@ -828,6 +830,17 @@ export async function completeReturn(formData: FormData) {
     if (!replacementImeiId) return { error: "Pick or enter the replacement from In shop stock." }
   }
 
+  const payChannel = shopPayChannel(method)
+  if (record.outcome === "REFUND") {
+    const asked = money(record.returnValue) || money(record.refundAmount) || (record.imei ? money(record.imei.product.sellingPrice) : 0)
+    const salePaid = sale ? money(sale.paidAmount) : asked
+    const cashOut = Math.min(asked, salePaid || asked)
+    if (cashOut > 0 && payChannel === "CASH") {
+      const cashGate = await assertCashAvailable(record.branchId, cashOut)
+      if (!cashGate.ok) return { error: cashGate.error }
+    }
+  }
+
   try {
   await prisma.$transaction(async (tx) => {
     const sealed = await tx.stockReturn.updateMany({
@@ -868,7 +881,7 @@ export async function completeReturn(formData: FormData) {
         await tx.financeEntry.create({
           data: {
             branchId: record.branchId,
-            account: "CASH",
+            account: payChannel === "CASH" ? "CASH" : "BANK",
             type: "EXPENSE",
             amount: cashOut.toFixed(2),
             reference: record.returnNumber,
@@ -1330,6 +1343,12 @@ export async function completeSwap(formData: FormData) {
   const receivable = Math.max(balance, 0)
   const payable = Math.max(-balance, 0)
   const collected = Math.min(Math.max(0, paid), receivable || payable)
+  const payChannel = shopPayChannel(method)
+  if (payable > 0 && payChannel === "CASH") {
+    const payOut = collected > 0 ? Math.min(collected, payable) : payable
+    const cashGate = await assertCashAvailable(swap.branchId, payOut)
+    if (!cashGate.ok) return { error: cashGate.error }
+  }
 
   let invoice: { id: string }
   try {
@@ -1432,7 +1451,7 @@ export async function completeSwap(formData: FormData) {
       await tx.financeEntry.create({
         data: {
           branchId: swap.branchId,
-          account: method === "CASH" ? "CASH" : "BANK",
+          account: payChannel === "CASH" ? "CASH" : "BANK",
           type: "INCOME",
           amount: collected.toFixed(2),
           reference: invoiceNumber,
@@ -1445,7 +1464,7 @@ export async function completeSwap(formData: FormData) {
       await tx.financeEntry.create({
         data: {
           branchId: swap.branchId,
-          account: method === "CASH" ? "CASH" : "BANK",
+          account: payChannel === "CASH" ? "CASH" : "BANK",
           type: "EXPENSE",
           amount: payOut.toFixed(2),
           reference: invoiceNumber,

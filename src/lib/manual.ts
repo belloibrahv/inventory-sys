@@ -497,14 +497,18 @@ const PAGES: Array<
     href: "/expenses",
     title: "Expenses",
     needAction: "action.finance",
-    what: "Fuel, rent, salary, light bill. Staff ask. A manager says yes. Then money can leave.",
+    what: "Fuel, rent, salary, light bill. Staff ask. A manager says yes. Then money can leave from cash in the till. The till cannot go below zero.",
     doThis: [
-      "Create the expense with an amount and a description.",
+      "Read cash in the till on the page.",
+      "Create the expense with an amount at or under that cash, and a description.",
       "Wait on Waiting for yes.",
-      "After yes, the pay-out can show in Money in & out.",
+      "After yes, the pay-out shows in Money in & out and cash in the till drops.",
     ],
-    watch: ["Money does not leave until yes."],
-    cannot: ["A no leaves the expense rejected."],
+    watch: [
+      "Money does not leave until yes.",
+      "A bill bigger than cash in the till is refused. Collect a cash sale first, or pay from the bank.",
+    ],
+    cannot: ["A no leaves the expense rejected.", "You cannot take cash out when the till is empty."],
     lookup: ["expense", "fuel", "bill"],
   },
   {
