@@ -24,7 +24,7 @@ export async function getSales() {
     where: branchId ? { branchId } : undefined,
     include: { customer: true, branch: true, user: true, items: { include: { product: true, imei: true } } },
     orderBy: { saleDate: "desc" },
-    take: 100,
+    take: 500,
   })
 }
 

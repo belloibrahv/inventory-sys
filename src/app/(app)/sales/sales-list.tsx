@@ -18,7 +18,7 @@ type SaleRow = {
   paymentMethod: string
   status: string
   customer: { name: string } | null
-  branch: { code: string }
+  branch: { code: string; name?: string }
 }
 
 type PayFilter = "all" | "paid" | "part" | "unpaid"
@@ -29,6 +29,11 @@ function payKey(sale: SaleRow): Exclude<PayFilter, "all"> {
   if (paid <= 0) return "unpaid"
   if (paid + 0.001 >= total) return "paid"
   return "part"
+}
+
+/** Paid minus sales. Zero when settled. Negative when the buyer still owes. */
+function saleBalance(sale: SaleRow) {
+  return money(sale.paidAmount) - money(sale.totalAmount)
 }
 
 export function SalesList({ sales }: { sales: SaleRow[] }) {
@@ -53,6 +58,20 @@ export function SalesList({ sales }: { sales: SaleRow[] }) {
       unpaid: base.filter((sale) => payKey(sale) === "unpaid").length,
     }
   }, [sales, when])
+
+  const totals = useMemo(() => {
+    return filtered.reduce(
+      (acc, sale) => {
+        const salesValue = money(sale.totalAmount)
+        const paid = money(sale.paidAmount)
+        acc.sales += salesValue
+        acc.paid += paid
+        acc.balance += paid - salesValue
+        return acc
+      },
+      { sales: 0, paid: 0, balance: 0 }
+    )
+  }, [filtered])
 
   const pager = usePagedRows(filtered, `${pay}|${when}`)
 
@@ -83,63 +102,138 @@ export function SalesList({ sales }: { sales: SaleRow[] }) {
         />
       </div>
 
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="surface-card p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sales value</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums">{formatCurrency(totals.sales)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {filtered.length} sale{filtered.length === 1 ? "" : "s"} on this filter
+          </p>
+        </div>
+        <div className="surface-card p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Payments received</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums">{formatCurrency(totals.paid)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">Money already taken on these bills</p>
+        </div>
+        <div className="surface-card p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Balance</p>
+          <p
+            className={`mt-1 text-2xl font-semibold tabular-nums ${
+              totals.balance < -0.005 ? "text-danger" : totals.balance > 0.005 ? "text-success" : "text-foreground"
+            }`}
+          >
+            {formatCurrency(totals.balance)}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Paid minus sales. Negative means buyers still owe.
+          </p>
+        </div>
+      </div>
+
       <div className="surface-card overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="text-left text-muted-foreground">
-            <tr className="border-b border-border">
-              <th className="px-4 py-3">Invoice</th>
-              <th className="px-4 py-3">Customer</th>
-              <th className="px-4 py-3">Branch</th>
-              <th className="px-4 py-3">Total / Paid</th>
-              <th className="px-4 py-3">Method</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">When</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pager.pageRows.map((sale) => (
-              <tr key={sale.id} className="border-b border-border/70">
-                <td className="px-4 py-3">
-                  <Link href={`/sales/${sale.id}`} className="font-medium text-primary">
-                    {sale.invoiceNumber}
-                  </Link>
-                </td>
-                <td className="px-4 py-3">
-                  {sale.customer ? (
-                    sale.customer.name
-                  ) : (
-                    <span>
-                      Walk-in
-                      <span className="block text-xs text-warning">
-                        This one needs a buyer name before anybody can return it
-                      </span>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[960px] text-sm">
+            <thead className="text-left text-muted-foreground">
+              <tr className="border-b border-border">
+                <th className="px-4 py-3">Invoice</th>
+                <th className="px-4 py-3">Branch</th>
+                <th className="px-4 py-3">Customer</th>
+                <th className="px-4 py-3 text-right">Sales</th>
+                <th className="px-4 py-3 text-right">Paid</th>
+                <th className="px-4 py-3 text-right">Balance</th>
+                <th className="px-4 py-3">Payment method</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">When</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pager.pageRows.map((sale) => {
+                const salesValue = money(sale.totalAmount)
+                const paid = money(sale.paidAmount)
+                const balance = saleBalance(sale)
+                return (
+                  <tr key={sale.id} className="border-b border-border/70">
+                    <td className="px-4 py-3">
+                      <Link href={`/sales/${sale.id}`} className="font-medium text-primary">
+                        {sale.invoiceNumber}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="font-medium">{sale.branch.name || sale.branch.code}</p>
+                      {sale.branch.name ? (
+                        <p className="text-xs text-muted-foreground">{sale.branch.code}</p>
+                      ) : null}
+                    </td>
+                    <td className="px-4 py-3">
+                      {sale.customer ? (
+                        sale.customer.name
+                      ) : (
+                        <span>
+                          Walk-in
+                          <span className="block text-xs text-warning">
+                            Needs a buyer name before anybody can return it
+                          </span>
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium tabular-nums">
+                      {formatCurrency(salesValue)}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(paid)}</td>
+                    <td
+                      className={`px-4 py-3 text-right font-semibold tabular-nums ${
+                        balance < -0.005
+                          ? "text-danger"
+                          : balance > 0.005
+                            ? "text-success"
+                            : "text-foreground"
+                      }`}
+                    >
+                      {formatCurrency(balance)}
+                    </td>
+                    <td className="px-4 py-3">{statusLabel(sale.paymentMethod)}</td>
+                    <td className="px-4 py-3">
+                      <StatusBadge value={sale.status} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="font-medium tabular-nums">{formatShopWhen(sale.saleDate)}</p>
+                    </td>
+                  </tr>
+                )
+              })}
+              {filtered.length === 0 ? (
+                <tr>
+                  <td className="px-4 py-8 text-sm text-muted-foreground" colSpan={9}>
+                    {sales.length === 0
+                      ? "No sales on the books yet."
+                      : "No sale matches this filter. Tap another chip above."}
+                  </td>
+                </tr>
+              ) : (
+                <tr className="border-t-2 border-border bg-muted/40 font-semibold">
+                  <td className="px-4 py-3" colSpan={3}>
+                    Totals for this filter
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(totals.sales)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(totals.paid)}</td>
+                  <td
+                    className={`px-4 py-3 text-right tabular-nums ${
+                      totals.balance < -0.005 ? "text-danger" : "text-foreground"
+                    }`}
+                  >
+                    {formatCurrency(totals.balance)}
+                  </td>
+                  <td className="px-4 py-3" colSpan={3}>
+                    <span className="text-xs font-normal text-muted-foreground">
+                      Balance is paid minus sales across {filtered.length} sale
+                      {filtered.length === 1 ? "" : "s"}
                     </span>
-                  )}
-                </td>
-                <td className="px-4 py-3">{sale.branch.code}</td>
-                <td className="px-4 py-3">
-                  {formatCurrency(money(sale.totalAmount))} / {formatCurrency(money(sale.paidAmount))}
-                </td>
-                <td className="px-4 py-3">{statusLabel(sale.paymentMethod)}</td>
-                <td className="px-4 py-3">
-                  <StatusBadge value={sale.status} />
-                </td>
-                <td className="px-4 py-3">
-                  <p className="font-medium tabular-nums">{formatShopWhen(sale.saleDate)}</p>
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 ? (
-              <tr>
-                <td className="px-4 py-8 text-sm text-muted-foreground" colSpan={7}>
-                  {sales.length === 0
-                    ? "No sales on the books yet."
-                    : "No sale matches this filter. Tap another chip above."}
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
         <TablePager
           page={pager.page}
           pageCount={pager.pageCount}
