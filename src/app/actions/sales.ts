@@ -101,6 +101,7 @@ export async function getPosLookups() {
       id: product.id,
       name: product.name,
       sku: product.sku,
+      costPrice: money(product.costPrice),
       sellingPrice: money(product.sellingPrice),
       minimumPrice: money(product.minimumPrice),
       serialized: product.tracking !== "NONE",
@@ -363,20 +364,21 @@ export async function getShopImeiSheet(branchId: string) {
   const shop = scoped || branchId
   const rows = await prisma.imeiRecord.findMany({
     where: { status: "IN_STOCK", branchId: shop },
-    include: { product: { select: { sku: true, name: true } } },
+    include: { product: { select: { sku: true, name: true, costPrice: true } } },
     orderBy: { createdAt: "desc" },
     take: 50_000,
   })
   return {
     truncated: rows.length === 50_000,
     rows: [
-      ["imei", "serial", "item_code", "name", "quantity", "color", "notes"],
+      ["imei", "serial", "item_code", "name", "quantity", "unit_cost", "color", "notes"],
       ...rows.map((item) => [
         item.imei1,
         item.serialNumber ?? "",
         item.product.sku,
         item.product.name,
         "1",
+        money(item.product.costPrice).toFixed(2),
         "",
         "",
       ]),

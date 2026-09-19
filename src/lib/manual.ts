@@ -336,10 +336,11 @@ const PAGES: Array<
     href: "/transfers",
     title: "Shop to shop (Stock Transfer)",
     needAction: "action.transfer",
-    what: "Move phones and accessories that already belong to Abu Twins from one of our shops to another. Pick From (Branch), To (Pick the branch), select the items, and Submit the transfer. Stock stays In shop at the sending branch until the receiving branch accepts or rejects.",
+    what: "Move phones and accessories that already belong to Abu Twins from one of our shops to another. Pick From (Branch) and To (Pick the branch). Find items, set Qty to send, read Cost value at unit cost, extract a sheet if you need it, then Submit. Stock stays In shop at the sending branch until the receiving branch accepts or rejects.",
     doThis: [
       "Pick From (Branch) and To (Pick the branch).",
-      "Select the phones and any no-number pieces to send.",
+      "Find phones and piece items. Tick phones. Type Qty to send on cords and other no-number items.",
+      "Read the Cost value total. Extract selection or stock as CSV or Excel if you need a packing sheet.",
       "Submit the transfer. The receiving branch sees Waiting for accept.",
       "The receiving branch Accepts or Rejects. Only Accept moves stock off the sending In shop record.",
     ],
