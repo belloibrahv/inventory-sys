@@ -53,7 +53,7 @@ export const ACTION_PERMS = [
   { key: "action.staff", label: "Add and edit staff" },
   { key: "action.settings", label: "Change shop settings" },
   { key: "action.all_branches", label: "See every shop" },
-  { key: "action.override_floor", label: "Sell below the lowest price" },
+  { key: "action.override_floor", label: "Sell below the list sell price" },
 ] as const
 
 export const ALL_PERM_KEYS = [...VIEW_PERMS, ...ACTION_PERMS].map((row) => row.key)
@@ -106,8 +106,8 @@ const DEFAULTS: Record<UserRole, string[]> = {
     "action.sell", "action.neighbor", "action.return", "action.finance"
   ),
   SALES_EXECUTIVE: V(
-    "view.dashboard", "view.pos", "view.sales", "view.customers", "view.products", "view.expenses", "view.finance", "view.neighbor-fills", "view.notifications",
-    "action.sell", "action.neighbor", "action.finance"
+    "view.dashboard", "view.pos", "view.sales", "view.customers", "view.products", "view.expenses", "view.finance", "view.neighbor-fills", "view.returns", "view.notifications",
+    "action.sell", "action.neighbor", "action.return", "action.finance"
   ),
   ENGINEER: V(
     "view.dashboard", "view.imei", "view.repairs", "view.returns", "view.customers", "view.notifications",
@@ -144,6 +144,16 @@ export const ensureRolePermissions = cache(async () => {
     where: {
       role: { in: ["CASHIER", "SALES_EXECUTIVE"] },
       permKey: { in: ["view.expenses", "view.finance", "view.customers", "action.finance"] },
+      allowed: false,
+    },
+    data: { allowed: true },
+  })
+
+  // Sales reps log returns for phones they sold. Older installs left this shut.
+  await prisma.rolePermission.updateMany({
+    where: {
+      role: "SALES_EXECUTIVE",
+      permKey: { in: ["view.returns", "action.return"] },
       allowed: false,
     },
     data: { allowed: true },

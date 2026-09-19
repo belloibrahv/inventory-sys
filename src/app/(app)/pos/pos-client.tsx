@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { createCustomer } from "@/app/actions/parties"
-import { checkoutSale, findInStockImei } from "@/app/actions/sales"
+import { checkoutSale, findInStockImei, searchTillStock } from "@/app/actions/sales"
 import { ScanField } from "@/components/scan-field"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -20,6 +20,19 @@ import { useDecision } from "@/hooks/use-decision"
 
 function lookLabel(item: TillImei) {
   return phoneLookLabel(item.cosmeticGrade) || formatCondition(item.product.condition)
+}
+
+function detailParts(storage?: string | null, condition?: string | null, color?: string | null, category?: string | null) {
+  const look = formatCondition(condition) || phoneLookLabel(condition)
+  return [storage, look, color, category].filter(Boolean) as string[]
+}
+
+function matchesTillQuery(
+  q: string,
+  fields: Array<string | null | undefined>
+) {
+  const hay = fields.filter(Boolean).join(" ").toLowerCase()
+  return hay.includes(q)
 }
 
 export function PosClient({
@@ -79,15 +92,20 @@ export function PosClient({
       name: string
       imei?: string
       unitPrice: number
+      listPrice: number
       minPrice: number
       quantity: number
       warrantyDays?: number
       storage?: string | null
       condition?: string | null
       color?: string | null
+      category?: string | null
     }>
   >([])
   const [busy, setBusy] = useState(false)
+  const [remoteImeis, setRemoteImeis] = useState<TillImei[]>([])
+  const [remoteAccessories, setRemoteAccessories] = useState<TillProduct[]>([])
+  const [searchingRemote, setSearchingRemote] = useState(false)
   const { confirm } = useDecision()
 
   function resetSale() {
@@ -222,29 +240,83 @@ export function PosClient({
   )
 
   const q = query.trim().toLowerCase()
-  const filtered = useMemo(
-    () =>
-      q
-        ? branchImeis.filter(
-            (item) =>
-              item.imei1.toLowerCase().includes(q) ||
-              (item.serialNumber ?? "").toLowerCase().includes(q) ||
-              item.product.name.toLowerCase().includes(q)
+  const filtered = useMemo(() => {
+    const local = q
+      ? branchImeis.filter((item) =>
+          matchesTillQuery(q, [
+            item.imei1,
+            item.serialNumber,
+            item.product.name,
+            item.product.storage,
+            item.product.color,
+            item.product.brand,
+            item.product.category,
+            lookLabel(item),
+            item.cosmeticGrade,
+          ])
+        )
+      : []
+    const localIds = new Set(local.map((row) => row.id))
+    const extra = remoteImeis.filter(
+      (item) => item.branchId === branchId && !cartImeiIds.has(item.id) && !localIds.has(item.id)
+    )
+    return [...local, ...extra]
+  }, [q, branchImeis, remoteImeis, branchId, cartImeiIds])
+  const accessoryHits = useMemo(() => {
+    const local = q
+      ? products.filter((product) => {
+          if (product.serialized) return false
+          const onHand = product.stock.find((row) => row.branchId === branchId)?.quantity ?? 0
+          return (
+            onHand > 0 &&
+            matchesTillQuery(q, [
+              product.name,
+              product.sku,
+              product.brand.name,
+              product.category?.name,
+              product.storage,
+              product.color,
+              formatCondition(product.condition),
+            ])
           )
-        : [],
-    [q, branchImeis]
-  )
-  const accessoryHits = useMemo(
-    () =>
-      q
-        ? products.filter((product) => {
-            if (product.serialized) return false
-            const onHand = product.stock.find((row) => row.branchId === branchId)?.quantity ?? 0
-            return onHand > 0 && (product.name.toLowerCase().includes(q) || product.sku.toLowerCase().includes(q))
-          })
-        : [],
-    [q, products, branchId]
-  )
+        })
+      : []
+    const localIds = new Set(local.map((row) => row.id))
+    const extra = remoteAccessories.filter((product) => {
+      if (product.serialized) return false
+      if (localIds.has(product.id)) return false
+      const onHand = product.stock.find((row) => row.branchId === branchId)?.quantity ?? 0
+      return onHand > 0
+    })
+    return [...local, ...extra]
+  }, [q, products, branchId, remoteAccessories])
+
+  useEffect(() => {
+    if (!q || q.length < 2) {
+      setRemoteImeis([])
+      setRemoteAccessories([])
+      return
+    }
+    if (typeof navigator !== "undefined" && !navigator.onLine) return
+    let cancelled = false
+    const timer = window.setTimeout(async () => {
+      setSearchingRemote(true)
+      const result = await searchTillStock(query.trim(), branchId)
+      if (cancelled) return
+      setSearchingRemote(false)
+      if ("error" in result && result.error) {
+        setRemoteImeis([])
+        setRemoteAccessories([])
+        return
+      }
+      setRemoteImeis(result.imeis ?? [])
+      setRemoteAccessories((result.accessories ?? []) as TillProduct[])
+    }, 280)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [q, query, branchId])
 
   const total = useMemo(() => cart.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0), [cart])
   const customer = customers.find((row) => row.id === customerId)
@@ -307,6 +379,22 @@ export function PosClient({
     toast.error("That IMEI is not in the list saved on this phone. Scan a phone from the last In shop list, or wait for the network.")
   }
 
+  async function takeSearchEnter() {
+    const typed = query.trim()
+    if (!typed) return
+    if (filtered[0]) {
+      addImei(filtered[0])
+      toast.success("Added to this sale")
+      return
+    }
+    if (accessoryHits[0]) {
+      addAccessory(accessoryHits[0])
+      toast.success("Added to this sale")
+      return
+    }
+    await takeScan(typed)
+  }
+
   function addImei(item: TillImei) {
     if (isBlockedFromSell({ cosmeticGrade: item.cosmeticGrade, productCondition: item.product.condition })) {
       toast.error("That phone is Damaged. It cannot be sold. Open All phones and Set Good (sellable) if it is fixed.")
@@ -321,16 +409,20 @@ export function PosClient({
         name: item.product.name,
         imei: item.imei1,
         unitPrice: price,
+        listPrice: price,
         minPrice: money(item.product.minimumPrice),
         quantity: 1,
         warrantyDays: 0,
         storage: item.product.storage,
         condition: item.cosmeticGrade || item.product.condition,
         color: item.product.color,
+        category: item.product.category ?? null,
       },
     ])
     setPaidTo(total + price)
     setQuery("")
+    setRemoteImeis([])
+    setRemoteAccessories([])
   }
 
   function addAccessory(product: TillProduct) {
@@ -352,17 +444,21 @@ export function PosClient({
           productId: product.id,
           name: product.name,
           unitPrice: price,
+          listPrice: price,
           minPrice: money(product.minimumPrice),
           quantity: 1,
           warrantyDays: 0,
           storage: product.storage,
           condition: product.condition,
           color: product.color,
+          category: product.category?.name ?? null,
         },
       ]
     })
     setPaidTo(total + price)
     setQuery("")
+    setRemoteImeis([])
+    setRemoteAccessories([])
   }
 
   async function checkout() {
@@ -389,6 +485,10 @@ export function PosClient({
         ],
       })
       if (!ok) return
+    }
+    if (!canOverrideFloor && cart.some((line) => line.unitPrice < line.listPrice)) {
+      toast.error("One price is under the list sell price. Raise it, or ask Super Admin.")
+      return
     }
     if (!canOverrideFloor && cart.some((line) => line.unitPrice < line.minPrice)) {
       toast.error("One price is under the lowest price allowed. Raise it, or ask the main admin.")
@@ -502,14 +602,25 @@ export function PosClient({
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault()
-                takeScan(query)
+                void takeSearchEnter()
               }
             }}
-            placeholder="Or type an accessory name or device model"
+            placeholder="Find by IMEI, phone name, brand, category, storage, or accessory"
+            aria-label="Find by IMEI, phone name, brand, category, storage, or accessory"
           />
           {query ? (
             <div className="mt-3 space-y-2">
-              {filtered.slice(0, 8).map((item) => (
+              {searchingRemote ? (
+                <p className="px-3 text-xs text-muted-foreground">Looking across this shop stock</p>
+              ) : null}
+              {filtered.slice(0, 8).map((item) => {
+                const parts = detailParts(
+                  item.product.storage,
+                  item.cosmeticGrade || item.product.condition,
+                  item.product.color,
+                  item.product.category
+                )
+                return (
                 <button
                   key={item.id}
                   onClick={() => addImei(item)}
@@ -520,25 +631,24 @@ export function PosClient({
                     <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
                       <span className="font-mono text-foreground font-semibold">{item.imei1}</span>
                       {item.serialNumber ? <span>· {item.serialNumber}</span> : null}
-                      {item.product.storage ? (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200 font-semibold text-[10px]">
-                          {item.product.storage}
-                        </span>
-                      ) : null}
-                      {lookLabel(item) ? (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 font-medium text-[10px]">
-                          {lookLabel(item)}
-                        </span>
-                      ) : null}
-                      {item.product.color ? (
-                        <span className="text-[11px] text-muted-foreground">· {item.product.color}</span>
-                      ) : null}
+                      {parts.length ? (
+                        <span className="text-foreground">{parts.join(" · ")}</span>
+                      ) : (
+                        <span>Details not set on this phone</span>
+                      )}
                     </div>
                   </div>
                   <span className="text-sm font-semibold">{formatCurrency(money(item.product.sellingPrice))}</span>
                 </button>
-              ))}
-              {accessoryHits.slice(0, 4).map((product) => (
+              )})}
+              {accessoryHits.slice(0, 4).map((product) => {
+                const parts = detailParts(
+                  product.storage,
+                  product.condition,
+                  product.color,
+                  product.category?.name
+                )
+                return (
                 <button
                   key={product.id}
                   onClick={() => addAccessory(product)}
@@ -547,24 +657,17 @@ export function PosClient({
                   <div>
                     <span className="block text-sm font-medium">{product.name}</span>
                     <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
-                      <span>Accessory · {product.stock.find((row) => row.branchId === branchId)?.quantity ?? 0} on hand</span>
-                      {product.storage ? (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200 font-semibold text-[10px]">
-                          {product.storage}
-                        </span>
-                      ) : null}
-                      {product.condition ? (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 font-medium text-[10px]">
-                          {formatCondition(product.condition)}
-                        </span>
-                      ) : null}
-                      {product.color ? <span className="text-[11px] text-muted-foreground">· {product.color}</span> : null}
+                      <span>
+                        Accessory · {product.stock.find((row) => row.branchId === branchId)?.quantity ?? 0} on hand
+                        {product.brand?.name ? ` · ${product.brand.name}` : ""}
+                      </span>
+                      {parts.length ? <span className="text-foreground">{parts.join(" · ")}</span> : null}
                     </div>
                   </div>
                   <span className="text-sm font-semibold">{formatCurrency(money(product.sellingPrice))}</span>
                 </button>
-              ))}
-              {filtered.length === 0 && accessoryHits.length === 0 ? (
+              )})}
+              {filtered.length === 0 && accessoryHits.length === 0 && !searchingRemote ? (
                 <p className="px-3 py-4 text-sm text-muted-foreground">Nothing in this shop matches what you typed.</p>
               ) : null}
             </div>
@@ -597,33 +700,28 @@ export function PosClient({
               </tr>
             </thead>
             <tbody>
-              {cart.map((line, index) => (
+              {cart.map((line, index) => {
+                const parts = detailParts(line.storage, line.condition, line.color, line.category)
+                return (
                 <tr key={`${line.imeiId ?? line.productId}-${index}`} className="border-t border-border">
                   <td className="px-4 py-3">
                     <p className="font-medium">{line.name}{line.quantity > 1 ? ` × ${line.quantity}` : ""}</p>
-                    {(line.storage || line.condition || line.color) ? (
-                      <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                        {line.storage ? (
-                          <span className="inline-flex items-center px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200 font-semibold text-[10px]">
-                            {line.storage}
-                          </span>
-                        ) : null}
-                        {line.condition ? (
-                          <span className="inline-flex items-center px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 font-medium text-[10px]">
-                            {formatCondition(line.condition) || phoneLookLabel(line.condition)}
-                          </span>
-                        ) : null}
-                        {line.color ? (
-                          <span className="text-[11px] text-muted-foreground">
-                            · {line.color}
-                          </span>
-                        ) : null}
-                      </div>
-                    ) : null}
-                    {line.unitPrice < line.minPrice ? (
+                    {parts.length ? (
+                      <p className="mt-0.5 text-xs text-muted-foreground">{parts.join(" · ")}</p>
+                    ) : (
+                      <p className="mt-0.5 text-xs text-danger">
+                        Storage and how the phone looks are missing. Fix on Phones and items or Upload stock.
+                      </p>
+                    )}
+                    {line.unitPrice < line.listPrice ? (
                       <p className="text-xs text-danger">
-                        Below lowest price {formatCurrency(line.minPrice)}
-                        {canOverrideFloor ? " · The main admin can still sell this" : " · you cannot complete this sale"}
+                        Below list sell price {formatCurrency(line.listPrice)}
+                        {canOverrideFloor ? " · Super Admin can still sell this" : " · you cannot complete this sale"}
+                      </p>
+                    ) : null}
+                    {line.unitPrice > line.listPrice ? (
+                      <p className="text-xs text-muted-foreground">
+                        Above list sell price {formatCurrency(line.listPrice)}. Amount received updates with this price.
                       </p>
                     ) : null}
                   </td>
@@ -653,9 +751,17 @@ export function PosClient({
                       value={line.unitPrice}
                       onChange={(event) => {
                         const unitPrice = Number(event.target.value)
-                        setCart((current) => current.map((row, i) => (i === index ? { ...row, unitPrice } : row)))
+                        setCart((current) => {
+                          const next = current.map((row, i) => (i === index ? { ...row, unitPrice } : row))
+                          setPaidTo(next.reduce((sum, row) => sum + row.unitPrice * row.quantity, 0))
+                          return next
+                        })
                       }}
+                      aria-label={`Sell price for ${line.name}`}
                     />
+                    <p className="mt-0.5 text-[10px] text-muted-foreground">
+                      List {formatCurrency(line.listPrice)}
+                    </p>
                   </td>
                   <td className="px-4 py-3 text-right">
                     <Button
@@ -671,7 +777,7 @@ export function PosClient({
                     </Button>
                   </td>
                 </tr>
-              ))}
+              )})}
               {cart.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">

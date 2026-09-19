@@ -1,8 +1,10 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { createReturn } from "@/app/actions/ops"
+import { toast } from "sonner"
+import { createReturn, findSoldImei } from "@/app/actions/ops"
 import { ActionForm } from "@/components/action-form"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
@@ -49,14 +51,60 @@ function deviceLabel(row: { imei1: string; serialNumber?: string | null }) {
   return row.imei1
 }
 
+function mapFoundSold(row: {
+  id: string
+  imei1: string
+  serialNumber: string | null
+  branchId: string
+  product: { name: string; sellingPrice: unknown; warrantyDays: number }
+  customer: { name: string } | null
+  sale: {
+    invoiceNumber: string
+    saleDate: Date
+    items: Array<{ imeiId: string | null; totalPrice: unknown }>
+  } | null
+  branch: { code: string }
+}): Sold {
+  return {
+    id: row.id,
+    imei1: row.imei1,
+    serialNumber: row.serialNumber,
+    branchId: row.branchId,
+    product: {
+      name: row.product.name,
+      sellingPrice: money(row.product.sellingPrice),
+      warrantyDays: row.product.warrantyDays,
+    },
+    customer: row.customer ? { name: row.customer.name } : null,
+    sale: row.sale
+      ? {
+          invoiceNumber: row.sale.invoiceNumber,
+          saleDate: row.sale.saleDate,
+          items: row.sale.items.map((item) => ({
+            imeiId: item.imeiId,
+            totalPrice: money(item.totalPrice),
+          })),
+        }
+      : null,
+    branch: { code: row.branch.code },
+  }
+}
+
 export function ReturnForm({ sold, stock }: { sold: Sold[]; stock: StockUnit[] }) {
+  const [extraSold, setExtraSold] = useState<Sold[]>([])
+  const [findCode, setFindCode] = useState("")
+  const [finding, setFinding] = useState(false)
+  const soldList = useMemo(() => {
+    const seen = new Set(sold.map((row) => row.imei1))
+    return [...sold, ...extraSold.filter((row) => !seen.has(row.imei1))]
+  }, [sold, extraSold])
   const [imei1, setImei1] = useState(sold[0]?.imei1 ?? "")
   const [outcome, setOutcome] = useState("REPAIR")
   const [returnValue, setReturnValue] = useState("")
   const [replacementId, setReplacementId] = useState("")
   const [replacementValue, setReplacementValue] = useState("")
 
-  const selected = useMemo(() => sold.find((row) => row.imei1 === imei1), [sold, imei1])
+  const selected = useMemo(() => soldList.find((row) => row.imei1 === imei1), [soldList, imei1])
   const line = selected?.sale?.items.find((item) => item.imeiId === selected.id)
   const suggestedReturn = money(line?.totalPrice) || money(selected?.product.sellingPrice)
   const warranty = selected?.sale
@@ -71,6 +119,41 @@ export function ReturnForm({ sold, stock }: { sold: Sold[]; stock: StockUnit[] }
   const balance = givenAmount - returnAmount
   const isReplace = outcome === "REPLACEMENT"
 
+  function pickSold(next: string, list: Sold[] = soldList) {
+    setImei1(next)
+    const hit = list.find((row) => row.imei1 === next)
+    const nextLine = hit?.sale?.items.find((item) => item.imeiId === hit.id)
+    const nextValue = money(nextLine?.totalPrice) || money(hit?.product.sellingPrice)
+    setReturnValue(nextValue ? String(nextValue) : "")
+    setReplacementId("")
+    setReplacementValue("")
+  }
+
+  async function lookupSold() {
+    const code = findCode.trim()
+    if (!code) {
+      toast.error("Type or paste the sold IMEI first.")
+      return
+    }
+    setFinding(true)
+    const result = await findSoldImei(code)
+    setFinding(false)
+    if ("error" in result && result.error) {
+      toast.error(result.error)
+      return
+    }
+    if (!("sold" in result) || !result.sold) {
+      toast.error("That IMEI was not found.")
+      return
+    }
+    const mapped = mapFoundSold(result.sold)
+    const nextList = [...extraSold.filter((row) => row.imei1 !== mapped.imei1), mapped]
+    setExtraSold(nextList)
+    pickSold(mapped.imei1, [...sold, ...nextList])
+    setFindCode("")
+    toast.success("Sold phone found. Check the details, then save the return.")
+  }
+
   return (
     <ActionForm
       action={createReturn}
@@ -84,23 +167,30 @@ export function ReturnForm({ sold, stock }: { sold: Sold[]; stock: StockUnit[] }
       }}
       className="space-y-3"
     >
+      <div className="space-y-2 rounded-lg border border-border p-3">
+        <p className="text-xs font-medium text-muted-foreground">Find a sold IMEI if it is not in the list</p>
+        <div className="flex flex-wrap gap-2">
+          <Input
+            value={findCode}
+            onChange={(event) => setFindCode(event.target.value)}
+            placeholder="Type or paste sold IMEI"
+            aria-label="Type or paste sold IMEI"
+            className="min-w-[12rem] flex-1"
+          />
+          <Button type="button" variant="outline" onClick={() => void lookupSold()} disabled={finding}>
+            {finding ? "Looking up this IMEI" : "Find sold IMEI"}
+          </Button>
+        </div>
+      </div>
+
       <Select
         name="imei1"
         value={imei1}
-        onChange={(event) => {
-          const next = event.target.value
-          setImei1(next)
-          const hit = sold.find((row) => row.imei1 === next)
-          const nextLine = hit?.sale?.items.find((item) => item.imeiId === hit.id)
-          const nextValue = money(nextLine?.totalPrice) || money(hit?.product.sellingPrice)
-          setReturnValue(nextValue ? String(nextValue) : "")
-          setReplacementId("")
-          setReplacementValue("")
-        }}
+        onChange={(event) => pickSold(event.target.value)}
         required
-        emptyLabel="This shop has not sold any phone yet. A return needs a phone that this shop sold."
+        emptyLabel="This shop has not sold any phone yet. A return needs a phone that this shop sold with a buyer name."
       >
-        {sold.map((row) => (
+        {soldList.map((row) => (
           <option key={row.imei1} value={row.imei1}>
             {deviceLabel(row)} · {row.product.name} · {row.customer?.name ?? "Walk-in"}
           </option>
@@ -119,7 +209,7 @@ export function ReturnForm({ sold, stock }: { sold: Sold[]; stock: StockUnit[] }
           </p>
         </div>
       ) : (
-        <p className="text-sm text-danger">No IMEI has been sold here.</p>
+        <p className="text-sm text-danger">No IMEI has been sold here. Use Find sold IMEI, or attach a buyer name on the invoice first.</p>
       )}
 
       <Select name="reason" defaultValue="FAULTY">

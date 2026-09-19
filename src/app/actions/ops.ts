@@ -630,8 +630,40 @@ export async function getSoldImeis() {
       branch: true,
     },
     orderBy: { updatedAt: "desc" },
-    take: 80,
+    take: 300,
   })
+}
+
+/** Find one sold phone by IMEI or serial when it is not in the recent list. */
+export async function findSoldImei(code: string) {
+  const user = await requireUser()
+  if (!(await can(user.role, "action.return"))) {
+    return { error: "You are not allowed to record a return. Ask the main admin." }
+  }
+  const cleaned = code.replace(/[\s-]/g, "").trim()
+  if (!cleaned) return { error: "Scan or type the sold IMEI first." }
+  const branchId = await scopedBranchId(user.role, user.branchId)
+  const row = await prisma.imeiRecord.findFirst({
+    where: {
+      status: "SOLD",
+      customerId: { not: null },
+      ...(branchId ? { branchId } : {}),
+      OR: [{ imei1: cleaned }, { serialNumber: cleaned }, { imei1: { endsWith: cleaned } }],
+    },
+    include: {
+      product: true,
+      customer: true,
+      sale: { include: { items: true } },
+      branch: true,
+    },
+  })
+  if (!row) {
+    return {
+      error:
+        "That IMEI is not a sold phone with a buyer name in this shop. Attach the buyer on the invoice first, or check the shop.",
+    }
+  }
+  return { sold: row }
 }
 
 /** In shop units staff may give out on a Replace return. */

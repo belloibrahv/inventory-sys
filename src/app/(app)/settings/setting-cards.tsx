@@ -12,7 +12,7 @@ export const settingLabels: Record<string, string> = {
   "company.address": "Address on invoices",
   "company.email": "Email on invoices",
   "company.currency": "Currency",
-  "sales.allow_below_minimum": "Can cashiers sell under the lowest price?",
+  "sales.allow_below_minimum": "Can staff sell under the absolute lowest price (even with Super Admin override)?",
   "incoming.dual_control": "Need a second person before received goods can be sold?",
   "inventory.low_stock_threshold": "Warn me when an item drops to this many",
   "sales.warranty_days": "Warranty days for a new item",
@@ -40,8 +40,8 @@ export function SettingCards({ settings, canEdit }: { settings: SettingRow[]; ca
                 <Select name="value" defaultValue={setting.value}>
                   {setting.key === "sales.allow_below_minimum" ? (
                     <>
-                      <option value="false">No. Only the main admin can sell under the lowest price</option>
-                      <option value="true">Yes. Cashiers can sell under the lowest price</option>
+                      <option value="false">No. Stay at or above the absolute lowest price</option>
+                      <option value="true">Yes. Even the absolute lowest price can be broken when Super Admin overrides</option>
                     </>
                   ) : (
                     <>

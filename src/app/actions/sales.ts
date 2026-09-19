@@ -57,6 +57,7 @@ export async function getPosLookups() {
       where: { isActive: true, condition: { not: "FAULTY" } },
       include: {
         brand: true,
+        category: true,
         inventory: branchId ? { where: { branchId } } : true,
         _count: { select: { imeiRecords: true } },
       },
@@ -73,7 +74,7 @@ export async function getPosLookups() {
         product: { condition: { not: "FAULTY" } },
         ...(branchId ? { branchId } : {}),
       },
-      include: { product: true, branch: true },
+      include: { product: { include: { brand: true, category: true } }, branch: true },
       orderBy: { createdAt: "desc" },
       take: POS_IMEI_SNAPSHOT,
     }),
@@ -96,6 +97,7 @@ export async function getPosLookups() {
       minimumPrice: money(product.minimumPrice),
       serialized: product.tracking !== "NONE",
       brand: { name: product.brand.name },
+      category: { name: product.category.name },
       stock: product.inventory.map((row) => ({ branchId: row.branchId, quantity: row.quantity })),
       storage: product.storage,
       condition: product.condition,
@@ -117,7 +119,7 @@ export async function getPosLookups() {
     })),
     branchId: defaultBranchId,
     allowBelowMinimum: settings.allowBelowMinimum,
-    canOverrideFloor: settings.allowBelowMinimum || (await can(user.role, "action.override_floor")),
+    canOverrideFloor: await can(user.role, "action.override_floor"),
     lowStockThreshold: settings.lowStockThreshold,
     sellLocks: Object.fromEntries(
       await Promise.all(
@@ -144,6 +146,8 @@ function mapTillImei(item: {
     storage: string | null
     condition: string
     color: string | null
+    category?: { name: string } | null
+    brand?: { name: string } | null
   }
 }) {
   return {
@@ -160,6 +164,8 @@ function mapTillImei(item: {
       storage: item.product.storage,
       condition: item.product.condition,
       color: item.product.color,
+      category: item.product.category?.name ?? null,
+      brand: item.product.brand?.name ?? null,
     },
   }
 }
@@ -178,7 +184,7 @@ export async function findInStockImei(code: string, branchId?: string) {
       branchId: shop,
       OR: [{ imei1: cleaned }, { serialNumber: cleaned }],
     },
-    include: { product: true },
+    include: { product: { include: { brand: true, category: true } } },
   })
   if (!item) return { error: "That IMEI is not in this shop. Check Goods on the way, or check the shop." }
   if (isBlockedFromSell({ cosmeticGrade: item.cosmeticGrade, productCondition: item.product.condition })) {
@@ -198,6 +204,140 @@ export async function findInStockImei(code: string, branchId?: string) {
     }
   }
   return { imei: mapTillImei(item) }
+}
+
+/**
+ * Find In shop phones or accessories by name, category, brand, storage, or IMEI
+ * when the till's saved list is too short. Online only.
+ */
+export async function searchTillStock(query: string, branchId?: string) {
+  const user = await requireUser()
+  const cleaned = query.trim()
+  if (cleaned.length < 2) return { imeis: [] as ReturnType<typeof mapTillImei>[], accessories: [] as Array<{
+    id: string
+    name: string
+    sku: string
+    sellingPrice: number
+    minimumPrice: number
+    serialized: boolean
+    brand: { name: string }
+    category: { name: string }
+    stock: Array<{ branchId: string; quantity: number }>
+    storage?: string | null
+    condition?: string | null
+    color?: string | null
+  }> }
+  const shopGate = await resolveWritableShopId(user, branchId)
+  if ("error" in shopGate) return { error: shopGate.error }
+  const shop = shopGate.shopId
+  const q = cleaned.toLowerCase()
+  const imeiDigits = cleaned.replace(/[\s-]/g, "")
+
+  const [imeiRows, productRows] = await Promise.all([
+    prisma.imeiRecord.findMany({
+      where: {
+        status: "IN_STOCK",
+        branchId: shop,
+        NOT: { cosmeticGrade: "FAULTY" },
+        product: { condition: { not: "FAULTY" } },
+        OR: [
+          { imei1: { contains: imeiDigits } },
+          { serialNumber: { contains: cleaned } },
+          { product: { name: { contains: cleaned } } },
+          { product: { storage: { contains: cleaned } } },
+          { product: { color: { contains: cleaned } } },
+          { product: { brand: { name: { contains: cleaned } } } },
+          { product: { category: { name: { contains: cleaned } } } },
+        ],
+      },
+      include: { product: { include: { brand: true, category: true } } },
+      orderBy: { updatedAt: "desc" },
+      take: 40,
+    }),
+    prisma.product.findMany({
+      where: {
+        isActive: true,
+        tracking: "NONE",
+        condition: { not: "FAULTY" },
+        inventory: { some: { branchId: shop, quantity: { gt: 0 } } },
+        OR: [
+          { name: { contains: cleaned } },
+          { sku: { contains: cleaned } },
+          { brand: { name: { contains: cleaned } } },
+          { category: { name: { contains: cleaned } } },
+          { storage: { contains: cleaned } },
+          { color: { contains: cleaned } },
+        ],
+      },
+      include: {
+        brand: true,
+        category: true,
+        inventory: { where: { branchId: shop } },
+      },
+      take: 24,
+    }),
+  ])
+
+  // Case-fold in JS so SQLite and Postgres both match "uk" / "Samsung".
+  const imeis = imeiRows
+    .filter((row) => {
+      const hay = [
+        row.imei1,
+        row.serialNumber ?? "",
+        row.product.name,
+        row.product.storage ?? "",
+        row.product.color ?? "",
+        row.product.brand?.name ?? "",
+        row.product.category?.name ?? "",
+        formatConditionSearch(row.product.condition),
+        row.cosmeticGrade ?? "",
+      ]
+        .join(" ")
+        .toLowerCase()
+      return hay.includes(q) || row.imei1.includes(imeiDigits)
+    })
+    .slice(0, 20)
+    .map(mapTillImei)
+
+  const accessories = productRows
+    .filter((product) => {
+      const hay = [
+        product.name,
+        product.sku,
+        product.brand.name,
+        product.category.name,
+        product.storage ?? "",
+        product.color ?? "",
+        product.condition,
+      ]
+        .join(" ")
+        .toLowerCase()
+      return hay.includes(q)
+    })
+    .slice(0, 12)
+    .map((product) => ({
+      id: product.id,
+      name: product.name,
+      sku: product.sku,
+      sellingPrice: money(product.sellingPrice),
+      minimumPrice: money(product.minimumPrice),
+      serialized: false,
+      brand: { name: product.brand.name },
+      category: { name: product.category.name },
+      stock: product.inventory.map((row) => ({ branchId: row.branchId, quantity: row.quantity })),
+      storage: product.storage,
+      condition: product.condition,
+      color: product.color,
+    }))
+
+  return { imeis, accessories }
+}
+
+function formatConditionSearch(condition: string) {
+  if (condition === "BRAND_NEW") return "brand new new"
+  if (condition === "UK_USED") return "uk used uk"
+  if (condition === "OPEN_BOX" || condition === "OPENBOX") return "openbox open box"
+  return condition.toLowerCase()
 }
 
 /** Newest In shop phones at one shop, for a shop-to-shop CSV. Caps at 50,000 lines. */
@@ -258,8 +398,11 @@ export async function checkoutSale(input: {
     include: { _count: { select: { imeiRecords: true } } },
   })
   const productById = new Map(products.map((row) => [row.id, row]))
-  const canOverrideFloor = settings.allowBelowMinimum || (await can(user.role, "action.override_floor"))
-  const canOverrideCredit = await can(user.role, "action.override_floor")
+  // List sell price is the floor. Only Super Admin / CEO (override_floor) may go under it.
+  // The old "allow below minimum" setting still only opens the absolute lowest-price gate.
+  const canOverrideList = await can(user.role, "action.override_floor")
+  const canOverrideFloor = settings.allowBelowMinimum || canOverrideList
+  const canOverrideCredit = canOverrideList
 
   // One read for every tracked unit in the cart, and one for every branch stock
   // row, instead of a query per line. A 20 line cart used to fire 20 round trips.
@@ -306,6 +449,12 @@ export async function checkoutSale(input: {
     }
     if (!Number.isFinite(item.unitPrice) || item.unitPrice < 0) {
       return { error: `Enter a valid price for ${product.name}.` }
+    }
+    const listPrice = money(product.sellingPrice)
+    if (item.unitPrice < listPrice && !canOverrideList) {
+      return {
+        error: `${product.name} is below the list sell price (${listPrice.toLocaleString("en-NG")}). Raise it, or ask Super Admin.`,
+      }
     }
     if (item.unitPrice < money(product.minimumPrice) && !canOverrideFloor) {
       return { error: `${product.name} is below the lowest allowed price. Raise it, or ask the main admin.` }

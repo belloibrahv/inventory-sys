@@ -14,6 +14,8 @@ export type TillImei = {
     storage?: string | null
     condition?: string | null
     color?: string | null
+    category?: string | null
+    brand?: string | null
   }
 }
 
@@ -25,6 +27,7 @@ export type TillProduct = {
   minimumPrice: number
   serialized: boolean
   brand: { name: string }
+  category?: { name: string }
   stock: Array<{ branchId: string; quantity: number }>
   storage?: string | null
   condition?: string | null

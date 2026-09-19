@@ -58,7 +58,7 @@ const ROLE_JOB: Record<UserRole, { job: string; shops: string }> = {
     shops: "You work in the shop the main admin set on your login.",
   },
   SALES_EXECUTIVE: {
-    job: "You sell and close the day. You can see customers, who still owes us, shop expenses, and items. You do not record returns unless the main admin ticks that later.",
+    job: "You sell, close the day, and record a return for a phone this shop sold. You can see customers, who still owes us, shop expenses, and items. A manager must still say yes before stock or money moves on a return.",
     shops: "You work in the shop the main admin set on your login.",
   },
   ENGINEER: {
