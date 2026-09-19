@@ -22,6 +22,11 @@ function lookLabel(item: TillImei) {
   return phoneLookLabel(item.cosmeticGrade) || formatCondition(item.product.condition)
 }
 
+/** Uploaded initial sell price is the floor. Use the higher of sell and lowest. */
+function initialSellFloor(sellingPrice: number, minimumPrice: number) {
+  return Math.max(money(sellingPrice), money(minimumPrice))
+}
+
 function detailParts(storage?: string | null, condition?: string | null, color?: string | null, category?: string | null) {
   const look = formatCondition(condition) || phoneLookLabel(condition)
   return [storage, look, color, category].filter(Boolean) as string[]
@@ -400,7 +405,7 @@ export function PosClient({
       toast.error("That phone is Damaged. It cannot be sold. Open All phones and Set Good (sellable) if it is fixed.")
       return
     }
-    const price = money(item.product.sellingPrice)
+    const floor = initialSellFloor(item.product.sellingPrice, item.product.minimumPrice)
     setCart((current) => [
       ...current,
       {
@@ -408,9 +413,9 @@ export function PosClient({
         imeiId: item.id,
         name: item.product.name,
         imei: item.imei1,
-        unitPrice: price,
-        listPrice: price,
-        minPrice: money(item.product.minimumPrice),
+        unitPrice: floor,
+        listPrice: floor,
+        minPrice: floor,
         quantity: 1,
         warrantyDays: 0,
         storage: item.product.storage,
@@ -419,7 +424,7 @@ export function PosClient({
         category: item.product.category ?? null,
       },
     ])
-    setPaidTo(total + price)
+    setPaidTo(total + floor)
     setQuery("")
     setRemoteImeis([])
     setRemoteAccessories([])
@@ -453,7 +458,7 @@ export function PosClient({
       toast.error(`${product.name} has no pieces left in this shop.`)
       return
     }
-    const price = money(product.sellingPrice)
+    const floor = initialSellFloor(product.sellingPrice, product.minimumPrice)
     const addQty = Math.max(1, Math.min(onHand, Math.floor(pieces) || 1))
     setCart((current) => {
       const existing = current.find((line) => !line.imeiId && line.productId === product.id)
@@ -474,9 +479,9 @@ export function PosClient({
           {
             productId: product.id,
             name: product.name,
-            unitPrice: price,
-            listPrice: price,
-            minPrice: money(product.minimumPrice),
+            unitPrice: floor,
+            listPrice: floor,
+            minPrice: floor,
             quantity: addQty,
             onHand,
             warrantyDays: 0,
@@ -526,11 +531,7 @@ export function PosClient({
       if (!ok) return
     }
     if (!canOverrideFloor && cart.some((line) => line.unitPrice < line.listPrice)) {
-      toast.error("One price is under the list sell price. Raise it, or ask Super Admin.")
-      return
-    }
-    if (!canOverrideFloor && cart.some((line) => line.unitPrice < line.minPrice)) {
-      toast.error("One price is under the lowest price allowed. Raise it, or ask the main admin.")
+      toast.error("One price is under the initial sell price. Raise it for this buyer, or ask the CEO or Super Admin.")
       return
     }
     for (const line of cart) {
@@ -780,13 +781,19 @@ export function PosClient({
                     )}
                     {line.unitPrice < line.listPrice ? (
                       <p className="text-xs text-danger">
-                        Below list sell price {formatCurrency(line.listPrice)}
-                        {canOverrideFloor ? " · Super Admin can still sell this" : " · you cannot complete this sale"}
+                        Below initial sell price {formatCurrency(line.listPrice)}
+                        {canOverrideFloor
+                          ? " · CEO or Super Admin can still sell this"
+                          : " · raise the price, or ask the CEO or Super Admin"}
                       </p>
                     ) : null}
                     {line.unitPrice > line.listPrice ? (
                       <p className="text-xs text-muted-foreground">
-                        Above list sell price {formatCurrency(line.listPrice)}. Amount received updates with this price.
+                        Raised above initial {formatCurrency(line.listPrice)} for this buyer. Amount received updates with this price.
+                      </p>
+                    ) : line.unitPrice === line.listPrice ? (
+                      <p className="text-xs text-muted-foreground">
+                        Starts at the initial sell price. You may raise it for a walk-in buyer.
                       </p>
                     ) : null}
                   </td>
@@ -846,8 +853,8 @@ export function PosClient({
                       aria-label={`Sell price for ${line.name}`}
                     />
                     <p className="mt-0.5 text-[10px] text-muted-foreground">
-                      List {formatCurrency(line.listPrice)}
-                      {isPieceLine ? ` · each` : ""}
+                      Initial {formatCurrency(line.listPrice)}
+                      {isPieceLine ? " · each" : ""} · raise for walk-in; not under without CEO or Super Admin
                     </p>
                     {isPieceLine && line.quantity > 1 ? (
                       <p className="mt-0.5 text-xs font-medium">

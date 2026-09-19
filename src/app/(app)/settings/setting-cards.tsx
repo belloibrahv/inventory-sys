@@ -12,7 +12,7 @@ export const settingLabels: Record<string, string> = {
   "company.address": "Address on invoices",
   "company.email": "Email on invoices",
   "company.currency": "Currency",
-  "sales.allow_below_minimum": "Can staff sell under the absolute lowest price (even with Super Admin override)?",
+  "sales.allow_below_minimum": "Legacy lowest-price switch (till floor is the initial sell price)",
   "incoming.dual_control": "Need a second person before received goods can be sold?",
   "inventory.low_stock_threshold": "Warn me when an item drops to this many",
   "sales.warranty_days": "Warranty days for a new item",
@@ -40,8 +40,8 @@ export function SettingCards({ settings, canEdit }: { settings: SettingRow[]; ca
                 <Select name="value" defaultValue={setting.value}>
                   {setting.key === "sales.allow_below_minimum" ? (
                     <>
-                      <option value="false">No. Stay at or above the absolute lowest price</option>
-                      <option value="true">Yes. Even the absolute lowest price can be broken when Super Admin overrides</option>
+                      <option value="false">Kept for old installs. Sell now uses the initial sell price as the floor</option>
+                      <option value="true">Kept for old installs. Sell now uses the initial sell price as the floor</option>
                     </>
                   ) : (
                     <>
@@ -53,6 +53,11 @@ export function SettingCards({ settings, canEdit }: { settings: SettingRow[]; ca
               ) : (
                 <Input name="value" defaultValue={setting.value} />
               )}
+              {setting.key === "sales.allow_below_minimum" ? (
+                <p className="text-xs text-muted-foreground">
+                  On Sell now, the uploaded initial sell price is the floor. Cashiers may raise it for walk-in buyers. Only the CEO or Super Admin may sell under it. The sale always records the price that was charged.
+                </p>
+              ) : null}
             </ActionForm>
           ) : (
             <p className="text-sm font-medium">{setting.value}</p>

@@ -53,7 +53,7 @@ export const ACTION_PERMS = [
   { key: "action.staff", label: "Add and edit staff" },
   { key: "action.settings", label: "Change shop settings" },
   { key: "action.all_branches", label: "See every shop" },
-  { key: "action.override_floor", label: "Sell below the list sell price" },
+  { key: "action.override_floor", label: "Sell below the initial sell price" },
 ] as const
 
 export const ALL_PERM_KEYS = [...VIEW_PERMS, ...ACTION_PERMS].map((row) => row.key)

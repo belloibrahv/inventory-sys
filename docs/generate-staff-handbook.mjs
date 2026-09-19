@@ -151,8 +151,8 @@ const children = [
       ["Prepared by", "Techvaults Limited"],
       ["Document type", "Staff handbook"],
       ["Date", "19 September 2026"],
-      ["Version", "1.2"],
-      ["Status", "Updated: sell piece items by quantity on Sell now"],
+      ["Version", "1.3"],
+      ["Status", "Updated: initial sell price floor; raise freely for walk-in buyers"],
     ].map(([k, v]) => [k, v]),
     [2400, 4200]
   ),
@@ -241,7 +241,7 @@ const children = [
 
   h1("7. Selling and the till"),
   h2("Sell now"),
-  body("Scan an IMEI, or type to find by IMEI, phone name, brand, category, storage, or a piece item such as a pouch or charger cord. Phones with IMEI or serial stay one unit each. Piece items have a Pieces box on this sale so you can sell as many as you have on hand. The line shows storage, Uk or Brand new, and colour under the name. You cannot sell under the list sell price unless Super Admin overrides. Selling above the list price is allowed, and Amount received updates with the new total so the day books match."),
+  body("Scan an IMEI, or type to find by IMEI, phone name, brand, category, storage, or a piece item such as a pouch or charger cord. Phones with IMEI or serial stay one unit each. Piece items have a Pieces box on this sale so you can sell as many as you have on hand. The line shows storage, Uk or Brand new, and colour under the name. The uploaded initial sell price is the floor (often the wholesale price). You may raise it for a walk-in buyer. You cannot go under it unless the CEO or Super Admin overrides. Amount received updates with the price you charge, and the invoice keeps that amount."),
   h2("Returns"),
   body("Cashiers and sales reps can open Returns. Pick a sold phone with a buyer name, or Find sold IMEI if it is not in the recent list. A manager must still say yes before stock or money moves."),
   h2("Close the day"),

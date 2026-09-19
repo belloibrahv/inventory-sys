@@ -398,11 +398,10 @@ export async function checkoutSale(input: {
     include: { _count: { select: { imeiRecords: true } } },
   })
   const productById = new Map(products.map((row) => [row.id, row]))
-  // List sell price is the floor. Only Super Admin / CEO (override_floor) may go under it.
-  // The old "allow below minimum" setting still only opens the absolute lowest-price gate.
-  const canOverrideList = await can(user.role, "action.override_floor")
-  const canOverrideFloor = settings.allowBelowMinimum || canOverrideList
-  const canOverrideCredit = canOverrideList
+  // Initial sell price (uploaded) is the floor. Cashiers may raise it for walk-in
+  // buyers. Only CEO / Super Admin (override_floor) may go under it.
+  const canOverrideFloor = await can(user.role, "action.override_floor")
+  const canOverrideCredit = canOverrideFloor
 
   // One read for every tracked unit in the cart, and one for every branch stock
   // row, instead of a query per line. A 20 line cart used to fire 20 round trips.
@@ -456,14 +455,11 @@ export async function checkoutSale(input: {
     if (!Number.isFinite(item.unitPrice) || item.unitPrice < 0) {
       return { error: `Enter a valid price for ${product.name}.` }
     }
-    const listPrice = money(product.sellingPrice)
-    if (item.unitPrice < listPrice && !canOverrideList) {
+    const floorPrice = Math.max(money(product.sellingPrice), money(product.minimumPrice))
+    if (item.unitPrice < floorPrice && !canOverrideFloor) {
       return {
-        error: `${product.name} is below the list sell price (${listPrice.toLocaleString("en-NG")}). Raise it, or ask Super Admin.`,
+        error: `${product.name} is below the initial sell price (₦${floorPrice.toLocaleString("en-NG")}). Raise it for this buyer, or ask the CEO or Super Admin.`,
       }
-    }
-    if (item.unitPrice < money(product.minimumPrice) && !canOverrideFloor) {
-      return { error: `${product.name} is below the lowest allowed price. Raise it, or ask the main admin.` }
     }
     if (item.imeiId) {
       const imei = imeiById.get(item.imeiId)
