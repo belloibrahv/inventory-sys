@@ -391,9 +391,9 @@ export async function checkoutSale(input: {
   paidAmount: number
   /** Named bank when money came in by bank. Required for Bank sales with money received. */
   bankAccountId?: string
-  /** Cash or Bank channel for a credit-sale deposit. Ignored on full Cash / Bank sales. */
+  /** Cash or Bank channel for a credit-sale deposit when only one channel is used. */
   depositMethod?: "CASH" | "TRANSFER"
-  /** Kept for older parked sales on phones. New till sales are Cash or Bank only. */
+  /** Cash and bank together on a credit deposit (or older parked full splits). */
   splitTenders?: Array<{ method: "CASH" | "TRANSFER" | "POS"; amount: number }>
   notes?: string
   wholesale?: boolean
@@ -531,20 +531,24 @@ export async function checkoutSale(input: {
   const isSplit = input.paymentMethod === "SPLIT_PAYMENT" || validSplits.length > 1
   const isCreditTill = input.paymentMethod === "CREDIT"
   // Cash or Bank on the till always takes the full sale total. Credit sales keep
-  // the typed deposit. That stops a lagged Amount paid from under-recording a raised price.
+  // the typed deposit (one channel, or cash and bank together). That stops a lagged
+  // Amount paid from under-recording a raised price.
   const rawPaid = isSplit && validSplits.length > 0
     ? validSplits.reduce((sum, t) => sum + t.amount, 0)
-    : isCreditTill
-      ? input.paidAmount
-      : input.paymentMethod === "CASH" ||
-          input.paymentMethod === "TRANSFER" ||
-          input.paymentMethod === "POS"
-        ? subtotal
-        : input.paidAmount
+    : isCreditTill && validSplits.length === 1
+      ? validSplits[0].amount
+      : isCreditTill
+        ? input.paidAmount
+        : input.paymentMethod === "CASH" ||
+            input.paymentMethod === "TRANSFER" ||
+            input.paymentMethod === "POS"
+          ? subtotal
+          : input.paidAmount
 
   const paid = Math.min(Math.max(0, Number.isFinite(Number(rawPaid)) ? Number(rawPaid) : 0), subtotal)
   const due = subtotal - paid
-  // Sale label: credit when anything is still owed; otherwise Cash or Bank (or an old split).
+  // Sale label: credit when anything is still owed (even if today's money was cash + bank).
+  // Fully paid with two channels stays Split payment. Fully paid with one channel is Cash or Bank.
   const method: PaymentMethod =
     paid < subtotal
       ? "CREDIT"
@@ -554,22 +558,31 @@ export async function checkoutSale(input: {
           ? "CREDIT"
           : shopPayChannel(input.paymentMethod)
 
-  // Money that actually came in today: Cash or Bank. Credit deposits use depositMethod.
+  // Money that actually came in today: Cash or Bank. Credit deposits use depositMethod
+  // when there is only one channel; cash + bank uses the split lines.
   const receivedChannel: "CASH" | "TRANSFER" | "POS" =
     isSplit && validSplits[0]
       ? validSplits[0].method
-      : input.paymentMethod === "POS"
-        ? "POS"
-        : shopPayChannel(
-            isCreditTill
-              ? input.depositMethod || "TRANSFER"
-              : input.paymentMethod
-          )
+      : validSplits.length === 1
+        ? validSplits[0].method === "POS"
+          ? "POS"
+          : shopPayChannel(validSplits[0].method)
+        : input.paymentMethod === "POS"
+          ? "POS"
+          : shopPayChannel(
+              isCreditTill
+                ? input.depositMethod || "TRANSFER"
+                : input.paymentMethod
+            )
 
   let bankAccountId: string | null = null
-  // New Bank sales must name the account. Old POS lines and parked splits may have none.
+  // Bank money (full Bank sale, credit bank deposit, or the bank half of a split) must name the account.
+  const bankOnSplits = validSplits.some((t) => shopPayChannel(t.method) === "TRANSFER")
   const moneyIsBank = receivedChannel !== "CASH"
-  const needsNamedBank = paid > 0 && !isSplit && moneyIsBank && input.paymentMethod !== "POS"
+  const needsNamedBank =
+    paid > 0 &&
+    input.paymentMethod !== "POS" &&
+    (bankOnSplits || (!isSplit && moneyIsBank))
   if (needsNamedBank) {
     const wanted = String(input.bankAccountId || "").trim()
     if (!wanted) {
@@ -911,19 +924,31 @@ async function fanOutSaleAlerts(input: {
 export async function collectPayment(formData: FormData) {
   const user = await requireUser()
   const customerId = String(formData.get("customerId"))
-  const amount = Number(formData.get("amount") || 0)
-  const method = shopPayChannel(String(formData.get("method") || "TRANSFER"))
   const bankAccountIdRaw = String(formData.get("bankAccountId") || "").trim()
-  if (!customerId || amount <= 0) return { error: "Type how much was paid." }
+  const cashPart = Math.max(0, Number(formData.get("cashAmount") || 0) || 0)
+  const bankPart = Math.max(0, Number(formData.get("bankAmount") || 0) || 0)
+  const legacyAmount = Number(formData.get("amount") || 0)
+  const legacyMethod = shopPayChannel(String(formData.get("method") || "TRANSFER"))
 
-  let bankAccountId: string | null = null
-  if (method === "TRANSFER") {
-    if (!bankAccountIdRaw) {
-      return { error: "Pick which bank account received this money." }
-    }
+  const tenders: Array<{ method: "CASH" | "TRANSFER"; amount: number }> = []
+  if (cashPart > 0 || bankPart > 0) {
+    if (cashPart > 0) tenders.push({ method: "CASH", amount: cashPart })
+    if (bankPart > 0) tenders.push({ method: "TRANSFER", amount: bankPart })
+  } else if (legacyAmount > 0) {
+    tenders.push({ method: legacyMethod, amount: legacyAmount })
+  }
+
+  const amount = tenders.reduce((sum, row) => sum + row.amount, 0)
+  if (!customerId || amount <= 0) return { error: "Type how much was paid in cash, bank, or both." }
+
+  const wantsBank = tenders.some((row) => row.method === "TRANSFER")
+  if (wantsBank && !bankAccountIdRaw) {
+    return { error: "Pick which bank account received this money." }
   }
 
   const payRef = generateDocNumber("PAY")
+  const settleMethod =
+    tenders.length > 1 ? ("SPLIT_PAYMENT" as const) : tenders[0].method
 
   const posted = await settle(() =>
     prisma.$transaction(async (tx) => {
@@ -938,7 +963,8 @@ export async function collectPayment(formData: FormData) {
       const owing = money(customer.currentBalance)
       if (owing <= 0) throw new ConflictError("This customer does not owe us anything.")
 
-      if (method === "TRANSFER") {
+      let bankAccountId: string | null = null
+      if (wantsBank) {
         const bank = await tx.bankAccount.findFirst({
           where: { id: bankAccountIdRaw, isActive: true, branchId: customer.branchId },
           select: { id: true },
@@ -948,6 +974,18 @@ export async function collectPayment(formData: FormData) {
       }
 
       const collected = Math.min(amount, owing)
+      // Scale tenders down if they typed more than still owed.
+      let leftToTake = collected
+      const applied: Array<{ method: "CASH" | "TRANSFER"; amount: number }> = []
+      for (const row of tenders) {
+        if (leftToTake <= 0) break
+        const take = Math.min(row.amount, leftToTake)
+        if (take > 0) {
+          applied.push({ method: row.method, amount: take })
+          leftToTake -= take
+        }
+      }
+
       const after = await shiftCustomerBalance(tx, customerId, -collected)
       const next = money(after.currentBalance)
       if (next < -0.005) {
@@ -966,42 +1004,55 @@ export async function collectPayment(formData: FormData) {
           description: "Money collected on the customer account. Nothing on the invoice was changed",
         },
       })
-      await tx.financeEntry.create({
-        data: {
-          branchId: customer.branchId,
-          account: method === "CASH" ? "CASH" : "BANK",
-          type: "INCOME",
-          amount: collected.toFixed(2),
-          reference: payRef,
-          description: `Money collected from ${customer.name}`,
-        },
-      })
+      for (const row of applied) {
+        await tx.financeEntry.create({
+          data: {
+            branchId: customer.branchId,
+            account: row.method === "CASH" ? "CASH" : "BANK",
+            type: "INCOME",
+            amount: row.amount.toFixed(2),
+            reference: payRef,
+            description: `Money collected from ${customer.name}`,
+          },
+        })
+      }
 
-      let remaining = collected
+      // Peel cash then bank across open invoices so each payment line keeps its channel.
+      const pool = applied.map((row) => ({ ...row }))
       const openSales = await tx.sale.findMany({
         where: { customerId, status: "COMPLETED" },
         orderBy: { saleDate: "asc" },
         select: { id: true, totalAmount: true, paidAmount: true, paymentMethod: true },
       })
       for (const sale of openSales) {
-        const due = money(sale.totalAmount) - money(sale.paidAmount)
-        if (due <= 0 || remaining <= 0) continue
-        const apply = Math.min(due, remaining)
-        const credited = await creditInvoice(tx, sale.id, apply)
-        if (money(credited.paidAmount) >= money(credited.totalAmount)) {
-          await tx.sale.update({ where: { id: sale.id }, data: { paymentMethod: method } })
+        let due = money(sale.totalAmount) - money(sale.paidAmount)
+        if (due <= 0) continue
+        let appliedHere = 0
+        for (const row of pool) {
+          if (due <= 0 || row.amount <= 0) continue
+          const take = Math.min(due, row.amount)
+          await tx.payment.create({
+            data: {
+              saleId: sale.id,
+              amount: take.toFixed(2),
+              method: row.method,
+              bankAccountId: row.method === "TRANSFER" ? bankAccountId : null,
+              reference: payRef,
+              notes: "Taken from what the customer paid on their account. The invoice was not changed.",
+            },
+          })
+          row.amount -= take
+          due -= take
+          appliedHere += take
         }
-        await tx.payment.create({
-          data: {
-            saleId: sale.id,
-            amount: apply.toFixed(2),
-            method,
-            bankAccountId,
-            reference: payRef,
-            notes: "Taken from what the customer paid on their account. The invoice was not changed.",
-          },
-        })
-        remaining -= apply
+        if (appliedHere > 0) {
+          const credited = await creditInvoice(tx, sale.id, appliedHere)
+          if (money(credited.paidAmount) >= money(credited.totalAmount)) {
+            const finalMethod =
+              settleMethod === "SPLIT_PAYMENT" || applied.length > 1 ? "SPLIT_PAYMENT" : applied[0].method
+            await tx.sale.update({ where: { id: sale.id }, data: { paymentMethod: finalMethod } })
+          }
+        }
       }
 
       await tx.auditLog.create({
@@ -1010,7 +1061,7 @@ export async function collectPayment(formData: FormData) {
           action: "CREATE",
           entityType: "LedgerEntry",
           entityId: payRef,
-          newValue: JSON.stringify({ customerId, collected, method, bankAccountId }),
+          newValue: JSON.stringify({ customerId, collected, tenders: applied, bankAccountId }),
           branchId: customer.branchId,
         },
       })
@@ -1033,10 +1084,22 @@ export async function collectInvoicePayment(formData: FormData) {
     return { error: "You are not allowed to collect money on a sale. Ask the main admin." }
   }
   const saleId = String(formData.get("saleId") || "")
-  const amount = Number(formData.get("amount") || 0)
-  const method = shopPayChannel(String(formData.get("method") || "TRANSFER"))
   const bankAccountIdRaw = String(formData.get("bankAccountId") || "").trim()
-  if (!saleId || amount <= 0) return { error: "Enter the amount collected." }
+  const cashPart = Math.max(0, Number(formData.get("cashAmount") || 0) || 0)
+  const bankPart = Math.max(0, Number(formData.get("bankAmount") || 0) || 0)
+  const legacyAmount = Number(formData.get("amount") || 0)
+  const legacyMethod = shopPayChannel(String(formData.get("method") || "TRANSFER"))
+
+  const tenders: Array<{ method: "CASH" | "TRANSFER"; amount: number }> = []
+  if (cashPart > 0 || bankPart > 0) {
+    if (cashPart > 0) tenders.push({ method: "CASH", amount: cashPart })
+    if (bankPart > 0) tenders.push({ method: "TRANSFER", amount: bankPart })
+  } else if (legacyAmount > 0) {
+    tenders.push({ method: legacyMethod, amount: legacyAmount })
+  }
+
+  const amount = tenders.reduce((sum, row) => sum + row.amount, 0)
+  if (!saleId || amount <= 0) return { error: "Enter the amount collected in cash, bank, or both." }
 
   const sale = await prisma.sale.findUnique({
     where: { id: saleId },
@@ -1046,8 +1109,9 @@ export async function collectInvoicePayment(formData: FormData) {
   if (sale.status !== "COMPLETED") return { error: "You can only collect money on a sale that is finished." }
   if (money(sale.totalAmount) - money(sale.paidAmount) <= 0) return { error: "This sale is already fully paid." }
 
+  const wantsBank = tenders.some((row) => row.method === "TRANSFER")
   let bankAccountId: string | null = null
-  if (method === "TRANSFER") {
+  if (wantsBank) {
     if (!bankAccountIdRaw) return { error: "Pick which bank account received this money." }
     const bank = await prisma.bankAccount.findFirst({
       where: { id: bankAccountIdRaw, isActive: true, branchId: sale.branchId },
@@ -1072,20 +1136,43 @@ export async function collectInvoicePayment(formData: FormData) {
         throw new ConflictError(`${sale.invoiceNumber} was settled while you were typing. Nothing is owed on it now.`)
       }
       const collected = Math.min(amount, due)
+      let leftToTake = collected
+      const applied: Array<{ method: "CASH" | "TRANSFER"; amount: number }> = []
+      for (const row of tenders) {
+        if (leftToTake <= 0) break
+        const take = Math.min(row.amount, leftToTake)
+        if (take > 0) {
+          applied.push({ method: row.method, amount: take })
+          leftToTake -= take
+        }
+      }
 
       const credited = await creditInvoice(tx, sale.id, collected)
       if (money(credited.paidAmount) >= money(credited.totalAmount)) {
-        await tx.sale.update({ where: { id: sale.id }, data: { paymentMethod: method } })
+        const finalMethod = applied.length > 1 ? "SPLIT_PAYMENT" : applied[0].method
+        await tx.sale.update({ where: { id: sale.id }, data: { paymentMethod: finalMethod } })
       }
-      await tx.payment.create({
-        data: {
-          saleId: sale.id,
-          amount: collected.toFixed(2),
-          method,
-          bankAccountId,
-          notes: "Money collected on a finished invoice. The items and IMEIs were not changed",
-        },
-      })
+      for (const row of applied) {
+        await tx.payment.create({
+          data: {
+            saleId: sale.id,
+            amount: row.amount.toFixed(2),
+            method: row.method,
+            bankAccountId: row.method === "TRANSFER" ? bankAccountId : null,
+            notes: "Money collected on a finished invoice. The items and IMEIs were not changed",
+          },
+        })
+        await tx.financeEntry.create({
+          data: {
+            branchId: sale.branchId,
+            account: row.method === "CASH" ? "CASH" : "BANK",
+            type: "INCOME",
+            amount: row.amount.toFixed(2),
+            reference: sale.invoiceNumber,
+            description: `Money collected on ${sale.invoiceNumber}`,
+          },
+        })
+      }
       if (sale.customerId) {
         const after = await shiftCustomerBalance(tx, sale.customerId, -collected)
         const next = Math.max(0, money(after.currentBalance))
@@ -1100,23 +1187,13 @@ export async function collectInvoicePayment(formData: FormData) {
           },
         })
       }
-      await tx.financeEntry.create({
-        data: {
-          branchId: sale.branchId,
-          account: method === "CASH" ? "CASH" : "BANK",
-          type: "INCOME",
-          amount: collected.toFixed(2),
-          reference: sale.invoiceNumber,
-          description: `Money collected on ${sale.invoiceNumber}`,
-        },
-      })
       await tx.auditLog.create({
         data: {
           userId: user.id,
           action: "CREATE",
           entityType: "Payment",
           entityId: sale.invoiceNumber,
-          newValue: JSON.stringify({ collected, method, bankAccountId, itemsUntouched: true }),
+          newValue: JSON.stringify({ collected, tenders: applied, bankAccountId, itemsUntouched: true }),
           branchId: sale.branchId,
         },
       })

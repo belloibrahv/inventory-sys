@@ -68,8 +68,15 @@ export default async function CustomersPage() {
               </Select>
             </label>
             <label className="block text-sm">
+              <span className="mb-1 block text-muted-foreground">Opening balance they owe us</span>
+              <Input name="openingBalance" type="number" min={0} step="0.01" placeholder="0" />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Money this buyer already owed before this software. Leave at zero if they start clean.
+              </p>
+            </label>
+            <label className="block text-sm">
               <span className="mb-1 block text-muted-foreground">Credit limit</span>
-              <Input name="creditLimit" type="number" />
+              <Input name="creditLimit" type="number" min={0} step="0.01" placeholder="0" />
             </label>
           </ActionForm>
         </div>

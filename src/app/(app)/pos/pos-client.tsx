@@ -83,7 +83,8 @@ export function PosClient({
   const [customerId, setCustomerId] = useState("")
   const [branchId, setBranchId] = useState(defaultBranchId || serverBranches[0]?.id || "")
   const [method, setMethod] = useState<"CASH" | "BANK" | "CREDIT">("CASH")
-  const [creditTender, setCreditTender] = useState<"CASH" | "BANK">("BANK")
+  const [creditCash, setCreditCash] = useState(0)
+  const [creditBank, setCreditBank] = useState(0)
   const [bankAccountId, setBankAccountId] = useState("")
   const [paid, setPaid] = useState(0)
   const [notes, setNotes] = useState("")
@@ -118,7 +119,8 @@ export function PosClient({
   function resetSale() {
     setCart([])
     setPaid(0)
-    setCreditTender("BANK")
+    setCreditCash(0)
+    setCreditBank(0)
     setCustomerId("")
     setNotes("")
     setWholesale(false)
@@ -337,14 +339,15 @@ export function PosClient({
     () => bankAccounts.filter((row) => row.branchId === branchId),
     [bankAccounts, branchId]
   )
-  // Cash and Bank always pay the full sale total. Only Credit sales keep a separate
-  // "received now" figure. That stops Amount paid from lagging behind a raised price.
-  const effectivePaid = method === "CREDIT" ? Math.min(Math.max(0, paid), total) : total
+  // Cash and Bank always pay the full sale total. Credit sales keep cash and/or bank
+  // received now. That stops Amount paid from lagging behind a raised price.
+  const creditReceived = Math.max(0, creditCash) + Math.max(0, creditBank)
+  const effectivePaid = method === "CREDIT" ? Math.min(creditReceived, total) : total
   const due = Math.max(0, total - effectivePaid)
   const nextDebt = (customer?.currentBalance ?? 0) + due
   const sellLock = sellLocks?.[branchId]
   const wantsBank =
-    method === "BANK" || (method === "CREDIT" && effectivePaid > 0 && creditTender === "BANK")
+    method === "BANK" || (method === "CREDIT" && Math.max(0, creditBank) > 0)
 
   useEffect(() => {
     if (!shopBanks.length) {
@@ -359,6 +362,19 @@ export function PosClient({
   useEffect(() => {
     if (method !== "CREDIT") setPaid(total)
   }, [method, total])
+
+  // Keep cash + bank from exceeding the sale total while staff type.
+  useEffect(() => {
+    if (method !== "CREDIT" || !(total > 0)) return
+    if (creditCash + creditBank <= total) return
+    const overflow = creditCash + creditBank - total
+    if (creditBank >= overflow) setCreditBank(Math.max(0, creditBank - overflow))
+    else {
+      const rest = overflow - creditBank
+      setCreditBank(0)
+      setCreditCash(Math.max(0, creditCash - rest))
+    }
+  }, [method, total, creditCash, creditBank])
 
   function setPaidTo(nextTotal: number) {
     if (method !== "CREDIT") setPaid(nextTotal)
@@ -491,8 +507,8 @@ export function PosClient({
       const next = current.map((row, i) => {
         if (i !== index) return row
         if (row.imeiId) return { ...row, quantity: 1 }
-        const max = row.onHand && row.onHand > 0 ? row.onHand : 9999
-        const quantity = Math.max(1, Math.min(max, Math.floor(Number.isFinite(raw) ? raw : 1) || 1))
+        // Any whole number from 1 up. Stock on hand is checked when the sale is completed.
+        const quantity = Math.max(1, Math.floor(Number.isFinite(raw) ? raw : 1) || 1)
         return { ...row, quantity }
       })
       syncPaid(next)
@@ -614,24 +630,29 @@ export function PosClient({
     }
 
     const depositChannel: "CASH" | "TRANSFER" =
-      method === "CREDIT"
-        ? creditTender === "CASH"
-          ? "CASH"
-          : "TRANSFER"
-        : method === "CASH"
-          ? "CASH"
-          : "TRANSFER"
+      method === "CASH" ? "CASH" : "TRANSFER"
 
-    // Credit sales always send CREDIT. Cash / Bank send the tender and the full total.
+    // Credit sales always send CREDIT so Sales stays Credit sales while anything is owed.
+    // Money today can be cash, bank, or both (splitTenders).
     const checkoutMethod: "CASH" | "TRANSFER" | "CREDIT" =
       method === "CREDIT" ? "CREDIT" : depositChannel
+
+    const creditSplits: Array<{ method: "CASH" | "TRANSFER"; amount: number }> = []
+    if (method === "CREDIT") {
+      if (creditCash > 0) creditSplits.push({ method: "CASH", amount: Math.max(0, creditCash) })
+      if (creditBank > 0) creditSplits.push({ method: "TRANSFER", amount: Math.max(0, creditBank) })
+    }
 
     const payload = {
       customerId: customerId || undefined,
       branchId,
       paymentMethod: checkoutMethod,
       paidAmount: effectivePaid,
-      depositMethod: method === "CREDIT" && effectivePaid > 0 ? depositChannel : undefined,
+      depositMethod:
+        method === "CREDIT" && creditSplits.length === 1
+          ? creditSplits[0].method
+          : undefined,
+      splitTenders: method === "CREDIT" && creditSplits.length > 1 ? creditSplits : undefined,
       bankAccountId: wantsBank ? bankAccountId : undefined,
       notes,
       wholesale,
@@ -870,7 +891,6 @@ export function PosClient({
                         <Input
                           type="number"
                           min={1}
-                          max={onHand > 0 ? onHand : undefined}
                           step={1}
                           className="h-9 w-24"
                           value={String(line.quantity)}
@@ -878,8 +898,14 @@ export function PosClient({
                           aria-label={`Pieces of ${line.name}`}
                         />
                         <p className="mt-0.5 text-[10px] text-muted-foreground">
-                          {onHand > 0 ? `${onHand} on hand in this shop` : "On hand not known"}
+                          Type any amount from 1 up
+                          {onHand > 0 ? ` · ${onHand} on hand in this shop` : ""}
                         </p>
+                        {onHand > 0 && line.quantity > onHand ? (
+                          <p className="mt-0.5 text-[10px] text-danger">
+                            More than on hand. Complete sale will ask you to lower Pieces, or fix shop stock first.
+                          </p>
+                        ) : null}
                       </div>
                     ) : (
                       <p className="text-sm font-medium">1</p>
@@ -1016,6 +1042,8 @@ export function PosClient({
               setMethod(next)
               if (next === "CREDIT") {
                 setPaid(0)
+                setCreditCash(0)
+                setCreditBank(0)
               } else {
                 setPaid(total)
               }
@@ -1028,7 +1056,7 @@ export function PosClient({
         </label>
         {method === "CREDIT" ? (
           <p className="text-xs text-muted-foreground">
-            Type any money received now. What is left is credit sales. If they paid nothing today, leave the amount at zero. Money today is either all cash or all bank into one named account.
+            Type money received now in cash, bank, or both. What is left is still Credit sales. The bill stays under Sales as Credit sales until it is paid in full. Check the books counts cash and bank separately.
           </p>
         ) : (
           <p className="text-xs text-muted-foreground">
@@ -1036,23 +1064,47 @@ export function PosClient({
           </p>
         )}
         <div className="space-y-3">
-          <label className="block text-sm">
-            <span className="mb-1 block text-muted-foreground">
-              {method === "CREDIT" ? "Amount received now" : "Amount paid"}
-            </span>
-            {method === "CREDIT" ? (
-              <Input
-                type="number"
-                min={0}
-                max={total || undefined}
-                value={paid || ""}
-                placeholder="0"
-                onChange={(event) => {
-                  const next = Math.max(0, Number(event.target.value) || 0)
-                  setPaid(Math.min(next, total || next))
-                }}
-              />
-            ) : (
+          {method === "CREDIT" ? (
+            <>
+              <label className="block text-sm">
+                <span className="mb-1 block text-muted-foreground">Cash received now</span>
+                <Input
+                  type="number"
+                  min={0}
+                  max={total || undefined}
+                  value={creditCash || ""}
+                  placeholder="0"
+                  onChange={(event) => {
+                    const next = Math.max(0, Number(event.target.value) || 0)
+                    const capped = Math.min(next, Math.max(0, total - creditBank))
+                    setCreditCash(capped)
+                  }}
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-muted-foreground">Bank received now</span>
+                <Input
+                  type="number"
+                  min={0}
+                  max={total || undefined}
+                  value={creditBank || ""}
+                  placeholder="0"
+                  onChange={(event) => {
+                    const next = Math.max(0, Number(event.target.value) || 0)
+                    const capped = Math.min(next, Math.max(0, total - creditCash))
+                    setCreditBank(capped)
+                  }}
+                />
+              </label>
+              <p className="text-xs text-muted-foreground">
+                Together cannot be more than the sale total ({formatCurrency(total)}). Received now{" "}
+                {formatCurrency(effectivePaid)}
+                {due > 0 ? ` · still owed ${formatCurrency(due)}` : " · paid in full today"}.
+              </p>
+            </>
+          ) : (
+            <label className="block text-sm">
+              <span className="mb-1 block text-muted-foreground">Amount paid</span>
               <Input
                 type="number"
                 readOnly
@@ -1061,29 +1113,11 @@ export function PosClient({
                 className="bg-muted/40 font-semibold tabular-nums"
                 aria-label="Amount paid equals the sale total for Cash or Bank"
               />
-            )}
-          </label>
-          {method === "CREDIT" ? (
-            <p className="text-xs text-muted-foreground">
-              Cannot be more than the sale total ({formatCurrency(total)}). What is left is still owed.
-            </p>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Always matches the sale total when they pay Cash or Bank. Raise or lower a line price above and this figure updates with it.
-            </p>
-          )}
-          {method === "CREDIT" && paid > 0 ? (
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted-foreground">How they paid this amount</span>
-              <Select
-                value={creditTender}
-                onChange={(event) => setCreditTender(event.target.value as "CASH" | "BANK")}
-              >
-                <option value="BANK">Bank</option>
-                <option value="CASH">Cash</option>
-              </Select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Always matches the sale total when they pay Cash or Bank. Raise or lower a line price above and this figure updates with it.
+              </p>
             </label>
-          ) : null}
+          )}
           {wantsBank ? (
             <label className="block text-sm">
               <span className="mb-1 block text-muted-foreground">Bank account that received it</span>

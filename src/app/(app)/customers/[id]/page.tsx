@@ -30,9 +30,9 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         </div>
         <div className="surface-card p-5 md:col-span-2">
           <h3 className="mb-3 font-semibold">Collect money</h3>
-          <ActionForm action={collectPayment} submit="Record payment" className="grid gap-3 md:grid-cols-[1fr_140px_1fr_auto] md:items-end">
+          <ActionForm action={collectPayment} submit="Record payment" className="grid gap-3 md:grid-cols-1 md:items-end">
             <input type="hidden" name="customerId" value={customer.id} />
-            <CollectMoneyFields banks={banks} />
+            <CollectMoneyFields banks={banks} allowSplit />
           </ActionForm>
         </div>
       </div>

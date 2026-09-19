@@ -9,6 +9,7 @@ import { displayPartyName } from "@/lib/party-key"
 import { findDuplicateSupplier } from "@/lib/supplier-identity"
 import { healOpeningStockBills } from "@/lib/opening-stock-money"
 import { payablePurchaseWhere } from "@/lib/purchase-money"
+import { generateDocNumber } from "@/lib/utils"
 import type { SupplierKind } from "@prisma/client"
 
 export async function getCustomers(search?: string) {
@@ -56,6 +57,9 @@ export async function createCustomer(formData: FormData) {
   const branchId = shopGate.shopId
   if (!name || !phone) return { error: "Type the name and phone, and pick the shop." }
 
+  const openingBalance = Math.max(0, Number(formData.get("openingBalance") || 0) || 0)
+  const creditLimit = Math.max(0, Number(formData.get("creditLimit") || 0) || 0)
+
   const exists = await prisma.customer.findUnique({ where: { phone } })
   if (exists) return { error: "A customer with this phone number is already on the system." }
 
@@ -66,13 +70,31 @@ export async function createCustomer(formData: FormData) {
       email: String(formData.get("email") || "") || null,
       address: String(formData.get("address") || "") || null,
       branchId,
-      creditLimit: Number(formData.get("creditLimit") || 0).toFixed(2),
+      creditLimit: creditLimit.toFixed(2),
+      currentBalance: openingBalance.toFixed(2),
       notes: String(formData.get("notes") || "") || null,
     },
   })
+
+  if (openingBalance > 0) {
+    await prisma.ledgerEntry.create({
+      data: {
+        customerId: customer.id,
+        type: "ADJUSTMENT",
+        amount: openingBalance.toFixed(2),
+        balance: openingBalance.toFixed(2),
+        reference: generateDocNumber("OBAL"),
+        description:
+          "Opening balance. Money this buyer already owed when the shops started on this software.",
+      },
+    })
+  }
+
   revalidatePath("/customers")
   revalidatePath("/pos")
   revalidatePath("/sales")
+  revalidatePath("/finance")
+  revalidatePath("/reports")
   return { success: true, id: customer.id }
 }
 
@@ -131,13 +153,22 @@ export async function getSupplier(id: string) {
 }
 
 export async function createSupplier(formData: FormData) {
-  await requireUser()
+  const user = await requireUser()
   const name = displayPartyName(String(formData.get("name") ?? ""))
   const phone = String(formData.get("phone") ?? "").trim()
   if (!name || !phone) return { error: "Name and phone are required." }
   const clash = await findDuplicateSupplier({ name, phone })
   if (clash) return clash
-  await prisma.supplier.create({
+
+  const openingBalance = Math.max(0, Number(formData.get("openingBalance") || 0) || 0)
+  let shopId: string | null = null
+  if (openingBalance > 0) {
+    const shopGate = await resolveWritableShopId(user, String(formData.get("branchId") ?? user.branchId ?? ""))
+    if ("error" in shopGate) return { error: shopGate.error }
+    shopId = shopGate.shopId
+  }
+
+  const supplier = await prisma.supplier.create({
     data: {
       name,
       phone,
@@ -149,7 +180,30 @@ export async function createSupplier(formData: FormData) {
       kind: (String(formData.get("kind") || "SUPPLIER") === "NEIGHBOR" ? "NEIGHBOR" : "SUPPLIER") as SupplierKind,
     },
   })
+
+  // Opening money we already owed this house becomes an unpaid bill so Suppliers,
+  // Reports, and Check the books all count it the same way as later cartons.
+  if (openingBalance > 0 && shopId) {
+    await prisma.purchase.create({
+      data: {
+        invoiceNumber: generateDocNumber("OBAL"),
+        supplierId: supplier.id,
+        branchId: shopId,
+        userId: user.id,
+        status: "RECEIVED",
+        totalAmount: openingBalance.toFixed(2),
+        paidAmount: "0",
+        notes:
+          "Opening balance. Money we already owed this house when the shops started on this software. Not a new carton.",
+        source: "OPENING_BALANCE",
+      },
+    })
+  }
+
   revalidatePath("/suppliers")
+  revalidatePath("/finance")
+  revalidatePath("/reports")
+  revalidatePath("/purchases")
   return { success: true }
 }
 

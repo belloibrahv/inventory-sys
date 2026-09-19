@@ -76,7 +76,7 @@ const labels: Record<string, string> = {
   DIAGNOSING: "Checking",
   REPAIRING: "In repair",
   TRANSFERRED: "Sent to another shop",
-  CREDIT: "Credit",
+  CREDIT: "Credit sales",
   REJECTED: "No",
   CANCELLED: "Cancelled",
   REFUNDED: "Refunded",

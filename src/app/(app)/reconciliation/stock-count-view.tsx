@@ -6,6 +6,7 @@ import { CheckCircle2, FileSpreadsheet, Loader2, Printer, Scale, Send, TrendingD
 import { toast } from "sonner"
 import { startReconciliation } from "@/app/actions/finance"
 import { DocumentLetterhead } from "@/components/document-letterhead"
+import { FilterChips } from "@/components/filter-chips"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
@@ -13,6 +14,7 @@ import { StatCard, StatGrid, TableEmpty, TableShell, TonePill, Toolbar } from "@
 import { TablePager, usePagedRows } from "@/components/table-pager"
 import { downloadTable } from "@/lib/download-table"
 import type { LetterheadBrand } from "@/lib/letterhead"
+import { countByStockCategory, matchesStockCategory, STOCK_CATEGORY_FILTERS } from "@/lib/stock-categories"
 import { formatCurrency, money } from "@/lib/utils"
 
 type Branch = { id: string; name: string; code?: string }
@@ -21,7 +23,14 @@ type StockItem = {
   productId: string
   branchId: string
   quantity: number
-  product: { id: string; name: string; sku: string; costPrice: number; brand?: { name: string } }
+  product: {
+    id: string
+    name: string
+    sku: string
+    costPrice: number
+    brand?: { name: string }
+    category?: { name: string } | null
+  }
   branch: { id: string; name: string; code: string }
 }
 
@@ -41,9 +50,30 @@ export function StockCountView({
   const [branchId, setBranchId] = useState(defaultBranchId || branches[0]?.id || "")
   const [notes, setNotes] = useState("")
   const [counts, setCounts] = useState<Record<string, number>>({})
+  const [query, setQuery] = useState("")
+  const [categoryFilter, setCategoryFilter] = useState("ALL")
 
-  const rows = useMemo(() => inventory.filter((row) => row.branchId === branchId), [inventory, branchId])
-  const pager = usePagedRows(rows, branchId)
+  const shopRows = useMemo(() => inventory.filter((row) => row.branchId === branchId), [inventory, branchId])
+
+  const categoryCounts = useMemo(
+    () => countByStockCategory(shopRows.map((row) => ({ category: row.product.category?.name }))),
+    [shopRows]
+  )
+
+  const rows = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    return shopRows.filter((row) => {
+      if (!matchesStockCategory(row.product.category?.name, categoryFilter)) return false
+      if (!needle) return true
+      return [row.product.name, row.product.sku, row.product.brand?.name, row.product.category?.name]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(needle)
+    })
+  }, [shopRows, categoryFilter, query])
+
+  const pager = usePagedRows(rows, `${branchId}|${categoryFilter}|${query}`)
   const selectedBranch = useMemo(() => branches.find((branch) => branch.id === branchId), [branches, branchId])
 
   /** What the system believes, until someone types over it. */
@@ -110,6 +140,7 @@ export function StockCountView({
       [
         "Item name",
         "Item code",
+        "Category",
         "Shop",
         "Cost",
         "System count",
@@ -126,6 +157,7 @@ export function StockCountView({
         return [
           row.product.name,
           row.product.sku,
+          row.product.category?.name ?? "",
           row.branch.name,
           cost.toFixed(2),
           String(expected),
@@ -150,10 +182,11 @@ export function StockCountView({
     event.preventDefault()
     setBusy(true)
 
+    // Always send every item for this shop so a category filter cannot drop uncounted lines.
     const formData = new FormData()
     formData.set("branchId", branchId)
     formData.set("notes", notes.trim())
-    for (const row of rows) formData.set(`count_${row.productId}`, String(countFor(row.productId, row.quantity)))
+    for (const row of shopRows) formData.set(`count_${row.productId}`, String(countFor(row.productId, row.quantity)))
 
     try {
       const result = await startReconciliation(formData)
@@ -258,15 +291,40 @@ export function StockCountView({
           </div>
         </Toolbar>
 
+        <div className="print:hidden">
+          <FilterChips
+            label="Count by category"
+            activeKey={categoryFilter}
+            onSelect={setCategoryFilter}
+            chips={STOCK_CATEGORY_FILTERS.filter((row) => row.key === "ALL" || (categoryCounts[row.key] ?? 0) > 0).map(
+              (row) => ({
+                key: row.key,
+                label: row.label,
+                count: categoryCounts[row.key] ?? 0,
+              })
+            )}
+          />
+        </div>
+
         <TableShell
           columns={[
-          { label: "Item" },
-          { label: "Cost", align: "right" },
-          { label: "System count", align: "center" },
-          { label: "Hand count", align: "center" },
-          { label: "Difference", align: "center" },
-          { label: "Difference value", align: "right" },
+            { label: "Item" },
+            { label: "Category" },
+            { label: "Cost", align: "right" },
+            { label: "System count", align: "center" },
+            { label: "Hand count", align: "center" },
+            { label: "Difference", align: "center" },
+            { label: "Difference value", align: "right" },
           ]}
+          caption={
+            <Input
+              placeholder="Find an item, item code, category, or brand"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              className="h-9 max-w-xs"
+              disabled={busy}
+            />
+          }
           footer={
             <TablePager
               page={pager.page}
@@ -287,6 +345,7 @@ export function StockCountView({
             const cost = money(row.product.costPrice)
             const diff = counted - expected
             const diffValue = diff * cost
+            const categoryName = row.product.category?.name ?? "Not set"
 
             return (
               <tr key={row.id}>
@@ -296,6 +355,7 @@ export function StockCountView({
                     {row.product.brand?.name ?? "Item"} · <span className="font-mono">{row.product.sku}</span>
                   </p>
                 </td>
+                <td className="text-sm text-muted-foreground">{categoryName}</td>
                 <td className="text-right num">{formatCurrency(cost)}</td>
                 <td className="text-center num font-semibold">{expected}</td>
                 <td className="text-center">
@@ -330,7 +390,7 @@ export function StockCountView({
               </tr>
             )
           })}
-          {rows.length === 0 ? <TableEmpty colSpan={6}>No inventory records recorded for this location.</TableEmpty> : null}
+          {rows.length === 0 ? <TableEmpty colSpan={7}>No inventory records recorded for this location.</TableEmpty> : null}
         </TableShell>
 
         {/* Only on paper: somewhere to sign. */}
@@ -352,14 +412,14 @@ export function StockCountView({
             </strong>
           </p>
 
-          <Button type="submit" size="lg" disabled={busy || rows.length === 0}>
+          <Button type="submit" size="lg" disabled={busy || shopRows.length === 0}>
             {busy ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting Audit…
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending this stock count
               </>
             ) : (
               <>
-                <Send className="mr-2 h-4 w-4" /> Submit Audit for Approval
+                <Send className="mr-2 h-4 w-4" /> Send stock count for approval
               </>
             )}
           </Button>

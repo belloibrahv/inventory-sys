@@ -30,6 +30,7 @@ export default async function ReconciliationPage() {
       sku: row.product.sku,
       costPrice: money(row.product.costPrice),
       brand: { name: row.product.brand.name },
+      category: row.product.category ? { name: row.product.category.name } : null,
     },
     branch: {
       id: row.branch.id,

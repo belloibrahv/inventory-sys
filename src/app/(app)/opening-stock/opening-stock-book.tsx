@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { downloadWorkbook } from "@/lib/download-table"
 import { bookSheets, cleanIdentity, type BookLine } from "@/lib/opening-book"
+import { countByStockCategory, matchesStockCategory, STOCK_CATEGORY_FILTERS } from "@/lib/stock-categories"
 import { formatCondition } from "@/lib/status"
 import { formatCurrency, formatDate } from "@/lib/utils"
 
@@ -31,22 +32,6 @@ type Edit = {
   sellingPrice?: string
   addIdentities?: string[]
   removeIdentities?: string[]
-}
-
-/** Shop words for the big opening-stock groups the client counts by hand. */
-const CATEGORY_FILTERS = [
-  { key: "ALL", label: "All categories", match: null as RegExp | null },
-  { key: "PHONES", label: "Phones", match: /phone/i },
-  { key: "ACCESSORIES", label: "Accessories", match: /accessor/i },
-  { key: "SCREEN", label: "Screen", match: /screen/i },
-  { key: "LAPTOP", label: "Laptop", match: /laptop/i },
-] as const
-
-function lineMatchesCategory(line: BookLine, key: string) {
-  if (key === "ALL") return true
-  const filter = CATEGORY_FILTERS.find((row) => row.key === key)
-  if (!filter?.match) return true
-  return filter.match.test(line.category)
 }
 
 export function OpeningStockBook({ branchId, book }: { branchId: string; book: OpeningBook }) {
@@ -61,19 +46,12 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
   const [newUnits, setNewUnits] = useState("")
   const [showAddModal, setShowAddModal] = useState(false)
 
-  const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { ALL: book.lines.length }
-    for (const filter of CATEGORY_FILTERS) {
-      if (filter.key === "ALL") continue
-      counts[filter.key] = book.lines.filter((line) => lineMatchesCategory(line, filter.key)).length
-    }
-    return counts
-  }, [book.lines])
+  const categoryCounts = useMemo(() => countByStockCategory(book.lines), [book.lines])
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase()
     return book.lines.filter((line) => {
-      if (!lineMatchesCategory(line, categoryFilter)) return false
+      if (!matchesStockCategory(line.category, categoryFilter)) return false
       if (!needle) return true
       return [line.name, line.sku, line.brand, line.category, line.storage, line.condition, ...line.identities]
         .join(" ")
@@ -191,7 +169,7 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
         label="Count by category"
         activeKey={categoryFilter}
         onSelect={setCategoryFilter}
-        chips={CATEGORY_FILTERS.filter((row) => row.key === "ALL" || (categoryCounts[row.key] ?? 0) > 0).map((row) => ({
+        chips={STOCK_CATEGORY_FILTERS.filter((row) => row.key === "ALL" || (categoryCounts[row.key] ?? 0) > 0).map((row) => ({
           key: row.key,
           label: row.label,
           count: categoryCounts[row.key] ?? 0,

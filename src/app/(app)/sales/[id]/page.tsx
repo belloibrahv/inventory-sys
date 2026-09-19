@@ -218,9 +218,9 @@ export default async function SaleDetailPage({
       {due > 0 && sale.customerId ? (
         <div className="surface-card p-5 print:hidden">
           <h3 className="mb-3 font-semibold">Collect the rest of the money</h3>
-          <ActionForm action={collectInvoicePayment} submit="Save this payment" className="grid gap-3 md:grid-cols-[1fr_140px_1fr_auto] md:items-end">
+          <ActionForm action={collectInvoicePayment} submit="Save this payment" className="grid gap-3 md:grid-cols-1 md:items-end">
             <input type="hidden" name="saleId" value={sale.id} />
-            <CollectMoneyFields banks={banks} defaultAmount={due} />
+            <CollectMoneyFields banks={banks} defaultAmount={due} allowSplit />
           </ActionForm>
         </div>
       ) : null}
