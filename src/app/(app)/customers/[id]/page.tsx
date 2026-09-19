@@ -2,17 +2,22 @@ import { notFound } from "next/navigation"
 import { getCustomer } from "@/app/actions/parties"
 import { collectPayment } from "@/app/actions/sales"
 import { ActionForm } from "@/components/action-form"
+import { CollectMoneyFields } from "@/components/collect-money-fields"
 import { PageHeader, StatusBadge } from "@/components/shared"
-import { Input } from "@/components/ui/input"
-import { Select } from "@/components/ui/select"
 import { formatCurrency, formatDate, money } from "@/lib/utils"
 import { warrantyState } from "@/lib/warranty"
 import { statusLabel } from "@/lib/status"
+import { prisma } from "@/lib/prisma"
 
 export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const customer = await getCustomer(id)
   if (!customer) notFound()
+  const banks = await prisma.bankAccount.findMany({
+    where: { isActive: true, branchId: customer.branchId },
+    orderBy: [{ bankName: "asc" }, { accountNumber: "asc" }],
+    select: { id: true, bankName: true, accountNumber: true, accountName: true },
+  })
 
   return (
     <div className="space-y-6">
@@ -25,14 +30,9 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         </div>
         <div className="surface-card p-5 md:col-span-2">
           <h3 className="mb-3 font-semibold">Collect money</h3>
-          <ActionForm action={collectPayment} submit="Record payment" className="grid gap-3 md:grid-cols-[1fr_160px_auto] md:items-end">
+          <ActionForm action={collectPayment} submit="Record payment" className="grid gap-3 md:grid-cols-[1fr_140px_1fr_auto] md:items-end">
             <input type="hidden" name="customerId" value={customer.id} />
-            <Input name="amount" type="number" placeholder="Amount" required />
-            <Select name="method" defaultValue="TRANSFER">
-              <option value="CASH">Cash</option>
-              <option value="TRANSFER">Transfer</option>
-              <option value="POS">POS</option>
-            </Select>
+            <CollectMoneyFields banks={banks} />
           </ActionForm>
         </div>
       </div>

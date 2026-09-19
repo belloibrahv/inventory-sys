@@ -37,7 +37,7 @@ export default async function DayClosePage({
       <div className="flex flex-wrap items-center justify-between gap-4">
         <PageHeader
           title="Close the day"
-          description="Sales, cash, transfer, and POS for this shop day."
+          description="Sales, cash, and bank money for this shop day."
         />
         <Link
           href="/finance"
@@ -134,7 +134,7 @@ export default async function DayClosePage({
       ) : null}
 
       {/* Overview Metric Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div className="surface-card p-5 border-l-4 border-l-primary bg-primary/5">
           <p className="text-xs font-bold uppercase tracking-wider text-primary">Total sales for the day</p>
           <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">{formatCurrency(preview.totalSales)}</p>
@@ -148,20 +148,15 @@ export default async function DayClosePage({
           <p className="text-xs text-muted-foreground mt-1">Physical cash taken in today</p>
         </div>
         <div className="surface-card p-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Transfer received</p>
-          <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">{formatCurrency(preview.transferTotal)}</p>
-          <p className="text-xs text-muted-foreground mt-1">Customers who paid by Bank Transfer</p>
-        </div>
-        <div className="surface-card p-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">POS received</p>
-          <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">{formatCurrency(preview.posTotal)}</p>
-          <p className="text-xs text-muted-foreground mt-1">Customers who paid with card on POS</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Bank received</p>
+          <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">{formatCurrency(preview.transferTotal + preview.posTotal)}</p>
+          <p className="text-xs text-muted-foreground mt-1">Transfer, POS terminal, and other bank channels counted as Bank</p>
         </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-xs">
         <span className="font-semibold text-foreground">
-          Total payments received today (Cash + Transfer + POS):
+          Total payments received today (Cash + Bank):
         </span>
         <span className="font-bold tabular-nums text-sm text-primary">
           {formatCurrency(totalReceived)}
@@ -241,7 +236,7 @@ export default async function DayClosePage({
               <p className="text-xs text-muted-foreground mt-0.5">
                 {preview.expectedCash > 0
                   ? "Count the physical cash inside the till drawer. Remit this cash and enter the amount below."
-                  : "No cash sales today. Transfer and POS do not need a till count. Close the day so Sell now can open tomorrow."}
+                  : "No cash sales today. Bank money does not need a till count. Close the day so Sell now can open tomorrow."}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -291,7 +286,7 @@ export default async function DayClosePage({
                 placeholder={
                   preview.expectedCash > 0
                     ? "If there is a shortage or overage, say why. Example: ₦2,000 used to buy shop supplies."
-                    : "Optional note for this day, for example: transfer and POS only."
+                    : "Optional note for this day, for example: bank sales only."
                 }
               />
             </div>
@@ -478,7 +473,7 @@ export default async function DayClosePage({
                 <th className="px-4 py-3 text-right">Cash expected</th>
                 <th className="px-4 py-3 text-right">Cash remitted</th>
                 <th className="px-4 py-3 text-right">Shortage / Overage</th>
-                <th className="px-4 py-3">Transfer & POS</th>
+                <th className="px-4 py-3">Bank</th>
                 <th className="px-5 py-3">Who closed it</th>
               </tr>
             </thead>
@@ -512,7 +507,7 @@ export default async function DayClosePage({
                     </span>
                   </td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">
-                    T: {formatCurrency(row.transferTotal)} · P: {formatCurrency(row.posTotal)}
+                    Bank: {formatCurrency(row.transferTotal + row.posTotal)}
                   </td>
                   <td className="px-5 py-3 text-xs text-muted-foreground">{row.user}</td>
                 </tr>

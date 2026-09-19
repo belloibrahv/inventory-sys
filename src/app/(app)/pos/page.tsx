@@ -9,6 +9,7 @@ export default async function PosPage() {
       customers={data.customers}
       imeis={data.imeis}
       branches={data.branches}
+      bankAccounts={data.bankAccounts}
       defaultBranchId={data.branchId}
       canOverrideFloor={data.canOverrideFloor}
       sellLocks={data.sellLocks}

@@ -6,6 +6,7 @@ import { getAppSettings } from "@/lib/settings"
 import { letterheadFromSettings } from "@/lib/letterhead"
 import { getCustomers } from "@/app/actions/parties"
 import { ActionForm } from "@/components/action-form"
+import { CollectMoneyFields } from "@/components/collect-money-fields"
 import { PageHeader, StatusBadge } from "@/components/shared"
 import { PrintButton } from "@/components/print-button"
 import { ReceiptPdfButton } from "@/components/receipt-pdf-button"
@@ -18,6 +19,7 @@ import { requireUser } from "@/lib/session"
 import { formatCurrency, formatDateTime, money } from "@/lib/utils"
 import { formatCondition, statusLabel } from "@/lib/status"
 import { warrantyState } from "@/lib/warranty"
+import { prisma } from "@/lib/prisma"
 
 export default async function SaleDetailPage({
   params,
@@ -37,6 +39,11 @@ export default async function SaleDetailPage({
   const branchCustomers = customers.filter(
     (row) => row.branchId === sale.branchId && !row.name.toLowerCase().includes("walk-in")
   )
+  const banks = await prisma.bankAccount.findMany({
+    where: { isActive: true, branchId: sale.branchId },
+    orderBy: [{ bankName: "asc" }, { accountNumber: "asc" }],
+    select: { id: true, bankName: true, accountNumber: true, accountName: true },
+  })
 
   const receiptData = {
     company: brand.name,
@@ -211,14 +218,9 @@ export default async function SaleDetailPage({
       {due > 0 && sale.customerId ? (
         <div className="surface-card p-5 print:hidden">
           <h3 className="mb-3 font-semibold">Collect the rest of the money</h3>
-          <ActionForm action={collectInvoicePayment} submit="Save this payment" className="grid gap-3 md:grid-cols-[1fr_160px_auto] md:items-end">
+          <ActionForm action={collectInvoicePayment} submit="Save this payment" className="grid gap-3 md:grid-cols-[1fr_140px_1fr_auto] md:items-end">
             <input type="hidden" name="saleId" value={sale.id} />
-            <Input name="amount" type="number" defaultValue={due} required />
-            <Select name="method" defaultValue="TRANSFER">
-              <option value="CASH">Cash</option>
-              <option value="TRANSFER">Transfer</option>
-              <option value="POS">POS</option>
-            </Select>
+            <CollectMoneyFields banks={banks} defaultAmount={due} />
           </ActionForm>
         </div>
       ) : null}

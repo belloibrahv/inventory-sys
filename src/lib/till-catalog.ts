@@ -45,6 +45,14 @@ export type TillCustomer = {
 
 export type TillBranch = { id: string; name: string; code: string }
 
+export type TillBankAccount = {
+  id: string
+  branchId: string
+  bankName: string
+  accountNumber: string
+  accountName: string | null
+}
+
 export type TillSellLock = { locked: boolean; dates: string[]; href: string; message: string }
 
 export type TillSnapshot = {
@@ -56,6 +64,7 @@ export type TillSnapshot = {
   customers: TillCustomer[]
   imeis: TillImei[]
   branches: TillBranch[]
+  bankAccounts?: TillBankAccount[]
 }
 
 const SNAP_KEY = "current"

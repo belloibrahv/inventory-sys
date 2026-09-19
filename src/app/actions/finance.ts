@@ -69,6 +69,7 @@ export type NamedBankRow = {
   accountNumber: string
   accountName: string | null
   openingBalance: number
+  salesReceived: number
   branchId: string
   branchName: string
   branchCode: string
@@ -166,26 +167,74 @@ export async function getFinance() {
     amount: number
   }> = []
 
+  const namedBankLabelById = new Map(
+    bankAccounts.map((row) => [row.id, `${row.bankName} ${row.accountNumber}`] as const)
+  )
+  const salesByBank = new Map<string, number>()
   for (const sale of sales) {
-    const tenders = saleTenders(sale)
-    const channels: Array<{ method: string; amount: number }> = [
-      { method: "CASH", amount: tenders.cash },
-      { method: "TRANSFER", amount: tenders.transfer },
-      { method: "POS", amount: tenders.pos },
-    ]
-    for (const channel of channels) {
-      if (channel.amount <= 0) continue
-      const entry = {
-        id: `${sale.id}-${channel.method}`,
-        date: sale.saleDate,
-        branch: sale.branch.name,
-        type: "IN" as const,
-        category: `Sales Revenue (${channel.method})`,
-        description: `Sale ${sale.invoiceNumber} - ${sale.customer?.name || "Walk-in"}`,
-        amount: channel.amount,
+    for (const payment of sale.payments ?? []) {
+      if (!payment.bankAccountId) continue
+      if (payment.method === "CASH") continue
+      salesByBank.set(
+        payment.bankAccountId,
+        (salesByBank.get(payment.bankAccountId) ?? 0) + money(payment.amount)
+      )
+    }
+  }
+
+  for (const sale of sales) {
+    const payments = sale.payments?.length ? sale.payments : null
+    if (payments) {
+      for (const payment of payments) {
+        const amount = money(payment.amount)
+        if (amount <= 0) continue
+        if (payment.method === "CASH") {
+          cashEntries.push({
+            id: `${sale.id}-${payment.id}`,
+            date: sale.saleDate,
+            branch: sale.branch.name,
+            type: "IN",
+            category: "Sales Revenue (Cash)",
+            description: `Sale ${sale.invoiceNumber} - ${sale.customer?.name || "Walk-in"}`,
+            amount,
+          })
+        } else {
+          const bankLabel = payment.bankAccountId
+            ? namedBankLabelById.get(payment.bankAccountId)
+            : null
+          bankEntries.push({
+            id: `${sale.id}-${payment.id}`,
+            date: sale.saleDate,
+            branch: sale.branch.name,
+            type: "IN",
+            category: "Sales Revenue (Bank)",
+            description: bankLabel
+              ? `Sale ${sale.invoiceNumber} into ${bankLabel} - ${sale.customer?.name || "Walk-in"}`
+              : `Sale ${sale.invoiceNumber} - ${sale.customer?.name || "Walk-in"}`,
+            amount,
+          })
+        }
       }
-      if (channel.method === "CASH") cashEntries.push(entry)
-      else bankEntries.push(entry)
+    } else {
+      const tenders = saleTenders(sale)
+      const channels: Array<{ method: string; amount: number }> = [
+        { method: "CASH", amount: tenders.cash },
+        { method: "BANK", amount: tenders.bank },
+      ]
+      for (const channel of channels) {
+        if (channel.amount <= 0) continue
+        const entry = {
+          id: `${sale.id}-${channel.method}`,
+          date: sale.saleDate,
+          branch: sale.branch.name,
+          type: "IN" as const,
+          category: `Sales Revenue (${channel.method === "CASH" ? "Cash" : "Bank"})`,
+          description: `Sale ${sale.invoiceNumber} - ${sale.customer?.name || "Walk-in"}`,
+          amount: channel.amount,
+        }
+        if (channel.method === "CASH") cashEntries.push(entry)
+        else bankEntries.push(entry)
+      }
     }
   }
 
@@ -228,6 +277,7 @@ export async function getFinance() {
     accountNumber: row.accountNumber,
     accountName: row.accountName,
     openingBalance: money(row.openingBalance),
+    salesReceived: salesByBank.get(row.id) ?? 0,
     branchId: row.branchId,
     branchName: row.branch.name,
     branchCode: row.branch.code,

@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { pushSaleQueue } from "@/lib/offline-sales"
 import { requestParkedFlush } from "@/lib/flush-parked"
-import { applyParkedToTillSnapshot, readTillSnapshot, saveTillSnapshot, type TillBranch, type TillCustomer, type TillImei, type TillProduct, type TillSellLock, type TillSnapshot } from "@/lib/till-catalog"
+import { applyParkedToTillSnapshot, readTillSnapshot, saveTillSnapshot, type TillBankAccount, type TillBranch, type TillCustomer, type TillImei, type TillProduct, type TillSellLock, type TillSnapshot } from "@/lib/till-catalog"
 import { formatCurrency, money } from "@/lib/utils"
 import { formatCondition } from "@/lib/status"
 import { phoneLookLabel, isBlockedFromSell } from "@/lib/phone-look"
@@ -45,6 +45,7 @@ export function PosClient({
   customers: serverCustomers,
   imeis: serverImeis,
   branches: serverBranches,
+  bankAccounts: serverBankAccounts = [],
   defaultBranchId,
   canOverrideFloor: serverCanOverrideFloor,
   sellLocks: serverSellLocks,
@@ -53,6 +54,7 @@ export function PosClient({
   customers: TillCustomer[]
   imeis: TillImei[]
   branches: TillBranch[]
+  bankAccounts?: TillBankAccount[]
   defaultBranchId?: string | null
   canOverrideFloor?: boolean
   sellLocks?: Record<string, TillSellLock>
@@ -74,17 +76,16 @@ export function PosClient({
   const customers = deviceList?.customers ?? serverCustomers
   const imeis = deviceList?.imeis ?? serverImeis
   const branches = deviceList?.branches ?? serverBranches
+  const bankAccounts = deviceList?.bankAccounts ?? serverBankAccounts
   const canOverrideFloor = deviceList ? Boolean(deviceList.canOverrideFloor) : Boolean(serverCanOverrideFloor)
   const sellLocks = deviceList?.sellLocks ?? serverSellLocks
   const [query, setQuery] = useState("")
   const [customerId, setCustomerId] = useState("")
   const [branchId, setBranchId] = useState(defaultBranchId || serverBranches[0]?.id || "")
-  const [method, setMethod] = useState<"CASH" | "TRANSFER" | "POS" | "CREDIT" | "SPLIT_PAYMENT">("CASH")
-  const [creditTender, setCreditTender] = useState<"CASH" | "TRANSFER" | "POS">("TRANSFER")
+  const [method, setMethod] = useState<"CASH" | "BANK" | "CREDIT">("CASH")
+  const [creditTender, setCreditTender] = useState<"CASH" | "BANK">("BANK")
+  const [bankAccountId, setBankAccountId] = useState("")
   const [paid, setPaid] = useState(0)
-  const [splitCash, setSplitCash] = useState(0)
-  const [splitTransfer, setSplitTransfer] = useState(0)
-  const [splitPos, setSplitPos] = useState(0)
   const [notes, setNotes] = useState("")
   const [wholesale, setWholesale] = useState(false)
   const [newName, setNewName] = useState("")
@@ -117,10 +118,7 @@ export function PosClient({
   function resetSale() {
     setCart([])
     setPaid(0)
-    setSplitCash(0)
-    setSplitTransfer(0)
-    setSplitPos(0)
-    setCreditTender("TRANSFER")
+    setCreditTender("BANK")
     setCustomerId("")
     setNotes("")
     setWholesale(false)
@@ -203,6 +201,7 @@ export function PosClient({
       customers: serverCustomers,
       imeis: serverImeis,
       branches: serverBranches,
+      bankAccounts: serverBankAccounts,
       defaultBranchId,
       canOverrideFloor: serverCanOverrideFloor,
       sellLocks: serverSellLocks,
@@ -230,7 +229,7 @@ export function PosClient({
     return () => {
       cancelled = true
     }
-  }, [serverProducts, serverCustomers, serverImeis, serverBranches, defaultBranchId, serverCanOverrideFloor, serverSellLocks])
+  }, [serverProducts, serverCustomers, serverImeis, serverBranches, serverBankAccounts, defaultBranchId, serverCanOverrideFloor, serverSellLocks])
 
   // What is In shop here and not already on this sale. Worked out once per
   // change rather than on every keystroke: this walks every phone in the shop
@@ -326,13 +325,29 @@ export function PosClient({
 
   const total = useMemo(() => cart.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0), [cart])
   const customer = customers.find((row) => row.id === customerId)
-  const effectivePaid = method === "SPLIT_PAYMENT" ? splitCash + splitTransfer + splitPos : paid
+  const shopBanks = useMemo(
+    () => bankAccounts.filter((row) => row.branchId === branchId),
+    [bankAccounts, branchId]
+  )
+  const effectivePaid = paid
   const due = Math.max(0, total - effectivePaid)
   const nextDebt = (customer?.currentBalance ?? 0) + due
   const sellLock = sellLocks?.[branchId]
+  const wantsBank =
+    method === "BANK" || (method === "CREDIT" && effectivePaid > 0 && creditTender === "BANK")
+
+  useEffect(() => {
+    if (!shopBanks.length) {
+      if (bankAccountId) setBankAccountId("")
+      return
+    }
+    if (!shopBanks.some((row) => row.id === bankAccountId)) {
+      setBankAccountId(shopBanks[0].id)
+    }
+  }, [shopBanks, bankAccountId])
 
   function setPaidTo(nextTotal: number) {
-    if (method !== "CREDIT" && method !== "SPLIT_PAYMENT") setPaid(nextTotal)
+    if (method !== "CREDIT") setPaid(nextTotal)
   }
 
   async function saveCustomer() {
@@ -530,6 +545,10 @@ export function PosClient({
       })
       if (!ok) return
     }
+    if (wantsBank && !bankAccountId) {
+      toast.error("Pick which bank account received this money. Add banks under Money in and out if the list is empty.")
+      return
+    }
     if (!canOverrideFloor && cart.some((line) => line.unitPrice < line.listPrice)) {
       toast.error("One price is under the initial sell price. Raise it for this buyer, or ask the CEO or Super Admin.")
       return
@@ -549,23 +568,24 @@ export function PosClient({
       }
     }
 
-    const splitTenders = method === "SPLIT_PAYMENT"
-      ? [
-          { method: "CASH" as const, amount: splitCash },
-          { method: "TRANSFER" as const, amount: splitTransfer },
-          { method: "POS" as const, amount: splitPos },
-        ].filter((t) => t.amount > 0)
-      : undefined
+    const depositChannel: "CASH" | "TRANSFER" =
+      method === "CREDIT"
+        ? creditTender === "CASH"
+          ? "CASH"
+          : "TRANSFER"
+        : method === "CASH"
+          ? "CASH"
+          : "TRANSFER"
 
-    const checkoutMethod: "CASH" | "TRANSFER" | "POS" | "CREDIT" | "SPLIT_PAYMENT" =
-      method === "CREDIT" ? (effectivePaid > 0 ? creditTender : "CREDIT") : method
+    const checkoutMethod: "CASH" | "TRANSFER" | "CREDIT" =
+      method === "CREDIT" ? (effectivePaid > 0 ? depositChannel : "CREDIT") : depositChannel
 
     const payload = {
       customerId: customerId || undefined,
       branchId,
       paymentMethod: checkoutMethod,
       paidAmount: effectivePaid,
-      splitTenders,
+      bankAccountId: wantsBank ? bankAccountId : undefined,
       notes,
       wholesale,
       items: cart.map((line) => ({
@@ -942,7 +962,7 @@ export function PosClient({
           )}
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block text-muted-foreground">Payment Method</span>
+          <span className="mb-1 block text-muted-foreground">How they paid</span>
           <Select
             value={method}
             onChange={(event) => {
@@ -950,101 +970,70 @@ export function PosClient({
               setMethod(next)
               if (next === "CREDIT") {
                 setPaid(0)
-              } else if (next === "SPLIT_PAYMENT") {
-                setSplitCash(total)
-                setSplitTransfer(0)
-                setSplitPos(0)
               } else {
                 setPaid(total)
               }
             }}
           >
             <option value="CASH">Cash</option>
-            <option value="TRANSFER">Bank Transfer</option>
-            <option value="POS">POS Terminal</option>
-            <option value="SPLIT_PAYMENT">Split Payment (Multiple Tenders)</option>
+            <option value="BANK">Bank</option>
             <option value="CREDIT">Credit sales</option>
           </Select>
         </label>
         {method === "CREDIT" ? (
           <p className="text-xs text-muted-foreground">
-            Type any money received now. What is left is credit sales. If they paid nothing today, leave the amount at zero.
+            Type any money received now. What is left is credit sales. If they paid nothing today, leave the amount at zero. Money today is either all cash or all bank into one named account.
           </p>
-        ) : null}
-        {method === "SPLIT_PAYMENT" ? (
-          <div className="space-y-3 rounded-lg border border-border/80 bg-muted/20 p-3.5">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold uppercase tracking-wider text-muted-foreground">Multi-Tender Breakdown</span>
-              <span className="font-semibold text-primary">Invoice Total: {formatCurrency(total)}</span>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <span className="mb-1 block text-xs text-muted-foreground">Cash (₦)</span>
-                <Input
-                  type="number"
-                  min="0"
-                  value={splitCash || ""}
-                  placeholder="0"
-                  onChange={(e) => setSplitCash(Math.max(0, Number(e.target.value) || 0))}
-                />
-              </div>
-              <div>
-                <span className="mb-1 block text-xs text-muted-foreground">Transfer (₦)</span>
-                <Input
-                  type="number"
-                  min="0"
-                  value={splitTransfer || ""}
-                  placeholder="0"
-                  onChange={(e) => setSplitTransfer(Math.max(0, Number(e.target.value) || 0))}
-                />
-              </div>
-              <div>
-                <span className="mb-1 block text-xs text-muted-foreground">POS (₦)</span>
-                <Input
-                  type="number"
-                  min="0"
-                  value={splitPos || ""}
-                  placeholder="0"
-                  onChange={(e) => setSplitPos(Math.max(0, Number(e.target.value) || 0))}
-                />
-              </div>
-            </div>
-            <div className="flex items-center justify-between text-xs pt-1 border-t border-border/60">
-              <span className="text-muted-foreground">Combined Tenders:</span>
-              <span className={`font-semibold ${splitCash + splitTransfer + splitPos === total ? "text-emerald-600" : "text-amber-600"}`}>
-                {formatCurrency(splitCash + splitTransfer + splitPos)}
-              </span>
-            </div>
-          </div>
         ) : (
-          <div className="space-y-3">
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted-foreground">
-                {method === "CREDIT" ? "Amount received now" : "Amount paid"}
-              </span>
-              <Input
-                type="number"
-                min={0}
-                value={paid || ""}
-                placeholder="0"
-                onChange={(event) => setPaid(Math.max(0, Number(event.target.value) || 0))}
-              />
-            </label>
-            {method === "CREDIT" && paid > 0 ? (
-              <label className="block text-sm">
-                <span className="mb-1 block text-muted-foreground">How they paid this amount</span>
-                <Select
-                  value={creditTender}
-                  onChange={(event) => setCreditTender(event.target.value as "CASH" | "TRANSFER" | "POS")}
-                >
-                  <option value="TRANSFER">Bank Transfer</option>
-                  <option value="CASH">Cash</option>
-                  <option value="POS">POS Terminal</option>
-                </Select>
-              </label>
-            ) : null}
-          </div>
+          <p className="text-xs text-muted-foreground">
+            Cash stays in the till. Bank means the full amount landed in one shop bank account (transfer, POS terminal, or USSD all count as Bank).
+          </p>
         )}
+        <div className="space-y-3">
+          <label className="block text-sm">
+            <span className="mb-1 block text-muted-foreground">
+              {method === "CREDIT" ? "Amount received now" : "Amount paid"}
+            </span>
+            <Input
+              type="number"
+              min={0}
+              value={paid || ""}
+              placeholder="0"
+              onChange={(event) => setPaid(Math.max(0, Number(event.target.value) || 0))}
+            />
+          </label>
+          {method === "CREDIT" && paid > 0 ? (
+            <label className="block text-sm">
+              <span className="mb-1 block text-muted-foreground">How they paid this amount</span>
+              <Select
+                value={creditTender}
+                onChange={(event) => setCreditTender(event.target.value as "CASH" | "BANK")}
+              >
+                <option value="BANK">Bank</option>
+                <option value="CASH">Cash</option>
+              </Select>
+            </label>
+          ) : null}
+          {wantsBank ? (
+            <label className="block text-sm">
+              <span className="mb-1 block text-muted-foreground">Bank account that received it</span>
+              {shopBanks.length ? (
+                <Select value={bankAccountId} onChange={(event) => setBankAccountId(event.target.value)}>
+                  {shopBanks.map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {row.bankName} · {row.accountNumber}
+                      {row.accountName ? ` · ${row.accountName}` : ""}
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-foreground">
+                  No bank account is on the books for this shop yet. Add GTBank, Access, or OPay under Money in and out, then come back to Sell now.
+                </p>
+              )}
+            </label>
+          ) : null}
+        </div>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={wholesale} onChange={(event) => setWholesale(event.target.checked)} />
           Wholesale / dealer sale

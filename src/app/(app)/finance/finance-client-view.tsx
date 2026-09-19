@@ -128,7 +128,7 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
         <StatCard
           label="Sales"
           value={formatCurrency(data.revenue)}
-          hint={`Cash: ${formatCurrency(data.cashRevenue)} · Transfer and POS: ${formatCurrency(data.bankRevenue)}`}
+          hint={`Cash: ${formatCurrency(data.cashRevenue)} · Bank: ${formatCurrency(data.bankRevenue)}`}
           icon={<TrendingUp className="h-4 w-4" />}
           tone="success"
         />
@@ -183,10 +183,10 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
                 <Landmark className="h-5 w-5" />
               </span>
               <div className="text-left">
-                <p className="text-sm font-semibold">Bank, transfer, and POS</p>
+                <p className="text-sm font-semibold">Bank</p>
                 <p className="text-xs text-muted-foreground">
                   Started with {formatCurrency(data.openingBank)} across {data.bankAccounts.length} bank
-                  {data.bankAccounts.length === 1 ? "" : "s"}
+                  {data.bankAccounts.length === 1 ? "" : "s"}. Bank sales land on the named account.
                 </p>
               </div>
             </div>
@@ -348,7 +348,7 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
         open={ledger !== null}
         onClose={() => setLedger(null)}
         eyebrow="Money movement"
-        title={ledger === "CASH" ? "Cash in the till" : "Bank, transfer, and POS"}
+        title={ledger === "CASH" ? "Cash in the till" : "Bank"}
         download={
           account
             ? {

@@ -15,6 +15,7 @@ import { getSellLock } from "@/app/actions/day-close"
 import { markParkedPosted } from "@/app/actions/parked"
 import { isBlockedFromSell } from "@/lib/phone-look"
 import { reservedTransferImeiSet, reservedSwapImeiSet } from "@/app/actions/ops"
+import { shopPayChannel } from "@/lib/sale-money"
 
 export async function getSales() {
   const user = await requireUser()
@@ -52,7 +53,7 @@ export async function getPosLookups() {
   const viewShop = await viewBranchFilter(user)
   // Shop staff always sell in their own shop. Head office follows the shop picker.
   const branchId = canAll ? viewShop || user.branchId || undefined : user.branchId || undefined
-  const [products, customers, imeis, branches] = await Promise.all([
+  const [products, customers, imeis, branches, bankAccounts] = await Promise.all([
     prisma.product.findMany({
       where: { isActive: true, condition: { not: "FAULTY" } },
       include: {
@@ -85,6 +86,13 @@ export async function getPosLookups() {
       },
       orderBy: [{ isHq: "desc" }, { name: "asc" }],
     }),
+    prisma.bankAccount.findMany({
+      where: {
+        isActive: true,
+        ...(canAll ? {} : user.branchId ? { branchId: user.branchId } : { branchId: "__none__" }),
+      },
+      orderBy: [{ bankName: "asc" }, { accountNumber: "asc" }],
+    }),
   ])
   const settings = await getAppSettings()
   const defaultBranchId = branchId || branches[0]?.id
@@ -116,6 +124,13 @@ export async function getPosLookups() {
       id: branch.id,
       name: branch.name,
       code: branch.code,
+    })),
+    bankAccounts: bankAccounts.map((row) => ({
+      id: row.id,
+      branchId: row.branchId,
+      bankName: row.bankName,
+      accountNumber: row.accountNumber,
+      accountName: row.accountName,
     })),
     branchId: defaultBranchId,
     allowBelowMinimum: settings.allowBelowMinimum,
@@ -374,6 +389,9 @@ export async function checkoutSale(input: {
   branchId: string
   paymentMethod: PaymentMethod
   paidAmount: number
+  /** Named bank when money came in by bank. Required for Bank sales with money received. */
+  bankAccountId?: string
+  /** Kept for older parked sales on phones. New till sales are Cash or Bank only. */
   splitTenders?: Array<{ method: "CASH" | "TRANSFER" | "POS"; amount: number }>
   notes?: string
   wholesale?: boolean
@@ -509,14 +527,56 @@ export async function checkoutSale(input: {
     : input.paidAmount
 
   const paid = Math.min(Math.max(0, rawPaid), subtotal)
-  const method = paid < subtotal ? "CREDIT" : (isSplit ? "SPLIT_PAYMENT" : input.paymentMethod)
   const due = subtotal - paid
+  // Sale label: credit when anything is still owed; otherwise Cash or Bank (or an old split).
+  const method: PaymentMethod =
+    paid < subtotal
+      ? "CREDIT"
+      : isSplit
+        ? "SPLIT_PAYMENT"
+        : input.paymentMethod === "CREDIT"
+          ? "CREDIT"
+          : shopPayChannel(input.paymentMethod)
+
+  // Money that actually came in today: Cash or Bank. Old POS / split lines stay as stored.
   const receivedChannel: "CASH" | "TRANSFER" | "POS" =
     isSplit && validSplits[0]
       ? validSplits[0].method
-      : input.paymentMethod === "CASH" || input.paymentMethod === "TRANSFER" || input.paymentMethod === "POS"
-        ? input.paymentMethod
-        : "TRANSFER"
+      : input.paymentMethod === "POS"
+        ? "POS"
+        : shopPayChannel(input.paymentMethod === "CREDIT" ? "TRANSFER" : input.paymentMethod)
+
+  let bankAccountId: string | null = null
+  // New Bank sales must name the account. Old POS lines and parked splits may have none.
+  const needsNamedBank =
+    paid > 0 &&
+    !isSplit &&
+    input.paymentMethod !== "POS" &&
+    input.paymentMethod !== "CASH" &&
+    input.paymentMethod !== "CREDIT" &&
+    shopPayChannel(input.paymentMethod) === "TRANSFER"
+  if (needsNamedBank) {
+    const wanted = String(input.bankAccountId || "").trim()
+    if (!wanted) {
+      return {
+        error: "Pick which bank account received this money. Add banks under Money in and out if the list is empty.",
+      }
+    }
+    const bank = await prisma.bankAccount.findFirst({
+      where: { id: wanted, isActive: true, branchId: saleShopId },
+      select: { id: true },
+    })
+    if (!bank) {
+      return { error: "That bank account is not on the books for this shop. Pick another, or add it under Money in and out." }
+    }
+    bankAccountId = bank.id
+  } else if (input.bankAccountId) {
+    const bank = await prisma.bankAccount.findFirst({
+      where: { id: String(input.bankAccountId), isActive: true, branchId: saleShopId },
+      select: { id: true },
+    })
+    if (bank) bankAccountId = bank.id
+  }
 
   if (due > 0 && !input.customerId) {
     return { error: "A credit sale or part payment needs a buyer name. A walk-in must pay everything now." }
@@ -571,11 +631,13 @@ export async function checkoutSale(input: {
                     ? validSplits.map((t) => ({
                         amount: t.amount.toFixed(2),
                         method: t.method,
+                        bankAccountId: shopPayChannel(t.method) === "TRANSFER" ? bankAccountId : null,
                       }))
                     : [
                         {
                           amount: paid.toFixed(2),
                           method: receivedChannel,
+                          bankAccountId: receivedChannel === "CASH" ? null : bankAccountId,
                         },
                       ],
                 }
@@ -835,8 +897,16 @@ export async function collectPayment(formData: FormData) {
   const user = await requireUser()
   const customerId = String(formData.get("customerId"))
   const amount = Number(formData.get("amount") || 0)
-  const method = String(formData.get("method") || "TRANSFER") as PaymentMethod
+  const method = shopPayChannel(String(formData.get("method") || "TRANSFER"))
+  const bankAccountIdRaw = String(formData.get("bankAccountId") || "").trim()
   if (!customerId || amount <= 0) return { error: "Type how much was paid." }
+
+  let bankAccountId: string | null = null
+  if (method === "TRANSFER") {
+    if (!bankAccountIdRaw) {
+      return { error: "Pick which bank account received this money." }
+    }
+  }
 
   const payRef = generateDocNumber("PAY")
 
@@ -852,6 +922,15 @@ export async function collectPayment(formData: FormData) {
       if (!customer) throw new ConflictError("We could not find that customer.")
       const owing = money(customer.currentBalance)
       if (owing <= 0) throw new ConflictError("This customer does not owe us anything.")
+
+      if (method === "TRANSFER") {
+        const bank = await tx.bankAccount.findFirst({
+          where: { id: bankAccountIdRaw, isActive: true, branchId: customer.branchId },
+          select: { id: true },
+        })
+        if (!bank) throw new ConflictError("That bank account is not on the books for this shop.")
+        bankAccountId = bank.id
+      }
 
       const collected = Math.min(amount, owing)
       const after = await shiftCustomerBalance(tx, customerId, -collected)
@@ -902,6 +981,7 @@ export async function collectPayment(formData: FormData) {
             saleId: sale.id,
             amount: apply.toFixed(2),
             method,
+            bankAccountId,
             reference: payRef,
             notes: "Taken from what the customer paid on their account. The invoice was not changed.",
           },
@@ -915,7 +995,7 @@ export async function collectPayment(formData: FormData) {
           action: "CREATE",
           entityType: "LedgerEntry",
           entityId: payRef,
-          newValue: JSON.stringify({ customerId, collected, method }),
+          newValue: JSON.stringify({ customerId, collected, method, bankAccountId }),
           branchId: customer.branchId,
         },
       })
@@ -939,7 +1019,8 @@ export async function collectInvoicePayment(formData: FormData) {
   }
   const saleId = String(formData.get("saleId") || "")
   const amount = Number(formData.get("amount") || 0)
-  const method = String(formData.get("method") || "TRANSFER") as PaymentMethod
+  const method = shopPayChannel(String(formData.get("method") || "TRANSFER"))
+  const bankAccountIdRaw = String(formData.get("bankAccountId") || "").trim()
   if (!saleId || amount <= 0) return { error: "Enter the amount collected." }
 
   const sale = await prisma.sale.findUnique({
@@ -949,6 +1030,17 @@ export async function collectInvoicePayment(formData: FormData) {
   if (!sale) return { error: "We could not find that sale." }
   if (sale.status !== "COMPLETED") return { error: "You can only collect money on a sale that is finished." }
   if (money(sale.totalAmount) - money(sale.paidAmount) <= 0) return { error: "This sale is already fully paid." }
+
+  let bankAccountId: string | null = null
+  if (method === "TRANSFER") {
+    if (!bankAccountIdRaw) return { error: "Pick which bank account received this money." }
+    const bank = await prisma.bankAccount.findFirst({
+      where: { id: bankAccountIdRaw, isActive: true, branchId: sale.branchId },
+      select: { id: true },
+    })
+    if (!bank) return { error: "That bank account is not on the books for this shop." }
+    bankAccountId = bank.id
+  }
 
   const posted = await settle(() =>
     prisma.$transaction(async (tx) => {
@@ -975,6 +1067,7 @@ export async function collectInvoicePayment(formData: FormData) {
           saleId: sale.id,
           amount: collected.toFixed(2),
           method,
+          bankAccountId,
           notes: "Money collected on a finished invoice. The items and IMEIs were not changed",
         },
       })
@@ -1008,7 +1101,7 @@ export async function collectInvoicePayment(formData: FormData) {
           action: "CREATE",
           entityType: "Payment",
           entityId: sale.invoiceNumber,
-          newValue: JSON.stringify({ collected, method, itemsUntouched: true }),
+          newValue: JSON.stringify({ collected, method, bankAccountId, itemsUntouched: true }),
           branchId: sale.branchId,
         },
       })

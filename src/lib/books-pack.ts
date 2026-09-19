@@ -15,12 +15,20 @@ export function booksRangeTitle(range: BooksCheck["range"]) {
 export function booksCompareRows(data: BooksCheck) {
   return [
     { label: "Total sales", now: data.revenue, then: data.compare.priorRevenue, change: data.compare.revenue, money: true },
-    // "Total payments received" = cash + transfer + POS only (money physically in hand)
+    // "Total payments received" = cash + bank only (money physically in)
     // Does NOT include credit-sale deposits counted under paidAmount — those appear under Credit sales / Receivables
     { label: "Total payments received", now: data.methodSum, then: data.compare.priorMethodSum, change: data.compare.methodSum, money: true },
     { label: "Cash received", now: data.cash, then: data.compare.priorCash, change: data.compare.cash, money: true },
-    { label: "Transfer received", now: data.transfer, then: data.compare.priorTransfer, change: data.compare.transfer, money: true },
-    { label: "POS received", now: data.pos, then: data.compare.priorPos, change: data.compare.pos, money: true },
+    {
+      label: "Bank received",
+      now: data.transfer + data.pos,
+      then: data.compare.priorTransfer + data.compare.priorPos,
+      change: {
+        amount: data.compare.transfer.amount + data.compare.pos.amount,
+        value: data.compare.methodSum.value,
+      },
+      money: true,
+    },
     { label: "Credit sales", now: data.credit, then: data.compare.priorCredit, change: data.compare.credit, money: true },
     { label: "Customers still owe", now: data.due, then: data.compare.priorDue, change: data.compare.due, money: true },
     { label: "Approved expenses", now: data.expenses, then: data.compare.priorExpenses, change: data.compare.expenses, money: true },
@@ -46,8 +54,7 @@ export function formatPdfMove(change: { amount: number; value: string }, money: 
 export function booksMoneyLines(data: BooksCheck) {
   return [
     { label: "Cash received", value: data.cash, total: false },
-    { label: "Transfer received", value: data.transfer, total: false },
-    { label: "POS received", value: data.pos, total: false },
+    { label: "Bank received", value: data.transfer + data.pos, total: false },
     { label: "Total payments received", value: data.methodSum, total: true },
     { label: "Total sales", value: data.revenue, total: false },
     { label: "Payment received from sales", value: data.collected, total: false },

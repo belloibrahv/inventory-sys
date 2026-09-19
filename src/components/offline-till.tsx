@@ -133,6 +133,7 @@ export function OfflineTill() {
               customers={snapshot.customers}
               imeis={snapshot.imeis}
               branches={snapshot.branches}
+              bankAccounts={snapshot.bankAccounts ?? []}
               defaultBranchId={snapshot.defaultBranchId}
               canOverrideFloor={snapshot.canOverrideFloor}
               sellLocks={snapshot.sellLocks}

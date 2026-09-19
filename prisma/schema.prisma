@@ -588,17 +588,21 @@ model SaleItem {
 }
 
 model Payment {
-  id        String        @id @default(cuid())
-  saleId    String
-  sale      Sale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  amount    Decimal
-  method    PaymentMethod
-  reference String?
-  notes     String?
-  paidAt    DateTime      @default(now())
+  id            String        @id @default(cuid())
+  saleId        String
+  sale          Sale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  amount        Decimal
+  method        PaymentMethod
+  /// Named bank when money came in by bank (transfer or POS terminal). Cash leaves this empty.
+  bankAccountId String?
+  bankAccount   BankAccount?  @relation(fields: [bankAccountId], references: [id])
+  reference     String?
+  notes         String?
+  paidAt        DateTime      @default(now())
 
   @@index([saleId])
   @@index([paidAt])
+  @@index([bankAccountId])
 }
 
 model Customer {
@@ -819,20 +823,21 @@ model FinanceEntry {
 }
 
 /// A named bank or wallet. Opening balance is money already in that account
-/// when the shops started using this software. Later transfer and POS sit on
-/// top of these figures in Money in and out.
+/// when the shops started using this software. Bank sales on Sell now land on
+/// a named account. Cash stays in the till.
 model BankAccount {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   branchId       String
-  branch         Branch   @relation(fields: [branchId], references: [id])
+  branch         Branch    @relation(fields: [branchId], references: [id])
   bankName       String
   accountNumber  String
   accountName    String?
-  openingBalance Decimal  @default(0)
-  isActive       Boolean  @default(true)
+  openingBalance Decimal   @default(0)
+  isActive       Boolean   @default(true)
   createdById    String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  payments       Payment[]
 
   @@index([branchId])
   @@index([accountNumber])
