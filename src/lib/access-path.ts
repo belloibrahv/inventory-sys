@@ -1,5 +1,6 @@
 const VIEW_HREFS = [
   "/dashboard",
+  "/owner",
   "/products",
   "/uploads",
   "/imei",

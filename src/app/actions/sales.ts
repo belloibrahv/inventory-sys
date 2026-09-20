@@ -72,7 +72,10 @@ export async function getPosLookups() {
     prisma.imeiRecord.findMany({
       where: {
         status: "IN_STOCK",
-        NOT: { cosmeticGrade: "FAULTY" },
+        // A phone with no cosmetic grade recorded is an ordinary phone, not a
+        // faulty one. `NOT: { cosmeticGrade: "FAULTY" }` drops those rows, because
+        // SQL cannot compare NULL to a word — it hid every ungraded phone.
+        OR: [{ cosmeticGrade: null }, { cosmeticGrade: { not: "FAULTY" } }],
         product: { condition: { not: "FAULTY" } },
         ...(branchId ? { branchId } : {}),
       },
@@ -265,7 +268,11 @@ export async function searchTillStock(query: string, branchId?: string) {
       where: {
         status: "IN_STOCK",
         branchId: shop,
-        NOT: { cosmeticGrade: "FAULTY" },
+        // A phone with no cosmetic grade recorded is an ordinary phone, not a
+        // faulty one. `NOT: { cosmeticGrade: "FAULTY" }` drops those rows, because
+        // SQL cannot compare NULL to a word — it hid every ungraded phone.
+        // This sits in AND so it cannot displace the search's own OR below.
+        AND: [{ OR: [{ cosmeticGrade: null }, { cosmeticGrade: { not: "FAULTY" } }] }],
         product: { condition: { not: "FAULTY" } },
         OR: [
           { imei1: { contains: imeiDigits } },

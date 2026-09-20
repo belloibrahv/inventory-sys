@@ -128,6 +128,14 @@
   --chart-3: 262 70% 60%;
   --chart-4: 33 88% 52%;
   --chart-5: 196 76% 45%;
+
+  /* Owner board series. Fixed order, so an item keeps its colour from one
+     chart to the next. Checked against the white card for lightness, chroma,
+     colourblind separation and contrast before being used. */
+  --board-money: #2547D0;
+  --board-units: #B45309;
+  --board-profit: #0F9B8E;
+  --board-spare: #6D28D9;
 }
 
 .dark {
@@ -173,6 +181,13 @@
   --sidebar-muted: 230 22% 15%;
   --sidebar-active: 232 48% 22%;
   --sidebar-border: 230 20% 17%;
+
+  /* Chosen for the night card, not lightened from the day set — a flipped
+     palette fails contrast against a dark surface. Same order, same meaning. */
+  --board-money: #5B7CF0;
+  --board-units: #C9821E;
+  --board-profit: #18907F;
+  --board-spare: #9A7AF0;
 }
 
 * {

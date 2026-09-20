@@ -7,6 +7,7 @@ export { isSuperAdmin, isShopOwner, isBooksDesk, BOOKS_DESK_ROLES } from "@/lib/
 
 export const VIEW_PERMS = [
   { key: "view.dashboard", label: "Home", href: "/dashboard" },
+  { key: "view.owner", label: "Business today", href: "/owner" },
   { key: "view.uploads", label: "Upload stock", href: "/uploads" },
   { key: "view.products", label: "Phones & items", href: "/products" },
   { key: "view.imei", label: "Phone numbers (IMEI)", href: "/imei" },
@@ -81,6 +82,7 @@ export const AUDITOR_KEYS = V(
  */
 export const ACCOUNTANT_KEYS = V(
   "view.dashboard",
+  "view.owner",
   "view.sales",
   "view.customers",
   "view.suppliers",
@@ -112,7 +114,7 @@ const DEFAULTS: Record<UserRole, string[]> = {
   AUDITOR: AUDITOR_KEYS,
   ACCOUNTANT: ACCOUNTANT_KEYS,
   BRANCH_MANAGER: V(
-    "view.dashboard", "view.products", "view.uploads", "view.imei", "view.inventory", "view.incoming", "view.sales", "view.pos",
+    "view.dashboard", "view.owner", "view.products", "view.uploads", "view.imei", "view.inventory", "view.incoming", "view.sales", "view.pos",
     "view.purchases", "view.customers", "view.suppliers", "view.transfers", "view.neighbor-fills", "view.returns",
     "view.swaps", "view.repairs", "view.reconciliation", "view.finance", "view.expenses", "view.profits",
     "view.approvals", "view.staff", "view.reports", "view.notifications",

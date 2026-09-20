@@ -10,6 +10,7 @@ import {
   DatabaseBackup,
   Factory,
   FileSpreadsheet,
+  Gauge,
   GitBranch,
   Handshake,
   LayoutDashboard,
@@ -75,6 +76,7 @@ export const navGroups: NavGroup[] = [
     label: "Start",
     items: [
       { name: "Home", href: "/dashboard", icon: LayoutDashboard },
+      { name: "Business today", href: "/owner", icon: Gauge },
       { name: "How to use this", href: "/help", icon: BookOpen },
     ],
   },
