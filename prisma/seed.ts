@@ -998,7 +998,7 @@ async function main() {
       { key: "company.logo", value: "", description: "Logo printed on invoices" },
       { key: "company.footer", value: "Thank you for buying from Abu Twins", description: "Thank-you line at the bottom of invoices" },
       { key: "company.currency", value: "NGN", description: "Default currency" },
-      { key: "sales.allow_below_minimum", value: "false", description: "Require approval below min price" },
+      { key: "sales.allow_below_minimum", value: "false", description: "Going under an item's lowest allowed price needs the CEO or Super Admin" },
       {
         key: "incoming.dual_control",
         value: "true",

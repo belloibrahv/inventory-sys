@@ -16,6 +16,7 @@ import { markParkedPosted } from "@/app/actions/parked"
 import { isBlockedFromSell } from "@/lib/phone-look"
 import { reservedTransferImeiSet, reservedSwapImeiSet } from "@/app/actions/ops"
 import { shopPayChannel } from "@/lib/sale-money"
+import { belowCost, discountOff, needsReason, sellFloor } from "@/lib/pricing"
 
 export async function getSales() {
   const user = await requireUser()
@@ -104,6 +105,7 @@ export async function getPosLookups() {
       costPrice: money(product.costPrice),
       sellingPrice: money(product.sellingPrice),
       minimumPrice: money(product.minimumPrice),
+      resellerMarkup: money(product.category.resellerMarkup),
       serialized: product.tracking !== "NONE",
       brand: { name: product.brand.name },
       category: { name: product.category.name },
@@ -135,7 +137,11 @@ export async function getPosLookups() {
     })),
     branchId: defaultBranchId,
     allowBelowMinimum: settings.allowBelowMinimum,
-    canOverrideFloor: await can(user.role, "action.override_floor"),
+    // The shop-wide switch grants the same freedom as the permission, the way it
+    // already works for neighbour fills. It was being read here and then dropped.
+    canOverrideFloor:
+      settings.allowBelowMinimum || (await can(user.role, "action.override_floor")),
+    canSeeCost: await can(user.role, "action.see_cost"),
     lowStockThreshold: settings.lowStockThreshold,
     sellLocks: Object.fromEntries(
       await Promise.all(
@@ -159,10 +165,11 @@ function mapTillImei(item: {
     name: string
     sellingPrice: unknown
     minimumPrice: unknown
+    costPrice: unknown
     storage: string | null
     condition: string
     color: string | null
-    category?: { name: string } | null
+    category?: { name: string; resellerMarkup?: unknown } | null
     brand?: { name: string } | null
   }
 }) {
@@ -177,6 +184,8 @@ function mapTillImei(item: {
       name: item.product.name,
       sellingPrice: money(item.product.sellingPrice),
       minimumPrice: money(item.product.minimumPrice),
+      costPrice: money(item.product.costPrice),
+      resellerMarkup: money(item.product.category?.resellerMarkup),
       storage: item.product.storage,
       condition: item.product.condition,
       color: item.product.color,
@@ -235,6 +244,8 @@ export async function searchTillStock(query: string, branchId?: string) {
     sku: string
     sellingPrice: number
     minimumPrice: number
+    costPrice: number
+    resellerMarkup: number
     serialized: boolean
     brand: { name: string }
     category: { name: string }
@@ -337,6 +348,8 @@ export async function searchTillStock(query: string, branchId?: string) {
       sku: product.sku,
       sellingPrice: money(product.sellingPrice),
       minimumPrice: money(product.minimumPrice),
+      costPrice: money(product.costPrice),
+      resellerMarkup: money(product.category.resellerMarkup),
       serialized: false,
       brand: { name: product.brand.name },
       category: { name: product.category.name },
@@ -399,9 +412,21 @@ export async function checkoutSale(input: {
   splitTenders?: Array<{ method: "CASH" | "TRANSFER" | "POS"; amount: number }>
   notes?: string
   wholesale?: boolean
+  /** Money taken off the whole order, in naira. Bulk deals are recorded here. */
+  orderDiscount?: number
+  /** Why the order discount was given. Needed when it pushes a line under its floor. */
+  discountReason?: string
   queuedAt?: string
   offlineId?: string
-  items: Array<{ productId: string; imeiId?: string; quantity: number; unitPrice: number; warrantyDays?: number }>
+  items: Array<{
+    productId: string
+    imeiId?: string
+    quantity: number
+    unitPrice: number
+    warrantyDays?: number
+    /** Why this line left the standard price. Needed under the floor or under cost. */
+    priceReason?: string
+  }>
 }) {
   const user = await requireUser()
   if (!(await canSell(user.role))) return { error: "You are not allowed to sell. Ask the main admin." }
@@ -417,13 +442,29 @@ export async function checkoutSale(input: {
   const settings = await getAppSettings()
   const products = await prisma.product.findMany({
     where: { id: { in: input.items.map((item) => item.productId) } },
-    include: { _count: { select: { imeiRecords: true } } },
+    include: {
+      _count: { select: { imeiRecords: true } },
+      // The reseller markup lives on the category, and the floor needs it.
+      category: { select: { resellerMarkup: true } },
+    },
   })
   const productById = new Map(products.map((row) => [row.id, row]))
-  // Initial sell price (uploaded) is the floor. Cashiers may raise it for walk-in
-  // buyers. Only CEO / Super Admin (override_floor) may go under it.
-  const canOverrideFloor = await can(user.role, "action.override_floor")
-  const canOverrideCredit = canOverrideFloor
+  // The lowest allowed price on the item is the floor, not the standard price.
+  // Staff may price a deal anywhere from the floor up — that is what a reseller
+  // price or a bulk discount is. Only CEO / Super Admin (override_floor) may go
+  // under the floor, or under what the item cost us, and never without a reason.
+  const hasFloorPermission = await can(user.role, "action.override_floor")
+  // Credit limits are a separate judgement. Turning the price switch on must not
+  // quietly hand out credit as well.
+  const canOverrideCredit = hasFloorPermission
+  const canOverrideFloor = settings.allowBelowMinimum || hasFloorPermission
+  const isReseller = Boolean(input.wholesale)
+  // Worked out here, once, and reused for the floor check, the cost snapshot and
+  // the discount recorded against each line.
+  const priceLines = new Map<
+    number,
+    { floor: number; cost: number; list: number; reason: string }
+  >()
 
   // One read for every tracked unit in the cart, and one for every branch stock
   // row, instead of a query per line. A 20 line cart used to fire 20 round trips.
@@ -459,7 +500,7 @@ export async function checkoutSale(input: {
   const wantByProduct = new Map<string, number>()
   const shelfWantByProduct = new Map<string, number>()
 
-  for (const item of input.items) {
+  for (const [lineIndex, item] of input.items.entries()) {
     const product = productById.get(item.productId)
     if (!product) return { error: "One of the items in the cart is missing." }
     if (isBlockedFromSell({ productCondition: product.condition })) {
@@ -477,12 +518,40 @@ export async function checkoutSale(input: {
     if (!Number.isFinite(item.unitPrice) || item.unitPrice < 0) {
       return { error: `Enter a valid price for ${product.name}.` }
     }
-    const floorPrice = Math.max(money(product.sellingPrice), money(product.minimumPrice))
-    if (item.unitPrice < floorPrice && !canOverrideFloor) {
-      return {
-        error: `${product.name} is below the initial sell price (₦${floorPrice.toLocaleString("en-NG")}). Raise it for this buyer, or ask the CEO or Super Admin.`,
+    const basis = {
+      costPrice: money(product.costPrice),
+      minimumPrice: money(product.minimumPrice),
+      sellingPrice: money(product.sellingPrice),
+      resellerMarkup: money(product.category.resellerMarkup),
+    }
+    const floorPrice = sellFloor(basis, { reseller: isReseller })
+    const reason = String(item.priceReason || "").trim()
+    if (item.unitPrice < floorPrice) {
+      if (!canOverrideFloor) {
+        return {
+          error: `${product.name} is below the lowest allowed price (₦${floorPrice.toLocaleString("en-NG")}). Raise it for this buyer, or ask the CEO or Super Admin.`,
+        }
+      }
+      if (!reason) {
+        return { error: `Say why ${product.name} is going below the lowest allowed price.` }
       }
     }
+    if (belowCost(item.unitPrice, basis.costPrice)) {
+      if (!canOverrideFloor) {
+        return {
+          error: `${product.name} is below what it cost us (₦${basis.costPrice.toLocaleString("en-NG")}). The shop loses money at that price. Ask the CEO or Super Admin.`,
+        }
+      }
+      if (!reason) {
+        return { error: `Say why ${product.name} is being sold below cost.` }
+      }
+    }
+    priceLines.set(lineIndex, {
+      floor: floorPrice,
+      cost: basis.costPrice,
+      list: money(product.sellingPrice),
+      reason,
+    })
     if (item.imeiId) {
       const imei = imeiById.get(item.imeiId)
       if (!imei || imei.status !== "IN_STOCK") return { error: `IMEI ${imei?.imei1 ?? ""} is not available.` }
@@ -523,12 +592,46 @@ export async function checkoutSale(input: {
     return { error: `${imeiById.get(duplicateImei)?.imei1 ?? "That phone"} is on this sale twice. Remove one line.` }
   }
 
-  const subtotal = input.items.reduce((sum, item) => {
+  const grossTotal = input.items.reduce((sum, item) => {
     const price = Number(item.unitPrice)
     const qty = Number(item.quantity)
     if (!Number.isFinite(price) || !Number.isFinite(qty) || price < 0 || qty < 1) return sum
     return sum + price * qty
   }, 0)
+
+  // Money off the whole order, the way a bulk deal is actually struck. It is
+  // checked against the same floors as a typed line price, so an order discount
+  // cannot quietly do what a line price is not allowed to do.
+  const rawDiscount = Number(input.orderDiscount ?? 0)
+  const orderDiscount = Number.isFinite(rawDiscount) && rawDiscount > 0
+    ? Math.min(money(rawDiscount), grossTotal)
+    : 0
+  const discountReason = String(input.discountReason || "").trim()
+  if (orderDiscount > 0) {
+    const floorTotal = input.items.reduce((sum, item, index) => {
+      const line = priceLines.get(index)
+      if (!line) return sum
+      return sum + line.floor * Math.max(1, Number(item.quantity) || 1)
+    }, 0)
+    const costTotal = input.items.reduce((sum, item, index) => {
+      const line = priceLines.get(index)
+      if (!line) return sum
+      return sum + line.cost * Math.max(1, Number(item.quantity) || 1)
+    }, 0)
+    const afterDiscount = grossTotal - orderDiscount
+    if (afterDiscount < floorTotal || afterDiscount < costTotal) {
+      const guard = Math.max(floorTotal, costTotal)
+      if (!canOverrideFloor) {
+        return {
+          error: `That discount takes the sale to ₦${afterDiscount.toLocaleString("en-NG")}, under the ₦${guard.toLocaleString("en-NG")} this stock may go for. Lower the discount, or ask the CEO or Super Admin.`,
+        }
+      }
+      if (!discountReason) {
+        return { error: "Say why this order is going below what the stock may be sold for." }
+      }
+    }
+  }
+  const subtotal = money(grossTotal - orderDiscount)
   const validSplits = (input.splitTenders ?? []).filter((t) => Number.isFinite(t.amount) && t.amount > 0)
   const isSplit = input.paymentMethod === "SPLIT_PAYMENT" || validSplits.length > 1
   const isCreditTill = input.paymentMethod === "CREDIT"
@@ -639,20 +742,32 @@ export async function checkoutSale(input: {
           saleType: input.wholesale ? "WHOLESALE" : "RETAIL",
           isWholesale: Boolean(input.wholesale),
           status: "COMPLETED",
-          subtotal: subtotal.toFixed(2),
+          subtotal: grossTotal.toFixed(2),
+          discount: orderDiscount.toFixed(2),
+          discountReason: orderDiscount > 0 ? discountReason || null : null,
           totalAmount: subtotal.toFixed(2),
           paidAmount: paid.toFixed(2),
           paymentMethod: method,
           notes: input.notes,
           items: {
-            create: input.items.map((item) => ({
-              productId: item.productId,
-              imeiId: item.imeiId || null,
-              quantity: item.quantity,
-              unitPrice: item.unitPrice.toFixed(2),
-              totalPrice: (item.unitPrice * item.quantity).toFixed(2),
-              warrantyDays: item.warrantyDays != null ? Math.max(0, Number(item.warrantyDays)) : 0,
-            })),
+            create: input.items.map((item, index) => {
+              const line = priceLines.get(index)
+              return {
+                productId: item.productId,
+                imeiId: item.imeiId || null,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice.toFixed(2),
+                totalPrice: (item.unitPrice * item.quantity).toFixed(2),
+                // Cost is copied in here, on the day of the sale. Reading it
+                // from the product later meant a new batch at a new exchange
+                // rate rewrote the profit on sales already made.
+                costPrice: (line?.cost ?? 0).toFixed(2),
+                listPrice: (line?.list ?? 0).toFixed(2),
+                discount: discountOff(line?.list ?? 0, item.unitPrice, item.quantity).toFixed(2),
+                priceReason: line?.reason || null,
+                warrantyDays: item.warrantyDays != null ? Math.max(0, Number(item.warrantyDays)) : 0,
+              }
+            }),
           },
           payments:
             paid > 0
@@ -802,6 +917,9 @@ export async function checkoutSale(input: {
             total: subtotal,
             paid,
             method,
+            ...(orderDiscount > 0
+              ? { orderDiscount, discountReason: discountReason || null }
+              : {}),
             ...(isSplit ? { splitTenders: validSplits } : {}),
             ...(input.queuedAt
               ? { postedFromOffline: true, queuedAt: input.queuedAt, offlineId: input.offlineId ?? null }

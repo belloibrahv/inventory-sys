@@ -79,15 +79,17 @@ export default async function NewProductPage() {
           <ul className="space-y-3 text-sm text-muted-foreground">
             <li>
               <span className="font-medium text-foreground">Cost price</span> is what you paid the supplier. Profit is
-              worked out from it, so a wrong cost makes every profit figure wrong.
+              worked out from it, so a wrong cost makes every profit figure wrong. It is copied onto each
+              sale on the day it happens, so a later batch at a new rate never changes an old profit.
             </li>
             <li>
-              <span className="font-medium text-foreground">Lowest price</span> is the floor. A cashier cannot sell
-              under it unless the main admin has allowed it in Settings.
+              <span className="font-medium text-foreground">Lowest price</span> is the real floor at the till.
+              A seller may price a deal anywhere from this figure up — that is where a reseller price or a
+              bulk discount comes from. Going under it needs the CEO or Super Admin, and a reason.
             </li>
             <li>
-              <span className="font-medium text-foreground">Sell price</span> is what shows on the receipt before any
-              haggling.
+              <span className="font-medium text-foreground">Sell price</span> is only what the till offers first.
+              It is a starting point, not a fixed price.
             </li>
             <li>
               <span className="font-medium text-foreground">How we count it</span> cannot be changed easily later. Pick

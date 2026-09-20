@@ -13,7 +13,17 @@ export type QueuedSale = {
     splitTenders?: Array<{ method: "CASH" | "TRANSFER" | "POS"; amount: number }>
     notes?: string
     wholesale?: boolean
-    items: Array<{ productId: string; imeiId?: string; quantity: number; unitPrice: number; warrantyDays?: number }>
+    /** Money off the whole order, carried so a parked bulk deal replays as struck. */
+    orderDiscount?: number
+    discountReason?: string
+    items: Array<{
+      productId: string
+      imeiId?: string
+      quantity: number
+      unitPrice: number
+      warrantyDays?: number
+      priceReason?: string
+    }>
   }
 }
 

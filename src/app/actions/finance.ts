@@ -1326,6 +1326,97 @@ export async function getReportData(
 }
 
 
+/**
+ * Every sale line that left the standard price, newest first. This is the
+ * control that makes flexible pricing safe: prices may move for a buyer, and
+ * the shop can see afterwards who moved them, by how much, and why.
+ */
+export async function getPriceChanges(limit = 200) {
+  const user = await requireUser()
+  if (!(await can(user.role, "view.profits")) && !(await can(user.role, "view.reports"))) {
+    return { lines: [] as PriceChangeLine[] }
+  }
+  const branchId = await viewBranchFilter(user)
+  const rows = await prisma.saleItem.findMany({
+    where: {
+      sale: { status: "COMPLETED", ...(branchId ? { branchId } : {}) },
+      // A line only counts as a price change when there is a standard to compare
+      // against. Sales written before the standard was recorded carry 0.
+      listPrice: { gt: 0 },
+    },
+    include: {
+      product: { select: { name: true } },
+      sale: {
+        select: {
+          invoiceNumber: true,
+          saleDate: true,
+          isWholesale: true,
+          discount: true,
+          discountReason: true,
+          branch: { select: { name: true } },
+          customer: { select: { name: true } },
+          user: { select: { name: true } },
+        },
+      },
+    },
+    orderBy: { sale: { saleDate: "desc" } },
+    take: Math.min(1000, Math.max(1, limit)) * 3,
+  })
+
+  const lines = rows
+    .map((row) => {
+      const charged = money(row.unitPrice)
+      const list = money(row.listPrice)
+      const cost = money(row.costPrice)
+      const off = money(row.discount)
+      return {
+        id: row.id,
+        invoice: row.sale.invoiceNumber,
+        date: row.sale.saleDate,
+        shop: row.sale.branch.name,
+        soldBy: row.sale.user.name ?? "Staff",
+        customer: row.sale.customer?.name ?? "Walk-in",
+        item: row.product.name,
+        quantity: row.quantity,
+        charged,
+        list,
+        cost,
+        off,
+        offPercent: list > 0 ? Math.round(((list - charged) / list) * 1000) / 10 : 0,
+        reseller: row.sale.isWholesale,
+        belowCost: cost > 0 && charged < cost,
+        reason: row.priceReason ?? "",
+        orderDiscount: money(row.sale.discount),
+        orderDiscountReason: row.sale.discountReason ?? "",
+      }
+    })
+    .filter((row) => row.off > 0 || row.belowCost || Boolean(row.reason))
+    .slice(0, limit)
+
+  return { lines }
+}
+
+export type PriceChangeLine = {
+  id: string
+  invoice: string
+  date: Date
+  shop: string
+  soldBy: string
+  customer: string
+  item: string
+  quantity: number
+  charged: number
+  list: number
+  cost: number
+  off: number
+  offPercent: number
+  reseller: boolean
+  belowCost: boolean
+  reason: string
+  orderDiscount: number
+  orderDiscountReason: string
+}
+
 export async function getProfitData() {
   const user = await requireUser()
   if (!(await can(user.role, "view.profits")) && !(await can(user.role, "view.reports"))) {
@@ -1353,8 +1444,13 @@ export async function getProfitData() {
 
   const shopLines = sales.flatMap((sale) =>
     sale.items.map((item) => {
-      const cost = money(item.product.costPrice) * item.quantity
+      // The cost copied onto the line on the day it sold. Sales written before
+      // that field existed carry 0, so those fall back to the item's cost today
+      // — the old behaviour, and the reason their profit could move on its own.
+      const unitCost = money(item.costPrice) || money(item.product.costPrice)
+      const cost = unitCost * item.quantity
       const sell = money(item.totalPrice)
+      const list = money(item.listPrice)
       return {
         id: item.id,
         invoice: sale.invoiceNumber,
@@ -1368,6 +1464,11 @@ export async function getProfitData() {
         sell,
         cost,
         profit: sell - cost,
+        /** 0 when the line carries no snapshot, so the books can flag it. */
+        costIsSnapshot: money(item.costPrice) > 0,
+        list,
+        discount: money(item.discount),
+        priceReason: item.priceReason,
         date: sale.saleDate,
       }
     })

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { createCustomer } from "@/app/actions/parties"
@@ -13,6 +13,7 @@ import { pushSaleQueue } from "@/lib/offline-sales"
 import { requestParkedFlush } from "@/lib/flush-parked"
 import { applyParkedToTillSnapshot, readTillSnapshot, saveTillSnapshot, type TillBankAccount, type TillBranch, type TillCustomer, type TillImei, type TillProduct, type TillSellLock, type TillSnapshot } from "@/lib/till-catalog"
 import { formatCurrency, money } from "@/lib/utils"
+import { belowCost, lineMargin, needsReason, openingPrice, resellerPrice, sellFloor } from "@/lib/pricing"
 import { formatCondition } from "@/lib/status"
 import { phoneLookLabel, isBlockedFromSell } from "@/lib/phone-look"
 import { Trash2, RotateCcw, PlusCircle } from "lucide-react"
@@ -22,9 +23,24 @@ function lookLabel(item: TillImei) {
   return phoneLookLabel(item.cosmeticGrade) || formatCondition(item.product.condition)
 }
 
-/** Uploaded initial sell price is the floor. Use the higher of sell and lowest. */
-function initialSellFloor(sellingPrice: number, minimumPrice: number) {
-  return Math.max(money(sellingPrice), money(minimumPrice))
+/**
+ * Everything about what a line may be charged comes from one place, shared with
+ * the shop system, so the till never promises a price the sale then refuses.
+ */
+type PriceSource = {
+  sellingPrice: number
+  minimumPrice: number
+  costPrice: number
+  resellerMarkup: number
+}
+
+function priceBasis(source: PriceSource) {
+  return {
+    costPrice: money(source.costPrice),
+    minimumPrice: money(source.minimumPrice),
+    sellingPrice: money(source.sellingPrice),
+    resellerMarkup: money(source.resellerMarkup),
+  }
 }
 
 function detailParts(storage?: string | null, condition?: string | null, color?: string | null, category?: string | null) {
@@ -48,6 +64,7 @@ export function PosClient({
   bankAccounts: serverBankAccounts = [],
   defaultBranchId,
   canOverrideFloor: serverCanOverrideFloor,
+  canSeeCost: serverCanSeeCost,
   sellLocks: serverSellLocks,
 }: {
   products: TillProduct[]
@@ -57,6 +74,7 @@ export function PosClient({
   bankAccounts?: TillBankAccount[]
   defaultBranchId?: string | null
   canOverrideFloor?: boolean
+  canSeeCost?: boolean
   sellLocks?: Record<string, TillSellLock>
 }) {
   const router = useRouter()
@@ -78,6 +96,7 @@ export function PosClient({
   const branches = deviceList?.branches ?? serverBranches
   const bankAccounts = deviceList?.bankAccounts ?? serverBankAccounts
   const canOverrideFloor = deviceList ? Boolean(deviceList.canOverrideFloor) : Boolean(serverCanOverrideFloor)
+  const canSeeCost = deviceList ? Boolean(deviceList.canSeeCost) : Boolean(serverCanSeeCost)
   const sellLocks = deviceList?.sellLocks ?? serverSellLocks
   const [query, setQuery] = useState("")
   const [customerId, setCustomerId] = useState("")
@@ -99,8 +118,17 @@ export function PosClient({
       name: string
       imei?: string
       unitPrice: number
+      /** The standard price, for showing what a discount actually gave away. */
       listPrice: number
+      /** The lowest staff may charge. Under it needs the CEO and a reason. */
       minPrice: number
+      /** What this unit cost us, so margin can be shown as the price is typed. */
+      costPrice: number
+      resellerMarkup: number
+      sellingPrice: number
+      minimumPrice: number
+      /** Why this line left the standard price. Only asked for under the floor. */
+      priceReason?: string
       quantity: number
       onHand?: number
       warrantyDays?: number
@@ -110,6 +138,8 @@ export function PosClient({
       category?: string | null
     }>
   >([])
+  const [orderDiscount, setOrderDiscount] = useState(0)
+  const [discountReason, setDiscountReason] = useState("")
   const [busy, setBusy] = useState(false)
   const [remoteImeis, setRemoteImeis] = useState<TillImei[]>([])
   const [remoteAccessories, setRemoteAccessories] = useState<TillProduct[]>([])
@@ -124,6 +154,8 @@ export function PosClient({
     setCustomerId("")
     setNotes("")
     setWholesale(false)
+    setOrderDiscount(0)
+    setDiscountReason("")
     setQuery("")
   }
 
@@ -206,6 +238,7 @@ export function PosClient({
       bankAccounts: serverBankAccounts,
       defaultBranchId,
       canOverrideFloor: serverCanOverrideFloor,
+      canSeeCost: serverCanSeeCost,
       sellLocks: serverSellLocks,
     }
     void (async () => {
@@ -231,7 +264,7 @@ export function PosClient({
     return () => {
       cancelled = true
     }
-  }, [serverProducts, serverCustomers, serverImeis, serverBranches, serverBankAccounts, defaultBranchId, serverCanOverrideFloor, serverSellLocks])
+  }, [serverProducts, serverCustomers, serverImeis, serverBranches, serverBankAccounts, defaultBranchId, serverCanOverrideFloor, serverCanSeeCost, serverSellLocks])
 
   // What is In shop here and not already on this sale. Worked out once per
   // change rather than on every keystroke: this walks every phone in the shop
@@ -325,7 +358,7 @@ export function PosClient({
     }
   }, [q, query, branchId])
 
-  const total = useMemo(
+  const grossTotal = useMemo(
     () =>
       cart.reduce((sum, line) => {
         const price = Number.isFinite(line.unitPrice) ? line.unitPrice : 0
@@ -334,6 +367,22 @@ export function PosClient({
       }, 0),
     [cart]
   )
+  // The lowest this basket may go for, and what it cost us. Both are checked
+  // again by the shop system; these are here so the cashier sees it while typing.
+  const floorTotal = useMemo(
+    () => cart.reduce((sum, line) => sum + line.minPrice * (line.quantity || 1), 0),
+    [cart]
+  )
+  const costTotal = useMemo(
+    () => cart.reduce((sum, line) => sum + line.costPrice * (line.quantity || 1), 0),
+    [cart]
+  )
+  const maxDiscount = Math.max(0, grossTotal)
+  const appliedDiscount = Math.min(Math.max(0, orderDiscount), maxDiscount)
+  const total = Math.max(0, grossTotal - appliedDiscount)
+  const discountGuard = Math.max(floorTotal, costTotal)
+  const discountBreaksFloor = appliedDiscount > 0 && total < discountGuard
+  const marginTotal = total - costTotal
   const customer = customers.find((row) => row.id === customerId)
   const shopBanks = useMemo(
     () => bankAccounts.filter((row) => row.branchId === branchId),
@@ -362,6 +411,36 @@ export function PosClient({
   useEffect(() => {
     if (method !== "CREDIT") setPaid(total)
   }, [method, total])
+
+  // Ticking Reseller re-quotes the basket off cost, and unticking puts the
+  // standard prices back. A price typed by hand is replaced too — the tick is a
+  // deliberate act, so the cashier is told what happened rather than left with a
+  // mix of retail and reseller lines on one invoice.
+  const resellerRef = useRef(wholesale)
+  useEffect(() => {
+    if (resellerRef.current === wholesale) return
+    resellerRef.current = wholesale
+    setCart((current) => {
+      if (current.length === 0) return current
+      let requoted = 0
+      const next = current.map((line) => {
+        const basis = priceBasis(line)
+        const opening = openingPrice(basis, { reseller: wholesale })
+        const floor = sellFloor(basis, { reseller: wholesale })
+        if (opening !== line.unitPrice) requoted += 1
+        return { ...line, unitPrice: opening, minPrice: floor, priceReason: "" }
+      })
+      if (requoted > 0) {
+        toast.message(
+          wholesale
+            ? `${requoted} line${requoted === 1 ? "" : "s"} re-quoted at the reseller price.`
+            : `${requoted} line${requoted === 1 ? "" : "s"} back at the standard price.`
+        )
+      }
+      syncPaid(next)
+      return next
+    })
+  }, [wholesale])
 
   // Keep cash + bank from exceeding the sale total while staff type.
   useEffect(() => {
@@ -470,7 +549,8 @@ export function PosClient({
       toast.error("That phone is Damaged. It cannot be sold. Open All phones and Set Good (sellable) if it is fixed.")
       return
     }
-    const floor = initialSellFloor(item.product.sellingPrice, item.product.minimumPrice)
+    const basis = priceBasis(item.product)
+    const opening = openingPrice(basis, { reseller: wholesale })
     setCart((current) => {
       const next = [
         ...current,
@@ -479,9 +559,13 @@ export function PosClient({
           imeiId: item.id,
           name: item.product.name,
           imei: item.imei1,
-          unitPrice: floor,
-          listPrice: floor,
-          minPrice: floor,
+          unitPrice: opening,
+          listPrice: money(item.product.sellingPrice),
+          minPrice: sellFloor(basis, { reseller: wholesale }),
+          costPrice: basis.costPrice,
+          resellerMarkup: basis.resellerMarkup,
+          sellingPrice: basis.sellingPrice,
+          minimumPrice: basis.minimumPrice,
           quantity: 1,
           warrantyDays: 0,
           storage: item.product.storage,
@@ -498,8 +582,9 @@ export function PosClient({
     setRemoteAccessories([])
   }
 
-  function syncPaid(nextCart: typeof cart) {
-    setPaidTo(nextCart.reduce((sum, row) => sum + row.unitPrice * row.quantity, 0))
+  function syncPaid(nextCart: typeof cart, discount = appliedDiscount) {
+    const gross = nextCart.reduce((sum, row) => sum + row.unitPrice * row.quantity, 0)
+    setPaidTo(Math.max(0, gross - Math.min(Math.max(0, discount), Math.max(0, gross))))
   }
 
   function setLineQuantity(index: number, raw: number) {
@@ -526,7 +611,8 @@ export function PosClient({
       toast.error(`${product.name} has no pieces left in this shop.`)
       return
     }
-    const floor = initialSellFloor(product.sellingPrice, product.minimumPrice)
+    const basis = priceBasis(product)
+    const opening = openingPrice(basis, { reseller: wholesale })
     const addQty = Math.max(1, Math.min(onHand, Math.floor(pieces) || 1))
     setCart((current) => {
       const existing = current.find((line) => !line.imeiId && line.productId === product.id)
@@ -547,9 +633,13 @@ export function PosClient({
           {
             productId: product.id,
             name: product.name,
-            unitPrice: floor,
-            listPrice: floor,
-            minPrice: floor,
+            unitPrice: opening,
+            listPrice: money(product.sellingPrice),
+            minPrice: sellFloor(basis, { reseller: wholesale }),
+            costPrice: basis.costPrice,
+            resellerMarkup: basis.resellerMarkup,
+            sellingPrice: basis.sellingPrice,
+            minimumPrice: basis.minimumPrice,
             quantity: addQty,
             onHand,
             warrantyDays: 0,
@@ -602,9 +692,54 @@ export function PosClient({
       toast.error("Pick which bank account received this money. Add banks under Money in and out if the list is empty.")
       return
     }
-    if (!canOverrideFloor && cart.some((line) => line.unitPrice < line.listPrice)) {
-      toast.error("One price is under the initial sell price. Raise it for this buyer, or ask the CEO or Super Admin.")
+    const underFloor = cart.filter((line) => line.unitPrice < line.minPrice)
+    const underCost = cart.filter((line) => belowCost(line.unitPrice, line.costPrice))
+    if (underFloor.length > 0 && !canOverrideFloor) {
+      toast.error(
+        `${underFloor[0].name} is under the lowest allowed price of ${formatCurrency(underFloor[0].minPrice)}. Raise it, or ask the CEO or Super Admin.`
+      )
       return
+    }
+    if (underCost.length > 0 && !canOverrideFloor) {
+      toast.error(
+        `${underCost[0].name} is under what it cost us. The shop loses money at that price. Ask the CEO or Super Admin.`
+      )
+      return
+    }
+    const missingReason = cart.find(
+      (line) =>
+        needsReason({ unitPrice: line.unitPrice, floor: line.minPrice, costPrice: line.costPrice }) &&
+        !String(line.priceReason || "").trim()
+    )
+    if (missingReason) {
+      toast.error(`Say why ${missingReason.name} is going below the lowest allowed price.`)
+      return
+    }
+    if (discountBreaksFloor && !canOverrideFloor) {
+      toast.error(
+        `That discount takes the sale under the ${formatCurrency(discountGuard)} this stock may go for. Lower it, or ask the CEO or Super Admin.`
+      )
+      return
+    }
+    if (discountBreaksFloor && !discountReason.trim()) {
+      toast.error("Say why this order is going below what the stock may be sold for.")
+      return
+    }
+    // A price below cost is the one the shop feels straight away, so it is
+    // confirmed out loud even when the person is allowed to do it.
+    if (underCost.length > 0) {
+      const ok = await confirm({
+        title: "This sale loses money",
+        description: `${underCost.length} line${underCost.length === 1 ? "" : "s"} on this sale go for less than we paid.`,
+        tone: "danger",
+        confirmLabel: "Yes, sell at a loss",
+        cancelLabel: "Go back and change the price",
+        impactItems: underCost.map(
+          (line) =>
+            `${line.name}: ${formatCurrency(line.unitPrice)} against ${formatCurrency(line.costPrice)} cost`
+        ),
+      })
+      if (!ok) return
     }
     if (cart.some((line) => !Number.isFinite(line.unitPrice) || line.unitPrice < 0)) {
       toast.error("Every line needs a valid sell price before you complete the sale.")
@@ -656,12 +791,15 @@ export function PosClient({
       bankAccountId: wantsBank ? bankAccountId : undefined,
       notes,
       wholesale,
+      orderDiscount: appliedDiscount,
+      discountReason: discountReason.trim() || undefined,
       items: cart.map((line) => ({
         productId: line.productId,
         imeiId: line.imeiId,
         quantity: line.quantity,
         unitPrice: Number.isFinite(line.unitPrice) ? line.unitPrice : 0,
         warrantyDays: line.warrantyDays ?? 0,
+        priceReason: String(line.priceReason || "").trim() || undefined,
       })),
     }
     if (sellLock?.locked) {
@@ -848,6 +986,14 @@ export function PosClient({
               {cart.map((line, index) => {
                 const parts = detailParts(line.storage, line.condition, line.color, line.category)
                 const isPieceLine = !line.imeiId
+                const margin = lineMargin(line.unitPrice, line.costPrice, line.quantity)
+                const isUnderCost = belowCost(line.unitPrice, line.costPrice)
+                const quote = resellerPrice(priceBasis(line))
+                const wantsReason = needsReason({
+                  unitPrice: line.unitPrice,
+                  floor: line.minPrice,
+                  costPrice: line.costPrice,
+                })
                 const onHand =
                   line.onHand ??
                   products.find((row) => row.id === line.productId)?.stock.find((row) => row.branchId === branchId)
@@ -866,21 +1012,29 @@ export function PosClient({
                         Storage and how the phone looks are missing. Fix on Phones and items or Upload stock.
                       </p>
                     )}
-                    {line.unitPrice < line.listPrice ? (
+                    {line.unitPrice < line.minPrice ? (
                       <p className="text-xs text-danger">
-                        Below initial sell price {formatCurrency(line.listPrice)}
+                        Below the lowest allowed price {formatCurrency(line.minPrice)}
                         {canOverrideFloor
-                          ? " · CEO or Super Admin can still sell this"
+                          ? " · CEO or Super Admin may still sell this, with a reason"
                           : " · raise the price, or ask the CEO or Super Admin"}
+                      </p>
+                    ) : null}
+                    {isUnderCost ? (
+                      <p className="text-xs text-danger">
+                        Under what we paid. The shop loses {formatCurrency(Math.abs(margin.amount))} on this line.
+                      </p>
+                    ) : null}
+                    {line.unitPrice < line.listPrice && line.unitPrice >= line.minPrice ? (
+                      <p className="text-xs text-muted-foreground">
+                        {formatCurrency(line.listPrice - line.unitPrice)} off the standard{" "}
+                        {formatCurrency(line.listPrice)}
+                        {wholesale && quote > 0 ? " · reseller price" : ""}
                       </p>
                     ) : null}
                     {line.unitPrice > line.listPrice ? (
                       <p className="text-xs text-muted-foreground">
-                        Raised above initial {formatCurrency(line.listPrice)} for this buyer. Amount received updates with this price.
-                      </p>
-                    ) : line.unitPrice === line.listPrice ? (
-                      <p className="text-xs text-muted-foreground">
-                        Starts at the initial sell price. You may raise it for a walk-in buyer.
+                        Raised above the standard {formatCurrency(line.listPrice)} for this buyer.
                       </p>
                     ) : null}
                   </td>
@@ -947,12 +1101,42 @@ export function PosClient({
                       aria-label={`Sell price for ${line.name}`}
                     />
                     <p className="mt-0.5 text-[10px] text-muted-foreground">
-                      Initial {formatCurrency(line.listPrice)}
-                      {isPieceLine ? " · each" : ""} · raise for walk-in; not under without CEO or Super Admin
+                      Standard {formatCurrency(line.listPrice)}
+                      {isPieceLine ? " · each" : ""} · lowest {formatCurrency(line.minPrice)}
+                      {quote > 0 ? ` · reseller ${formatCurrency(quote)}` : ""}
                     </p>
+                    {canSeeCost && margin.hasCost ? (
+                      <p
+                        className={`mt-0.5 text-[10px] tabular-nums ${
+                          isUnderCost ? "font-medium text-danger" : "text-muted-foreground"
+                        }`}
+                      >
+                        Cost {formatCurrency(line.costPrice)} · we keep{" "}
+                        {formatCurrency(margin.amount)} ({margin.percent}%)
+                      </p>
+                    ) : null}
                     <p className="mt-0.5 text-xs font-medium tabular-nums">
                       Line total {formatCurrency((Number.isFinite(line.unitPrice) ? line.unitPrice : 0) * line.quantity)}
                     </p>
+                    {wantsReason ? (
+                      <div className="mt-1">
+                        <Input
+                          className="h-8 w-full text-xs"
+                          value={line.priceReason ?? ""}
+                          onChange={(event) => {
+                            const priceReason = event.target.value
+                            setCart((current) =>
+                              current.map((row, i) => (i === index ? { ...row, priceReason } : row))
+                            )
+                          }}
+                          placeholder="Why this price?"
+                          aria-label={`Reason for the price on ${line.name}`}
+                        />
+                        <p className="mt-0.5 text-[10px] text-muted-foreground">
+                          Kept on the invoice and on the Price changes report.
+                        </p>
+                      </div>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <Button
@@ -1138,14 +1322,112 @@ export function PosClient({
             </label>
           ) : null}
         </div>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={wholesale} onChange={(event) => setWholesale(event.target.checked)} />
-          Wholesale / dealer sale
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={wholesale}
+            onChange={(event) => setWholesale(event.target.checked)}
+          />
+          <span>
+            Reseller / dealer sale
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              Quotes every line off cost using the category markup. Tick it before you price the sale.
+            </span>
+          </span>
         </label>
+
+        <div className="space-y-2 rounded-lg border border-border p-3">
+          <label className="block text-sm">
+            <span className="mb-1 block text-muted-foreground">Discount on the whole order</span>
+            <Input
+              type="number"
+              min={0}
+              step={1}
+              value={orderDiscount ? String(orderDiscount) : ""}
+              onChange={(event) => {
+                const raw = Number(event.target.value)
+                const next = Number.isFinite(raw) && raw > 0 ? Math.min(raw, maxDiscount) : 0
+                setOrderDiscount(next)
+                syncPaid(cart, next)
+              }}
+              placeholder="0"
+              aria-label="Discount on the whole order"
+            />
+          </label>
+          <div className="flex flex-wrap gap-1.5">
+            {[2.5, 5, 10].map((percent) => (
+              <button
+                key={percent}
+                type="button"
+                className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
+                onClick={() => {
+                  const next = Math.round((grossTotal * percent) / 100)
+                  setOrderDiscount(next)
+                  syncPaid(cart, next)
+                }}
+                disabled={!(grossTotal > 0)}
+              >
+                {percent}%
+              </button>
+            ))}
+            {appliedDiscount > 0 ? (
+              <button
+                type="button"
+                className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
+                onClick={() => {
+                  setOrderDiscount(0)
+                  setDiscountReason("")
+                  syncPaid(cart, 0)
+                }}
+              >
+                Clear
+              </button>
+            ) : null}
+          </div>
+          {discountBreaksFloor ? (
+            <>
+              <p className="text-xs text-danger">
+                This takes the sale under the {formatCurrency(discountGuard)} this stock may go for.
+                {canOverrideFloor ? " Say why below." : " Lower it, or ask the CEO or Super Admin."}
+              </p>
+              {canOverrideFloor ? (
+                <Input
+                  className="h-9 text-xs"
+                  value={discountReason}
+                  onChange={(event) => setDiscountReason(event.target.value)}
+                  placeholder="Why this discount?"
+                  aria-label="Reason for this discount"
+                />
+              ) : null}
+            </>
+          ) : appliedDiscount > 0 ? (
+            <p className="text-xs text-muted-foreground">
+              {formatCurrency(appliedDiscount)} off. Amount received follows this.
+            </p>
+          ) : null}
+        </div>
+
         <Input placeholder="Notes" value={notes} onChange={(event) => setNotes(event.target.value)} />
         <div className="rounded-lg bg-muted p-4">
           <p className="text-sm text-muted-foreground">Sale total</p>
           <p className="text-3xl font-semibold tabular-nums">{formatCurrency(total)}</p>
+          {appliedDiscount > 0 ? (
+            <p className="mt-1 text-sm tabular-nums text-muted-foreground">
+              {formatCurrency(grossTotal)} less {formatCurrency(appliedDiscount)} discount
+            </p>
+          ) : null}
+          {canSeeCost && costTotal > 0 ? (
+            <p
+              className={`mt-1 text-sm tabular-nums ${
+                marginTotal < 0 ? "font-medium text-danger" : "text-muted-foreground"
+              }`}
+            >
+              {marginTotal < 0 ? "Loss on this sale " : "We keep "}
+              {formatCurrency(Math.abs(marginTotal))}
+              {total > 0 ? ` (${Math.round((marginTotal / total) * 1000) / 10}%)` : ""}
+            </p>
+          ) : null}
           <p className="mt-1 text-sm tabular-nums text-muted-foreground">
             Amount paid {formatCurrency(effectivePaid)}
             {due > 0 ? ` · still owed ${formatCurrency(due)}` : " · paid in full"}

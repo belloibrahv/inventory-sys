@@ -244,6 +244,7 @@ export default async function SaleDetailPage({
             color: item.product.color,
           }))}
           total={money(sale.totalAmount)}
+          discount={money(sale.discount)}
           paid={money(sale.paidAmount)}
           method={statusLabel(sale.paymentMethod)}
           notes={sale.notes}

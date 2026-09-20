@@ -53,7 +53,8 @@ export const ACTION_PERMS = [
   { key: "action.staff", label: "Add and edit staff" },
   { key: "action.settings", label: "Change shop settings" },
   { key: "action.all_branches", label: "See every shop" },
-  { key: "action.override_floor", label: "Sell below the initial sell price" },
+  { key: "action.override_floor", label: "Sell below the lowest allowed price" },
+  { key: "action.see_cost", label: "See what an item cost us while selling" },
 ] as const
 
 export const ALL_PERM_KEYS = [...VIEW_PERMS, ...ACTION_PERMS].map((row) => row.key)
@@ -70,7 +71,8 @@ const V = (...keys: string[]) => keys
 export const AUDITOR_KEYS = V(
   ...VIEW_PERMS.filter((row) => row.key !== "view.access").map((row) => row.key),
   "action.finance",
-  "action.all_branches"
+  "action.all_branches",
+  "action.see_cost"
 )
 
 /**
@@ -94,7 +96,8 @@ export const ACCOUNTANT_KEYS = V(
   "view.notifications",
   "view.branches",
   "action.finance",
-  "action.all_branches"
+  "action.all_branches",
+  "action.see_cost"
 )
 
 /** @deprecated Prefer AUDITOR_KEYS or ACCOUNTANT_KEYS. Kept for older call sites. */
@@ -114,7 +117,8 @@ const DEFAULTS: Record<UserRole, string[]> = {
     "view.swaps", "view.repairs", "view.reconciliation", "view.finance", "view.expenses", "view.profits",
     "view.approvals", "view.staff", "view.reports", "view.notifications",
     "action.sell", "action.upload", "action.intake", "action.incoming", "action.transfer", "action.neighbor",
-    "action.return", "action.swap", "action.repair", "action.recon", "action.approve", "action.finance", "action.staff"
+    "action.return", "action.swap", "action.repair", "action.recon", "action.approve", "action.finance", "action.staff",
+    "action.see_cost"
   ),
   VAULT_MANAGER: V(
     "view.dashboard", "view.products", "view.uploads", "view.imei", "view.inventory", "view.incoming", "view.purchases",
@@ -127,11 +131,11 @@ const DEFAULTS: Record<UserRole, string[]> = {
   ),
   CASHIER: V(
     "view.dashboard", "view.pos", "view.sales", "view.customers", "view.expenses", "view.finance", "view.neighbor-fills", "view.returns", "view.notifications",
-    "action.sell", "action.neighbor", "action.return", "action.finance"
+    "action.sell", "action.neighbor", "action.return", "action.finance", "action.see_cost"
   ),
   SALES_EXECUTIVE: V(
     "view.dashboard", "view.pos", "view.sales", "view.customers", "view.products", "view.expenses", "view.finance", "view.neighbor-fills", "view.returns", "view.notifications",
-    "action.sell", "action.neighbor", "action.return", "action.finance"
+    "action.sell", "action.neighbor", "action.return", "action.finance", "action.see_cost"
   ),
   ENGINEER: V(
     "view.dashboard", "view.imei", "view.repairs", "view.returns", "view.customers", "view.notifications",

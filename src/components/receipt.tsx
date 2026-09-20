@@ -23,6 +23,7 @@ export function Receipt({
   soldAt,
   items,
   total,
+  discount = 0,
   paid,
   method,
   notes,
@@ -36,6 +37,8 @@ export function Receipt({
   soldAt: Date
   items: Line[]
   total: number
+  /** Money taken off the whole order. Shown so the lines and the total add up. */
+  discount?: number
   paid: number
   method: string
   notes?: string | null
@@ -100,6 +103,18 @@ export function Receipt({
           <p className="mt-2 print:hidden">If a receipt printer is connected, printing this can open the cash drawer.</p>
         </div>
         <div className="space-y-1 text-sm">
+          {discount > 0 ? (
+            <>
+              <div className="flex justify-between text-slate-500">
+                <span>Items</span>
+                <span>{formatCurrency(total + discount)}</span>
+              </div>
+              <div className="flex justify-between text-slate-500">
+                <span>Discount</span>
+                <span>-{formatCurrency(discount)}</span>
+              </div>
+            </>
+          ) : null}
           <div className="flex justify-between"><span>Total</span><span className="font-semibold">{formatCurrency(total)}</span></div>
           <div className="flex justify-between"><span>Paid</span><span>{formatCurrency(paid)}</span></div>
           <div className="flex justify-between border-t border-slate-200 pt-1 font-semibold">

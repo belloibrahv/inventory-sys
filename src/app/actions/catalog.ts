@@ -482,6 +482,22 @@ function cleanLabel(raw: FormDataEntryValue | null, label: string) {
   return name
 }
 
+/**
+ * Reseller markup for a category, as a percentage over cost. Left blank means
+ * "no reseller quote for this category", which the till reads as 0 and falls
+ * back to the standard price.
+ */
+function readMarkup(raw: FormDataEntryValue | null) {
+  const text = String(raw ?? "").trim()
+  if (!text) return { value: 0 }
+  const parsed = Number(text)
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return { error: "Reseller markup must be a number from 0 up, like 12 for cost plus 12%." }
+  }
+  if (parsed > 500) return { error: "Reseller markup above 500% looks like a typing mistake." }
+  return { value: Math.round(parsed * 100) / 100 }
+}
+
 export async function getCatalogTaxonomy() {
   await requireUser()
   const [brands, categories] = await Promise.all([
@@ -597,16 +613,20 @@ export async function createCategory(formData: FormData) {
   try {
     const name = cleanLabel(formData.get("name"), "category name")
     const description = String(formData.get("description") || "").trim() || null
+    const markup = readMarkup(formData.get("resellerMarkup"))
+    if ("error" in markup) return { error: markup.error }
     const exists = await prisma.category.findUnique({ where: { name } })
     if (exists) return { error: `${name} is already on the category list.` }
-    await prisma.category.create({ data: { name, description } })
+    await prisma.category.create({
+      data: { name, description, resellerMarkup: markup.value.toFixed(2) },
+    })
     await prisma.auditLog.create({
       data: {
         userId: user.id,
         action: "CREATE",
         entityType: "Category",
         entityId: name,
-        newValue: JSON.stringify({ name, description }),
+        newValue: JSON.stringify({ name, description, resellerMarkup: markup.value }),
         branchId: user.branchId,
       },
     })
@@ -616,6 +636,7 @@ export async function createCategory(formData: FormData) {
   revalidatePath("/products")
   revalidatePath("/products/brands")
   revalidatePath("/products/new")
+  revalidatePath("/pos")
   return { success: true }
 }
 
@@ -626,21 +647,30 @@ export async function updateCategory(formData: FormData) {
   try {
     const name = cleanLabel(formData.get("name"), "category name")
     const description = String(formData.get("description") || "").trim() || null
+    const markup = readMarkup(formData.get("resellerMarkup"))
+    if ("error" in markup) return { error: markup.error }
     const existing = await prisma.category.findUnique({ where: { id } })
     if (!existing) return { error: "We could not find that category." }
     if (name !== existing.name) {
       const taken = await prisma.category.findUnique({ where: { name } })
       if (taken) return { error: `${name} is already on the category list.` }
     }
-    await prisma.category.update({ where: { id }, data: { name, description } })
+    await prisma.category.update({
+      where: { id },
+      data: { name, description, resellerMarkup: markup.value.toFixed(2) },
+    })
     await prisma.auditLog.create({
       data: {
         userId: user.id,
         action: "UPDATE",
         entityType: "Category",
         entityId: name,
-        oldValue: JSON.stringify({ name: existing.name, description: existing.description }),
-        newValue: JSON.stringify({ name, description }),
+        oldValue: JSON.stringify({
+          name: existing.name,
+          description: existing.description,
+          resellerMarkup: Number(existing.resellerMarkup),
+        }),
+        newValue: JSON.stringify({ name, description, resellerMarkup: markup.value }),
         branchId: user.branchId,
       },
     })
@@ -650,6 +680,7 @@ export async function updateCategory(formData: FormData) {
   revalidatePath("/products")
   revalidatePath("/products/brands")
   revalidatePath("/products/new")
+  revalidatePath("/pos")
   return { success: true }
 }
 

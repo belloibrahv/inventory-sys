@@ -242,7 +242,7 @@ const PAGES: Array<
       "A waiting sale shows a banner on every signed-in page until it is sent.",
       "After two hours The main admin, the CEO, and the records checker get an alert.",
       "If someone wipes a waiting sale off the device, Who did what records it as vanished.",
-      "You cannot sell under the initial sell price unless the CEO or Super Admin overrides. You may raise the price for a walk-in buyer. The invoice keeps the price you charged.",
+      "The floor is the item's lowest allowed price, not the price the till offers first. You may price a deal anywhere from the floor up, and raise it for a walk-in buyer. Going under the floor, or under what the item cost us, needs the CEO or Super Admin and a reason. Every price that leaves the standard one shows on Profit, under Price changes.",
     ],
     cannot: ["You cannot sell a Coming phone. You cannot force a live sale while an older day with sales is still open."],
     lookup: ["sell", "till", "pos", "scan", "parked", "offline", "complete sale"],

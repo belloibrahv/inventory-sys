@@ -12,6 +12,7 @@ export default async function PosPage() {
       bankAccounts={data.bankAccounts}
       defaultBranchId={data.branchId}
       canOverrideFloor={data.canOverrideFloor}
+      canSeeCost={data.canSeeCost}
       sellLocks={data.sellLocks}
     />
   )

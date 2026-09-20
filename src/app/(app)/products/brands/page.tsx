@@ -27,7 +27,7 @@ export default async function BrandsCategoriesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Brands & categories"
-        description="Add Samsung, Tecno, and the rest once. New items pick from this list."
+        description="Add Samsung, Tecno, and the rest once. New items pick from this list. A category also carries the reseller markup over cost."
       />
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -109,6 +109,21 @@ export default async function BrandsCategoriesPage() {
               Short note (optional)
               <Textarea name="description" placeholder="What belongs here" className="mt-1" rows={2} />
             </label>
+            <label className="block text-xs text-muted-foreground">
+              Reseller markup over cost (%)
+              <Input
+                name="resellerMarkup"
+                type="number"
+                min={0}
+                step="0.01"
+                placeholder="e.g. 12"
+                className="mt-1"
+              />
+              <span className="mt-1 block text-[11px]">
+                What a reseller is quoted, worked out from cost. 12 means cost plus 12%. It follows
+                cost, so when the exchange rate moves you change nothing here.
+              </span>
+            </label>
           </ActionForm>
 
           {categories.length === 0 ? (
@@ -123,6 +138,11 @@ export default async function BrandsCategoriesPage() {
                       {category.description ? (
                         <p className="text-xs text-muted-foreground">{category.description}</p>
                       ) : null}
+                      <p className="text-xs text-muted-foreground">
+                        {Number(category.resellerMarkup) > 0
+                          ? `Resellers pay cost + ${Number(category.resellerMarkup)}%`
+                          : "No reseller price set"}
+                      </p>
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {category._count.products} item{category._count.products === 1 ? "" : "s"}
@@ -148,6 +168,18 @@ export default async function BrandsCategoriesPage() {
                           rows={2}
                           placeholder="Short note"
                         />
+                        <label className="block text-xs text-muted-foreground">
+                          Reseller markup over cost (%)
+                          <Input
+                            name="resellerMarkup"
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            defaultValue={Number(category.resellerMarkup) || ""}
+                            placeholder="e.g. 12"
+                            className="mt-1"
+                          />
+                        </label>
                       </ActionForm>
                       {canRemove ? (
                       <ActionForm

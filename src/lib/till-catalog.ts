@@ -11,6 +11,9 @@ export type TillImei = {
     name: string
     sellingPrice: number
     minimumPrice: number
+    costPrice: number
+    /** Reseller markup over cost for this item's category, as a percentage. */
+    resellerMarkup: number
     storage?: string | null
     condition?: string | null
     color?: string | null
@@ -25,6 +28,9 @@ export type TillProduct = {
   sku: string
   sellingPrice: number
   minimumPrice: number
+  costPrice: number
+  /** Reseller markup over cost for this item's category, as a percentage. */
+  resellerMarkup: number
   serialized: boolean
   brand: { name: string }
   category?: { name: string }
@@ -59,6 +65,7 @@ export type TillSnapshot = {
   savedAt: string
   defaultBranchId?: string | null
   canOverrideFloor?: boolean
+  canSeeCost?: boolean
   sellLocks?: Record<string, TillSellLock>
   products: TillProduct[]
   customers: TillCustomer[]

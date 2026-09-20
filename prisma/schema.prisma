@@ -317,6 +317,10 @@ model Category {
   id          String    @id @default(cuid())
   name        String    @unique
   description String?
+  /// Reseller markup over cost, as a percentage. 12 means resellers are quoted
+  /// cost + 12%. The quote follows cost, so one rate change moves every item in
+  /// the category instead of hundreds of typed prices.
+  resellerMarkup Decimal @default(0)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   products    Product[]
@@ -549,6 +553,9 @@ model Sale {
   paymentMethod PaymentMethod
   paymentNotes  String?
   notes         String?
+  /// Why money was taken off the whole order. Staff must give it when the
+  /// discount takes the sale under what the stock may be sold for.
+  discountReason String?
   isWholesale   Boolean       @default(false)
   saleDate      DateTime      @default(now())
   createdAt     DateTime      @default(now())
@@ -580,6 +587,17 @@ model SaleItem {
   unitPrice  Decimal
   discount   Decimal     @default(0)
   totalPrice Decimal
+  /// What this unit cost us on the day it was sold, copied in at checkout.
+  /// Profit used to be read from the product's current cost, so a later batch
+  /// landing at a new exchange rate silently rewrote the profit on sales
+  /// already made. 0 marks a row written before this field existed.
+  costPrice  Decimal     @default(0)
+  /// The standard price the till offered before anyone typed over it. Kept so
+  /// a discount can be seen for what it was long after the price list moved on.
+  listPrice  Decimal     @default(0)
+  /// Why this price left the standard one. Staff must give it when a sale goes
+  /// under the lowest allowed price or under cost.
+  priceReason String?
   warrantyDays Int?      @default(0)
   createdAt  DateTime    @default(now())
 
