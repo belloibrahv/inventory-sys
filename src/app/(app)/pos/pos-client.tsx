@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { createCustomer } from "@/app/actions/parties"
+import { createBankAccount } from "@/app/actions/finance"
 import { checkoutSale, findInStockImei, searchTillStock } from "@/app/actions/sales"
 import { TillLookup } from "@/components/till-lookup"
 import { Button } from "@/components/ui/button"
@@ -98,9 +99,11 @@ export function PosClient({
   const [query, setQuery] = useState("")
   const [customerId, setCustomerId] = useState("")
   const [branchId, setBranchId] = useState(defaultBranchId || serverBranches[0]?.id || "")
-  const [method, setMethod] = useState<"CASH" | "BANK" | "CREDIT">("CASH")
-  const [creditCash, setCreditCash] = useState(0)
-  const [creditBank, setCreditBank] = useState(0)
+  const [method, setMethod] = useState<"CASH" | "BANK" | "SPLIT" | "CREDIT">("CASH")
+  // Money taken now, split between the till and the bank. Both a Split sale and
+  // a Credit sale use these: the difference is whether anything is left owing.
+  const [payCash, setPayCash] = useState(0)
+  const [payBank, setPayBank] = useState(0)
   const [bankAccountId, setBankAccountId] = useState("")
   const [paid, setPaid] = useState(0)
   const [notes, setNotes] = useState("")
@@ -108,6 +111,9 @@ export function PosClient({
   const [newName, setNewName] = useState("")
   const [newPhone, setNewPhone] = useState("")
   const [savingCustomer, setSavingCustomer] = useState(false)
+  const [newBankName, setNewBankName] = useState("")
+  const [newBankNumber, setNewBankNumber] = useState("")
+  const [savingBank, setSavingBank] = useState(false)
   const [cart, setCart] = useState<
     Array<{
       productId: string
@@ -146,8 +152,8 @@ export function PosClient({
   function resetSale() {
     setCart([])
     setPaid(0)
-    setCreditCash(0)
-    setCreditBank(0)
+    setPayCash(0)
+    setPayBank(0)
     setCustomerId("")
     setNotes("")
     setWholesale(false)
@@ -386,12 +392,16 @@ export function PosClient({
   )
   // Cash and Bank always pay the full sale total. Credit sales keep cash and/or bank
   // received now. That stops Amount paid from lagging behind a raised price.
-  const creditReceived = Math.max(0, creditCash) + Math.max(0, creditBank)
-  const effectivePaid = method === "CREDIT" ? Math.min(creditReceived, total) : total
+  /** Cash and bank typed in by hand, for a Split or a Credit sale. */
+  const handReceived = Math.max(0, payCash) + Math.max(0, payBank)
+  const splitsTyped = method === "SPLIT" || method === "CREDIT"
+  const effectivePaid = splitsTyped ? Math.min(handReceived, total) : total
+  /** A Split sale is paid in full, so the two boxes have to reach the total. */
+  const splitShortfall = method === "SPLIT" ? Math.max(0, total - handReceived) : 0
   const due = Math.max(0, total - effectivePaid)
   const nextDebt = (customer?.currentBalance ?? 0) + due
   const wantsBank =
-    method === "BANK" || (method === "CREDIT" && Math.max(0, creditBank) > 0)
+    method === "BANK" || (splitsTyped && Math.max(0, payBank) > 0)
 
   useEffect(() => {
     if (!shopBanks.length) {
@@ -404,7 +414,18 @@ export function PosClient({
   }, [shopBanks, bankAccountId])
 
   useEffect(() => {
-    if (method !== "CREDIT") setPaid(total)
+    if (!splitsTyped) setPaid(total)
+  }, [method, total, splitsTyped])
+
+  // A price edited after the split was typed would leave the two boxes short or
+  // over. The bank side absorbs the change, since the cash side is what someone
+  // physically counted out.
+  useEffect(() => {
+    if (method !== "SPLIT") return
+    const cash = Math.min(payCash, total)
+    const bank = Math.max(0, total - cash)
+    if (cash !== payCash) setPayCash(cash)
+    if (bank !== payBank) setPayBank(bank)
   }, [method, total])
 
   // Ticking Reseller re-quotes the basket off cost, and unticking puts the
@@ -439,19 +460,55 @@ export function PosClient({
 
   // Keep cash + bank from exceeding the sale total while staff type.
   useEffect(() => {
-    if (method !== "CREDIT" || !(total > 0)) return
-    if (creditCash + creditBank <= total) return
-    const overflow = creditCash + creditBank - total
-    if (creditBank >= overflow) setCreditBank(Math.max(0, creditBank - overflow))
+    if (!splitsTyped || !(total > 0)) return
+    if (payCash + payBank <= total) return
+    const overflow = payCash + payBank - total
+    if (payBank >= overflow) setPayBank(Math.max(0, payBank - overflow))
     else {
-      const rest = overflow - creditBank
-      setCreditBank(0)
-      setCreditCash(Math.max(0, creditCash - rest))
+      const rest = overflow - payBank
+      setPayBank(0)
+      setPayCash(Math.max(0, payCash - rest))
     }
-  }, [method, total, creditCash, creditBank])
+  }, [method, total, payCash, payBank])
 
   function setPaidTo(nextTotal: number) {
-    if (method !== "CREDIT") setPaid(nextTotal)
+    if (!splitsTyped) setPaid(nextTotal)
+  }
+
+  /**
+   * Add a shop bank account without leaving the till. Bank money has to land in
+   * a named account, and a cashier who finds the list empty mid-sale used to be
+   * sent to another screen and told to come back. Who may do this is unchanged:
+   * the shop system refuses anyone the money screens would refuse.
+   */
+  async function saveBankAccount() {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("You can only add a bank account when the network is good.")
+      return
+    }
+    if (!newBankName.trim() || !newBankNumber.trim()) {
+      toast.error("Type the bank name and the account number.")
+      return
+    }
+    setSavingBank(true)
+    const formData = new FormData()
+    formData.set("branchId", branchId)
+    formData.set("bankName", newBankName.trim())
+    formData.set("accountNumber", newBankNumber.trim())
+    // The money screens own opening balances. A bank added here starts at zero
+    // and is topped up there, so the till cannot quietly declare money.
+    formData.set("openingBalance", "0")
+    const result = await createBankAccount(formData)
+    setSavingBank(false)
+    if ("error" in result && result.error) {
+      toast.error(result.error)
+      return
+    }
+    toast.success("Bank account saved for this shop.")
+    if ("id" in result && result.id) setBankAccountId(result.id)
+    setNewBankName("")
+    setNewBankNumber("")
+    router.refresh()
   }
 
   async function saveCustomer() {
@@ -683,6 +740,16 @@ export function PosClient({
       })
       if (!ok) return
     }
+    if (method === "SPLIT" && splitShortfall > 0) {
+      toast.error(
+        `Cash and bank together come to ${formatCurrency(handReceived)}, ${formatCurrency(splitShortfall)} short of ${formatCurrency(total)}. Add the rest, or use Credit sales if they are not paying it all today.`
+      )
+      return
+    }
+    if (method === "SPLIT" && handReceived > 0 && (payCash <= 0 || payBank <= 0)) {
+      toast.error("A split needs money in both boxes. Use Cash or Bank on its own otherwise.")
+      return
+    }
     if (wantsBank && !bankAccountId) {
       toast.error("Pick which bank account received this money. Add banks under Money in and out if the list is empty.")
       return
@@ -762,16 +829,24 @@ export function PosClient({
     const depositChannel: "CASH" | "TRANSFER" =
       method === "CASH" ? "CASH" : "TRANSFER"
 
-    // Credit sales always send CREDIT so Sales stays Credit sales while anything is owed.
-    // Money today can be cash, bank, or both (splitTenders).
-    const checkoutMethod: "CASH" | "TRANSFER" | "CREDIT" =
-      method === "CREDIT" ? "CREDIT" : depositChannel
-
-    const creditSplits: Array<{ method: "CASH" | "TRANSFER"; amount: number }> = []
-    if (method === "CREDIT") {
-      if (creditCash > 0) creditSplits.push({ method: "CASH", amount: Math.max(0, creditCash) })
-      if (creditBank > 0) creditSplits.push({ method: "TRANSFER", amount: Math.max(0, creditBank) })
+    // Both a Split and a Credit sale can take cash and bank together, so the
+    // tenders are built the same way. They differ in what the sale is called:
+    // Credit stays Credit while anything is owed, Split is paid in full.
+    const tenders: Array<{ method: "CASH" | "TRANSFER"; amount: number }> = []
+    if (splitsTyped) {
+      if (payCash > 0) tenders.push({ method: "CASH", amount: Math.max(0, payCash) })
+      if (payBank > 0) tenders.push({ method: "TRANSFER", amount: Math.max(0, payBank) })
     }
+
+    const checkoutMethod: "CASH" | "TRANSFER" | "CREDIT" | "SPLIT_PAYMENT" =
+      method === "CREDIT"
+        ? "CREDIT"
+        : method === "SPLIT"
+          ? tenders.length > 1
+            ? "SPLIT_PAYMENT"
+            : // One box left empty is not a split, it is that one channel.
+              tenders[0]?.method ?? "CASH"
+          : depositChannel
 
     const payload = {
       customerId: customerId || undefined,
@@ -779,10 +854,8 @@ export function PosClient({
       paymentMethod: checkoutMethod,
       paidAmount: effectivePaid,
       depositMethod:
-        method === "CREDIT" && creditSplits.length === 1
-          ? creditSplits[0].method
-          : undefined,
-      splitTenders: method === "CREDIT" && creditSplits.length > 1 ? creditSplits : undefined,
+        method === "CREDIT" && tenders.length === 1 ? tenders[0].method : undefined,
+      splitTenders: tenders.length > 1 ? tenders : undefined,
       bankAccountId: wantsBank ? bankAccountId : undefined,
       notes,
       wholesale,
@@ -1208,15 +1281,24 @@ export function PosClient({
               setMethod(next)
               if (next === "CREDIT") {
                 setPaid(0)
-                setCreditCash(0)
-                setCreditBank(0)
+                setPayCash(0)
+                setPayBank(0)
+              } else if (next === "SPLIT") {
+                // Start the split at the whole sale in cash, so the cashier
+                // moves one figure across rather than typing both.
+                setPayCash(total)
+                setPayBank(0)
+                setPaid(total)
               } else {
+                setPayCash(0)
+                setPayBank(0)
                 setPaid(total)
               }
             }}
           >
             <option value="CASH">Cash</option>
             <option value="BANK">Bank</option>
+            <option value="SPLIT">Split — part cash, part bank</option>
             <option value="CREDIT">Credit sales</option>
           </Select>
         </label>
@@ -1224,49 +1306,81 @@ export function PosClient({
           <p className="text-xs text-muted-foreground">
             Type money received now in cash, bank, or both. What is left is still Credit sales. The bill stays under Sales as Credit sales until it is paid in full. Check the books counts cash and bank separately.
           </p>
+        ) : method === "SPLIT" ? (
+          <p className="text-xs text-muted-foreground">
+            The buyer settles the whole bill with two kinds of money — some in the till, the rest into
+            a shop bank account. Both boxes together must reach {formatCurrency(total)}. If they are
+            not paying it all today, use Credit sales instead.
+          </p>
         ) : (
           <p className="text-xs text-muted-foreground">
             Cash stays in the till. Bank means the full amount landed in one shop bank account (transfer, POS terminal, or USSD all count as Bank).
           </p>
         )}
         <div className="space-y-3">
-          {method === "CREDIT" ? (
+          {splitsTyped ? (
             <>
               <label className="block text-sm">
-                <span className="mb-1 block text-muted-foreground">Cash received now</span>
+                <span className="mb-1 block text-muted-foreground">
+                  {method === "SPLIT" ? "Cash part" : "Cash received now"}
+                </span>
                 <Input
                   type="number"
                   min={0}
                   max={total || undefined}
-                  value={creditCash || ""}
+                  value={payCash || ""}
                   placeholder="0"
                   onChange={(event) => {
                     const next = Math.max(0, Number(event.target.value) || 0)
-                    const capped = Math.min(next, Math.max(0, total - creditBank))
-                    setCreditCash(capped)
+                    if (method === "SPLIT") {
+                      // The bill is settled in full, so whatever is not cash is
+                      // bank. Moving one box moves the other.
+                      const cash = Math.min(next, total)
+                      setPayCash(cash)
+                      setPayBank(Math.max(0, total - cash))
+                      return
+                    }
+                    setPayCash(Math.min(next, Math.max(0, total - payBank)))
                   }}
                 />
               </label>
               <label className="block text-sm">
-                <span className="mb-1 block text-muted-foreground">Bank received now</span>
+                <span className="mb-1 block text-muted-foreground">
+                  {method === "SPLIT" ? "Bank part" : "Bank received now"}
+                </span>
                 <Input
                   type="number"
                   min={0}
                   max={total || undefined}
-                  value={creditBank || ""}
+                  value={payBank || ""}
                   placeholder="0"
                   onChange={(event) => {
                     const next = Math.max(0, Number(event.target.value) || 0)
-                    const capped = Math.min(next, Math.max(0, total - creditCash))
-                    setCreditBank(capped)
+                    if (method === "SPLIT") {
+                      const bank = Math.min(next, total)
+                      setPayBank(bank)
+                      setPayCash(Math.max(0, total - bank))
+                      return
+                    }
+                    setPayBank(Math.min(next, Math.max(0, total - payCash)))
                   }}
                 />
               </label>
-              <p className="text-xs text-muted-foreground">
-                Together cannot be more than the sale total ({formatCurrency(total)}). Received now{" "}
-                {formatCurrency(effectivePaid)}
-                {due > 0 ? ` · still owed ${formatCurrency(due)}` : " · paid in full today"}.
-              </p>
+              {method === "SPLIT" ? (
+                <p
+                  className={`text-xs ${splitShortfall > 0 ? "font-medium text-warning" : "text-success"}`}
+                >
+                  {splitShortfall > 0
+                    ? `${formatCurrency(handReceived)} of ${formatCurrency(total)} — ${formatCurrency(splitShortfall)} still to place in a box.`
+                    : `${formatCurrency(payCash)} cash + ${formatCurrency(payBank)} bank = ${formatCurrency(total)}. Paid in full.`}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Together cannot be more than the sale total ({formatCurrency(total)}). Received now{" "}
+                  {formatCurrency(effectivePaid)}
+                  {due > 0 ? ` · still owed ${formatCurrency(due)}` : " · paid in full today"}.
+                </p>
+              )}
             </>
           ) : (
             <label className="block text-sm">
@@ -1297,9 +1411,41 @@ export function PosClient({
                   ))}
                 </Select>
               ) : (
-                <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-foreground">
-                  No bank account is on the books for this shop yet. Add GTBank, Access, or OPay under Money in and out, then come back to Sell now.
-                </p>
+                <div className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2">
+                  <p className="text-xs text-foreground">
+                    No bank account is on the books for this shop yet. Add the one the money landed
+                    in — GTBank, Access, OPay, Moniepoint — and it will be here for every sale after
+                    this.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      value={newBankName}
+                      onChange={(event) => setNewBankName(event.target.value)}
+                      placeholder="Bank name"
+                      aria-label="Bank name"
+                    />
+                    <Input
+                      value={newBankNumber}
+                      onChange={(event) => setNewBankNumber(event.target.value)}
+                      placeholder="Account number"
+                      aria-label="Bank account number"
+                      inputMode="numeric"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    disabled={savingBank}
+                    onClick={saveBankAccount}
+                  >
+                    {savingBank ? "Saving this bank account" : "Save bank account for this shop"}
+                  </Button>
+                  <p className="text-[11px] text-muted-foreground">
+                    It starts at zero. Set what is already in the account under Money in and out.
+                  </p>
+                </div>
               )}
             </label>
           ) : null}
