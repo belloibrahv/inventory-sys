@@ -21,7 +21,7 @@ type Product = {
   costPrice: number
   brand?: { name: string }
   category?: { name: string }
-  stock: Array<{ branchId: string; quantity: number }>
+  stock: Array<{ branchId: string; quantity: number; units?: number }>
 }
 
 type PhonePick = {
@@ -68,6 +68,28 @@ export function TransferForm({
         .filter((product) => product.onShelf > 0),
     [products, fromId]
   )
+
+  /**
+   * Items the sending shop has on its shelf but cannot pick, because a phone
+   * travels by its own number and those numbers are not recorded. This is the
+   * usual reason the packing table looks empty while Shop stock shows plenty,
+   * and it used to leave staff staring at a blank screen.
+   */
+  const unpickable = useMemo(
+    () =>
+      products
+        .filter((product) => product.serialized)
+        .map((product) => {
+          const shelf = product.stock.find((row) => row.branchId === fromId)
+          const onShelf = shelf?.quantity ?? 0
+          const withNumbers = shelf?.units ?? 0
+          return { product, missing: onShelf - withNumbers, onShelf, withNumbers }
+        })
+        .filter((row) => row.missing > 0)
+        .sort((a, b) => b.missing - a.missing),
+    [products, fromId]
+  )
+  const unpickableTotal = unpickable.reduce((sum, row) => sum + row.missing, 0)
 
   const needle = query.trim().toLowerCase()
 
@@ -332,6 +354,28 @@ export function TransferForm({
           aria-label="Find items to send"
         />
 
+        {unpickableTotal > 0 ? (
+          <div className="rounded-lg bg-warning-soft px-4 py-3 text-sm text-warning">
+            <p className="font-medium">
+              {unpickableTotal} unit{unpickableTotal === 1 ? "" : "s"} on this shop&apos;s shelf cannot be
+              picked, because their phone numbers are not recorded
+            </p>
+            <p className="mt-1 text-xs">
+              A phone travels by its own number, so it has to be on the phone list before it can be
+              sent. Put the missing numbers in under Phone numbers (IMEI), then come back here.
+            </p>
+            <ul className="mt-2 space-y-0.5 text-xs">
+              {unpickable.slice(0, 6).map((row) => (
+                <li key={row.product.id}>
+                  {row.product.name} — shelf shows {row.onShelf}, {row.withNumbers} ha
+                  {row.withNumbers === 1 ? "s" : "ve"} a number, {row.missing} missing
+                </li>
+              ))}
+              {unpickable.length > 6 ? <li>and {unpickable.length - 6} more items</li> : null}
+            </ul>
+          </div>
+        ) : null}
+
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="min-w-full text-sm">
             <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -356,7 +400,11 @@ export function TransferForm({
               {!phonesBusy && visiblePhones.length === 0 && visibleAccessories.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
-                    No In shop items match this search at the sending branch.
+                    {needle
+                      ? `Nothing at ${fromShop?.name ?? "this branch"} matches "${query.trim()}".`
+                      : unpickableTotal > 0
+                        ? `${fromShop?.name ?? "This branch"} has nothing that can be picked. Its shelf shows ${unpickableTotal} unit${unpickableTotal === 1 ? "" : "s"}, but none of them have phone numbers recorded — see the note above.`
+                        : `${fromShop?.name ?? "This branch"} has nothing In shop to send. Pick another sending branch.`}
                   </td>
                 </tr>
               ) : null}
