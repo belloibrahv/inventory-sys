@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache"
 import { ProductCondition, ProductTracking } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
+import { watDayKey } from "@/lib/lagos-day"
+import { setStock } from "@/lib/concurrency"
 import { requireUser } from "@/lib/session"
 import { canHardDelete, canManageCatalog } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
@@ -843,6 +845,19 @@ export async function reduceInventoryStock(formData: FormData) {
         where: { productId_branchId: { productId, branchId } },
         data: { quantity: nextQty },
       }),
+      // A write-off is a correction by hand. Before the stock ledger existed it
+      // moved the shelf and left nothing behind but an audit note.
+      prisma.stockMovement.create({
+        data: {
+          productId,
+          branchId,
+          quantity: -records.length,
+          kind: "HAND_CORRECTION",
+          reference: reason,
+          userId: user.id,
+          businessDate: watDayKey(),
+        },
+      }),
       prisma.auditLog.create({
         data: {
           userId: user.id,
@@ -883,6 +898,17 @@ export async function reduceInventoryStock(formData: FormData) {
     prisma.inventory.update({
       where: { productId_branchId: { productId, branchId } },
       data: { quantity: nextQty },
+    }),
+    prisma.stockMovement.create({
+      data: {
+        productId,
+        branchId,
+        quantity: -reduceBy,
+        kind: "HAND_CORRECTION",
+        reference: reason,
+        userId: user.id,
+        businessDate: watDayKey(),
+      },
     }),
     prisma.auditLog.create({
       data: {

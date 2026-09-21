@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import type { Prisma, UserRole } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
+import { recordMovement } from "@/lib/concurrency"
 import { can } from "@/lib/permissions"
 import { scopedBranchId } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
@@ -314,6 +315,12 @@ async function moveShelf(tx: Tx, productId: string, branchId: string, delta: num
     where: { productId_branchId: { productId, branchId } },
     update: { quantity: next, lastStockCheck: new Date() },
     create: { productId, branchId, quantity: next, lastStockCheck: new Date() },
+  })
+  await recordMovement(tx, {
+    productId,
+    branchId,
+    quantity: next - (row?.quantity ?? 0),
+    move: { kind: "OPENING", reference: "Opening stock correction" },
   })
 }
 

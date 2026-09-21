@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { IMEIStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
+import { recordMovement } from "@/lib/concurrency"
 import { canReachBranch, viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
 import { scopedBranchId } from "@/lib/rbac"
@@ -205,6 +206,12 @@ export async function intakeImei(formData: FormData) {
         update: { quantity: { increment: addQty } },
         create: { productId, branchId, quantity: addQty },
       })
+      await recordMovement(tx, {
+        productId,
+        branchId,
+        quantity: addQty,
+        move: { kind: "RECEIVED", reference: tracked ? imei1 : product.sku, userId: user.id },
+      })
     }
 
     await tx.auditLog.create({
@@ -385,12 +392,24 @@ async function applyShelfState(input: {
         where: { productId: current.productId, branchId: current.branchId, quantity: { gt: 0 } },
         data: { quantity: { decrement: 1 } },
       })
+      await recordMovement(tx, {
+        productId: current.productId,
+        branchId: current.branchId,
+        quantity: -1,
+        move: { kind: "HAND_CORRECTION", reference: current.imei1, userId },
+      })
     }
     if (returningSellable) {
       await tx.inventory.upsert({
         where: { productId_branchId: { productId: current.productId, branchId: current.branchId } },
         update: { quantity: { increment: 1 } },
         create: { productId: current.productId, branchId: current.branchId, quantity: 1 },
+      })
+      await recordMovement(tx, {
+        productId: current.productId,
+        branchId: current.branchId,
+        quantity: 1,
+        move: { kind: "HAND_CORRECTION", reference: current.imei1, userId },
       })
     }
 

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { ExpenseCategory, UserRole } from "@prisma/client"
 import * as bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
+import { setStock } from "@/lib/concurrency"
 import { branchFilter, canReachBranch, OTHER_SHOP, resolveWritableShopId, viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
 import { canApprove, canHardDelete, canManageFinance, canManageStaff, canEditLetterhead, canSetOpeningMoney, isSuperAdmin, scopedBranchId } from "@/lib/rbac"
@@ -699,9 +700,19 @@ export async function decideApproval(id: string, status: "APPROVED" | "REJECTED"
     if (recon) {
       if (status === "APPROVED") {
         for (const item of recon.items) {
-          await prisma.inventory.updateMany({
-            where: { productId: item.productId, branchId: recon.branchId },
-            data: { quantity: item.countedQty, lastStockCheck: new Date() },
+          // A count says what the shelf is, so the ledger line is the difference
+          // against the shelf as it stands now, not the variance worked out on
+          // the day of the count — the shelf may have moved since.
+          await setStock(prisma, {
+            productId: item.productId,
+            branchId: recon.branchId,
+            quantity: item.countedQty,
+            lastStockCheck: true,
+            move: {
+              kind: "COUNT_ADJUST",
+              reference: `Stock count ${recon.id.slice(-6)}`,
+              userId: user.id,
+            },
           })
         }
       }

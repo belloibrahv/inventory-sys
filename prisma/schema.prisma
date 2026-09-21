@@ -266,6 +266,7 @@ model User {
   dayCloses       DayClose[]
   parkedSales     ParkedSale[]
   neighborFills   NeighborFill[]
+  stockMoves      StockMovement[]
 
   @@index([email])
   @@index([branchId])
@@ -302,6 +303,7 @@ model Branch {
   dayCloses       DayClose[]
   parkedSales     ParkedSale[]
   neighborFills   NeighborFill[]
+  stockMoves      StockMovement[]
   openingStock    OpeningStock?
   bankAccounts    BankAccount[]
   /// Cash in the till on the day this shop started using the software.
@@ -367,6 +369,7 @@ model Product {
   reconItems    ReconciliationItem[]
   incomingItems IncomingItem[]
   neighborFills NeighborFill[]
+  stockMoves    StockMovement[]
 
   @@index([sku])
   @@index([categoryId])
@@ -432,6 +435,62 @@ model ImeiRecord {
   @@index([purchaseId])
   @@index([branchId, status])
   @@index([status, productId])
+}
+
+/**
+ * Why stock moved. The shop reads these words back on the item's history, so
+ * they name the event, not the table it came from.
+ */
+enum StockMoveKind {
+  OPENING
+  RECEIVED
+  SALE
+  SALE_REVERSED
+  TRANSFER_OUT
+  TRANSFER_IN
+  RETURN_IN
+  REPLACEMENT_OUT
+  RETURN_TO_SUPPLIER
+  SWAP_OUT
+  SWAP_IN
+  REPAIR_OUT
+  REPAIR_IN
+  NEIGHBOR_FILL
+  COUNT_ADJUST
+  HAND_CORRECTION
+}
+
+/**
+ * One row per change to what is on a shelf. Before this, the shelf held only
+ * its current figure, so a question as ordinary as "what did this shop open
+ * with today" had to be worked backwards from whatever papers happened to carry
+ * a date — and any correction made by hand left no trace at all.
+ *
+ * Written inside the same transaction as the shelf move itself, so the ledger
+ * cannot drift from the quantity it explains.
+ */
+model StockMovement {
+  id        String        @id @default(cuid())
+  productId String
+  product   Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  branchId  String
+  branch    Branch        @relation(fields: [branchId], references: [id])
+  /// Signed: positive onto the shelf, negative off it.
+  quantity  Int
+  kind      StockMoveKind
+  /// The paper this move came from — invoice, transfer, or supplier bill number.
+  reference String?
+  /// Who did it. Null for a move the system made on its own.
+  userId    String?
+  user      User?         @relation(fields: [userId], references: [id])
+  /// Shop business day in West Africa Time, so a day groups without date maths.
+  businessDate String
+  createdAt DateTime      @default(now())
+
+  @@index([branchId, businessDate])
+  @@index([productId, branchId])
+  @@index([businessDate])
+  @@index([createdAt])
 }
 
 model Inventory {

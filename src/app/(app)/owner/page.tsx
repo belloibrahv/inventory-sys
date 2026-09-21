@@ -16,6 +16,26 @@ export const dynamic = "force-dynamic"
 const ORDER_TODAY_DAYS = 3
 const ORDER_SOON_DAYS = 10
 
+/** The shop's words for why stock moved, for the movement line. */
+const MOVE_WORDS: Record<string, string> = {
+  OPENING: "Opening stock",
+  RECEIVED: "Received",
+  SALE: "Sold",
+  SALE_REVERSED: "Sale undone",
+  TRANSFER_OUT: "Sent to another shop",
+  TRANSFER_IN: "Came from another shop",
+  RETURN_IN: "Returned by a buyer",
+  REPLACEMENT_OUT: "Given as a replacement",
+  RETURN_TO_SUPPLIER: "Sent back to supplier",
+  SWAP_OUT: "Given on a swap",
+  SWAP_IN: "Taken in on a swap",
+  REPAIR_OUT: "Went to the bench",
+  REPAIR_IN: "Back from the bench",
+  NEIGHBOR_FILL: "Filled for a neighbour",
+  COUNT_ADJUST: "Stock count",
+  HAND_CORRECTION: "Corrected by hand",
+}
+
 function Figure({
   label,
   value,
@@ -61,6 +81,18 @@ export default async function OwnerBoardPage() {
       inShop: row.inShop,
       soldPerDay: row.soldPerDay,
     }))
+  // Why stock moved today, biggest first, in the shop's own words.
+  const movementTotals = new Map<string, number>()
+  for (const shop of board.shops) {
+    for (const row of shop.byKind) {
+      movementTotals.set(row.kind, (movementTotals.get(row.kind) ?? 0) + row.quantity)
+    }
+  }
+  const movementWords = [...movementTotals.entries()]
+    .filter(([, qty]) => qty !== 0)
+    .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
+    .map(([kind, qty]) => `${MOVE_WORDS[kind] ?? kind} ${qty > 0 ? "+" : "−"}${Math.abs(qty)}`)
+
   const topChart = board.topSellers.map((row) => ({
     item: row.item.length > 26 ? `${row.item.slice(0, 25)}…` : row.item,
     units: row.units,
@@ -146,8 +178,8 @@ export default async function OwnerBoardPage() {
       <div className="surface-card p-5">
         <h3 className="font-semibold">How the shop moved today</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          Counted from the papers that made each move — supplier bills and phone records coming in,
-          sale lines going out.
+          Every change to a shelf is written down as it happens, so this line is a record of the
+          day rather than a guess at it.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-3 text-sm">
           {totals.reconciles ? (
@@ -180,12 +212,17 @@ export default async function OwnerBoardPage() {
           </span>
         </div>
 
+        {movementWords.length > 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            {movementWords.join(" · ")}
+          </p>
+        ) : null}
+
         {!totals.reconciles ? (
           <p className="mt-3 rounded-lg bg-warning-soft px-4 py-3 text-sm text-warning">
-            What the shop opened with cannot be worked out for this day. More goods were booked in
-            than the shelf can account for, which happens when stock is corrected by hand on Shop
-            stock or moved by a stock count. The figures above are each counted from their own
-            paper and are still right.
+            What the shop opened with does not add up for this day. This should not happen now
+            that every move is written down, so it points at stock changed outside the system.
+            The figures above are each counted from their own record and are still right.
           </p>
         ) : null}
 

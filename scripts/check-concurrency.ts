@@ -40,7 +40,7 @@ async function main() {
   let threw = false
   try {
     await prisma.$transaction(async (tx) => {
-      await drawStock(tx, { productId: product.id, branchId: branch.id, quantity: 5, label: product.name })
+      await drawStock(tx, { productId: product.id, branchId: branch.id, quantity: 5, label: product.name, move: { kind: "SALE", reference: "CHECK" } })
     })
   } catch (e) { threw = e instanceof ConflictError }
   check("asking for 5 when 3 are held is refused", threw)
@@ -51,7 +51,7 @@ async function main() {
 
   console.log("\n2. drawStock allows a draw that fits, exactly once")
   await prisma.$transaction(async (tx) => {
-    await drawStock(tx, { productId: product.id, branchId: branch.id, quantity: 3, label: product.name })
+    await drawStock(tx, { productId: product.id, branchId: branch.id, quantity: 3, label: product.name, move: { kind: "SALE", reference: "CHECK" } })
   })
   const drained = await prisma.inventory.findUnique({
     where: { productId_branchId: { productId: product.id, branchId: branch.id } },
@@ -60,7 +60,7 @@ async function main() {
   let secondThrew = false
   try {
     await prisma.$transaction(async (tx) => {
-      await drawStock(tx, { productId: product.id, branchId: branch.id, quantity: 1, label: product.name })
+      await drawStock(tx, { productId: product.id, branchId: branch.id, quantity: 1, label: product.name, move: { kind: "SALE", reference: "CHECK" } })
     })
   } catch (e) { secondThrew = e instanceof ConflictError }
   check("a second draw on empty stock is refused", secondThrew)

@@ -1,5 +1,6 @@
 "use server"
 
+import type { StockMoveKind } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
@@ -12,10 +13,10 @@ import { recentWatDays, shiftWatDay, watBounds, watDayKey } from "@/lib/lagos-da
  * in the shop, what went out today, and what is about to run out — instead of
  * the work in progress the other screens are built around.
  *
- * Every figure is counted from the papers that created it: units in shop from
- * the shelf, units sold from the sale lines, units received from the phone
- * records and supplier bills. Nothing here is an estimate except the sell rate,
- * which says so on the screen.
+ * Every figure is counted from the record that created it: units in shop from
+ * the shelf, units sold from the sale lines, and every other shelf change from
+ * the stock ledger. Nothing here is an estimate except the sell rate, which
+ * says so on the screen.
  */
 
 /** How far back the sell rate is measured. Four weeks smooths a slow week. */
@@ -37,6 +38,8 @@ export type OwnerShopDay = {
   inShopNow: number
   soldValue: number
   soldCost: number
+  /** Today's shelf changes broken out by why, straight from the stock ledger. */
+  byKind: Array<{ kind: StockMoveKind; quantity: number }>
   /**
    * False when working the day backwards gives an impossible opening, which
    * means something moved stock without leaving a dated paper behind — a hand
@@ -97,9 +100,7 @@ export async function getOwnerBoard(dayKey?: string) {
     branches,
     stockRows,
     soldToday,
-    receivedTodayTracked,
-    receivedTodayPieces,
-    transfersToday,
+    movesToday,
     soldOverTrend,
     soldOverRate,
   ] = await Promise.all([
@@ -154,44 +155,14 @@ export async function getOwnerBoard(dayKey?: string) {
         },
       },
     }),
-    // Phones and anything else carrying a number arrive one record at a time,
-    // so the records themselves are the count. A unit booked in Faulty never
-    // reached the shelf — counting it here would make the shop look like it
-    // received more than it did, and push the opening figure down.
-    prisma.imeiRecord.groupBy({
-      by: ["branchId"],
-      where: {
-        createdAt: today,
-        status: { not: "FAULTY" },
-        // Null means no grade was recorded, which is an ordinary phone. Asking
-        // for "not FAULTY" alone would drop every one of those rows.
-        OR: [{ cosmeticGrade: null }, { cosmeticGrade: { not: "FAULTY" } }],
-        ...shopWhere,
-      },
-      _count: { _all: true },
-    }),
-    // Pieces with no number arrive on a supplier bill instead.
-    prisma.purchaseItem.findMany({
-      where: {
-        product: { tracking: "NONE" },
-        purchase: {
-          ...shopWhere,
-          OR: [{ receivedDate: today }, { receivedDate: null, createdAt: today }],
-        },
-      },
-      select: {
-        quantity: true,
-        receivedQty: true,
-        purchase: { select: { branchId: true } },
-      },
-    }),
-    // Stock moves between shops the moment the receiving shop accepts it.
-    prisma.transferItem.findMany({
-      where: { transfer: { status: "RECEIVED", receivedAt: today } },
-      select: {
-        quantity: true,
-        transfer: { select: { fromBranchId: true, toBranchId: true } },
-      },
+    // Every change to a shelf today, from the stock ledger. This used to be
+    // pieced together from whichever papers happened to carry a date, which
+    // could not see a correction made by hand and sometimes worked out an
+    // opening figure below zero.
+    prisma.stockMovement.groupBy({
+      by: ["branchId", "kind"],
+      where: { businessDate: day, ...shopWhere },
+      _sum: { quantity: true },
     }),
     prisma.saleItem.findMany({
       where: {
@@ -237,6 +208,7 @@ export async function getOwnerBoard(dayKey?: string) {
       inShopNow: 0,
       soldValue: 0,
       soldCost: 0,
+      byKind: [],
       reconciles: true,
     })
   }
@@ -255,31 +227,30 @@ export async function getOwnerBoard(dayKey?: string) {
     shop.soldValue += money(line.totalPrice)
     shop.soldCost += (money(line.costPrice) || money(line.product.costPrice)) * line.quantity
   }
-  for (const row of receivedTodayTracked) {
+  // Every shelf change today, grouped by why it happened. Selling is counted
+  // from the sale lines above so the pieces and the money come from one place;
+  // the ledger supplies everything else.
+  for (const row of movesToday) {
     const shop = shopRow(row.branchId)
-    if (shop) shop.cameIn += row._count._all
+    if (!shop) continue
+    const qty = row._sum.quantity ?? 0
+    if (row.kind === "SALE" || row.kind === "SALE_REVERSED") continue
+    if (qty > 0) shop.cameIn += qty
+    else shop.movedOut += -qty
+    shop.byKind.push({ kind: row.kind, quantity: qty })
   }
-  for (const row of receivedTodayPieces) {
-    const shop = shopRow(row.purchase.branchId)
-    if (shop) shop.cameIn += row.receivedQty || row.quantity
-  }
-  for (const row of transfersToday) {
-    const out = shopRow(row.transfer.fromBranchId)
-    if (out) out.movedOut += row.quantity
-    const into = shopRow(row.transfer.toBranchId)
-    if (into) into.cameIn += row.quantity
-  }
-  // What the shop opened with is what is left, plus everything that went out,
-  // less everything that came in. Read the other way round, the line reads
-  // opened with 70, sold 5, 65 left.
-  //
-  // A shop cannot have opened with less than nothing. When that is the answer,
-  // the shelf and the day's papers disagree and the figure is withheld instead
-  // of shown, because a wrong opening is worse than no opening.
+  // With the ledger in place this is no longer a reconstruction. What the shop
+  // opened with is what is on the shelf now, less everything that landed on it
+  // today and plus everything that left. Read forwards it says: opened with 70,
+  // came in 0, sold 5, 65 in the shop now.
   for (const shop of byShop.values()) {
-    const worked = shop.inShopNow + shop.sold + shop.movedOut - shop.cameIn
-    shop.reconciles = worked >= 0
-    shop.openedWith = shop.reconciles ? worked : null
+    const opened = shop.inShopNow + shop.sold + shop.movedOut - shop.cameIn
+    // A shelf cannot have started the day below zero. Every path that moves
+    // stock now writes a ledger line, so this should not happen; if it ever
+    // does the figure is withheld rather than shown wrong.
+    shop.reconciles = opened >= 0
+    shop.openedWith = shop.reconciles ? opened : null
+    shop.byKind.sort((a, b) => Math.abs(b.quantity) - Math.abs(a.quantity))
   }
 
   const shops = [...byShop.values()].sort((a, b) => b.inShopNow - a.inShopNow)

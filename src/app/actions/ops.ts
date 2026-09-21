@@ -17,7 +17,7 @@ import { can } from "@/lib/permissions"
 import { generateDocNumber, money } from "@/lib/utils"
 import { shopError } from "@/lib/shop-speak"
 import { canReachBranch, resolveWritableShopId, viewBranchFilter } from "@/lib/branch-scope"
-import { ConflictError, claimImei, claimImeis, drawStock, returnStock, shiftCustomerBalance } from "@/lib/concurrency"
+import { ConflictError, claimImei, claimImeis, drawStock, recordMovement, returnStock, shiftCustomerBalance } from "@/lib/concurrency"
 import { warrantyState } from "@/lib/warranty"
 import { cell, readTableFile } from "@/lib/table-file"
 import { buildBillTrace, type SupplierBillTrace } from "@/lib/supplier-trace"
@@ -426,7 +426,12 @@ export async function receivePurchaseImeis(formData: FormData) {
           where: { id },
           data: { status: "RECEIVED", receivedDate: new Date() },
         })
-        await returnStock(tx, { productId: item.productId, branchId: purchase.branchId, quantity: remaining })
+        await returnStock(tx, {
+          productId: item.productId,
+          branchId: purchase.branchId,
+          quantity: remaining,
+          move: { kind: "RECEIVED", reference: purchase.invoiceNumber, userId: user.id },
+        })
       })
     } catch (error) {
       return { error: shopError(error, "Could not receive this shipment.") }
@@ -484,7 +489,12 @@ export async function receivePurchaseImeis(formData: FormData) {
         receivedDate: done ? new Date() : purchase.receivedDate,
       },
     })
-    await returnStock(tx, { productId: item.productId, branchId: purchase.branchId, quantity: imeis.length })
+    await returnStock(tx, {
+      productId: item.productId,
+      branchId: purchase.branchId,
+      quantity: imeis.length,
+      move: { kind: "RECEIVED", reference: purchase.invoiceNumber, userId: user.id },
+    })
     await tx.auditLog.create({
       data: {
         userId: user.id,
@@ -963,6 +973,7 @@ export async function completeReturn(formData: FormData) {
         branchId: fresh.branchId,
         quantity: 1,
         label: fresh.product.name,
+        move: { kind: "REPLACEMENT_OUT", reference: record.returnNumber, userId: user.id },
       })
       if (record.imeiId) {
         await tx.imeiRecord.update({
@@ -970,7 +981,12 @@ export async function completeReturn(formData: FormData) {
           data: { status: record.faultClass === "GOOD_STOCK" ? "IN_STOCK" : "FAULTY", customerId: null, saleId: null },
         })
         if (record.faultClass === "GOOD_STOCK") {
-          await returnStock(tx, { productId: record.imei!.productId, branchId: record.branchId, quantity: 1 })
+          await returnStock(tx, {
+            productId: record.imei!.productId,
+            branchId: record.branchId,
+            quantity: 1,
+            move: { kind: "RETURN_IN", reference: record.returnNumber, userId: user.id },
+          })
         }
       }
 
@@ -1024,7 +1040,12 @@ export async function completeReturn(formData: FormData) {
         },
       })
       if (record.faultClass === "GOOD_STOCK") {
-        await returnStock(tx, { productId: record.imei!.productId, branchId: record.branchId, quantity: 1 })
+        await returnStock(tx, {
+          productId: record.imei!.productId,
+          branchId: record.branchId,
+          quantity: 1,
+          move: { kind: "RETURN_IN", reference: record.returnNumber, userId: user.id },
+        })
       }
     }
 
@@ -1280,6 +1301,7 @@ export async function applySwapApprovalDecision(
         },
       })
       await drawStock(tx, {
+        move: { kind: "SWAP_OUT", reference: swap.swapNumber, userId },
         productId: swap.newProductId,
         branchId: swap.branchId,
         quantity: 1,
@@ -1293,7 +1315,12 @@ export async function applySwapApprovalDecision(
           notes: `Swap Deal from ${swap.customer.name} · ${swap.swapNumber}`,
         },
       })
-      await returnStock(tx, { productId: swap.oldImei.productId, branchId: swap.branchId, quantity: 1 })
+      await returnStock(tx, {
+        productId: swap.oldImei.productId,
+        branchId: swap.branchId,
+        quantity: 1,
+        move: { kind: "SWAP_IN", reference: swap.swapNumber, userId },
+      })
 
       await tx.swap.update({
         where: { id: swap.id },
@@ -1378,7 +1405,12 @@ export async function completeSwap(formData: FormData) {
           notes: `Swap Deal from ${swap.customer.name} · ${swap.swapNumber}`,
         },
       })
-      await returnStock(tx, { productId: swap.oldImei.productId, branchId: swap.branchId, quantity: 1 })
+      await returnStock(tx, {
+        productId: swap.oldImei.productId,
+        branchId: swap.branchId,
+        quantity: 1,
+        move: { kind: "SWAP_IN", reference: swap.swapNumber, userId: user.id },
+      })
     }
     if (swap.newImei?.status === "IN_STOCK") {
       await claimImei(tx, {
@@ -1388,6 +1420,7 @@ export async function completeSwap(formData: FormData) {
         data: { status: "SOLD", customerId: swap.customerId },
       })
       await drawStock(tx, {
+        move: { kind: "SWAP_OUT", reference: swap.swapNumber, userId: user.id },
         productId: swap.newProductId,
         branchId: swap.branchId,
         quantity: 1,
@@ -1534,6 +1567,12 @@ export async function createRepair(formData: FormData) {
         where: { productId_branchId: { productId: imei.productId, branchId: imei.branchId } },
         data: { quantity: { decrement: 1 } },
       })
+      await recordMovement(tx, {
+        productId: imei.productId,
+        branchId: imei.branchId,
+        quantity: -1,
+        move: { kind: "REPAIR_OUT", reference: imei1, userId: user.id },
+      })
     }
     await tx.auditLog.create({
       data: {
@@ -1591,7 +1630,12 @@ export async function advanceRepair(formData: FormData) {
         },
       })
       if (shopUnit && status === "DELIVERED") {
-        await returnStock(tx, { productId: repair.imei.productId, branchId: repair.branchId, quantity: 1 })
+        await returnStock(tx, {
+          productId: repair.imei.productId,
+          branchId: repair.branchId,
+          quantity: 1,
+          move: { kind: "REPAIR_IN", reference: repair.repairNumber, userId: user.id },
+        })
       }
       if (status === "DELIVERED" && repair.customerId && nextCost > 0 && repair.status !== "DELIVERED") {
         const after = await shiftCustomerBalance(tx, repair.customerId, nextCost)
@@ -2043,12 +2087,14 @@ export async function receiveTransfer(formData: FormData) {
             branchId: transfer.fromBranchId,
             quantity: item.quantity,
             label: item.product.name,
+            move: { kind: "TRANSFER_OUT", reference: transfer.transferNumber, userId: user.id },
           })
         }
         await returnStock(tx, {
           productId: item.productId,
           branchId: transfer.toBranchId,
           quantity: item.quantity,
+          move: { kind: "TRANSFER_IN", reference: transfer.transferNumber, userId: user.id },
         })
       }
 
@@ -2120,6 +2166,7 @@ export async function rejectTransfer(formData: FormData) {
             productId: item.productId,
             branchId: transfer.fromBranchId,
             quantity: item.quantity,
+            move: { kind: "TRANSFER_IN", reference: transfer.transferNumber, userId: user.id },
           })
         }
       }
@@ -2336,6 +2383,7 @@ export async function sendUnitsToSupplier(formData: FormData) {
           branchId: record.branchId,
           quantity: 1,
           label: record.imei1,
+          move: { kind: "RETURN_TO_SUPPLIER", reference: rtv, userId: user.id },
         })
       }
       const moneyMove = await applySupplierReturnMoney(tx, record as SupplierReturnImei)

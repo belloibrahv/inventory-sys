@@ -823,6 +823,7 @@ export async function checkoutSale(input: {
           branchId: saleShopId,
           quantity: item.quantity || 1,
           label,
+          move: { kind: "SALE", reference: invoiceNumber, userId: user.id },
         })
         await tx.auditLog.create({
           data: {
@@ -843,6 +844,7 @@ export async function checkoutSale(input: {
           branchId: saleShopId,
           quantity: wanted,
           label: productById.get(productId)?.name ?? "This item",
+          move: { kind: "SALE", reference: invoiceNumber, userId: user.id },
         })
       }
 

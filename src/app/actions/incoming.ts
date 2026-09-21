@@ -3,6 +3,7 @@
 import { IncomingIdentity, IncomingStatus, type Prisma } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
+import { recordMovement } from "@/lib/concurrency"
 import { can, isShopOwner } from "@/lib/permissions"
 import { canApprove, scopedBranchId } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
@@ -504,6 +505,12 @@ async function finalizeStagedIncomingLot(
         },
         create: { productId: item.productId, branchId: lot.branchId, quantity: receivedQty, incomingQty: 0 },
       })
+      await recordMovement(tx, {
+        productId: item.productId,
+        branchId: lot.branchId,
+        quantity: receivedQty,
+        move: { kind: "RECEIVED", reference: lot.lotNumber, userId: input.userId },
+      })
     } else {
       const confirmedIds = (item.identifiers || "")
         .split(/[\r\n,]+/)
@@ -541,6 +548,12 @@ async function finalizeStagedIncomingLot(
           quantity: { increment: receivedQty },
         },
         create: { productId: item.productId, branchId: lot.branchId, quantity: receivedQty, incomingQty: 0 },
+      })
+      await recordMovement(tx, {
+        productId: item.productId,
+        branchId: lot.branchId,
+        quantity: receivedQty,
+        move: { kind: "RECEIVED", reference: lot.lotNumber, userId: input.userId },
       })
     }
 

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { ProductCondition, ProductTracking } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
+import { recordMovement, setStock } from "@/lib/concurrency"
 import { requireUser } from "@/lib/session"
 import { can } from "@/lib/permissions"
 import { readTableFile, readWorkbookGrids } from "@/lib/table-file"
@@ -401,6 +402,12 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
           update: { quantity: { increment: count } },
           create: { productId, branchId, quantity: count },
         })
+        await recordMovement(tx, {
+          productId,
+          branchId,
+          quantity: count,
+          move: { kind: "RECEIVED", reference: invoiceNumber, userId: user.id },
+        })
       }
     })
     phonesAdded += batch.length
@@ -411,10 +418,12 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
   for (const row of plan.quantities) {
     const productId = productIdByKey.get(row.productKey)
     if (!productId) continue
-    await prisma.inventory.upsert({
-      where: { productId_branchId: { productId, branchId: shop.id } },
-      update: { quantity: row.quantity, lastStockCheck: new Date() },
-      create: { productId, branchId: shop.id, quantity: row.quantity },
+    await setStock(prisma, {
+      productId,
+      branchId: shop.id,
+      quantity: row.quantity,
+      lastStockCheck: true,
+      move: { kind: "OPENING", reference: invoiceNumber, userId: user.id },
     })
     pieceCounts.set(productId, (pieceCounts.get(productId) ?? 0) + row.quantity)
     pieceLines += 1
@@ -618,6 +627,12 @@ export async function importImeis(formData: FormData): Promise<UploadResult> {
           update: { quantity: { increment: count } },
           create: { productId, branchId, quantity: count },
         })
+        await recordMovement(tx, {
+          productId,
+          branchId,
+          quantity: count,
+          move: { kind: "RECEIVED", reference: name, userId: user.id },
+        })
       }
     })
     added += batch.length
@@ -678,11 +693,19 @@ export async function importStock(formData: FormData): Promise<UploadResult> {
     if ("error" in shopGate) {
       return { error: `A line for another shop was refused: ${shopGate.error}` }
     }
-    await prisma.inventory.upsert({
-      where: { productId_branchId: { productId: row.productId, branchId: shopGate.shopId } },
-      update: { quantity: row.quantity, ...(row.minStock !== null ? { minStock: row.minStock } : {}), lastStockCheck: new Date() },
-      create: { productId: row.productId, branchId: shopGate.shopId, quantity: row.quantity, ...(row.minStock !== null ? { minStock: row.minStock } : {}) },
+    await setStock(prisma, {
+      productId: row.productId,
+      branchId: shopGate.shopId,
+      quantity: row.quantity,
+      lastStockCheck: true,
+      move: { kind: "HAND_CORRECTION", reference: name, userId: user.id },
     })
+    if (row.minStock !== null) {
+      await prisma.inventory.update({
+        where: { productId_branchId: { productId: row.productId, branchId: shopGate.shopId } },
+        data: { minStock: row.minStock },
+      })
+    }
   }
 
   await trail(user.id, "Inventory", { lines: plan.rows.length, file: name }, user.branchId)
@@ -1256,6 +1279,12 @@ export async function batchUploadStock(payload: BatchUploadPayload): Promise<Upl
         where: { productId_branchId: { productId: item.productId, branchId: shop.id } },
         update: { quantity: { increment: item.quantity }, lastStockCheck: new Date() },
         create: { productId: item.productId, branchId: shop.id, quantity: item.quantity, lastStockCheck: new Date() },
+      })
+      await recordMovement(tx, {
+        productId: item.productId,
+        branchId: shop.id,
+        quantity: item.quantity,
+        move: { kind: "RECEIVED", reference: invoiceNumber, userId: user.id },
       })
 
       // If IMEI / SERIAL, insert individual records

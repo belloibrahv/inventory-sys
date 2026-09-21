@@ -1,4 +1,5 @@
-import type { IMEIStatus, Prisma } from "@prisma/client"
+import type { IMEIStatus, Prisma, StockMoveKind } from "@prisma/client"
+import { watDayKey } from "@/lib/lagos-day"
 
 export type Tx = Prisma.TransactionClient
 
@@ -87,13 +88,54 @@ export async function claimImeis(
   }
 }
 
+/** What a shelf move is, in the shop's own words, plus the paper behind it. */
+export type StockMove = {
+  kind: StockMoveKind
+  /** Invoice, transfer, or bill number. What staff would quote if asked. */
+  reference?: string | null
+  userId?: string | null
+}
+
+/**
+ * Write one line of the stock ledger. Always called inside the same transaction
+ * as the shelf move it describes, so the two cannot drift apart.
+ *
+ * `quantity` is signed: positive onto the shelf, negative off it.
+ */
+export async function recordMovement(
+  tx: Tx,
+  input: { productId: string; branchId: string; quantity: number; move: StockMove }
+) {
+  if (!input.quantity) return
+  await tx.stockMovement.create({
+    data: {
+      productId: input.productId,
+      branchId: input.branchId,
+      quantity: input.quantity,
+      kind: input.move.kind,
+      reference: input.move.reference ?? null,
+      userId: input.move.userId ?? null,
+      businessDate: watDayKey(),
+    },
+  })
+}
+
 /**
  * Draw untracked pieces down. The quantity guard lives in the WHERE clause, so
  * stock can never be pushed below zero and no read-modify-write window exists.
+ *
+ * The ledger line is written here rather than at each call site, so a shelf can
+ * never move without saying why.
  */
 export async function drawStock(
   tx: Tx,
-  input: { productId: string; branchId: string; quantity: number; label: string }
+  input: {
+    productId: string
+    branchId: string
+    quantity: number
+    label: string
+    move: StockMove
+  }
 ) {
   if (input.quantity <= 0) return
   const { count } = await tx.inventory.updateMany({
@@ -109,12 +151,18 @@ export async function drawStock(
       `${input.label} no longer has ${input.quantity} in this shop. Someone else sold or moved it. Check the stock and try again.`
     )
   }
+  await recordMovement(tx, { ...input, quantity: -input.quantity })
 }
 
 /** Put pieces back. Creates the branch row when the item has never been held here. */
 export async function returnStock(
   tx: Tx,
-  input: { productId: string; branchId: string; quantity: number }
+  input: {
+    productId: string
+    branchId: string
+    quantity: number
+    move: StockMove
+  }
 ) {
   if (input.quantity <= 0) return
   await tx.inventory.upsert({
@@ -122,6 +170,41 @@ export async function returnStock(
     update: { quantity: { increment: input.quantity } },
     create: { productId: input.productId, branchId: input.branchId, quantity: input.quantity },
   })
+  await recordMovement(tx, input)
+}
+
+/**
+ * Set a shelf to an exact figure and record the difference.
+ *
+ * A stock count or a correction by hand says what the shelf *is*, not how much
+ * it changed by. The ledger only deals in changes, so the previous figure is
+ * read inside the transaction and the delta written from it — which is how a
+ * correction finally leaves a trace it never used to.
+ */
+export async function setStock(
+  tx: Tx,
+  input: {
+    productId: string
+    branchId: string
+    quantity: number
+    move: StockMove
+    lastStockCheck?: boolean
+  }
+) {
+  const next = Math.max(0, Math.trunc(input.quantity))
+  const row = await tx.inventory.findUnique({
+    where: { productId_branchId: { productId: input.productId, branchId: input.branchId } },
+    select: { quantity: true },
+  })
+  const before = row?.quantity ?? 0
+  const stamp = input.lastStockCheck ? { lastStockCheck: new Date() } : {}
+  await tx.inventory.upsert({
+    where: { productId_branchId: { productId: input.productId, branchId: input.branchId } },
+    update: { quantity: next, ...stamp },
+    create: { productId: input.productId, branchId: input.branchId, quantity: next, ...stamp },
+  })
+  await recordMovement(tx, { ...input, quantity: next - before })
+  return { before, after: next }
 }
 
 /**
