@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { pushSaleQueue } from "@/lib/offline-sales"
 import { requestParkedFlush } from "@/lib/flush-parked"
-import { applyParkedToTillSnapshot, readTillSnapshot, saveTillSnapshot, type TillBankAccount, type TillBranch, type TillCustomer, type TillImei, type TillProduct, type TillSellLock, type TillSnapshot } from "@/lib/till-catalog"
+import { applyParkedToTillSnapshot, readTillSnapshot, saveTillSnapshot, type TillBankAccount, type TillBranch, type TillCustomer, type TillImei, type TillProduct, type TillSnapshot } from "@/lib/till-catalog"
 import { formatCurrency, money } from "@/lib/utils"
 import { belowCost, lineMargin, needsReason, openingPrice, resellerPrice, sellFloor } from "@/lib/pricing"
 import { formatCondition } from "@/lib/status"
@@ -65,7 +65,6 @@ export function PosClient({
   defaultBranchId,
   canOverrideFloor: serverCanOverrideFloor,
   canSeeCost: serverCanSeeCost,
-  sellLocks: serverSellLocks,
 }: {
   products: TillProduct[]
   customers: TillCustomer[]
@@ -75,7 +74,6 @@ export function PosClient({
   defaultBranchId?: string | null
   canOverrideFloor?: boolean
   canSeeCost?: boolean
-  sellLocks?: Record<string, TillSellLock>
 }) {
   const router = useRouter()
   // The till reads the shop system while the line is up, and the last list
@@ -97,7 +95,6 @@ export function PosClient({
   const bankAccounts = deviceList?.bankAccounts ?? serverBankAccounts
   const canOverrideFloor = deviceList ? Boolean(deviceList.canOverrideFloor) : Boolean(serverCanOverrideFloor)
   const canSeeCost = deviceList ? Boolean(deviceList.canSeeCost) : Boolean(serverCanSeeCost)
-  const sellLocks = deviceList?.sellLocks ?? serverSellLocks
   const [query, setQuery] = useState("")
   const [customerId, setCustomerId] = useState("")
   const [branchId, setBranchId] = useState(defaultBranchId || serverBranches[0]?.id || "")
@@ -239,7 +236,6 @@ export function PosClient({
       defaultBranchId,
       canOverrideFloor: serverCanOverrideFloor,
       canSeeCost: serverCanSeeCost,
-      sellLocks: serverSellLocks,
     }
     void (async () => {
       const online = navigator.onLine
@@ -264,7 +260,7 @@ export function PosClient({
     return () => {
       cancelled = true
     }
-  }, [serverProducts, serverCustomers, serverImeis, serverBranches, serverBankAccounts, defaultBranchId, serverCanOverrideFloor, serverCanSeeCost, serverSellLocks])
+  }, [serverProducts, serverCustomers, serverImeis, serverBranches, serverBankAccounts, defaultBranchId, serverCanOverrideFloor, serverCanSeeCost])
 
   // What is In shop here and not already on this sale. Worked out once per
   // change rather than on every keystroke: this walks every phone in the shop
@@ -394,7 +390,6 @@ export function PosClient({
   const effectivePaid = method === "CREDIT" ? Math.min(creditReceived, total) : total
   const due = Math.max(0, total - effectivePaid)
   const nextDebt = (customer?.currentBalance ?? 0) + due
-  const sellLock = sellLocks?.[branchId]
   const wantsBank =
     method === "BANK" || (method === "CREDIT" && Math.max(0, creditBank) > 0)
 
@@ -802,10 +797,6 @@ export function PosClient({
         priceReason: String(line.priceReason || "").trim() || undefined,
       })),
     }
-    if (sellLock?.locked) {
-      toast.error(sellLock.message)
-      return
-    }
     setBusy(true)
     async function keepOnDevice() {
       await pushSaleQueue(payload)
@@ -849,24 +840,6 @@ export function PosClient({
           You are selling from the last shop list saved on this phone. You can only use names already on this phone. Phones still on the way are not here. The real invoice is created when the network comes back.
         </div>
       ) : null}
-      {sellLock?.locked ? (
-        <div className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger xl:col-span-2">
-          <p>{sellLock.message}</p>
-          <a href={sellLock.href} className="mt-2 inline-block font-medium text-primary">
-            Count the till for {sellLock.dates[0]}
-          </a>
-        </div>
-      ) : sellLock?.reminder ? (
-        // Days are still owed, but the counter stays open. The shop is told, not
-        // stopped — a till that refuses to sell on a busy morning costs more
-        // than the reminder is worth.
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-warning-soft px-4 py-3 text-sm text-warning xl:col-span-2">
-          <p>{sellLock.message}</p>
-          <a href={sellLock.href} className="font-medium underline">
-            Count the till for {sellLock.dates[0]}
-          </a>
-        </div>
-      ) : null}
       <div className="space-y-4">
         <div className="surface-card space-y-4 p-5">
           <div className="flex items-start justify-between gap-3">
@@ -889,7 +862,6 @@ export function PosClient({
             onChange={setQuery}
             onCommit={takeLookupCommit}
             searching={searchingRemote}
-            disabled={Boolean(sellLock?.locked)}
           />
           {query ? (
             <div className="overflow-hidden rounded-xl border border-border bg-muted/20">
@@ -1446,8 +1418,8 @@ export function PosClient({
             <p className="mt-1 text-xs text-muted-foreground">After this sale they would owe {formatCurrency(nextDebt)}</p>
           ) : null}
         </div>
-        <Button className="min-h-12 w-full" disabled={!cart.length || busy || Boolean(sellLock?.locked)} onClick={checkout}>
-          {busy ? "Saving this sale" : sellLock?.locked ? "Close yesterday first" : "Complete sale"}
+        <Button className="min-h-12 w-full" disabled={!cart.length || busy} onClick={checkout}>
+          {busy ? "Saving this sale" : "Complete sale"}
         </Button>
         <p className="text-xs text-muted-foreground">
           USB scanners work like a keyboard. Print the invoice after the sale. If a receipt printer is attached, printing can open the cash drawer.

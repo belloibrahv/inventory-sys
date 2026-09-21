@@ -136,7 +136,6 @@ export function OfflineTill() {
               bankAccounts={snapshot.bankAccounts ?? []}
               defaultBranchId={snapshot.defaultBranchId}
               canOverrideFloor={snapshot.canOverrideFloor}
-              sellLocks={snapshot.sellLocks}
             />
           </div>
         ) : null}

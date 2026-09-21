@@ -11,7 +11,6 @@ import { letterheadFromSettings } from "@/lib/letterhead"
 import { generateDocNumber, money } from "@/lib/utils"
 import { ConflictError, claimImei, creditInvoice, drawStock, settle, shiftCustomerBalance } from "@/lib/concurrency"
 import { resolveWritableShopId, scopeRecord, viewBranchFilter } from "@/lib/branch-scope"
-import { getSellLock } from "@/app/actions/day-close"
 import { markParkedPosted } from "@/app/actions/parked"
 import { isBlockedFromSell } from "@/lib/phone-look"
 import { reservedTransferImeiSet, reservedSwapImeiSet } from "@/app/actions/ops"
@@ -146,23 +145,7 @@ export async function getPosLookups() {
       settings.allowBelowMinimum || (await can(user.role, "action.override_floor")),
     canSeeCost: await can(user.role, "action.see_cost"),
     lowStockThreshold: settings.lowStockThreshold,
-    sellLocks: Object.fromEntries(
-      await Promise.all(
-        branches.map(async (branch) => {
-          const lock = await getSellLock(branch.id)
-          return [
-            branch.id,
-            {
-              locked: lock.locked,
-              reminder: lock.reminder,
-              dates: lock.dates,
-              href: lock.href,
-              message: lock.message,
-            },
-          ]
-        })
-      )
-    ),
+
   }
 }
 
@@ -450,10 +433,9 @@ export async function checkoutSale(input: {
   if ("error" in shopGate) return { error: shopGate.error }
   const saleShopId = shopGate.shopId
   if (!input.items.length) return { error: "Add at least one item." }
-  if (!input.queuedAt || !input.offlineId) {
-    const lock = await getSellLock(saleShopId)
-    if (lock.locked) return { error: lock.message }
-  }
+  // A day left unbalanced no longer stops the till. Selling is what the shop is
+  // open to do; counting the money is a separate job, done when the cashier is
+  // ready and for whichever day they are settling. See Balance the till.
 
   const settings = await getAppSettings()
   const products = await prisma.product.findMany({

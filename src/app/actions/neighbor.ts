@@ -2,7 +2,6 @@
 
 import { PaymentMethod } from "@prisma/client"
 import { revalidatePath } from "next/cache"
-import { getSellLock } from "@/app/actions/day-close"
 import { prisma } from "@/lib/prisma"
 import { viewBranchFilter } from "@/lib/branch-scope"
 import { shiftCustomerBalance } from "@/lib/concurrency"
@@ -231,9 +230,6 @@ export async function sellNeighborFill(formData: FormData) {
   })
   if (!fill) return { error: "We could not find that neighbor fill." }
   if (fill.status !== "OPEN") return { error: "This fill is already sold or settled." }
-
-  const lock = await getSellLock(fill.branchId)
-  if (lock.locked) return { error: lock.message }
 
   const sellPrice = money(fill.sellPrice)
   const paid = Math.min(Math.max(0, paidAmount || sellPrice), sellPrice)

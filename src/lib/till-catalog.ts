@@ -59,22 +59,11 @@ export type TillBankAccount = {
   accountName: string | null
 }
 
-export type TillSellLock = {
-  /** True when the sale is refused outright. */
-  locked: boolean
-  /** True when days are still open but the shop may keep selling. */
-  reminder?: boolean
-  dates: string[]
-  href: string
-  message: string
-}
-
 export type TillSnapshot = {
   savedAt: string
   defaultBranchId?: string | null
   canOverrideFloor?: boolean
   canSeeCost?: boolean
-  sellLocks?: Record<string, TillSellLock>
   products: TillProduct[]
   customers: TillCustomer[]
   imeis: TillImei[]

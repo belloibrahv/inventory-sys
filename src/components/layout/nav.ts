@@ -139,7 +139,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { name: "Sales", href: "/sales", icon: ShoppingCart },
       { name: "Sell now", href: "/pos", icon: Store },
-      { name: "Close the day", href: "/finance/close", icon: ClipboardCheck },
+      { name: "Balance the till", href: "/finance/close", icon: ClipboardCheck },
       { name: "Goods from supplier", href: "/purchases", icon: Truck },
       { name: "Customers & money owed", href: "/customers", icon: Users },
       { name: "Suppliers", href: "/suppliers", icon: Factory },

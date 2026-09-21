@@ -27,8 +27,7 @@ import { money } from "@/lib/utils"
  * Opening stock, per shop: loaded, corrected against a physical count, then
  * closed for good.
  *
- * While a shop's opening stock is Open, the shop cannot sell (see getSellLock),
- * so nothing moves under the count. The opening bill's lines are the opening
+ * The opening bill's lines are the opening
  * figures: quantity, unit cost, and the IMEIs tied to the bill. A correction
  * changes the bill line and moves the shelf by the same difference, so goods
  * booked on other bills are never counted twice.

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
-import { can } from "@/lib/permissions"
+import { can, isShopOwner } from "@/lib/permissions"
 import { scopedBranchId } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { recentWatDays, shiftWatDay, watBounds, watDayKey } from "@/lib/lagos-day"
@@ -10,7 +10,6 @@ import { money } from "@/lib/utils"
 import { saleTenders } from "@/lib/sale-money"
 import { canReachBranch, viewBranchFilter } from "@/lib/branch-scope"
 import { healDuplicateDayCloses } from "@/lib/day-close-heal"
-import { getAppSettings } from "@/lib/settings"
 
 async function resolveShop(user: { role: Parameters<typeof scopedBranchId>[0]; branchId: string | null }, requested?: string) {
   const scoped = await scopedBranchId(user.role, user.branchId, requested)
@@ -58,50 +57,19 @@ export async function getUnclosedBusinessDays(branchId: string) {
 }
 
 /**
- * Whether an uncounted day stops the till, and what to tell staff.
+ * Days this shop has trading on but has not balanced yet.
  *
- * `locked` means the sale is refused. `reminder` means days are still open but
- * trading carries on — the shop sees the days it owes without the counter going
- * dead. Which of the two applies is the shop's own setting, because a till that
- * refuses to sell costs real money on a busy morning, while a till nobody ever
- * counts costs it quietly. Selling rules holds the choice.
+ * This used to stop the till: no new sale until yesterday was counted. It does
+ * not any more. Selling is what the shop is open to do, and counting the money
+ * is a separate job the cashier does when they are ready — including for a day
+ * that has already gone by. Only Balance the till reads this now, to show which
+ * days are still waiting.
  */
-export async function getSellLock(branchId?: string) {
+export async function getUnbalancedDays(branchId?: string) {
   const user = await requireUser()
   const shopId = await resolveShop(user, branchId)
-  const idle = {
-    locked: false,
-    reminder: false,
-    dates: [] as string[],
-    href: "/finance/close",
-    message: "",
-    branchId: shopId,
-  }
-  if (!shopId) return { ...idle, branchId: "" }
-  const dates = await getUnclosedBusinessDays(shopId)
-  if (!dates.length) return { ...idle, dates }
-
-  const settings = await getAppSettings()
-  const more = dates.length > 1 ? ` and ${dates.length - 1} more day(s)` : ""
-  const href = `/finance/close?date=${dates[0]}&branchId=${shopId}`
-  if (settings.blockSellUntilDayClosed) {
-    return {
-      locked: true,
-      reminder: false,
-      dates,
-      href,
-      message: `This shop has not closed ${dates[0]}${more}. Close that day before any new sale.`,
-      branchId: shopId,
-    }
-  }
-  return {
-    locked: false,
-    reminder: true,
-    dates,
-    href,
-    message: `This shop still has to count the till for ${dates[0]}${more}. You can keep selling today.`,
-    branchId: shopId,
-  }
+  if (!shopId) return { dates: [] as string[], branchId: "" }
+  return { dates: await getUnclosedBusinessDays(shopId), branchId: shopId }
 }
 
 export async function getDayClosePreview(branchId?: string, businessDate?: string) {
@@ -325,7 +293,16 @@ export async function closeDay(formData: FormData) {
     const rawBranchId = String(formData.get("branchId") || "")
     const preview = await getDayClosePreview(rawBranchId || undefined, businessDate)
     if (!preview.branchId) return { error: "Choose a shop." }
-    if (preview.alreadyClosed) return { error: "This shop already closed that day." }
+    // A day already balanced can be balanced again, but not quietly. Counting a
+    // day the first time is the cashier's own job; going back over one someone
+    // has already signed is a correction, and a correction needs a superior.
+    const recount = preview.alreadyClosed
+    if (recount && !isShopOwner(user.role) && !(await can(user.role, "action.approve"))) {
+      return {
+        error:
+          "This day has already been balanced. Only a manager, the CEO or the main admin can count it again.",
+      }
+    }
     // Cash remittance is only required when cash came into the till. Transfer
     // and POS days still close, so Sell now can open tomorrow, but with ₦0 remitted.
     let countedCash = 0
@@ -340,38 +317,47 @@ export async function closeDay(formData: FormData) {
     // closes for the same date, which then confused the till lock and the books.
     // The lasting fix is the unique index noted in scripts/check-day-closes.ts;
     // this stops the double click that actually happens on the shop floor.
+    const figures = {
+      userId: user.id,
+      closeDate: new Date(),
+      expectedCash: preview.expectedCash.toFixed(2),
+      countedCash: countedCash.toFixed(2),
+      variance: (countedCash - preview.expectedCash).toFixed(2),
+      transferTotal: preview.transferTotal.toFixed(2),
+      posTotal: preview.posTotal.toFixed(2),
+      creditTotal: preview.creditTotal.toFixed(2),
+      saleCount: preview.saleCount,
+      notes: String(formData.get("notes") || "") || null,
+    }
     const closed = await prisma.$transaction(async (tx) => {
       const existing = await tx.dayClose.findFirst({
         where: { branchId: preview.branchId, businessDate },
         select: { id: true },
       })
-      if (existing) return null
+      if (existing) {
+        // Only reachable by a superior, checked above. The count is rewritten
+        // against today's figures; the old one stays in Who did what.
+        if (!recount) return null
+        return tx.dayClose.update({ where: { id: existing.id }, data: figures })
+      }
       return tx.dayClose.create({
-        data: {
-          branchId: preview.branchId,
-          userId: user.id,
-          closeDate: new Date(),
-          businessDate,
-          expectedCash: preview.expectedCash.toFixed(2),
-          countedCash: countedCash.toFixed(2),
-          variance: (countedCash - preview.expectedCash).toFixed(2),
-          transferTotal: preview.transferTotal.toFixed(2),
-          posTotal: preview.posTotal.toFixed(2),
-          creditTotal: preview.creditTotal.toFixed(2),
-          saleCount: preview.saleCount,
-          notes: String(formData.get("notes") || "") || null,
-        },
+        data: { branchId: preview.branchId, businessDate, ...figures },
       })
     })
-    if (!closed) return { error: "This shop already closed that day." }
+    if (!closed) return { error: "This shop already balanced that day." }
 
     await prisma.auditLog.create({
       data: {
         userId: user.id,
-        action: "CREATE",
+        action: recount ? "UPDATE" : "CREATE",
         entityType: "DayClose",
         entityId: `${preview.branchId}:${businessDate}`,
-        newValue: JSON.stringify({ businessDate, expectedCash: preview.expectedCash, countedCash }),
+        newValue: JSON.stringify({
+          businessDate,
+          expectedCash: preview.expectedCash,
+          countedCash,
+          ...(recount ? { countedAgain: true } : {}),
+        }),
         branchId: preview.branchId,
       },
     })

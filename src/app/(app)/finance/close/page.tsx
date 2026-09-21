@@ -36,8 +36,8 @@ export default async function DayClosePage({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <PageHeader
-          title="Close the day"
-          description="Sales, cash, and bank money for this shop day."
+          title="Balance the till"
+          description="Count the money for a shop day and agree it with the system. Selling never waits for this — balance today, or go back and settle a day you missed."
         />
         <Link
           href="/finance"
@@ -52,7 +52,7 @@ export default async function DayClosePage({
         <div className="surface-card p-4 flex flex-wrap items-center justify-between gap-3 border-primary/20 bg-muted/20">
           <div className="flex items-center gap-2">
             <Store className="h-4 w-4 text-primary" />
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Which shop are you closing?</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Which shop are you balancing?</span>
           </div>
           <div className="flex flex-wrap gap-2">
             {branches.map((b) => {
@@ -82,11 +82,11 @@ export default async function DayClosePage({
             <div className="flex items-center gap-2 font-bold text-warning">
               <AlertTriangle className="h-4 w-4" />
               <span>
-                {preview.unclosed.length} old day(s) not closed yet {preview.branchName ? `for ${preview.branchName}` : ""}
+                {preview.unclosed.length} day(s) still to balance {preview.branchName ? `for ${preview.branchName}` : ""}
               </span>
             </div>
             <span className="text-xs text-muted-foreground">
-              Close older days first so till history stays straight.
+              The shop keeps selling either way. Settle them when you can.
             </span>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -207,7 +207,7 @@ export default async function DayClosePage({
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 text-success font-bold">
               <CheckCircle2 className="h-5 w-5" />
-              <span>This day is counted and closed</span>
+              <span>This day is counted and balanced</span>
             </div>
             {preview.closedRecord ? (
               <span className="text-xs text-muted-foreground">
@@ -274,12 +274,12 @@ export default async function DayClosePage({
               <h3 className="font-bold text-base">
                 {preview.expectedCash > 0
                   ? `Count cash to remit — ${preview.branchName || "Shop"} (${preview.businessDate})`
-                  : `Close the day — ${preview.branchName || "Shop"} (${preview.businessDate})`}
+                  : `Balance the till — ${preview.branchName || "Shop"} (${preview.businessDate})`}
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {preview.expectedCash > 0
                   ? "Count the physical cash inside the till drawer. Remit this cash and enter the amount below."
-                  : "No cash sales today. Bank money does not need a till count. Close the day so Sell now can open tomorrow."}
+                  : "No cash came in on this day. Bank money needs no till count, so this day balances on its own."}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -294,7 +294,7 @@ export default async function DayClosePage({
 
           <ActionForm
             action={closeDay}
-            submit={preview.expectedCash > 0 ? "Count is correct, close the day" : "Close the day"}
+            submit={preview.expectedCash > 0 ? "Count is correct, balance this day" : "Balance this day"}
             className="space-y-4"
           >
             <input type="hidden" name="branchId" value={preview.branchId} />
