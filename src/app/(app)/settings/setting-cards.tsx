@@ -13,6 +13,7 @@ export const settingLabels: Record<string, string> = {
   "company.email": "Email on invoices",
   "company.currency": "Currency",
   "sales.allow_below_minimum": "Let any seller go below the lowest allowed price?",
+  "sales.block_until_day_closed": "Stop selling until yesterday's till is counted?",
   "incoming.dual_control": "Need a second person before received goods can be sold?",
   "inventory.low_stock_threshold": "Warn me when an item drops to this many",
   "sales.warranty_days": "Warranty days for a new item",
@@ -36,12 +37,19 @@ export function SettingCards({ settings, canEdit }: { settings: SettingRow[]; ca
           {canEdit ? (
             <ActionForm action={saveSetting} submit="Update" className="space-y-3">
               <input type="hidden" name="key" value={setting.key} />
-              {setting.key === "sales.allow_below_minimum" || setting.key === "incoming.dual_control" ? (
+              {setting.key === "sales.allow_below_minimum" ||
+              setting.key === "sales.block_until_day_closed" ||
+              setting.key === "incoming.dual_control" ? (
                 <Select name="value" defaultValue={setting.value}>
                   {setting.key === "sales.allow_below_minimum" ? (
                     <>
                       <option value="false">No. Only the CEO or Super Admin may go under it</option>
                       <option value="true">Yes. Any seller may go under it, and must say why</option>
+                    </>
+                  ) : setting.key === "sales.block_until_day_closed" ? (
+                    <>
+                      <option value="false">No. Remind the shop, but keep selling</option>
+                      <option value="true">Yes. No new sale until the day is counted</option>
                     </>
                   ) : (
                     <>
@@ -53,6 +61,14 @@ export function SettingCards({ settings, canEdit }: { settings: SettingRow[]; ca
               ) : (
                 <Input name="value" defaultValue={setting.value} />
               )}
+              {setting.key === "sales.block_until_day_closed" ? (
+                <p className="text-xs text-muted-foreground">
+                  A day with sales must still be counted on Close the day, and Sell now shows the days
+                  a shop owes. This only decides whether an uncounted day stops the till. Stopping it
+                  keeps the cash tight; it also means nobody can sell on a busy morning until someone
+                  counts yesterday.
+                </p>
+              ) : null}
               {setting.key === "sales.allow_below_minimum" ? (
                 <p className="text-xs text-muted-foreground">
                   On Sell now, each item&apos;s lowest allowed price is the floor. Sellers may price a deal

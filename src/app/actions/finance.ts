@@ -1041,6 +1041,18 @@ export async function getSettings() {
       description: "Second person must say yes before received goods become sellable",
     },
   })
+  // Older installs stopped the till whenever a day was left uncounted, with no
+  // way to change it. The row is created switched off, so the shop keeps selling
+  // and is reminded instead, and the CEO can put the hard stop back.
+  await prisma.setting.upsert({
+    where: { key: "sales.block_until_day_closed" },
+    update: {},
+    create: {
+      key: "sales.block_until_day_closed",
+      value: "false",
+      description: "An uncounted day reminds the shop but does not stop the till",
+    },
+  })
   await prisma.setting.upsert({
     where: { key: "company.logo" },
     update: {},

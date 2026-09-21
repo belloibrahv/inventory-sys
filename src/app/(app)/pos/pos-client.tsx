@@ -856,6 +856,16 @@ export function PosClient({
             Count the till for {sellLock.dates[0]}
           </a>
         </div>
+      ) : sellLock?.reminder ? (
+        // Days are still owed, but the counter stays open. The shop is told, not
+        // stopped — a till that refuses to sell on a busy morning costs more
+        // than the reminder is worth.
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-warning-soft px-4 py-3 text-sm text-warning xl:col-span-2">
+          <p>{sellLock.message}</p>
+          <a href={sellLock.href} className="font-medium underline">
+            Count the till for {sellLock.dates[0]}
+          </a>
+        </div>
       ) : null}
       <div className="space-y-4">
         <div className="surface-card space-y-4 p-5">

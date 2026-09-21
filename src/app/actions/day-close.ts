@@ -10,6 +10,7 @@ import { money } from "@/lib/utils"
 import { saleTenders } from "@/lib/sale-money"
 import { canReachBranch, viewBranchFilter } from "@/lib/branch-scope"
 import { healDuplicateDayCloses } from "@/lib/day-close-heal"
+import { getAppSettings } from "@/lib/settings"
 
 async function resolveShop(user: { role: Parameters<typeof scopedBranchId>[0]; branchId: string | null }, requested?: string) {
   const scoped = await scopedBranchId(user.role, user.branchId, requested)
@@ -56,17 +57,49 @@ export async function getUnclosedBusinessDays(branchId: string) {
   return window.filter((day) => sold.has(day) && !closed.has(day))
 }
 
+/**
+ * Whether an uncounted day stops the till, and what to tell staff.
+ *
+ * `locked` means the sale is refused. `reminder` means days are still open but
+ * trading carries on — the shop sees the days it owes without the counter going
+ * dead. Which of the two applies is the shop's own setting, because a till that
+ * refuses to sell costs real money on a busy morning, while a till nobody ever
+ * counts costs it quietly. Selling rules holds the choice.
+ */
 export async function getSellLock(branchId?: string) {
   const user = await requireUser()
   const shopId = await resolveShop(user, branchId)
-  if (!shopId) return { locked: false, dates: [] as string[], href: "/finance/close", message: "", branchId: "" }
+  const idle = {
+    locked: false,
+    reminder: false,
+    dates: [] as string[],
+    href: "/finance/close",
+    message: "",
+    branchId: shopId,
+  }
+  if (!shopId) return { ...idle, branchId: "" }
   const dates = await getUnclosedBusinessDays(shopId)
-  if (!dates.length) return { locked: false, dates, href: "/finance/close", message: "", branchId: shopId }
+  if (!dates.length) return { ...idle, dates }
+
+  const settings = await getAppSettings()
+  const more = dates.length > 1 ? ` and ${dates.length - 1} more day(s)` : ""
+  const href = `/finance/close?date=${dates[0]}&branchId=${shopId}`
+  if (settings.blockSellUntilDayClosed) {
+    return {
+      locked: true,
+      reminder: false,
+      dates,
+      href,
+      message: `This shop has not closed ${dates[0]}${more}. Close that day before any new sale.`,
+      branchId: shopId,
+    }
+  }
   return {
-    locked: true,
+    locked: false,
+    reminder: true,
     dates,
-    href: `/finance/close?date=${dates[0]}&branchId=${shopId}`,
-    message: `This shop has not closed ${dates[0]}${dates.length > 1 ? ` and ${dates.length - 1} more day(s)` : ""}. Close that day before any new sale.`,
+    href,
+    message: `This shop still has to count the till for ${dates[0]}${more}. You can keep selling today.`,
     branchId: shopId,
   }
 }

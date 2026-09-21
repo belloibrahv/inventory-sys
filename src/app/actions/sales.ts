@@ -150,7 +150,16 @@ export async function getPosLookups() {
       await Promise.all(
         branches.map(async (branch) => {
           const lock = await getSellLock(branch.id)
-          return [branch.id, { locked: lock.locked, dates: lock.dates, href: lock.href, message: lock.message }]
+          return [
+            branch.id,
+            {
+              locked: lock.locked,
+              reminder: lock.reminder,
+              dates: lock.dates,
+              href: lock.href,
+              message: lock.message,
+            },
+          ]
         })
       )
     ),

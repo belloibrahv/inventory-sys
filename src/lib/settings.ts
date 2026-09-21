@@ -15,6 +15,12 @@ export async function getAppSettings() {
     companyFooter: map["company.footer"] || "Thank you for buying from Abu Twins",
     currency: map["company.currency"] || "NGN",
     allowBelowMinimum: map["sales.allow_below_minimum"] === "true",
+    /**
+     * Whether an uncounted day stops the till. Off by default: the shop is
+     * reminded to count yesterday but can keep selling today. Turning it on
+     * restores the hard stop for shops that want the till counted first.
+     */
+    blockSellUntilDayClosed: map["sales.block_until_day_closed"] === "true",
     /** Second person must say yes before received goods become sellable. */
     dualControlIncoming: map["incoming.dual_control"] !== "false",
     lowStockThreshold: Number(map["inventory.low_stock_threshold"] || 3) || 3,
