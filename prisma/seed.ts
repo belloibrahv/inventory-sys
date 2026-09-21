@@ -620,23 +620,28 @@ async function main() {
 
   await prisma.ledgerEntry.createMany({
     data: [
-      {
-        customerId: emeka.id,
-        type: "SALE",
-        amount: naira(185000),
-        balance: naira(185000),
-        reference: creditSale.invoiceNumber,
-        description: "Wholesale Camon 30 on credit",
-        createdAt: daysAgo(6),
-      },
+      // A statement reads oldest first, and `balance` is the running total
+      // after that line. The older invoice therefore carries 235,000 and the
+      // newer one takes the account to 420,000 — which is what the customer
+      // record says they owe. These two used to be the other way round, so the
+      // newest line claimed 185,000 against a 420,000 account.
       {
         customerId: emeka.id,
         type: "SALE",
         amount: naira(235000),
-        balance: naira(420000),
+        balance: naira(235000),
         reference: "INV-LOS-0988",
         description: "Prior dealer invoice",
         createdAt: daysAgo(20),
+      },
+      {
+        customerId: emeka.id,
+        type: "SALE",
+        amount: naira(185000),
+        balance: naira(420000),
+        reference: creditSale.invoiceNumber,
+        description: "Wholesale Camon 30 on credit",
+        createdAt: daysAgo(6),
       },
       {
         customerId: aisha.id,
