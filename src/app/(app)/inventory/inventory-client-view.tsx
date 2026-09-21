@@ -6,12 +6,14 @@ import { AlertTriangle, Coins, FileSpreadsheet, Layers, Printer, Search, Trendin
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
+import { FilterChips } from "@/components/filter-chips"
 import { ShopTag, StatCard, StatGrid, TableEmpty, TableShell, TonePill, Toolbar } from "@/components/shared"
 import { TablePager, usePagedRows } from "@/components/table-pager"
 import { downloadTable } from "@/lib/download-table"
 import { formatCurrency, money } from "@/lib/utils"
 import { lowStockLimit } from "@/lib/stock-limits"
 import { formatCondition } from "@/lib/status"
+import { countByStockCategory, matchesStockCategory, STOCK_CATEGORY_FILTERS } from "@/lib/stock-categories"
 
 type Branch = { id: string; name: string; code: string }
 type InventoryRow = {
@@ -57,10 +59,11 @@ export function InventoryClientView({
 }) {
   const [selectedBranch, setSelectedBranch] = useState(branches.length === 1 ? branches[0].id : "ALL")
   const [conditionFilter, setConditionFilter] = useState("ALL")
+  const [categoryFilter, setCategoryFilter] = useState("ALL")
   const [search, setSearch] = useState("")
   const serialized = useMemo(() => new Set(serializedIds), [serializedIds])
 
-  const filtered = useMemo(() => {
+  const scoped = useMemo(() => {
     const query = search.trim().toLowerCase()
     return rows.filter((row) => {
       if (selectedBranch !== "ALL" && row.branchId !== selectedBranch) return false
@@ -75,7 +78,22 @@ export function InventoryClientView({
     })
   }, [rows, selectedBranch, conditionFilter, search])
 
-  const pager = usePagedRows(filtered, `${selectedBranch}|${conditionFilter}|${search}`)
+  /**
+   * Counts per fixed category group (Phones, Accessories, Screen, Laptop,
+   * Other) — same buckets used on the opening stock page.
+   */
+  const categoryCounts = useMemo(
+    () => countByStockCategory(scoped.map((row) => ({ category: row.product.category.name }))),
+    [scoped]
+  )
+
+  const filtered = useMemo(
+    () =>
+      scoped.filter((row) => matchesStockCategory(row.product.category.name, categoryFilter)),
+    [scoped, categoryFilter]
+  )
+
+  const pager = usePagedRows(filtered, `${selectedBranch}|${conditionFilter}|${categoryFilter}|${search}`)
 
   const imeiFor = useMemo(() => {
     const map = new Map<string, number>()
@@ -150,7 +168,11 @@ export function InventoryClientView({
   }
 
   const stamp = new Date().toISOString().slice(0, 10)
-  const fileBase = `inventory-ledger-${selectedBranch === "ALL" ? "all-branches" : selectedBranch}-${stamp}`
+  const categorySlug =
+    categoryFilter === "ALL"
+      ? ""
+      : `-${(STOCK_CATEGORY_FILTERS.find((r) => r.key === categoryFilter)?.label ?? categoryFilter).toLowerCase().replace(/[^a-z0-9]+/g, "-")}`
+  const fileBase = `inventory-ledger-${selectedBranch === "ALL" ? "all-branches" : selectedBranch}${categorySlug}-${stamp}`
 
   return (
     <div className="space-y-5">
@@ -263,6 +285,20 @@ export function InventoryClientView({
           </Button>
         </div>
       </Toolbar>
+
+      <FilterChips
+        label="Show by category"
+        className="print:hidden"
+        activeKey={categoryFilter}
+        onSelect={setCategoryFilter}
+        chips={STOCK_CATEGORY_FILTERS.filter(
+          (row) => row.key === "ALL" || (categoryCounts[row.key] ?? 0) > 0
+        ).map((row) => ({
+          key: row.key,
+          label: row.label,
+          count: categoryCounts[row.key] ?? 0,
+        }))}
+      />
 
       <TableShell
         columns={[
