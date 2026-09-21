@@ -116,8 +116,29 @@ export async function getDayClosePreview(branchId?: string, businessDate?: strin
       posTotal: 0,
       creditTotal: 0,
       saleCount: 0,
+      onOlderSales: [] as Array<{
+        invoice: string
+        customer: string
+        soldOn: string
+        method: string
+        amount: number
+      }>,
+      onOlderSalesTotal: 0,
       alreadyClosed: false,
-      closedRecord: null,
+      closedRecord: null as null | {
+        id: string
+        closedBy: string
+        closeDate: Date
+        expectedCash: number
+        countedCash: number
+        variance: number
+        transferTotal: number
+        posTotal: number
+        creditTotal: number
+        notes: string | null
+        cashDrift: number
+        liveExpectedCash: number
+      },
       branchId: "",
       branchName: "",
       businessDate: watDayKey(),
@@ -132,7 +153,7 @@ export async function getDayClosePreview(branchId?: string, businessDate?: strin
   ])
   const day = businessDate && businessDate.length === 10 ? businessDate : watDayKey()
   const { start, end } = watBounds(day)
-  const [sales, existing] = await Promise.all([
+  const [sales, moneyIn, existing] = await Promise.all([
     prisma.sale.findMany({
       where: {
         status: "COMPLETED",
@@ -146,6 +167,22 @@ export async function getDayClosePreview(branchId?: string, businessDate?: strin
         payments: true,
       },
       orderBy: { saleDate: "desc" },
+    }),
+    // Money that actually came in on this day, whichever day the sale was made.
+    // Counting a debt collected today against the day the goods left meant the
+    // cash was expected in a till that closed days ago — and never expected in
+    // the one it was really dropped into.
+    prisma.payment.findMany({
+      where: {
+        paidAt: { gte: start, lt: end },
+        sale: { status: "COMPLETED", ...(shopId ? { branchId: shopId } : {}) },
+      },
+      select: {
+        amount: true,
+        method: true,
+        paidAt: true,
+        sale: { select: { invoiceNumber: true, saleDate: true, customer: { select: { name: true } } } },
+      },
     }),
     shopId
       ? prisma.dayClose.findFirst({
@@ -161,21 +198,56 @@ export async function getDayClosePreview(branchId?: string, businessDate?: strin
   const totalSales = sales.reduce((sum, sale) => sum + money(sale.totalAmount), 0)
   const totalPaid = sales.reduce((sum, sale) => sum + money(sale.paidAmount), 0)
 
-  const mix = sales.reduce(
-    (acc, sale) => {
-      const row = saleTenders(sale)
-      acc.expectedCash += row.cash
-      acc.transferTotal += row.transfer
-      acc.posTotal += row.pos
-      acc.creditTotal += row.credit
+  // What the shop is still owed on the goods that left today. This belongs to
+  // the day of the sale, so it stays with the sales.
+  const creditTotal = sales.reduce((sum, sale) => sum + saleTenders(sale).credit, 0)
+
+  // Till money is counted by the day it arrived. Each payment row carries its
+  // own date, so a deposit taken at the counter and a debt paid off weeks later
+  // each land on the day the money was really handed over.
+  const tillMix = moneyIn.reduce(
+    (acc, row) => {
+      const amount = money(row.amount)
+      if (row.method === "CASH") acc.cash += amount
+      else if (row.method === "TRANSFER") acc.transfer += amount
+      else if (row.method === "POS") acc.pos += amount
       return acc
     },
-    { expectedCash: 0, transferTotal: 0, posTotal: 0, creditTotal: 0 }
+    { cash: 0, transfer: 0, pos: 0 }
   )
-  const expectedCash = mix.expectedCash
-  const transferTotal = mix.transferTotal
-  const posTotal = mix.posTotal
-  const creditTotal = mix.creditTotal
+
+  // Sales old enough to predate payment rows kept their money on the sale alone.
+  // Without this they would drop out of the till figures entirely.
+  const legacy = sales.reduce(
+    (acc, sale) => {
+      if (sale.payments.length > 0) return acc
+      const row = saleTenders(sale)
+      acc.cash += row.cash
+      acc.transfer += row.transfer
+      acc.pos += row.pos
+      if (row.cash === 0 && row.transfer === 0 && row.pos === 0) acc.unknown += row.collected
+      return acc
+    },
+    { cash: 0, transfer: 0, pos: 0, unknown: 0 }
+  )
+
+  const expectedCash = tillMix.cash + legacy.cash
+  const transferTotal = tillMix.transfer + legacy.transfer
+  const posTotal = tillMix.pos + legacy.pos + legacy.unknown
+
+  // Money taken today on goods that left on an earlier day. Shown on its own so
+  // the till count is not mistaken for the day's trading.
+  const onOlderSales = moneyIn
+    .filter((row) => watDayKey(row.sale.saleDate) !== day)
+    .map((row) => ({
+      invoice: row.sale.invoiceNumber,
+      customer: row.sale.customer?.name ?? "Walk-in",
+      soldOn: watDayKey(row.sale.saleDate),
+      method: row.method,
+      amount: money(row.amount),
+    }))
+    .sort((a, b) => b.amount - a.amount)
+  const onOlderSalesTotal = onOlderSales.reduce((sum, row) => sum + row.amount, 0)
 
   return {
     sales: sales.map((sale) => ({
@@ -210,6 +282,9 @@ export async function getDayClosePreview(branchId?: string, businessDate?: strin
     posTotal,
     creditTotal,
     saleCount: sales.length,
+    /** Money taken today on goods that left on an earlier day. */
+    onOlderSales,
+    onOlderSalesTotal,
     alreadyClosed: Boolean(existing),
     closedRecord: existing
       ? {
@@ -223,6 +298,14 @@ export async function getDayClosePreview(branchId?: string, businessDate?: strin
           posTotal: money(existing.posTotal),
           creditTotal: money(existing.creditTotal),
           notes: existing.notes,
+          /**
+           * The close keeps the figures as they stood when it was signed. When
+           * the day's money has moved since, the old record still reads
+           * "balanced" against a total that no longer exists — so the gap is
+           * reported rather than left to be discovered in a shortfall.
+           */
+          cashDrift: money(money(existing.expectedCash) - expectedCash),
+          liveExpectedCash: expectedCash,
         }
       : null,
     branchId: shopId,

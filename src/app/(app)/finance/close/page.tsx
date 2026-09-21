@@ -170,6 +170,37 @@ export default async function DayClosePage({
         </div>
       ) : null}
 
+      {preview.onOlderSalesTotal > 0 ? (
+        <details className="rounded-lg border border-border bg-muted/40 px-4 py-2.5 text-xs">
+          <summary className="flex cursor-pointer items-center justify-between gap-3">
+            <span className="text-muted-foreground">
+              Of the money taken today, this was owed on goods that left on an earlier day:
+            </span>
+            <span className="font-bold tabular-nums text-sm">
+              {formatCurrency(preview.onOlderSalesTotal)}
+            </span>
+          </summary>
+          <ul className="mt-2 space-y-1 text-muted-foreground">
+            {preview.onOlderSales.slice(0, 12).map((row, index) => (
+              <li key={`${row.invoice}-${index}`} className="flex justify-between gap-3">
+                <span>
+                  {row.invoice} · {row.customer} · sold {row.soldOn} ·{" "}
+                  {row.method === "CASH" ? "cash" : "bank"}
+                </span>
+                <span className="tabular-nums">{formatCurrency(row.amount)}</span>
+              </li>
+            ))}
+            {preview.onOlderSales.length > 12 ? (
+              <li>and {preview.onOlderSales.length - 12} more</li>
+            ) : null}
+          </ul>
+          <p className="mt-2 text-muted-foreground">
+            This money is counted in today&apos;s till because today is when it was handed over. It is
+            not part of today&apos;s sales figure.
+          </p>
+        </details>
+      ) : null}
+
       {/* Till Count Form or Closed Notice */}
       {preview.alreadyClosed ? (
         <div className="surface-card p-6 border-success/30 bg-success-soft">
@@ -218,6 +249,18 @@ export default async function DayClosePage({
               </p>
             </div>
           </div>
+          {preview.closedRecord && preview.closedRecord.cashDrift !== 0 ? (
+            <p className="mt-3 rounded border border-warning/30 bg-warning-soft p-2.5 text-xs text-warning">
+              <span className="font-semibold">
+                The cash for this day has changed since it was counted.
+              </span>{" "}
+              It was closed against {formatCurrency(preview.closedRecord.expectedCash)}, and the day
+              now stands at {formatCurrency(preview.closedRecord.liveExpectedCash)} — a difference of{" "}
+              {formatCurrency(Math.abs(preview.closedRecord.cashDrift))}. The shortage or overage
+              above was worked out on the older figure. Money taken later on a sale from this day is
+              counted on the day it was received, so check that day&apos;s count too.
+            </p>
+          ) : null}
           {preview.closedRecord?.notes ? (
             <p className="mt-3 text-xs text-muted-foreground bg-background/50 p-2.5 rounded border border-border/50">
               <span className="font-semibold">Note:</span> {preview.closedRecord.notes}
