@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { AlertTriangle, Coins, FileSpreadsheet, Layers, Printer, Search, TrendingUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -86,6 +86,14 @@ export function InventoryClientView({
     () => countByStockCategory(scoped.map((row) => ({ category: row.product.category.name }))),
     [scoped]
   )
+
+  // A chip only shows while its group has stock behind it. Switching shop can
+  // empty the chosen group, which would leave an empty table under a chip that
+  // is no longer on screen, so the filter falls back to All.
+  useEffect(() => {
+    if (categoryFilter === "ALL") return
+    if ((categoryCounts[categoryFilter] ?? 0) === 0) setCategoryFilter("ALL")
+  }, [categoryCounts, categoryFilter])
 
   const filtered = useMemo(
     () =>
