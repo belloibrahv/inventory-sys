@@ -612,6 +612,7 @@ export async function getReturns() {
       customer: true,
       imei: { include: { product: true } },
       replacementImei: { include: { product: true } },
+      saleItem: { include: { product: true } },
       branch: true,
       user: true,
     },
@@ -675,6 +676,72 @@ export async function findSoldImei(code: string) {
   return { sold: row }
 }
 
+/**
+ * Look up a completed sale by invoice number so staff can pick which line item
+ * to return. Used for accessories, cords, and other non-IMEI goods.
+ */
+export async function findSaleByInvoice(invoiceNumber: string) {
+  const user = await requireUser()
+  if (!(await can(user.role, "action.return"))) {
+    return { error: "You are not allowed to record a return. Ask the main admin." }
+  }
+  const cleaned = invoiceNumber.trim().toUpperCase()
+  if (!cleaned) return { error: "Type the invoice number first." }
+  const branchId = await scopedBranchId(user.role, user.branchId)
+
+  const sale = await prisma.sale.findFirst({
+    where: {
+      invoiceNumber: { equals: cleaned },
+      status: "COMPLETED",
+      ...(branchId ? { branchId } : {}),
+    },
+    include: {
+      customer: true,
+      branch: true,
+      items: {
+        include: {
+          product: { include: { category: true } },
+          imei: true,
+        },
+      },
+    },
+  })
+
+  if (!sale) {
+    // Try a case-insensitive partial match to help with minor typos
+    const partial = await prisma.sale.findFirst({
+      where: {
+        invoiceNumber: { contains: cleaned },
+        status: "COMPLETED",
+        ...(branchId ? { branchId } : {}),
+      },
+      include: {
+        customer: true,
+        branch: true,
+        items: {
+          include: {
+            product: { include: { category: true } },
+            imei: true,
+          },
+        },
+      },
+    })
+    if (!partial) {
+      return { error: `Invoice ${cleaned} was not found in this shop as a completed sale. Check the number and try again.` }
+    }
+    if (!partial.customerId) {
+      return { error: `Invoice ${partial.invoiceNumber} has no buyer name. Attach the customer on the invoice before logging a return.` }
+    }
+    return { sale: partial }
+  }
+
+  if (!sale.customerId) {
+    return { error: `Invoice ${sale.invoiceNumber} has no buyer name. Attach the customer on the invoice before logging a return.` }
+  }
+
+  return { sale }
+}
+
 /** In shop units staff may give out on a Replace return. */
 export async function getInStockForReplace() {
   const user = await requireUser()
@@ -698,6 +765,144 @@ export async function getInStockForReplace() {
 export async function createReturn(formData: FormData) {
   const user = await requireUser()
   if (!(await can(user.role, "action.return"))) return { error: "You are not allowed to record a return. Ask the main admin." }
+
+  const reason = String(formData.get("reason")) as ReturnReason
+  const outcome = String(formData.get("outcome")) as ReturnOutcome
+  const faultClass = String(formData.get("faultClass") || "FAULTY_STOCK") as FaultClass
+  const notesRaw = String(formData.get("notes") || "").trim()
+  const returnRaw = formData.get("returnValue") ?? formData.get("refundAmount")
+  const returnMode = String(formData.get("returnMode") || "imei") // "imei" | "invoice"
+
+  // ── INVOICE-ITEM PATH (accessories, cords, no-number items) ──────────────
+  if (returnMode === "invoice") {
+    const saleItemId = String(formData.get("saleItemId") || "").trim()
+    const quantityRaw = Number(formData.get("returnQty") || 1)
+    const returnQty = Math.max(1, Math.floor(quantityRaw))
+
+    if (!saleItemId) return { error: "Pick the item from the invoice that is being returned." }
+
+    const saleItem = await prisma.saleItem.findUnique({
+      where: { id: saleItemId },
+      include: {
+        product: true,
+        sale: {
+          include: {
+            customer: true,
+            branch: true,
+            items: true,
+          },
+        },
+      },
+    })
+    if (!saleItem) return { error: "That sale line was not found. Reload the invoice and try again." }
+    if (!saleItem.sale) return { error: "The sale for that item was not found." }
+    if (!saleItem.sale.customerId) return { error: "This sale has no buyer name. Add the buyer before you start the return." }
+    if (saleItem.imeiId) {
+      return { error: "That line has an IMEI. Use the IMEI tab to return a phone or laptop." }
+    }
+
+    // Check for existing open return on this exact sale item
+    const openItemReturn = await prisma.stockReturn.findFirst({
+      where: { saleItemId, status: { in: ["PENDING", "APPROVED"] } },
+    })
+    if (openItemReturn) {
+      return { error: `${saleItem.product.name} from that invoice already has an open return waiting for approval.` }
+    }
+
+    // Validate quantity
+    if (returnQty > saleItem.quantity) {
+      return { error: `You can return at most ${saleItem.quantity} ${saleItem.product.name}. The invoice only has that many.` }
+    }
+
+    const unitPrice = money(saleItem.totalPrice) / Math.max(1, saleItem.quantity)
+    const suggestedReturn = unitPrice * returnQty
+    const returnValue =
+      returnRaw !== null && String(returnRaw).trim() !== "" ? Number(returnRaw) : suggestedReturn
+    if (!Number.isFinite(returnValue) || returnValue < 0) {
+      return { error: "Enter the return item value." }
+    }
+
+    let replacementImeiId: string | null = null
+    let replacementValue: number | null = null
+    let balanceAmount: number | null = null
+
+    if (outcome === "REPLACEMENT") {
+      replacementImeiId = String(formData.get("replacementImeiId") || "").trim() || null
+      const replacementValueRaw = formData.get("replacementValue")
+      if (!replacementImeiId) return { error: "Pick the shop item to give out as the replacement." }
+      const fresh = await prisma.imeiRecord.findUnique({
+        where: { id: replacementImeiId },
+        include: { product: true },
+      })
+      if (!fresh || fresh.status !== "IN_STOCK") return { error: "That replacement is not In shop." }
+      if (fresh.branchId !== saleItem.sale.branchId) return { error: "The replacement must be in the same shop as the return." }
+      replacementValue =
+        replacementValueRaw !== null && String(replacementValueRaw).trim() !== ""
+          ? Number(replacementValueRaw)
+          : money(fresh.product.sellingPrice)
+      if (!Number.isFinite(replacementValue) || replacementValue < 0) {
+        return { error: "Enter the value of the replacement given out." }
+      }
+      balanceAmount = replacementValue - returnValue
+    }
+
+    const record = await prisma.stockReturn.create({
+      data: {
+        returnNumber: generateDocNumber("RTN"),
+        customerId: saleItem.sale.customerId,
+        saleId: saleItem.saleId,
+        saleItemId: saleItem.id,
+        branchId: saleItem.sale.branchId,
+        userId: user.id,
+        reason,
+        outcome,
+        faultClass,
+        notes: [
+          `Item: ${saleItem.product.name}`,
+          returnQty > 1 ? `Qty: ${returnQty}` : null,
+          notesRaw || null,
+        ].filter(Boolean).join(" · ") || null,
+        returnValue: returnValue.toFixed(2),
+        refundAmount: returnValue.toFixed(2),
+        replacementImeiId,
+        replacementValue: replacementValue != null ? replacementValue.toFixed(2) : null,
+        balanceAmount: balanceAmount != null ? balanceAmount.toFixed(2) : null,
+      },
+    })
+
+    await prisma.approval.create({
+      data: {
+        type: "RETURN",
+        entityId: record.id,
+        entityType: "Return",
+        requestedBy: user.id,
+        reason:
+          outcome === "REPLACEMENT" && balanceAmount != null
+            ? `${record.returnNumber}: replace · return ₦${returnValue} · given ₦${replacementValue} · ${
+                balanceAmount > 0 ? `Receivable ₦${balanceAmount}` : balanceAmount < 0 ? `Payable ₦${Math.abs(balanceAmount)}` : "Even"
+              }`
+            : `${record.returnNumber}: ${saleItem.product.name} · ${reason} · return value ₦${returnValue}`,
+      },
+    })
+
+    const managers = await prisma.user.findMany({
+      where: { role: { in: ["CEO", "BRANCH_MANAGER", "AUDITOR", "ACCOUNTANT", "SUPER_ADMIN"] }, isActive: true },
+    })
+    const invoiceNum = (await prisma.sale.findUnique({ where: { id: saleItem.saleId }, select: { invoiceNumber: true } }))?.invoiceNumber ?? ""
+    for (const manager of managers) {
+      await notify(
+        manager.id,
+        "A return is waiting for you to say yes",
+        `${record.returnNumber} · ${saleItem.product.name} · invoice ${invoiceNum}`,
+        "/approvals",
+        "APPROVAL_REQUEST"
+      )
+    }
+    refreshOps()
+    return { success: true }
+  }
+
+  // ── IMEI PATH (phones, laptops, serial items) ─────────────────────────────
   const imei1 = String(formData.get("imei1") ?? "").trim()
   const imei = await prisma.imeiRecord.findUnique({
     where: { imei1 },
@@ -710,16 +915,13 @@ export async function createReturn(formData: FormData) {
   })
   if (open) return { error: `${imei1} already has an open return.` }
 
-  const reason = String(formData.get("reason")) as ReturnReason
   if (reason === "WARRANTY") {
     const cover = warrantyState(imei.sale?.saleDate, imei.product.warrantyDays)
     if (!cover.active) return { error: cover.label + ". Pick another return reason. Do not change the old sale." }
   }
 
-  const outcome = String(formData.get("outcome")) as ReturnOutcome
   const line = imei.sale?.items.find((item) => item.imeiId === imei.id)
   const suggested = money(line?.totalPrice) || money(imei.product.sellingPrice)
-  const returnRaw = formData.get("returnValue") ?? formData.get("refundAmount")
   const returnValue = returnRaw !== null && String(returnRaw).trim() !== "" ? Number(returnRaw) : suggested
   if (!Number.isFinite(returnValue) || returnValue < 0) {
     return { error: "Enter the return item value." }
@@ -759,8 +961,8 @@ export async function createReturn(formData: FormData) {
       userId: user.id,
       reason,
       outcome,
-      faultClass: String(formData.get("faultClass") || "FAULTY_STOCK") as FaultClass,
-      notes: String(formData.get("notes") || "") || null,
+      faultClass,
+      notes: notesRaw || null,
       supplierId: imei.supplierId,
       returnValue: returnValue.toFixed(2),
       refundAmount: returnValue.toFixed(2),
@@ -810,6 +1012,7 @@ export async function completeReturn(formData: FormData) {
         },
       },
       replacementImei: { include: { product: true } },
+      saleItem: { include: { product: true } },
     },
   })
   if (!record) return { error: "We could not find that return." }
@@ -1041,6 +1244,23 @@ export async function completeReturn(formData: FormData) {
           productId: record.imei!.productId,
           branchId: record.branchId,
           quantity: 1,
+          move: { kind: "RETURN_IN", reference: record.returnNumber, userId: user.id },
+        })
+      }
+    }
+
+    // ── Invoice-item (non-IMEI) stock adjustment on Apply ─────────────────
+    // When the return was logged from an invoice line (accessories, cords, etc.)
+    // and the item is going back onto the shelf, add its pieces back to stock.
+    if (record.saleItemId && record.saleItem && record.outcome !== "REPLACEMENT") {
+      if (record.faultClass === "GOOD_STOCK") {
+        // Parse quantity from notes: "Item: X · Qty: N · ..." or default 1
+        const qtyMatch = record.notes?.match(/Qty:\s*(\d+)/)
+        const returnQty = qtyMatch ? Number(qtyMatch[1]) : 1
+        await returnStock(tx, {
+          productId: record.saleItem.productId,
+          branchId: record.branchId,
+          quantity: returnQty,
           move: { kind: "RETURN_IN", reference: record.returnNumber, userId: user.id },
         })
       }

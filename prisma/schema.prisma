@@ -647,6 +647,8 @@ model SaleItem {
   warrantyDays Int?      @default(0)
   createdAt  DateTime    @default(now())
 
+  stockReturns StockReturn[] @relation("ReturnSaleItem")
+
   @@index([saleId])
   @@index([imeiId])
 }
@@ -716,6 +718,10 @@ model StockReturn {
   customerId       String
   customer         Customer      @relation(fields: [customerId], references: [id])
   saleId           String?
+  /// For returns on non-IMEI items (accessories, cords, pieces). Points to the
+  /// exact SaleItem line the customer is returning. Null for IMEI-based returns.
+  saleItemId       String?
+  saleItem         SaleItem?     @relation("ReturnSaleItem", fields: [saleItemId], references: [id])
   imeiId           String?
   imei             ImeiRecord?   @relation("ReturnOld", fields: [imeiId], references: [id])
   branchId         String
@@ -751,6 +757,7 @@ model StockReturn {
   @@index([status])
   @@index([supplierId])
   @@index([replacementImeiId])
+  @@index([saleItemId])
 }
 
 model Swap {

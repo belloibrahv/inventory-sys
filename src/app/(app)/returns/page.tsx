@@ -35,6 +35,13 @@ export default async function ReturnsPage() {
                   productName: row.replacementImei.product.name,
                 }
               : null,
+            saleItem: row.saleItem
+              ? {
+                  id: row.saleItem.id,
+                  productName: row.saleItem.product.name,
+                  quantity: row.saleItem.quantity,
+                }
+              : null,
           }))}
           stock={stock.map((row) => ({
             id: row.id,
@@ -46,9 +53,9 @@ export default async function ReturnsPage() {
         />
       </div>
       <div className="surface-card p-5">
-        <h3 className="mb-4 font-semibold">Log a return</h3>
+        <h3 className="mb-1 font-semibold">Log a return</h3>
         <p className="mb-4 text-sm text-muted-foreground">
-          Show the goods and the money. Pick Replace to choose what goes out and see Receivable or Payable.
+          Phones and laptops: pick by IMEI. Accessories, cords, and other items: look up the invoice number.
         </p>
         <ReturnForm
           sold={sold.map((row) => ({
