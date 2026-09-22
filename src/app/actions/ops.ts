@@ -94,7 +94,6 @@ function refreshOps() {
     "/audit",
     "/staff",
     "/suppliers",
-    "/neighbor-fills",
     "/profits",
     "/reports",
     "/dashboard",
@@ -153,7 +152,6 @@ async function accessorySoldSince(productId: string, branchId: string, since: Da
         sale: {
           branchId,
           status: "COMPLETED",
-          saleType: { not: "NEIGHBOR_FILL" },
           saleDate: { gte: since },
         },
       },
@@ -166,7 +164,6 @@ async function accessorySoldSince(productId: string, branchId: string, since: Da
         sale: {
           branchId,
           status: "COMPLETED",
-          saleType: { not: "NEIGHBOR_FILL" },
           saleDate: { gte: today.start, lt: today.end },
         },
       },
@@ -302,7 +299,7 @@ export async function createPurchase(formData: FormData) {
   const supplier = await prisma.supplier.findUnique({ where: { id: supplierId } })
   if (!supplier) return { error: "Pick a supplier from the list." }
   if (supplier.kind === "NEIGHBOR") {
-    return { error: "A neighboring shop is not a supplier carton. Use Buy from next door." }
+    return { error: "A neighboring shop is not a supplier carton." }
   }
 
   const originCountry = String(formData.get("originCountry") || "").trim() || supplier.country

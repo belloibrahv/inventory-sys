@@ -227,8 +227,8 @@ async function main() {
     { name: "Anker Official Grey", phone: "+8613700010006", contactPerson: "Zhao Rui", email: "grey@anker-export.cn", address: "Shenzhen", country: "China", city: "Shenzhen" },
     { name: "Ibadan Bulk Accessories", phone: "+2348065552004", contactPerson: "Sola Akin", email: "sola@ibadanbulk.ng", address: "Challenge Market", country: "Nigeria", city: "Ibadan" },
     { name: "Apple Grey Line Dubai", phone: "+971500001007", contactPerson: "Omar Haddad", email: "omar@applegrey.ae", address: "Bur Dubai", country: "UAE", city: "Dubai" },
-    { name: "Next Door Gadget (Neighbor)", phone: "+2348035553001", contactPerson: "Bola Ade", email: "bola@nextdoor.ng", address: "Beside Iwo Road", country: "Nigeria", city: "Ibadan", kind: "NEIGHBOR" as const },
-    { name: "Bodija Corner Phones (Neighbor)", phone: "+2348035553002", contactPerson: "Yemi Lawal", email: "yemi@bodijacorner.ng", address: "Bodija Market edge", country: "Nigeria", city: "Ibadan", kind: "NEIGHBOR" as const },
+    { name: "Next Door Gadget (Neighbor)", phone: "+2348035553001", contactPerson: "Bola Ade", email: "bola@nextdoor.ng", address: "Beside Iwo Road", country: "Nigeria", city: "Ibadan" },
+    { name: "Bodija Corner Phones (Neighbor)", phone: "+2348035553002", contactPerson: "Yemi Lawal", email: "yemi@bodijacorner.ng", address: "Bodija Market edge", country: "Nigeria", city: "Ibadan" },
   ]
   const suppliers = []
   for (const s of supplierDefs) suppliers.push(await upsertSupplier(s))
@@ -245,8 +245,6 @@ async function main() {
     anker,
     ibadanBulk,
     appleGrey,
-    neighborIwo,
-    neighborBod,
   ] = suppliers
 
   // ——— Catalog: flagship phones, UK MacBooks, Dell/HP, accessories ———
@@ -884,91 +882,6 @@ async function main() {
     })
   }
 
-  // ——— Neighbor fills ———
-  async function ensureNeighborFill(fillNumber: string, shop: ShopCode, neighborId: string, customerPhone: string, sku: string, cost: number, sell: number, status: "OPEN" | "SOLD") {
-    if (await prisma.neighborFill.findUnique({ where: { fillNumber } })) return
-    let saleId: string | null = null
-    if (status === "SOLD") {
-      const inv = `BULK-INV-NF-${fillNumber.slice(-4)}`
-      if (!(await prisma.sale.findUnique({ where: { invoiceNumber: inv } }))) {
-        const sale = await prisma.sale.create({
-          data: {
-            invoiceNumber: inv,
-            branchId: byCode[shop].id,
-            userId: need(shop === "IWO" ? "cashier@abutwins.com" : shop === "BOD" ? "bodija.cashier@abutwins.com" : "challenge.cashier@abutwins.com").id,
-            customerId: customersByPhone[customerPhone].id,
-            saleType: "RETAIL",
-            status: "COMPLETED",
-            subtotal: naira(sell),
-            totalAmount: naira(sell),
-            paidAmount: naira(sell),
-            paymentMethod: "TRANSFER",
-            saleDate: daysAgo(2),
-            notes: "Neighbor fill",
-            items: {
-              create: {
-                productId: products[sku].id,
-                quantity: 1,
-                unitPrice: naira(sell),
-                totalPrice: naira(sell),
-              },
-            },
-            payments: { create: { amount: naira(sell), method: "TRANSFER", paidAt: daysAgo(2) } },
-          },
-        })
-        saleId = sale.id
-        await prisma.financeEntry.create({
-          data: {
-            branchId: byCode[shop].id,
-            account: "BANK",
-            type: "INCOME",
-            amount: naira(sell),
-            reference: inv,
-            description: `Neighbor fill ${fillNumber}`,
-            createdAt: daysAgo(2),
-          },
-        })
-        await prisma.financeEntry.create({
-          data: {
-            branchId: byCode[shop].id,
-            account: "CASH",
-            type: "EXPENSE",
-            amount: naira(cost),
-            reference: `${fillNumber}-PAY`,
-            description: `Paid neighbor ${fillNumber}`,
-            createdAt: daysAgo(2),
-          },
-        })
-      }
-    }
-    await prisma.neighborFill.create({
-      data: {
-        fillNumber,
-        branchId: byCode[shop].id,
-        neighborName: neighborId === neighborIwo.id ? neighborIwo.name : neighborBod.name,
-        neighborPhone: neighborId === neighborIwo.id ? neighborIwo.phone : neighborBod.phone,
-        supplierId: neighborId,
-        customerId: customersByPhone[customerPhone].id,
-        productId: products[sku].id,
-        imei1: studyImei(shop, 9000 + Number(fillNumber.replace(/\D/g, "").slice(-3) || "1")),
-        neighborCost: naira(cost),
-        sellPrice: naira(sell),
-        profit: naira(sell - cost),
-        moneySentToNeighbor: status === "SOLD" ? naira(cost) : naira(0),
-        saleId,
-        status,
-        paymentMethod: status === "SOLD" ? "TRANSFER" : null,
-        notes: "Bulk study neighbor fill",
-        userId: need(shop === "IWO" ? "cashier@abutwins.com" : "bodija.cashier@abutwins.com").id,
-        soldAt: status === "SOLD" ? daysAgo(2) : null,
-        settledAt: status === "SOLD" ? daysAgo(2) : null,
-      },
-    })
-  }
-  await ensureNeighborFill("BULK-NF-IWO-01", "IWO", neighborIwo.id, "08031111008", "BULK-IP16-128", 900_000, 980_000, "SOLD")
-  await ensureNeighborFill("BULK-NF-IWO-02", "IWO", neighborIwo.id, "08031111001", "BULK-IP15-128", 800_000, 880_000, "OPEN")
-  await ensureNeighborFill("BULK-NF-BOD-01", "BOD", neighborBod.id, "08032221006", "BULK-A55-128", 280_000, 315_000, "SOLD")
-
   // ——— Repair + return ———
   {
     const repairImei = (unitIdsBySkuShop.get("BULK-IP14-128-UK:IWO") ?? [])[5]
@@ -1191,7 +1104,7 @@ async function main() {
       `  ${row.code}: ${row.phonesIn} units In shop · ${row.sales} sales · ${row.purchases} bills · ${row.customers} customers`
     )
   }
-  console.log("Covered: Upload/PO trail, Coming lots, transfers, neighbor fills, sales, repairs, returns, expenses, day closes, approvals, alerts.")
+  console.log("Covered: Upload/PO trail, Coming lots, transfers, sales, repairs, returns, expenses, day closes, approvals, alerts.")
   console.log("Done.")
 }
 

@@ -1443,20 +1443,14 @@ export type PriceChangeLine = {
 export async function getProfitData() {
   const user = await requireUser()
   if (!(await can(user.role, "view.profits")) && !(await can(user.role, "view.reports"))) {
-    return { shopLines: [], neighborLines: [], expenses: 0, byShop: [] as Array<{ name: string; shopProfit: number; neighborProfit: number; expenses: number; net: number }> }
+    return { shopLines: [], expenses: 0, byShop: [] as Array<{ name: string; shopProfit: number; expenses: number; net: number }> }
   }
   const branchId = await viewBranchFilter(user)
-  const [sales, fills, expenseRows] = await Promise.all([
+  const [sales, expenseRows] = await Promise.all([
     prisma.sale.findMany({
-      where: { status: "COMPLETED", saleType: { not: "NEIGHBOR_FILL" }, ...(branchId ? { branchId } : {}) },
+      where: { status: "COMPLETED", ...(branchId ? { branchId } : {}) },
       include: { branch: true, items: { include: { product: true } } },
       orderBy: { saleDate: "desc" },
-      take: 200,
-    }),
-    prisma.neighborFill.findMany({
-      where: { status: { in: ["SOLD", "SETTLED"] }, ...(branchId ? { branchId } : {}) },
-      include: { branch: true, customer: true, product: true },
-      orderBy: { createdAt: "desc" },
       take: 200,
     }),
     prisma.expense.findMany({
@@ -1497,38 +1491,21 @@ export async function getProfitData() {
     })
   )
 
-  const neighborLines = fills.map((row) => ({
-    id: row.id,
-    fillNumber: row.fillNumber,
-    shop: row.branch.name,
-    neighbor: row.neighborName,
-    customer: row.customer.name,
-    item: row.product.name,
-    sell: money(row.sellPrice),
-    cost: money(row.neighborCost),
-    profit: money(row.profit),
-    paidToNeighbor: money(row.moneySentToNeighbor),
-    status: row.status,
-    date: row.soldAt ?? row.createdAt,
-  }))
-
-  const shopByKey = new Map<string, { name: string; shopProfit: number; neighborProfit: number; expenses: number }>()
+  const shopByKey = new Map<string, { name: string; shopProfit: number; expenses: number }>()
   function bucket(name: string) {
-    const current = shopByKey.get(name) ?? { name, shopProfit: 0, neighborProfit: 0, expenses: 0 }
+    const current = shopByKey.get(name) ?? { name, shopProfit: 0, expenses: 0 }
     shopByKey.set(name, current)
     return current
   }
   for (const line of shopLines) bucket(line.shop).shopProfit += line.profit
-  for (const line of neighborLines) bucket(line.shop).neighborProfit += line.profit
   for (const row of expenseRows) bucket(row.branch.name).expenses += money(row.amount)
 
   const byShop = [...shopByKey.values()]
-    .map((row) => ({ ...row, net: row.shopProfit + row.neighborProfit - row.expenses }))
+    .map((row) => ({ ...row, net: row.shopProfit - row.expenses }))
     .sort((a, b) => b.net - a.net)
 
   return {
     shopLines,
-    neighborLines,
     expenses: expenseRows.reduce((sum, row) => sum + money(row.amount), 0),
     byShop,
   }

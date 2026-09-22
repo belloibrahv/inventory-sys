@@ -19,7 +19,6 @@ export const VIEW_PERMS = [
   { key: "view.customers", label: "Customers & money owed", href: "/customers" },
   { key: "view.suppliers", label: "Suppliers", href: "/suppliers" },
   { key: "view.transfers", label: "Shop to shop", href: "/transfers" },
-  { key: "view.neighbor-fills", label: "Stock Outsourcing (Neighbour shop fill)", href: "/neighbor-fills" },
   { key: "view.returns", label: "Returns", href: "/returns" },
   { key: "view.swaps", label: "Swap Deal", href: "/swaps" },
   { key: "view.repairs", label: "Repairs", href: "/repairs" },
@@ -44,7 +43,6 @@ export const ACTION_PERMS = [
   { key: "action.intake", label: "Put one phone on the shelf" },
   { key: "action.incoming", label: "Book goods on the way" },
   { key: "action.transfer", label: "Send and receive shop to shop" },
-  { key: "action.neighbor", label: "Buy from next door" },
   { key: "action.return", label: "Take a return" },
   { key: "action.swap", label: "Record a Swap Deal" },
   { key: "action.repair", label: "Open and move a repair" },
@@ -115,10 +113,10 @@ const DEFAULTS: Record<UserRole, string[]> = {
   ACCOUNTANT: ACCOUNTANT_KEYS,
   BRANCH_MANAGER: V(
     "view.dashboard", "view.owner", "view.products", "view.uploads", "view.imei", "view.inventory", "view.incoming", "view.sales", "view.pos",
-    "view.purchases", "view.customers", "view.suppliers", "view.transfers", "view.neighbor-fills", "view.returns",
+    "view.purchases", "view.customers", "view.suppliers", "view.transfers", "view.returns",
     "view.swaps", "view.repairs", "view.reconciliation", "view.finance", "view.expenses", "view.profits",
     "view.approvals", "view.staff", "view.reports", "view.notifications",
-    "action.sell", "action.upload", "action.intake", "action.incoming", "action.transfer", "action.neighbor",
+    "action.sell", "action.upload", "action.intake", "action.incoming", "action.transfer",
     "action.return", "action.swap", "action.repair", "action.recon", "action.approve", "action.finance", "action.staff",
     "action.see_cost"
   ),
@@ -132,12 +130,12 @@ const DEFAULTS: Record<UserRole, string[]> = {
     "action.upload", "action.intake", "action.catalog", "action.all_branches"
   ),
   CASHIER: V(
-    "view.dashboard", "view.pos", "view.sales", "view.customers", "view.expenses", "view.finance", "view.neighbor-fills", "view.returns", "view.notifications",
-    "action.sell", "action.neighbor", "action.return", "action.finance", "action.see_cost"
+    "view.dashboard", "view.pos", "view.sales", "view.customers", "view.expenses", "view.finance", "view.returns", "view.notifications",
+    "action.sell", "action.return", "action.finance", "action.see_cost"
   ),
   SALES_EXECUTIVE: V(
-    "view.dashboard", "view.pos", "view.sales", "view.customers", "view.products", "view.expenses", "view.finance", "view.neighbor-fills", "view.returns", "view.notifications",
-    "action.sell", "action.neighbor", "action.return", "action.finance", "action.see_cost"
+    "view.dashboard", "view.pos", "view.sales", "view.customers", "view.products", "view.expenses", "view.finance", "view.returns", "view.notifications",
+    "action.sell", "action.return", "action.finance", "action.see_cost"
   ),
   ENGINEER: V(
     "view.dashboard", "view.imei", "view.repairs", "view.returns", "view.customers", "view.notifications",
@@ -228,7 +226,6 @@ export const ensureRolePermissions = cache(async () => {
           "action.intake",
           "action.incoming",
           "action.transfer",
-          "action.neighbor",
           "action.return",
           "action.swap",
           "action.repair",

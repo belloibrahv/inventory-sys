@@ -31,7 +31,6 @@ const MOVE_WORDS: Record<string, string> = {
   SWAP_IN: "Taken in on a swap",
   REPAIR_OUT: "Went to the bench",
   REPAIR_IN: "Back from the bench",
-  NEIGHBOR_FILL: "Filled for a neighbour",
   COUNT_ADJUST: "Stock count",
   HAND_CORRECTION: "Corrected by hand",
 }

@@ -101,7 +101,6 @@ async function main() {
       ["repairs", () => prisma.repair.updateMany({ where: { branchId: from.id }, data: { branchId: to.id } }), () => prisma.repair.count({ where: { branchId: from.id } })],
       ["stock counts", () => prisma.reconciliation.updateMany({ where: { branchId: from.id }, data: { branchId: to.id } }), () => prisma.reconciliation.count({ where: { branchId: from.id } })],
       ["goods on the way", () => prisma.incomingLot.updateMany({ where: { branchId: from.id }, data: { branchId: to.id } }), () => prisma.incomingLot.count({ where: { branchId: from.id } })],
-      ["neighbor fills", () => prisma.neighborFill.updateMany({ where: { branchId: from.id }, data: { branchId: to.id } }), () => prisma.neighborFill.count({ where: { branchId: from.id } })],
       ["day closes", () => prisma.dayClose.updateMany({ where: { branchId: from.id }, data: { branchId: to.id } }), () => prisma.dayClose.count({ where: { branchId: from.id } })],
       ["parked sales", () => prisma.parkedSale.updateMany({ where: { branchId: from.id }, data: { branchId: to.id } }), () => prisma.parkedSale.count({ where: { branchId: from.id } })],
       ["staff", () => prisma.user.updateMany({ where: { branchId: from.id }, data: { branchId: to.id } }), () => prisma.user.count({ where: { branchId: from.id } })],

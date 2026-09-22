@@ -1,28 +1,21 @@
 /**
- * Take a database that has been used for demos and leave only the real shop.
+ * Clear stock and trading history so a shop can load a fresh opening stock Excel.
  *
- * What it REMOVES: every movement and every record that came from a demo or a
- * test run - sales, payments, purchases, IMEIs, stock, products, customers,
- * suppliers, expenses, transfers, swaps, repairs, returns, stock counts, day
- * closes, finance entries, approvals, notifications, the audit trail, and every
- * login except the ones named with --keep.
+ * Removes: opening stock, IMEIs, shelf counts, products, purchases, sales,
+ * transfers, returns, swaps, repairs, and related money trails.
  *
- * What it KEEPS: the three real shops (Iwo Road, Bodija, Challenge), the company
- * settings that print on invoices, the role permission ticks, and the logins you
- * name with --keep.
+ * Keeps: shops, settings, role permissions, and logins named with --keep
+ * or --keep-roster.
  *
- * It refuses to run without --apply, and prints exactly what it would delete
- * first. Take a database backup before running with --apply: this cannot be
- * undone.
+ *   npx tsx scripts/clear-stock-for-reopen.ts --keep-roster
+ *   npx tsx scripts/clear-stock-for-reopen.ts --keep-roster --apply
  *
- *   npx tsx scripts/purge-demo-data.ts                       # dry run, deletes nothing
- *   npx tsx scripts/purge-demo-data.ts --keep owner@abutwins.com --apply
+ * Take a Railway backup before --apply. This cannot be undone.
  */
 import { PrismaClient } from "@prisma/client"
 import { SEATS } from "./staff-roster"
 
 const prisma = new PrismaClient()
-
 const APPLY = process.argv.includes("--apply")
 
 function keepEmails() {
@@ -30,9 +23,6 @@ function keepEmails() {
   process.argv.forEach((value, i) => {
     if (value === "--keep" && process.argv[i + 1]) out.push(process.argv[i + 1].toLowerCase().trim())
   })
-  // --keep-roster keeps every real seat in scripts/staff-roster.ts, which is the
-  // same list create-staff.ts builds from. Sharing one list is what stops a purge
-  // deleting the accounts that were just created for the shop.
   if (process.argv.includes("--keep-roster")) {
     for (const seat of SEATS) out.push(seat.email.toLowerCase())
   }
@@ -41,8 +31,12 @@ function keepEmails() {
 
 async function main() {
   const keep = keepEmails()
+  const users = await prisma.user.findMany({ select: { email: true, name: true, role: true } })
+  const kept = users.filter((user) => keep.includes(user.email.toLowerCase()))
+  const doomed = users.filter((user) => !keep.includes(user.email.toLowerCase()))
 
   const counts = {
+    openingStock: await prisma.openingStock.count(),
     auditLog: await prisma.auditLog.count(),
     notification: await prisma.notification.count(),
     approval: await prisma.approval.count(),
@@ -52,13 +46,12 @@ async function main() {
     ledgerEntry: await prisma.ledgerEntry.count(),
     payment: await prisma.payment.count(),
     saleItem: await prisma.saleItem.count(),
+    neighborFill: 0, // removed feature
     stockReturn: await prisma.stockReturn.count(),
     repair: await prisma.repair.count(),
     swap: await prisma.swap.count(),
-    neighborFill: 0, // removed feature
     parkedSale: await prisma.parkedSale.count(),
     dayClose: await prisma.dayClose.count(),
-    openingStock: await prisma.openingStock.count(),
     imeiRecord: await prisma.imeiRecord.count(),
     sale: await prisma.sale.count(),
     incomingItem: await prisma.incomingItem.count(),
@@ -77,42 +70,28 @@ async function main() {
     category: await prisma.category.count(),
   }
 
-  const users = await prisma.user.findMany({ select: { email: true, name: true, role: true } })
-  const doomed = users.filter((user) => !keep.includes(user.email.toLowerCase()))
-  const kept = users.filter((user) => keep.includes(user.email.toLowerCase()))
-
-  console.log(APPLY ? "APPLYING - this cannot be undone\n" : "DRY RUN - nothing will be deleted\n")
-  console.log("Rows to delete:")
+  console.log(APPLY ? "APPLYING on this database — cannot be undone\n" : "DRY RUN — nothing will be deleted\n")
+  console.log("Stock and trading rows that will go:")
   for (const [table, n] of Object.entries(counts)) {
     if (n > 0) console.log(`  ${String(n).padStart(6)}  ${table}`)
   }
-  console.log(`\nLogins to delete (${doomed.length}):`)
-  for (const user of doomed) console.log(`  ${user.email}  (${user.role})`)
   console.log(`\nLogins to keep (${kept.length}):`)
   for (const user of kept) console.log(`  ${user.email}  (${user.role})`)
-  for (const email of keep) {
-    if (!kept.some((u) => u.email.toLowerCase() === email)) {
-      console.log(`  !! ${email} is not on this database, so nothing will be kept under that name`)
-    }
+  if (doomed.length) {
+    console.log(`\nExtra logins left on the system (${doomed.length}) — not deleted by this script:`)
+    for (const user of doomed.slice(0, 20)) console.log(`  ${user.email}  (${user.role})`)
+    if (doomed.length > 20) console.log(`  … and ${doomed.length - 20} more`)
   }
 
-  const branches = await prisma.branch.count()
-  const settings = await prisma.setting.count()
-  const perms = await prisma.rolePermission.count()
-  console.log(`\nKeeping ${branches} shops, ${settings} company settings, ${perms} role permission rows.`)
-
+  if (kept.length === 0) {
+    throw new Error("Name at least one login with --keep or use --keep-roster so someone can still sign in.")
+  }
   if (!APPLY) {
-    console.log("\nNothing was changed. Re-run with --apply once the list above is right.")
+    console.log("\nNothing was changed. Re-run with --apply when the list above is right.")
     return
   }
-  if (kept.length === 0) {
-    throw new Error(
-      "Refusing to delete every login: nobody could sign in afterwards. Name the real one with --keep, " +
-        "or create it first with scripts/create-owner.ts."
-    )
-  }
 
-  // Children before parents, so a foreign key never blocks the delete.
+  // Children before parents so foreign keys never block.
   await prisma.auditLog.deleteMany()
   await prisma.notification.deleteMany()
   await prisma.approval.deleteMany()
@@ -144,9 +123,18 @@ async function main() {
   await prisma.supplier.deleteMany()
   await prisma.brand.deleteMany()
   await prisma.category.deleteMany()
-  await prisma.user.deleteMany({ where: { email: { notIn: kept.map((u) => u.email) } } })
 
-  console.log("\nDone. The shops, the company settings, the role permissions and the kept logins are still here.")
+  const left = {
+    openingStock: await prisma.openingStock.count(),
+    imeiRecord: await prisma.imeiRecord.count(),
+    inventory: await prisma.inventory.count(),
+    product: await prisma.product.count(),
+    purchase: await prisma.purchase.count(),
+  }
+  console.log("\nDone. Stock is clear.")
+  console.log("Remaining:", left)
+  console.log("Shops, settings, role permissions, and kept logins are still here.")
+  console.log("Next: Upload stock → Many at once (Excel) for Iwo Road.")
 }
 
 main()

@@ -239,13 +239,12 @@ async function databaseProblems(plan: CorrectionPlan, lines: BookLine[], purchas
       select: {
         imei1: true,
         serialNumber: true,
-        _count: { select: { saleItems: true, returns: true, repairs: true, swapsOld: true, swapsNew: true, neighborFills: true } },
+        _count: { select: { saleItems: true, returns: true, repairs: true, swapsOld: true, swapsNew: true } },
       },
     })
     for (const row of rows) {
       const used = Object.values(row._count).some((n) => n > 0)
-      if (used) problems.push(`${identityOf(row)} already has a sale, return, repair or swap on it, so it cannot be taken off.`)
-    }
+      if (used) problems.push(`${identityOf(row)} already has a sale, return, repair or swap on it, so it cannot be taken off.`)    }
   }
 
   for (const change of plan.changes) {

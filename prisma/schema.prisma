@@ -161,12 +161,6 @@ enum SupplierKind {
   NEIGHBOR
 }
 
-enum NeighborFillStatus {
-  OPEN
-  SOLD
-  SETTLED
-}
-
 enum ExpenseCategory {
   TRANSPORT
   FUEL
@@ -265,7 +259,6 @@ model User {
   incomingLots    IncomingLot[]
   dayCloses       DayClose[]
   parkedSales     ParkedSale[]
-  neighborFills   NeighborFill[]
   stockMoves      StockMovement[]
 
   @@index([email])
@@ -302,7 +295,6 @@ model Branch {
   incomingLots    IncomingLot[]
   dayCloses       DayClose[]
   parkedSales     ParkedSale[]
-  neighborFills   NeighborFill[]
   stockMoves      StockMovement[]
   openingStock    OpeningStock?
   bankAccounts    BankAccount[]
@@ -368,7 +360,6 @@ model Product {
   swaps         Swap[]
   reconItems    ReconciliationItem[]
   incomingItems IncomingItem[]
-  neighborFills NeighborFill[]
   stockMoves    StockMovement[]
 
   @@index([sku])
@@ -424,7 +415,6 @@ model ImeiRecord {
   repairs       Repair[]
   swapsOld      Swap[]         @relation("SwapOld")
   swapsNew      Swap[]         @relation("SwapNew")
-  neighborFills NeighborFill[]
 
   @@index([imei1])
   @@index([imei2])
@@ -455,7 +445,6 @@ enum StockMoveKind {
   SWAP_IN
   REPAIR_OUT
   REPAIR_IN
-  NEIGHBOR_FILL
   COUNT_ADJUST
   HAND_CORRECTION
 }
@@ -531,7 +520,6 @@ model Supplier {
   imeiRecords   ImeiRecord[]
   incomingLots  IncomingLot[]
   stockReturns  StockReturn[]
-  neighborFills NeighborFill[]
 
   @@index([isActive])
   @@index([kind])
@@ -623,7 +611,6 @@ model Sale {
   items         SaleItem[]
   payments      Payment[]
   imeis         ImeiRecord[]
-  neighborFills NeighborFill[]
 
   @@index([invoiceNumber])
   @@index([branchId])
@@ -703,7 +690,6 @@ model Customer {
   returns       StockReturn[]
   swaps         Swap[]
   repairs       Repair[]
-  neighborFills NeighborFill[]
 
   @@index([phone])
   @@index([branchId])
@@ -1131,44 +1117,6 @@ model IncomingItem {
 
   @@index([lotId])
   @@index([productId])
-}
-
-model NeighborFill {
-  id                  String             @id @default(cuid())
-  fillNumber          String             @unique
-  branchId            String
-  branch              Branch             @relation(fields: [branchId], references: [id])
-  neighborName        String
-  neighborPhone       String?
-  supplierId          String?
-  supplier            Supplier?          @relation(fields: [supplierId], references: [id])
-  customerId          String
-  customer            Customer           @relation(fields: [customerId], references: [id])
-  productId           String
-  product             Product            @relation(fields: [productId], references: [id])
-  imei1               String?
-  imeiId              String?
-  imei                ImeiRecord?        @relation(fields: [imeiId], references: [id])
-  neighborCost        Decimal
-  sellPrice           Decimal
-  profit              Decimal
-  moneySentToNeighbor Decimal            @default(0)
-  saleId              String?
-  sale                Sale?              @relation(fields: [saleId], references: [id])
-  status              NeighborFillStatus @default(OPEN)
-  paymentMethod       String?
-  notes               String?
-  userId              String
-  user                User               @relation(fields: [userId], references: [id])
-  soldAt              DateTime?
-  settledAt           DateTime?
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
-
-  @@index([fillNumber])
-  @@index([branchId])
-  @@index([status])
-  @@index([customerId])
 }
 
 model RolePermission {

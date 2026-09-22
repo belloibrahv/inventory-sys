@@ -132,7 +132,6 @@ export async function getOwnerBoard(dayKey?: string) {
       where: {
         sale: {
           status: "COMPLETED",
-          saleType: { not: "NEIGHBOR_FILL" },
           saleDate: today,
           ...shopWhere,
         },
@@ -168,7 +167,6 @@ export async function getOwnerBoard(dayKey?: string) {
       where: {
         sale: {
           status: "COMPLETED",
-          saleType: { not: "NEIGHBOR_FILL" },
           saleDate: spanWindow(trendFrom, day),
           ...shopWhere,
         },
@@ -186,7 +184,6 @@ export async function getOwnerBoard(dayKey?: string) {
       where: {
         sale: {
           status: "COMPLETED",
-          saleType: { not: "NEIGHBOR_FILL" },
           saleDate: spanWindow(rateFrom, day),
           ...shopWhere,
         },
