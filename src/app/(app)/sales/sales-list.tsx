@@ -5,7 +5,14 @@ import Link from "next/link"
 import { FilterChips } from "@/components/filter-chips"
 import { StatusBadge } from "@/components/shared"
 import { TablePager, usePagedRows } from "@/components/table-pager"
-import { formatShopWhen, matchesWhenFilter, type WhenFilter } from "@/lib/lagos-day"
+import { Input } from "@/components/ui/input"
+import {
+  formatShopWhen,
+  matchesDayRange,
+  type WhenFilter,
+  whenChipFromRange,
+  whenFilterRange,
+} from "@/lib/lagos-day"
 import { formatCurrency, money } from "@/lib/utils"
 import { statusLabel } from "@/lib/status"
 
@@ -38,26 +45,31 @@ function saleBalance(sale: SaleRow) {
 
 export function SalesList({ sales }: { sales: SaleRow[] }) {
   const [pay, setPay] = useState<PayFilter>("all")
-  const [when, setWhen] = useState<WhenFilter>("all")
+  const [from, setFrom] = useState("")
+  const [to, setTo] = useState("")
+
+  const when = whenChipFromRange(from, to)
+
+  const inRange = (sale: SaleRow) => matchesDayRange(sale.saleDate, from, to)
 
   const filtered = useMemo(
     () =>
       sales.filter((sale) => {
         if (pay !== "all" && payKey(sale) !== pay) return false
-        return matchesWhenFilter(sale.saleDate, when)
+        return inRange(sale)
       }),
-    [sales, pay, when]
+    [sales, pay, from, to]
   )
 
   const counts = useMemo(() => {
-    const base = when === "all" ? sales : sales.filter((sale) => matchesWhenFilter(sale.saleDate, when))
+    const base = sales.filter(inRange)
     return {
       all: base.length,
       paid: base.filter((sale) => payKey(sale) === "paid").length,
       part: base.filter((sale) => payKey(sale) === "part").length,
       unpaid: base.filter((sale) => payKey(sale) === "unpaid").length,
     }
-  }, [sales, when])
+  }, [sales, from, to])
 
   const totals = useMemo(() => {
     return filtered.reduce(
@@ -73,7 +85,14 @@ export function SalesList({ sales }: { sales: SaleRow[] }) {
     )
   }, [filtered])
 
-  const pager = usePagedRows(filtered, `${pay}|${when}`)
+  const pager = usePagedRows(filtered, `${pay}|${from}|${to}`)
+
+  function pickChip(key: WhenFilter) {
+    if (key === "custom") return
+    const range = whenFilterRange(key)
+    setFrom(range.from)
+    setTo(range.to)
+  }
 
   return (
     <div className="space-y-4">
@@ -92,14 +111,54 @@ export function SalesList({ sales }: { sales: SaleRow[] }) {
         <FilterChips
           label="When it was sold"
           activeKey={when}
-          onSelect={(key) => setWhen(key as WhenFilter)}
+          onSelect={(key) => pickChip(key as WhenFilter)}
           chips={[
             { key: "all", label: "Any day" },
             { key: "today", label: "Today", tone: "primary" },
             { key: "week", label: "Last 7 days" },
             { key: "month", label: "Last 30 days" },
+            ...(when === "custom" ? [{ key: "custom", label: "Chosen days", tone: "primary" as const }] : []),
           ]}
         />
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-sm">
+            <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              First day
+            </span>
+            <Input
+              type="date"
+              value={from}
+              onChange={(event) => setFrom(event.target.value)}
+              aria-label="First day sold"
+            />
+          </label>
+          <label className="text-sm">
+            <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Last day
+            </span>
+            <Input
+              type="date"
+              value={to}
+              onChange={(event) => setTo(event.target.value)}
+              aria-label="Last day sold"
+            />
+          </label>
+          {from || to ? (
+            <button
+              type="button"
+              className="min-h-10 rounded-lg border border-border px-3 text-sm font-medium hover:bg-muted"
+              onClick={() => {
+                setFrom("")
+                setTo("")
+              }}
+            >
+              Clear chosen days
+            </button>
+          ) : null}
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Tap a chip for a quick stretch, or pick First day and Last day for any dates you need. Totals follow those days.
+        </p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
@@ -206,7 +265,7 @@ export function SalesList({ sales }: { sales: SaleRow[] }) {
                   <td className="px-4 py-8 text-sm text-muted-foreground" colSpan={9}>
                     {sales.length === 0
                       ? "No sales on the books yet."
-                      : "No sale matches this filter. Tap another chip above."}
+                      : "No sale matches this filter. Pick other days or money chips above."}
                   </td>
                 </tr>
               ) : (

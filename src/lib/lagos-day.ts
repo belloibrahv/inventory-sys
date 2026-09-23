@@ -92,9 +92,54 @@ export function formatShopDay(date: Date | string | null | undefined) {
   }).format(value)
 }
 
-/** Client list chips: Any day / Today / Last 7 days / Last 30 days. */
-export type WhenFilter = "all" | "today" | "week" | "month"
+/** Client list chips: Any day / Today / Last 7 days / Last 30 days, plus a chosen stretch. */
+export type WhenFilter = "all" | "today" | "week" | "month" | "custom"
 export type ShopRange = "day" | "week" | "month"
+
+const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/
+
+export function isWatDayKey(value: string) {
+  return DAY_KEY.test(value)
+}
+
+/** Inclusive Lagos days. Empty first or last day means open on that side. Swaps if first is after last. */
+export function orderedDayRange(from: string, to: string) {
+  const start = isWatDayKey(from) ? from : ""
+  const end = isWatDayKey(to) ? to : ""
+  if (start && end && start > end) return { from: end, to: start }
+  return { from: start, to: end }
+}
+
+export function whenFilterRange(when: Exclude<WhenFilter, "custom">, today = watDayKey()) {
+  if (when === "today") return { from: today, to: today }
+  if (when === "week") return { from: shiftWatDay(today, -6), to: today }
+  if (when === "month") return { from: shiftWatDay(today, -29), to: today }
+  return { from: "", to: "" }
+}
+
+export function whenChipFromRange(from: string, to: string, today = watDayKey()): WhenFilter {
+  const range = orderedDayRange(from, to)
+  if (!range.from && !range.to) return "all"
+  const todayRange = whenFilterRange("today", today)
+  const weekRange = whenFilterRange("week", today)
+  const monthRange = whenFilterRange("month", today)
+  if (range.from === todayRange.from && range.to === todayRange.to) return "today"
+  if (range.from === weekRange.from && range.to === weekRange.to) return "week"
+  if (range.from === monthRange.from && range.to === monthRange.to) return "month"
+  return "custom"
+}
+
+export function matchesDayRange(date: Date | string | null | undefined, from: string, to: string) {
+  const range = orderedDayRange(from, to)
+  if (!range.from && !range.to) return true
+  if (!date) return false
+  const value = new Date(date)
+  if (Number.isNaN(value.getTime())) return false
+  const day = watDayKey(value)
+  if (range.from && day < range.from) return false
+  if (range.to && day > range.to) return false
+  return true
+}
 
 /** One Lagos day, the last 7 days ending on `day`, or this month up to `day`. */
 export function shopPeriodWindow(day: string, range: ShopRange) {

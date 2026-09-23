@@ -206,9 +206,9 @@ const PAGES: Array<
     href: "/sales",
     title: "Sales",
     needAction: "action.sell",
-    what: "Every invoice. The list shows Branch, Customer, Sales, Paid, Balance, and Payment method in their own columns. Balance is paid minus sales, so a buyer who still owes shows a negative balance. Totals at the top and foot of the list follow the day filter. Open one bill to collect remaining money, attach a buyer name, or print. The invoice itself cannot be edited.",
+    what: "Every invoice. The list shows Branch, Customer, Sales, Paid, Balance, and Payment method in their own columns. Balance is paid minus sales, so a buyer who still owes shows a negative balance. Totals at the top and foot of the list follow the days you pick. Open one bill to collect remaining money, attach a buyer name, or print. The invoice itself cannot be edited.",
     doThis: [
-      "Tap Today, Last 7 days, or Last 30 days to match a cashier day or stretch of days.",
+      "Tap Today, Last 7 days, or Last 30 days, or pick First day and Last day for any stretch you need.",
       "Read Sales value, Payments received, and Balance at the top. They must match the rows below.",
       "Open an invoice. Read the note that this sale cannot be changed.",
       "Print the invoice. The paper has the blue header and the ab mark.",
