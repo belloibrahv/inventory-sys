@@ -1,5 +1,5 @@
 import { keyName } from "@/lib/table-file"
-import { parseShopCondition } from "@/lib/conditions"
+import { parseShopCondition, shopConditionHelp } from "@/lib/conditions"
 import type { ProductCondition, ProductTracking } from "@prisma/client"
 
 /**
@@ -360,7 +360,7 @@ export function planOpeningStock(
 
       const condition = mapCondition(at(row, headers.condition))
       if (!condition) {
-        problems.push(`${label}: condition "${at(row, headers.condition)}" is not one we know. Use Brand New, Brand New (Locked), Brand New (N/A), UK, UK (Locked), Open Box, or Standard.`)
+        problems.push(`${label}: condition "${at(row, headers.condition)}" is not one we know. Use ${shopConditionHelp()}.`)
         continue
       }
 

@@ -3,7 +3,7 @@ import { formatCondition } from "@/lib/status"
 
 /**
  * How the phone looks when it is booked into the shop.
- * Same seven words as Add item and Upload stock.
+ * Same list as Add item and Upload stock.
  */
 export const PHONE_LOOK_OPTIONS = SHOP_CONDITION_OPTIONS
 

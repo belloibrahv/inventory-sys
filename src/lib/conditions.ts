@@ -13,6 +13,7 @@ export const SHOP_CONDITION_OPTIONS = [
   { value: "UK_LOCKED", label: "UK (Locked)" },
   { value: "OPEN_BOX", label: "Open Box" },
   { value: "STANDARD", label: "Standard" },
+  { value: "FAULTY", label: "Faulty" },
 ] as const
 
 export type ShopConditionValue = (typeof SHOP_CONDITION_OPTIONS)[number]["value"]
@@ -75,10 +76,18 @@ export function parseShopCondition(raw?: string | null): ProductCondition | null
   if (words.includes("uk")) return "UK_USED"
   if (words.includes("open") && words.includes("box")) return "OPEN_BOX"
   if (words.includes("standard")) return "STANDARD"
+  if (words.includes("fault") || words.includes("damage")) return "FAULTY"
   if (words.includes("non") && words.includes("active")) return "FAULTY"
   return null
 }
 
 export function isShopCondition(value: string): value is ShopConditionValue {
   return SHOP_CONDITION_OPTIONS.some((row) => row.value === value)
+}
+
+/** Full How the phone looks list, for error lines and the guidebook. */
+export function shopConditionHelp() {
+  const names = SHOP_CONDITION_OPTIONS.map((row) => row.label)
+  if (names.length < 2) return names[0] ?? ""
+  return `${names.slice(0, -1).join(", ")}, or ${names[names.length - 1]}`
 }

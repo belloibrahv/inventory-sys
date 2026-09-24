@@ -369,6 +369,7 @@ function formatConditionSearch(condition: string) {
   if (condition === "UK_LOCKED") return "uk locked"
   if (condition === "OPEN_BOX" || condition === "OPENBOX") return "open box openbox"
   if (condition === "STANDARD") return "standard"
+  if (condition === "FAULTY") return "faulty damaged"
   return condition.toLowerCase()
 }
 

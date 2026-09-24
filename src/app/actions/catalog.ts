@@ -10,7 +10,7 @@ import { canHardDelete, canManageCatalog } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { shopError } from "@/lib/shop-speak"
 import { UNSAFE_KEYS } from "@/lib/table-file"
-import { parseShopCondition } from "@/lib/conditions"
+import { parseShopCondition, shopConditionHelp } from "@/lib/conditions"
 import { makeOpeningSku } from "@/lib/opening-stock"
 
 async function findOrCreateBrand(name: string) {
@@ -485,7 +485,7 @@ export async function importProducts(formData: FormData) {
     const tracking = TRACKING[trackingKey] || "IMEI"
     const condition = parseShopCondition(cell(row, "condition") || "BRAND_NEW")
     if (!condition) {
-      errors.push(`Line ${line}: How the phone looks is not one we know. Use Brand New, Brand New (Locked), Brand New (N/A), UK, UK (Locked), Open Box, or Standard.`)
+      errors.push(`Line ${line}: How the phone looks is not one we know. Use ${shopConditionHelp()}.`)
       continue
     }
 

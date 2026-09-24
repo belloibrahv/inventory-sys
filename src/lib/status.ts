@@ -1,3 +1,5 @@
+import { shopConditionLabel } from "@/lib/conditions"
+
 type Tone = "default" | "success" | "warning" | "danger" | "info" | "muted"
 
 const map: Record<string, Tone> = {
@@ -162,5 +164,5 @@ export type BadgeTone = Tone
 
 export function formatCondition(condition?: string | null): string {
   if (!condition) return ""
-  return labels[condition] ?? statusLabel(condition)
+  return shopConditionLabel(condition) || labels[condition] || statusLabel(condition)
 }
