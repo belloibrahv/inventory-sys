@@ -8,6 +8,9 @@ import type { ProductCondition, ProductTracking } from "@prisma/client"
  * One Excel file per shop. Tabs they already use: PHONES, ACCESSORIES, SCREEN,
  * LAPTOPS. Same columns on every tab. The middle column is either an IMEI, a
  * serial, or a piece count, depending on the tab and what is written there.
+ *
+ * Opening load can take a tab with only PRODUCT NAME. Missing IMEI, serial, or
+ * piece count is filled later on Correct and close opening stock.
  */
 
 export type OpeningIdentity =
@@ -75,9 +78,10 @@ export function makeOpeningSku(parts: { brand: string; name: string; storage: st
 }
 
 function findHeaderRow(grid: string[][]) {
-  for (let i = 0; i < Math.min(grid.length, 8); i += 1) {
+  for (let i = 0; i < Math.min(grid.length, 12); i += 1) {
     const keys = grid[i].map((cell) => keyName(cell))
-    const hits = keys.filter((key) => HEADER_MARKERS.includes(key) || key.includes("product_name") || key.includes("imei") || key.includes("qty")).length
+    if (keys.some((key) => key.includes("product") && key.includes("name"))) return i
+    const hits = keys.filter((key) => HEADER_MARKERS.includes(key) || key.includes("imei") || key.includes("qty")).length
     if (hits >= 3) return i
   }
   return -1
@@ -89,6 +93,7 @@ function mapHeaders(cells: string[]) {
     const key = keyName(cell)
     if (!key) return
     if (key.includes("product") && key.includes("name")) index.name = i
+    else if (key === "name" && index.name == null) index.name = i
     else if (key === "brand") index.brand = i
     else if (key === "category") index.category = i
     else if (key.includes("qty") || key.includes("imei") || key.includes("serial")) index.identity = i
@@ -125,6 +130,39 @@ function sheetHint(sheet: string): "phone" | "laptop" | "pieces" {
   if (key.includes("phone") || key.includes("tablet")) return "phone"
   if (key.includes("laptop") || key.includes("computer") || key.includes("macbook")) return "laptop"
   return "pieces"
+}
+
+/** Empty, N/A, or a placeholder the shop wrote until they have the real number. */
+export function isBlankOpeningIdentity(raw: string) {
+  const value = clean(raw)
+  if (!value) return true
+  const key = keyName(value)
+  if (!key) return true
+  return (
+    key === "na" ||
+    key === "n_a" ||
+    key === "nil" ||
+    key === "none" ||
+    key === "tbd" ||
+    key === "pending" ||
+    key === "later" ||
+    key === "not_yet" ||
+    key === "-" ||
+    key === "--"
+  )
+}
+
+/**
+ * When the IMEI / serial / qty cell is empty, pick tracking from the tab so
+ * staff can add the missing numbers later without inventing them now.
+ */
+export function defaultTrackingForSheet(sheet: string): ProductTracking {
+  const hint = sheetHint(sheet)
+  if (hint === "laptop") return "SERIAL"
+  if (hint === "phone") return "IMEI"
+  const key = keyName(sheet)
+  if (key.includes("accessor") || key.includes("screen")) return "NONE"
+  return "IMEI"
 }
 
 function defaultCategory(sheet: string, written: string) {
@@ -204,6 +242,9 @@ export type OpeningOptions = {
    * right answer. On only for the one-off opening load, where a shop's existing
    * accessories often have no cost written down and holding back the whole shelf
    * would be worse than loading it with the price left to fill in.
+   *
+   * The same flag also lets a row load with only PRODUCT NAME. IMEI, serial, and
+   * piece count can be added later on Correct and close opening stock.
    */
   allowMissingPrices?: boolean
 }
@@ -234,9 +275,34 @@ export function planOpeningStock(
       continue
     }
     const headers = mapHeaders(grid[headerAt])
-    if (headers.name == null || headers.identity == null) {
+    if (headers.name == null) {
+      problems.push(`Tab ${sheet}: the header must include PRODUCT NAME.`)
+      continue
+    }
+    if (headers.identity == null && !options.allowMissingPrices) {
       problems.push(`Tab ${sheet}: the header must include PRODUCT NAME and QTY/IMEI/SERIAL NO.`)
       continue
+    }
+
+    const putDraft = (draft: OpeningProductDraft, label: string, itemName: string): string | null => {
+      const key = productKey(draft)
+      const existing = products.get(key)
+      if (existing) {
+        if (existing.tracking !== draft.tracking) {
+          problems.push(`${label}: ${itemName} was already listed with a different tracking type. Keep one model consistent.`)
+          return null
+        }
+        return key
+      }
+      let sku = draft.sku
+      let n = 2
+      while ([...products.values()].some((p) => p.sku === sku && productKey(p) !== key)) {
+        sku = `${draft.sku}-${n}`.slice(0, 60)
+        n += 1
+      }
+      draft.sku = sku
+      products.set(key, draft)
+      return key
     }
 
     for (let r = headerAt + 1; r < grid.length; r += 1) {
@@ -280,16 +346,8 @@ export function planOpeningStock(
 
       const costPrice = costOk ? rawCost : 0
       const minSell = sellOk ? rawMinSell : 0
-
-      const identity = classifyOpeningIdentity(sheet, identityRaw)
-      if (identity.kind === "bad") {
-        setAside.push(`${label}: ${name}: ${identity.reason}.`)
-        continue
-      }
-
       const storage = at(row, headers.spec) || null
-      const tracking: ProductTracking = identity.kind === "qty" ? "NONE" : identity.kind === "imei" ? "IMEI" : "SERIAL"
-      const draft: OpeningProductDraft = {
+      const makeDraft = (tracking: ProductTracking): OpeningProductDraft => ({
         sku: makeOpeningSku({ brand: brandName, name, storage: storage || "", condition }),
         name,
         brand: brandName,
@@ -300,26 +358,25 @@ export function planOpeningStock(
         costPrice,
         minimumPrice: minSell,
         sellingPrice: minSell,
+      })
+
+      const namesOnly = options.allowMissingPrices && isBlankOpeningIdentity(identityRaw)
+      if (namesOnly) {
+        const tracking = defaultTrackingForSheet(sheet)
+        const key = putDraft(makeDraft(tracking), label, name)
+        if (!key) continue
+        continue
       }
-      const key = productKey(draft)
-      const existing = products.get(key)
-      if (existing) {
-        if (existing.tracking !== draft.tracking) {
-          problems.push(`${label}: ${name} was already listed with a different tracking type. Keep one model consistent.`)
-          continue
-        }
-        // Keep the first prices; later rows of the same model may differ slightly.
-      } else {
-        // Avoid SKU clashes when two models collapse to the same slug.
-        let sku = draft.sku
-        let n = 2
-        while ([...products.values()].some((p) => p.sku === sku && productKey(p) !== key)) {
-          sku = `${draft.sku}-${n}`.slice(0, 60)
-          n += 1
-        }
-        draft.sku = sku
-        products.set(key, draft)
+
+      const identity = classifyOpeningIdentity(sheet, identityRaw)
+      if (identity.kind === "bad") {
+        setAside.push(`${label}: ${name}: ${identity.reason}.`)
+        continue
       }
+
+      const tracking: ProductTracking = identity.kind === "qty" ? "NONE" : identity.kind === "imei" ? "IMEI" : "SERIAL"
+      const key = putDraft(makeDraft(tracking), label, name)
+      if (!key) continue
 
       if (identity.kind === "qty") {
         const prev = qtyByKey.get(key)

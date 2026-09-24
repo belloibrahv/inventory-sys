@@ -108,7 +108,7 @@ function totals(lines: BookLine[]) {
   return {
     value: lines.reduce((sum, line) => sum + line.openingQty * line.costPrice, 0),
     quantity: lines.reduce((sum, line) => sum + line.openingQty, 0),
-    lines: lines.filter((line) => line.openingQty > 0).length,
+    lines: lines.length,
   }
 }
 
@@ -282,9 +282,9 @@ function describe(plan: CorrectionPlan, lines: BookLine[]) {
     const parts: string[] = []
     const qtyBefore = line.openingQty
     const qtyAfter =
-      line.tracking === "NONE"
-        ? change.quantity ?? qtyBefore
-        : qtyBefore + (change.addIdentities?.length ?? 0) - (change.removeIdentities?.length ?? 0)
+      change.promoteTracking || line.tracking !== "NONE"
+        ? qtyBefore + (change.addIdentities?.length ?? 0) - (change.removeIdentities?.length ?? 0)
+        : change.quantity ?? qtyBefore
     const cost = change.costPrice ?? line.costPrice
     if (qtyAfter !== qtyBefore) parts.push(`count ${qtyBefore} → ${qtyAfter}`)
     if (change.costPrice !== undefined) parts.push(`cost ${naira(line.costPrice)} → ${naira(change.costPrice)}`)
@@ -368,7 +368,14 @@ async function applyPlan(
         }
 
         let qty = line.openingQty
-        if (line.tracking === "NONE") {
+        const tracking = change.promoteTracking ?? line.tracking
+        if (change.promoteTracking) {
+          await tx.product.update({
+            where: { id: line.productId },
+            data: { tracking: change.promoteTracking },
+          })
+        }
+        if (tracking === "NONE") {
           if (change.quantity !== undefined) {
             await moveShelf(tx, line.productId, record.branchId, change.quantity - line.openingQty)
             qty = change.quantity
@@ -378,7 +385,7 @@ async function applyPlan(
             await tx.imeiRecord.create({
               data: {
                 imei1: identity,
-                serialNumber: line.tracking === "SERIAL" ? identity : null,
+                serialNumber: tracking === "SERIAL" ? identity : null,
                 productId: line.productId,
                 branchId: record.branchId,
                 supplierId: record.supplierId,

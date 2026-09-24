@@ -148,7 +148,7 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
           <ol className="grid gap-2 text-sm text-muted-foreground md:grid-cols-4">
             <li><span className="font-semibold text-foreground">1. Download the count sheet.</span> Every item, category, count, cost, both selling prices, and every IMEI.</li>
             <li><span className="font-semibold text-foreground">2. Count the shelf.</span> Tap Phones, Accessories, Screen, or Laptop above the list to give each person their own group. Write what you really find in COUNTED QTY. Mark a missing phone NO.</li>
-            <li><span className="font-semibold text-foreground">3. Correct.</span> Upload the filled sheet and check the preview, or change a line on screen below.</li>
+            <li><span className="font-semibold text-foreground">3. Correct.</span> Upload the filled sheet and check the preview, or change a line on screen below. Add a missing IMEI, serial, or piece count here. Super Admin, CEO, accountant, records checker, and stock uploader can change the list until it is closed.</li>
             <li><span className="font-semibold text-foreground">4. Close.</span> The CEO or main admin closes it. After that it is final and the shop can sell.</li>
           </ol>
         </SectionCard>
@@ -235,7 +235,7 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
         {pager.pageRows.map((line) => {
           const e = edits[line.sku] ?? {}
           const qty =
-            line.tracking === "NONE"
+            line.tracking === "NONE" && !(e.addIdentities?.length)
               ? Number(e.quantity ?? line.openingQty)
               : line.openingQty + (e.addIdentities?.length ?? 0) - (e.removeIdentities?.length ?? 0)
           const cost = Number(e.costPrice ?? line.costPrice)
@@ -252,6 +252,10 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
                 {line.tracking !== "NONE" ? (
                   <button type="button" className="mt-1 text-xs font-medium text-primary hover:underline" onClick={() => setUnitsFor(line)}>
                     {line.tracking === "IMEI" ? "IMEIs" : "Serials"} ({qty}){book.canCorrect ? " · add or take off" : ""}
+                  </button>
+                ) : book.canCorrect && line.openingQty === 0 ? (
+                  <button type="button" className="mt-1 text-xs font-medium text-primary hover:underline" onClick={() => setUnitsFor(line)}>
+                    Add IMEI or serial when you have it
                   </button>
                 ) : null}
               </td>
@@ -368,7 +372,11 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
                   </li>
                 )
               })}
-              {unitsFor.identities.length === 0 ? <li className="px-3 py-6 text-center text-muted-foreground">None listed.</li> : null}
+              {unitsFor.identities.length === 0 ? (
+                <li className="px-3 py-6 text-center text-muted-foreground">
+                  None listed yet. Type each IMEI or serial when you have it, then save the changed lines.
+                </li>
+              ) : null}
             </ul>
             {book.canCorrect ? (
               <p className="text-xs text-muted-foreground">Changes here are saved with Save changed lines on the table.</p>

@@ -66,6 +66,8 @@ export type OpeningChange = {
   sellingPrice?: number
   addIdentities?: string[]
   removeIdentities?: string[]
+  /** Names-only lines start as pieces. Adding an IMEI or serial later switches tracking. */
+  promoteTracking?: ProductTracking
 }
 
 export type NewOpeningItem = {
@@ -243,8 +245,12 @@ export function checkScreenChanges(raw: unknown, lines: BookLine[]): CorrectionP
     const add = list("addIdentities")
     const remove = list("removeIdentities")
     if ((add.length || remove.length) && line.tracking === "NONE") {
-      problems.push(`${line.name} is counted in pieces, so it has no IMEI or serial.`)
-      continue
+      if (line.openingQty > 0 || (quantity !== null && quantity > 0)) {
+        problems.push(`${line.name} is counted in pieces, so it has no IMEI or serial.`)
+        continue
+      }
+      const looksLikeImei = add.some((value) => value.replace(/\D/g, "").length >= 14)
+      next.promoteTracking = looksLikeImei ? "IMEI" : "SERIAL"
     }
     const short = add.find((value) => value.length < 4)
     if (short) {
@@ -255,6 +261,7 @@ export function checkScreenChanges(raw: unknown, lines: BookLine[]): CorrectionP
     const removable = remove.filter((value) => line.identities.includes(value))
     if (addable.length) next.addIdentities = addable
     if (removable.length) next.removeIdentities = removable
+    if (next.promoteTracking) delete next.quantity
 
     if (Object.keys(next).length > 1) out.push(next)
   }
@@ -444,7 +451,14 @@ export function planCorrection(
           continue
         }
         if (line.tracking === "NONE") {
-          problems.push(`${label}: ${line.name} is counted in pieces, so it has no IMEI or serial. Write its count on the ITEMS tab.`)
+          if (line.openingQty > 0) {
+            problems.push(`${label}: ${line.name} is counted in pieces, so it has no IMEI or serial. Write its count on the ITEMS tab.`)
+            continue
+          }
+          const next = change(line)
+          next.addIdentities = [...(next.addIdentities ?? []), identity]
+          const listed = next.addIdentities
+          next.promoteTracking = listed.some((value) => value.replace(/\D/g, "").length >= 14) ? "IMEI" : "SERIAL"
           continue
         }
         const known = line.identities.includes(identity)

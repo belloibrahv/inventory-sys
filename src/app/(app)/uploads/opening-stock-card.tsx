@@ -70,14 +70,15 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
       <p className="text-sm leading-relaxed text-muted-foreground">
         One file for one shop, with tabs for PHONES, ACCESSORIES, SCREEN and LAPTOPS. Pick the shop. If you do not know
         every supplier yet, leave Supplier on Opening Stock. The file books phones and laptops In shop, sets the piece
-        counts, and stores the opening stock value from the unit costs. That value is not a bill to pay.
+        counts, and stores the opening stock value from the unit costs. That value is not a bill to pay. A tab can list
+        only PRODUCT NAME. IMEI, serial, piece count, and prices can be added later on Correct and close opening stock.
       </p>
 
       <ul className="mt-3 grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
-        <li>PHONES tab: one row per phone, IMEI in the QTY/IMEI/SERIAL NO column.</li>
-        <li>LAPTOPS tab: one row per laptop, serial in that same column.</li>
-        <li>ACCESSORIES and SCREEN tabs: how many pieces are on the shelf.</li>
-        <li>Never make up an IMEI. If you send the same phone twice, the first one is not touched.</li>
+        <li>PHONES tab: one row per phone. Put the IMEI in QTY/IMEI/SERIAL NO when you have it. Leave it blank if you will add it later.</li>
+        <li>LAPTOPS tab: one row per laptop. Put the serial in that same column when you have it.</li>
+        <li>ACCESSORIES and SCREEN tabs: how many pieces are on the shelf, or leave the count blank and type it later.</li>
+        <li>Never make up an IMEI. Super Admin, CEO, accountant, records checker, and stock uploader can finish missing details on Correct and close opening stock.</li>
       </ul>
 
       <form

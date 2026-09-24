@@ -429,6 +429,10 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
     pieceLines += 1
   }
 
+  const namesOnlyIds = [...new Set(productIdByKey.values())].filter(
+    (productId) => !unitCounts.has(productId) && !pieceCounts.has(productId)
+  )
+
   await prisma.$transaction(async (tx) => {
     for (const [productId, quantity] of unitCounts) {
       await attachPurchaseLine(tx, {
@@ -448,9 +452,18 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
         markedPaid: false,
       })
     }
+    for (const productId of namesOnlyIds) {
+      await attachPurchaseLine(tx, {
+        purchaseId: purchase.id,
+        productId,
+        quantity: 0,
+        costPrice: costByProductId.get(productId) ?? 0,
+        markedPaid: false,
+      })
+    }
   })
 
-  if (phonesAdded === 0 && pieceLines === 0) {
+  if (phonesAdded === 0 && pieceLines === 0 && namesOnlyIds.length === 0) {
     await prisma.openingStock.deleteMany({ where: { purchaseId: purchase.id } })
     await prisma.purchase.delete({ where: { id: purchase.id } })
     await trail(
@@ -541,10 +554,15 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
       `${alreadyCount} IMEI or serial number(s) were already on the system. Each stays as one entry and was not doubled. Staff can edit later on Correct and close opening stock or Phones and items.`
     )
   }
+  if (namesOnlyIds.length > 0) {
+    softNotes.push(
+      `${namesOnlyIds.length} item name(s) were booked without an IMEI, serial, or piece count. Add those details on Correct and close opening stock.`
+    )
+  }
 
   return {
     success: true,
-    added: productsAdded + phonesAdded + pieceLines,
+    added: productsAdded + phonesAdded + pieceLines + namesOnlyIds.length,
     products: productsAdded,
     phones: phonesAdded,
     pieces: pieceLines,
