@@ -10,6 +10,7 @@ import { readTableFile, readWorkbookGrids } from "@/lib/table-file"
 import { makeOpeningSku, planOpeningStock } from "@/lib/opening-stock"
 import { planCustomers, planImeis, planStock, type CatalogItem, type ShopRef } from "@/lib/upload-plan"
 import {
+  OPENING_STOCK_ALL_SHOPS,
   OPENING_STOCK_METHOD,
   OPENING_STOCK_SUPPLIER_OPTION,
   OPENING_STOCK_SUPPLIER_PHONE,
@@ -22,6 +23,7 @@ import { mapBillCondition, normalizeStorage } from "@/lib/item-specs"
 import { displayPartyName } from "@/lib/party-key"
 import { ensureOpeningStockSupplier, findDuplicateSupplier } from "@/lib/supplier-identity"
 import { resolveWritableShopId, viewBranchFilter } from "@/lib/branch-scope"
+import { canSeeAllBranches } from "@/lib/rbac"
 
 /**
  * Loading the shop system from a sheet or by hand.
@@ -58,6 +60,8 @@ export type UploadResult = {
   paid?: boolean
   paidAmount?: number
   balanceOwed?: number
+  shops?: number
+  shopNames?: string
 }
 
 export type BatchUploadItem = {
@@ -139,10 +143,314 @@ async function trail(userId: string, entity: string, detail: Record<string, unkn
   })
 }
 
+type OpeningShopRef = { id: string; name: string; code: string }
+
+async function resolveOpeningTargetShops(
+  user: { role: Parameters<typeof canSeeAllBranches>[0]; branchId: string | null },
+  requested: string
+): Promise<{ shops: OpeningShopRef[] } | { error: string }> {
+  const asked = requested.trim()
+  if (asked === OPENING_STOCK_ALL_SHOPS) {
+    if (!(await canSeeAllBranches(user.role))) {
+      if (!user.branchId) return { error: "Your login is not tied to a shop. Ask the main admin." }
+      const shop = await prisma.branch.findFirst({
+        where: { id: user.branchId, isActive: true },
+        select: { id: true, name: true, code: true },
+      })
+      if (!shop) return { error: "Your shop is not open." }
+      return { shops: [shop] }
+    }
+    const shops = await prisma.branch.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, code: true },
+      orderBy: { name: "asc" },
+    })
+    if (!shops.length) return { error: "There is no open shop to load." }
+    return { shops }
+  }
+  const shopGate = await resolveWritableShopId(user, asked)
+  if ("error" in shopGate) return { error: shopGate.error }
+  const shop = await prisma.branch.findFirst({
+    where: { id: shopGate.shopId, isActive: true },
+    select: { id: true, name: true, code: true },
+  })
+  if (!shop) return { error: "Pick the shop this file belongs to: Iwo Road, Bodija, or Challenge, or pick All shops." }
+  return { shops: [shop] }
+}
+
+async function bookOpeningStockShop(input: {
+  shop: OpeningShopRef
+  userId: string
+  supplier: { id: string; name: string; country: string | null; city: string | null }
+  note: string
+  fileName: string
+  plan: ReturnType<typeof planOpeningStock>
+  productIdByKey: Map<string, string>
+  costByProductId: Map<string, number>
+}): Promise<{
+  kept: boolean
+  shopId: string
+  invoiceNumber: string
+  purchaseId: string
+  phonesAdded: number
+  pieceLines: number
+  namesOnly: number
+  alreadyCount: number
+  billTotal: number
+  notes: string[]
+}> {
+  const { shop, userId, supplier, note, fileName, plan, productIdByKey, costByProductId } = input
+  const invoiceNumber = generateDocNumber("PO")
+  const purchase = await prisma.purchase.create({
+    data: {
+      invoiceNumber,
+      supplierId: supplier.id,
+      branchId: shop.id,
+      userId,
+      status: "RECEIVED",
+      totalAmount: "0.00",
+      paidAmount: "0.00",
+      paymentMethod: OPENING_STOCK_METHOD,
+      source: UPLOAD_STOCK_SOURCE,
+      sessionOpen: false,
+      receivedDate: new Date(),
+      originCountry: supplier.country,
+      originCity: supplier.city,
+      notes: [
+        "Loaded from the opening stock Excel sheet. This is the shop's opening stock value. It is not a supplier bill to pay.",
+        note || null,
+        `File: ${fileName}`,
+      ]
+        .filter(Boolean)
+        .join(" "),
+    },
+  })
+
+  await prisma.openingStock.create({ data: { branchId: shop.id, purchaseId: purchase.id } })
+
+  const unitPayload = plan.units.map((row) => {
+    const productId = productIdByKey.get(row.productKey)
+    if (!productId) throw new Error("Something went wrong while saving that item. Try the upload again.")
+    return {
+      imei1: row.identity.value,
+      serialNumber: row.identity.kind === "serial" ? row.identity.value : null,
+      productId,
+      branchId: shop.id,
+      supplierId: supplier.id,
+      purchaseId: purchase.id,
+      status: "IN_STOCK" as const,
+      notes: `Opening stock · ${row.sheet} · ${invoiceNumber}`,
+    }
+  })
+
+  const existingImeis = unitPayload.length
+    ? await prisma.imeiRecord.findMany({
+        where: {
+          OR: [
+            { imei1: { in: unitPayload.map((row) => row.imei1) } },
+            {
+              serialNumber: {
+                in: unitPayload.map((row) => row.serialNumber).filter(Boolean) as string[],
+              },
+            },
+          ],
+        },
+        select: { imei1: true, serialNumber: true },
+      })
+    : []
+  const already = new Set(
+    existingImeis.flatMap((row) => [row.imei1, row.serialNumber].filter(Boolean) as string[])
+  )
+  const freshUnits = unitPayload.filter(
+    (row) => !already.has(row.imei1) && !(row.serialNumber && already.has(row.serialNumber))
+  )
+
+  let phonesAdded = 0
+  const unitCounts = new Map<string, number>()
+  for (let i = 0; i < freshUnits.length; i += 200) {
+    const batch = freshUnits.slice(i, i + 200)
+    await prisma.$transaction(async (tx) => {
+      await tx.imeiRecord.createMany({ data: batch })
+      const perShop = new Map<string, number>()
+      for (const row of batch) {
+        const key = `${row.productId}:${row.branchId}`
+        perShop.set(key, (perShop.get(key) ?? 0) + 1)
+        unitCounts.set(row.productId, (unitCounts.get(row.productId) ?? 0) + 1)
+      }
+      for (const [key, count] of perShop) {
+        const [productId, branchId] = key.split(":")
+        await tx.inventory.upsert({
+          where: { productId_branchId: { productId, branchId } },
+          update: { quantity: { increment: count } },
+          create: { productId, branchId, quantity: count },
+        })
+        await recordMovement(tx, {
+          productId,
+          branchId,
+          quantity: count,
+          move: { kind: "RECEIVED", reference: invoiceNumber, userId },
+        })
+      }
+    })
+    phonesAdded += batch.length
+  }
+
+  let pieceLines = 0
+  const pieceCounts = new Map<string, number>()
+  for (const row of plan.quantities) {
+    const productId = productIdByKey.get(row.productKey)
+    if (!productId) continue
+    await setStock(prisma, {
+      productId,
+      branchId: shop.id,
+      quantity: row.quantity,
+      lastStockCheck: true,
+      move: { kind: "OPENING", reference: invoiceNumber, userId },
+    })
+    pieceCounts.set(productId, (pieceCounts.get(productId) ?? 0) + row.quantity)
+    pieceLines += 1
+  }
+
+  const namesOnlyIds = [...new Set(productIdByKey.values())].filter(
+    (productId) => !unitCounts.has(productId) && !pieceCounts.has(productId)
+  )
+
+  await prisma.$transaction(async (tx) => {
+    for (const [productId, quantity] of unitCounts) {
+      await attachPurchaseLine(tx, {
+        purchaseId: purchase.id,
+        productId,
+        quantity,
+        costPrice: costByProductId.get(productId) ?? 0,
+        markedPaid: false,
+      })
+    }
+    for (const [productId, quantity] of pieceCounts) {
+      await attachPurchaseLine(tx, {
+        purchaseId: purchase.id,
+        productId,
+        quantity,
+        costPrice: costByProductId.get(productId) ?? 0,
+        markedPaid: false,
+      })
+    }
+    for (const productId of namesOnlyIds) {
+      await attachPurchaseLine(tx, {
+        purchaseId: purchase.id,
+        productId,
+        quantity: 0,
+        costPrice: costByProductId.get(productId) ?? 0,
+        markedPaid: false,
+      })
+    }
+  })
+
+  const notes: string[] = []
+  if (phonesAdded === 0 && pieceLines === 0 && namesOnlyIds.length === 0) {
+    await prisma.openingStock.deleteMany({ where: { purchaseId: purchase.id } })
+    await prisma.purchase.delete({ where: { id: purchase.id } })
+    await trail(
+      userId,
+      "OpeningStock",
+      {
+        shop: shop.name,
+        file: fileName,
+        phonesAdded: 0,
+        phonesAlready: unitPayload.length,
+        pieceLines: 0,
+        note: "There was nothing new to add, so no supplier bill was saved.",
+      },
+      shop.id
+    )
+    if (unitPayload.length > 0) {
+      notes.push(
+        `${shop.name}: ${unitPayload.length} IMEI or serial number(s) were already on the system. Each stays as one entry and was not doubled.`
+      )
+    }
+    return {
+      kept: false,
+      shopId: shop.id,
+      invoiceNumber,
+      purchaseId: purchase.id,
+      phonesAdded: 0,
+      pieceLines: 0,
+      namesOnly: 0,
+      alreadyCount: unitPayload.length,
+      billTotal: 0,
+      notes,
+    }
+  }
+
+  const refreshed = await prisma.purchase.findUnique({
+    where: { id: purchase.id },
+    select: { totalAmount: true },
+  })
+  const billTotal = money(refreshed?.totalAmount)
+
+  await prisma.purchase.update({
+    where: { id: purchase.id },
+    data: {
+      paidAmount: billTotal.toFixed(2),
+      paymentMethod: OPENING_STOCK_METHOD,
+      notes: [
+        "Loaded from the opening stock Excel sheet. This is the shop's opening stock value. It is not a supplier bill to pay.",
+        note || null,
+        `File: ${fileName}`,
+      ]
+        .filter(Boolean)
+        .join(" "),
+    },
+  })
+
+  await trail(
+    userId,
+    "OpeningStock",
+    {
+      shop: shop.name,
+      file: fileName,
+      invoiceNumber,
+      supplier: supplier.name,
+      phonesAdded,
+      phonesAlready: unitPayload.length - phonesAdded,
+      pieceLines,
+      namesOnly: namesOnlyIds.length,
+      submissionValue: billTotal,
+      amountPaid: 0,
+      balanceOwed: 0,
+    },
+    shop.id
+  )
+
+  const alreadyCount = unitPayload.length - phonesAdded
+  if (alreadyCount > 0) {
+    notes.push(
+      `${shop.name}: ${alreadyCount} IMEI or serial number(s) were already on the system. Each stays as one entry and was not doubled. Staff can edit later on Correct and close opening stock or Phones and items.`
+    )
+  }
+  if (namesOnlyIds.length > 0) {
+    notes.push(
+      `${shop.name}: ${namesOnlyIds.length} item name(s) were booked without an IMEI, serial, or piece count. Add those details on Correct and close opening stock.`
+    )
+  }
+
+  return {
+    kept: true,
+    shopId: shop.id,
+    invoiceNumber,
+    purchaseId: purchase.id,
+    phonesAdded,
+    pieceLines,
+    namesOnly: namesOnlyIds.length,
+    alreadyCount,
+    billTotal,
+    notes,
+  }
+}
+
 /**
- * Abu Twins opening stock: one workbook per shop.
- * Creates a Goods from supplier bill, missing item names, books phones and
- * serials In shop, and sets piece counts.
+ * Abu Twins opening stock: one workbook per shop, or All shops for the same names
+ * on every open shop. Creates a Goods from supplier bill, missing item names,
+ * books phones and serials In shop, and sets piece counts.
  */
 export async function importOpeningStock(formData: FormData): Promise<UploadResult> {
   const gate = await requireUploader()
@@ -154,20 +462,27 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
   if (file.size > MAX_BYTES) return { error: "That file is too big. Use a file under 25 MB." }
 
   const branchId = String(formData.get("branchId") || "")
-  const shopGate = await resolveWritableShopId(user, branchId)
-  if ("error" in shopGate) return { error: shopGate.error }
-  const shop = await prisma.branch.findFirst({ where: { id: shopGate.shopId, isActive: true } })
-  if (!shop) return { error: "Pick the shop this file belongs to: Iwo Road, Bodija, or Challenge." }
+  const shopPick = await resolveOpeningTargetShops(user, branchId)
+  if ("error" in shopPick) return { error: shopPick.error }
 
-  // One opening stock per shop. Once it exists, the count sheet on Correct &
-  // close opening stock is how it changes, so a second workbook cannot double it.
-  const opening = await prisma.openingStock.findUnique({ where: { branchId: shop.id }, select: { status: true } })
-  if (opening) {
+  const alreadyOpen: string[] = []
+  const targetShops: OpeningShopRef[] = []
+  for (const shop of shopPick.shops) {
+    const opening = await prisma.openingStock.findUnique({ where: { branchId: shop.id }, select: { status: true } })
+    if (!opening) {
+      targetShops.push(shop)
+      continue
+    }
+    alreadyOpen.push(
+      opening.status === "OPEN"
+        ? `${shop.name} already has opening stock. Correct it with the count sheet on Correct & close opening stock.`
+        : `${shop.name}'s opening stock is closed. New goods go on a Supplier bill.`
+    )
+  }
+  if (!targetShops.length) {
     return {
-      error:
-        opening.status === "OPEN"
-          ? `${shop.name} already has opening stock. Correct it with the count sheet on Correct & close opening stock.`
-          : `${shop.name}'s opening stock is closed. New goods go on a Supplier bill.`,
+      error: alreadyOpen[0] || "Pick the shop this file belongs to, or pick All shops.",
+      problems: alreadyOpen.slice(0, 40),
     }
   }
 
@@ -244,6 +559,12 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
         "We found no stock in that sheet. Use the PHONES, ACCESSORIES, SCREEN, and LAPTOPS tabs, and put PRODUCT NAME on the header row.",
     }
   }
+  if (plan.units.length > 0 && targetShops.length > 1) {
+    return {
+      error:
+        "An IMEI or serial belongs to one shop. Pick Iwo Road, Bodija, or Challenge. All shops is for names and piece counts that every shop should start with.",
+    }
+  }
 
   const [brands, categories] = await Promise.all([
     prisma.brand.findMany(),
@@ -293,6 +614,13 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
     if (existing) {
       productIdByKey.set(key, existing.id)
       costByProductId.set(existing.id, draft.costPrice)
+      for (const shop of targetShops) {
+        await prisma.inventory.upsert({
+          where: { productId_branchId: { productId: existing.id, branchId: shop.id } },
+          create: { productId: existing.id, branchId: shop.id, quantity: 0 },
+          update: {},
+        })
+      }
       continue
     }
 
@@ -312,274 +640,86 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
         description: `Opening stock · ${draft.category}`,
       },
     })
-    // Stock for this shop only. Other shops do not get a shelf row from this upload.
-    await prisma.inventory.create({
-      data: { productId: product.id, branchId: shop.id, quantity: 0 },
-    })
+    for (const shop of targetShops) {
+      await prisma.inventory.upsert({
+        where: { productId_branchId: { productId: product.id, branchId: shop.id } },
+        create: { productId: product.id, branchId: shop.id, quantity: 0 },
+        update: {},
+      })
+    }
     productIdByKey.set(key, product.id)
     costByProductId.set(product.id, draft.costPrice)
     productsAdded += 1
   }
 
-  const invoiceNumber = generateDocNumber("PO")
-  const purchase = await prisma.purchase.create({
-    data: {
-      invoiceNumber,
-      supplierId: supplier.id,
-      branchId: shop.id,
+
+  const loaded: Awaited<ReturnType<typeof bookOpeningStockShop>>[] = []
+  const extraNotes = [...plan.skipped, ...alreadyOpen]
+  for (const shop of targetShops) {
+    const booked = await bookOpeningStockShop({
+      shop,
       userId: user.id,
-      status: "RECEIVED",
-      totalAmount: "0.00",
-      paidAmount: "0.00",
-      paymentMethod: OPENING_STOCK_METHOD,
-      source: UPLOAD_STOCK_SOURCE,
-      sessionOpen: false,
-      receivedDate: new Date(),
-      originCountry: supplier.country,
-      originCity: supplier.city,
-      notes: [
-        "Loaded from the opening stock Excel sheet. This is the shop's opening stock value. It is not a supplier bill to pay.",
-        note || null,
-        `File: ${file.name}`,
-      ]
-        .filter(Boolean)
-        .join(" "),
-    },
-  })
-
-  await prisma.openingStock.create({ data: { branchId: shop.id, purchaseId: purchase.id } })
-
-  const unitPayload = plan.units.map((row) => {
-    const productId = productIdByKey.get(row.productKey)
-    if (!productId) throw new Error("Something went wrong while saving that item. Try the upload again.")
-    return {
-      imei1: row.identity.value,
-      serialNumber: row.identity.kind === "serial" ? row.identity.value : null,
-      productId,
-      branchId: shop.id,
-      supplierId: supplier.id,
-      purchaseId: purchase.id,
-      status: "IN_STOCK" as const,
-      notes: `Opening stock · ${row.sheet} · ${invoiceNumber}`,
-    }
-  })
-
-  const existingImeis = unitPayload.length
-    ? await prisma.imeiRecord.findMany({
-        where: {
-          OR: [
-            { imei1: { in: unitPayload.map((row) => row.imei1) } },
-            {
-              serialNumber: {
-                in: unitPayload.map((row) => row.serialNumber).filter(Boolean) as string[],
-              },
-            },
-          ],
-        },
-        select: { imei1: true, serialNumber: true },
-      })
-    : []
-  const already = new Set(
-    existingImeis.flatMap((row) => [row.imei1, row.serialNumber].filter(Boolean) as string[])
-  )
-  const freshUnits = unitPayload.filter(
-    (row) => !already.has(row.imei1) && !(row.serialNumber && already.has(row.serialNumber))
-  )
-
-  let phonesAdded = 0
-  const unitCounts = new Map<string, number>()
-  for (let i = 0; i < freshUnits.length; i += 200) {
-    const batch = freshUnits.slice(i, i + 200)
-    await prisma.$transaction(async (tx) => {
-      await tx.imeiRecord.createMany({ data: batch })
-      const perShop = new Map<string, number>()
-      for (const row of batch) {
-        const key = `${row.productId}:${row.branchId}`
-        perShop.set(key, (perShop.get(key) ?? 0) + 1)
-        unitCounts.set(row.productId, (unitCounts.get(row.productId) ?? 0) + 1)
-      }
-      for (const [key, count] of perShop) {
-        const [productId, branchId] = key.split(":")
-        await tx.inventory.upsert({
-          where: { productId_branchId: { productId, branchId } },
-          update: { quantity: { increment: count } },
-          create: { productId, branchId, quantity: count },
-        })
-        await recordMovement(tx, {
-          productId,
-          branchId,
-          quantity: count,
-          move: { kind: "RECEIVED", reference: invoiceNumber, userId: user.id },
-        })
-      }
+      supplier,
+      note,
+      fileName: file.name,
+      plan,
+      productIdByKey,
+      costByProductId,
     })
-    phonesAdded += batch.length
+    extraNotes.push(...booked.notes)
+    if (booked.kept) loaded.push(booked)
   }
-
-  let pieceLines = 0
-  const pieceCounts = new Map<string, number>()
-  for (const row of plan.quantities) {
-    const productId = productIdByKey.get(row.productKey)
-    if (!productId) continue
-    await setStock(prisma, {
-      productId,
-      branchId: shop.id,
-      quantity: row.quantity,
-      lastStockCheck: true,
-      move: { kind: "OPENING", reference: invoiceNumber, userId: user.id },
-    })
-    pieceCounts.set(productId, (pieceCounts.get(productId) ?? 0) + row.quantity)
-    pieceLines += 1
-  }
-
-  const namesOnlyIds = [...new Set(productIdByKey.values())].filter(
-    (productId) => !unitCounts.has(productId) && !pieceCounts.has(productId)
-  )
-
-  await prisma.$transaction(async (tx) => {
-    for (const [productId, quantity] of unitCounts) {
-      await attachPurchaseLine(tx, {
-        purchaseId: purchase.id,
-        productId,
-        quantity,
-        costPrice: costByProductId.get(productId) ?? 0,
-        markedPaid: false,
-      })
-    }
-    for (const [productId, quantity] of pieceCounts) {
-      await attachPurchaseLine(tx, {
-        purchaseId: purchase.id,
-        productId,
-        quantity,
-        costPrice: costByProductId.get(productId) ?? 0,
-        markedPaid: false,
-      })
-    }
-    for (const productId of namesOnlyIds) {
-      await attachPurchaseLine(tx, {
-        purchaseId: purchase.id,
-        productId,
-        quantity: 0,
-        costPrice: costByProductId.get(productId) ?? 0,
-        markedPaid: false,
-      })
-    }
-  })
-
-  if (phonesAdded === 0 && pieceLines === 0 && namesOnlyIds.length === 0) {
-    await prisma.openingStock.deleteMany({ where: { purchaseId: purchase.id } })
-    await prisma.purchase.delete({ where: { id: purchase.id } })
-    await trail(
-      user.id,
-      "OpeningStock",
-      {
-        shop: shop.name,
-        file: file.name,
-        productsAdded,
-        phonesAdded: 0,
-        phonesAlready: unitPayload.length,
-        pieceLines: 0,
-        note: "There was nothing new to add, so no supplier bill was saved.",
-      },
-      shop.id
-    )
-    revalidateStockViews()
-    const softNotes = [...plan.skipped]
-    if (unitPayload.length > 0) {
-      softNotes.push(
-        `${unitPayload.length} IMEI or serial number(s) were already on the system. Each stays as one entry and was not doubled. Staff can edit later on Correct and close opening stock or Phones and items.`
-      )
-    }
-    return {
-      success: true,
-      added: productsAdded,
-      products: productsAdded,
-      phones: 0,
-      pieces: 0,
-      skipped: unitPayload.length,
-      duplicates: plan.skipped.filter((row) => row.includes("twice") || row.includes("counted once")).length,
-      problems: softNotes.length ? softNotes.slice(0, 40) : undefined,
-    }
-  }
-
-  const refreshed = await prisma.purchase.findUnique({
-    where: { id: purchase.id },
-    select: { totalAmount: true },
-  })
-
-  // Opening stock is an independent value. paidAmount matches the value so the
-  // books never treat it as money owed to a supplier, and no payment is posted.
-  const billTotal = money(refreshed?.totalAmount)
-
-  await prisma.purchase.update({
-    where: { id: purchase.id },
-    data: {
-      paidAmount: billTotal.toFixed(2),
-      paymentMethod: OPENING_STOCK_METHOD,
-      notes: [
-        "Loaded from the opening stock Excel sheet. This is the shop's opening stock value. It is not a supplier bill to pay.",
-        note || null,
-        `File: ${file.name}`,
-      ]
-        .filter(Boolean)
-        .join(" "),
-    },
-  })
-
-  await trail(
-    user.id,
-    "OpeningStock",
-    {
-      shop: shop.name,
-      file: file.name,
-      invoiceNumber,
-      supplier: supplier.name,
-      productsAdded,
-      phonesAdded,
-      phonesAlready: unitPayload.length - phonesAdded,
-      pieceLines,
-      submissionValue: billTotal,
-      amountPaid: 0,
-      balanceOwed: 0,
-    },
-    shop.id
-  )
 
   revalidateStockViews()
   revalidatePath("/purchases")
   revalidatePath("/finance")
   revalidatePath("/suppliers")
 
-  const alreadyCount = unitPayload.length - phonesAdded
-  const softNotes = [...plan.skipped]
-  if (alreadyCount > 0) {
-    softNotes.push(
-      `${alreadyCount} IMEI or serial number(s) were already on the system. Each stays as one entry and was not doubled. Staff can edit later on Correct and close opening stock or Phones and items.`
-    )
+  if (!loaded.length) {
+    return {
+      success: true,
+      added: productsAdded,
+      products: productsAdded,
+      phones: 0,
+      pieces: 0,
+      skipped: extraNotes.filter((row) => row.includes("already on the system")).length,
+      duplicates: plan.skipped.filter((row) => row.includes("twice") || row.includes("counted once")).length,
+      problems: extraNotes.length ? extraNotes.slice(0, 40) : undefined,
+      shops: 0,
+    }
   }
-  if (namesOnlyIds.length > 0) {
-    softNotes.push(
-      `${namesOnlyIds.length} item name(s) were booked without an IMEI, serial, or piece count. Add those details on Correct and close opening stock.`
-    )
-  }
+
+  const phonesAdded = loaded.reduce((sum, row) => sum + row.phonesAdded, 0)
+  const pieceLines = loaded.reduce((sum, row) => sum + row.pieceLines, 0)
+  const namesOnly = loaded.reduce((sum, row) => sum + row.namesOnly, 0)
+  const alreadyCount = loaded.reduce((sum, row) => sum + row.alreadyCount, 0)
+  const billTotal = loaded.reduce((sum, row) => sum + row.billTotal, 0)
+  const namedLoaded = loaded.map((row) => {
+    const shop = targetShops.find((item) => item.id === row.shopId)
+    return `${shop?.name ?? "Shop"} ${row.invoiceNumber}`
+  })
+  extraNotes.unshift(`Loaded opening stock for ${namedLoaded.join(", ")}.`)
 
   return {
     success: true,
-    added: productsAdded + phonesAdded + pieceLines + namesOnlyIds.length,
+    added: productsAdded + phonesAdded + pieceLines + namesOnly,
     products: productsAdded,
     phones: phonesAdded,
     pieces: pieceLines,
     skipped: alreadyCount,
     duplicates: plan.skipped.filter((row) => row.includes("twice") || row.includes("counted once")).length,
-    problems: softNotes.length ? softNotes.slice(0, 40) : undefined,
-    invoiceNumber,
-    purchaseId: purchase.id,
+    problems: extraNotes.length ? extraNotes.slice(0, 40) : undefined,
+    invoiceNumber: loaded.map((row) => row.invoiceNumber).join(", "),
+    purchaseId: loaded[0].purchaseId,
     submissionValue: billTotal,
     paidAmount: 0,
     balanceOwed: 0,
     paid: true,
+    shops: loaded.length,
+    shopNames: namedLoaded.join(", "),
   }
 }
+
 
 /**
  * Step 3. The phones, one IMEI to a line.
@@ -921,7 +1061,7 @@ export async function getUploadProgress() {
       prisma.branch.findMany({
         where: {
           isActive: true,
-          ...(shopScope ? { id: shopScope } : {}),
+          ...((await canSeeAllBranches(user.role)) ? {} : shopScope ? { id: shopScope } : {}),
         },
         select: { id: true, name: true, code: true },
         orderBy: { name: "asc" },

@@ -12,6 +12,8 @@ export const OPENING_STOCK_SUPPLIER_NAME = "Opening Stock"
 export const OPENING_STOCK_SUPPLIER_PHONE = "not-required"
 /** Form value for the Opening Stock option on Many at once (Excel). */
 export const OPENING_STOCK_SUPPLIER_OPTION = "__opening_stock__"
+/** Form value to load the same opening sheet onto every open shop. */
+export const OPENING_STOCK_ALL_SHOPS = "__all_shops__"
 
 type Tx = Prisma.TransactionClient
 

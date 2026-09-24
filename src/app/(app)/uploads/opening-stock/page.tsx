@@ -15,7 +15,7 @@ export default async function OpeningStockPage() {
     <div className="space-y-6">
       <PageHeader
         title="Upload stock · Many at once (Excel)"
-        description="Load one shop from Excel. Opening value only, not a bill to pay."
+        description="Load one shop, or All shops, from Excel. Opening value only, not a bill to pay."
       />
 
       <div className="surface-card border-primary/30 bg-primary/5 p-4 text-sm text-muted-foreground">
@@ -38,7 +38,7 @@ export default async function OpeningStockPage() {
       <div className="surface-card p-5">
         <h2 className="text-sm font-semibold">Before you upload</h2>
         <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
-          <li>One sheet covers one shop. Do the shops one after the other. Stock for Iwo Road stays on Iwo Road only. It does not appear on Bodija or Challenge.</li>
+          <li>Pick All shops to put the same names on Iwo Road, Bodija, and Challenge in one upload. Pick one shop when the sheet has IMEIs or serials, because a phone number belongs to one shop only.</li>
           <li>If you do not know the supplier house yet, pick Opening Stock. No phone number is needed for that option.</li>
           <li>The system makes its own opening stock number, so do not type one.</li>
           <li>

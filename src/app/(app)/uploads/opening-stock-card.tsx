@@ -11,7 +11,7 @@ import { SectionCard } from "@/components/shared"
 import { BrandBusyOverlay } from "@/components/brand-busy-overlay"
 import { importOpeningStock, type UploadResult } from "@/app/actions/uploads"
 import { listedSupplierClash } from "@/lib/party-key"
-import { OPENING_STOCK_SUPPLIER_NAME, OPENING_STOCK_SUPPLIER_OPTION } from "@/lib/upload-purchase"
+import { OPENING_STOCK_ALL_SHOPS, OPENING_STOCK_SUPPLIER_NAME, OPENING_STOCK_SUPPLIER_OPTION } from "@/lib/upload-purchase"
 import { formatCurrency } from "@/lib/utils"
 
 type Shop = { id: string; name: string; code: string }
@@ -40,17 +40,19 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
   const openingHouse =
     suppliers.find((row) => row.name.trim().toLowerCase() === OPENING_STOCK_SUPPLIER_NAME.toLowerCase()) || null
   const [supplierChoice, setSupplierChoice] = useState(OPENING_STOCK_SUPPLIER_OPTION)
-  const [branchId, setBranchId] = useState(shops[0]?.id || "")
+  const [branchId, setBranchId] = useState(shops.length > 1 ? OPENING_STOCK_ALL_SHOPS : shops[0]?.id || "")
   const [trackingChoice, setTrackingChoice] = useState("ALL")
   const addingNewSupplier = supplierChoice === "__new__"
   const usingOpeningStock =
     supplierChoice === OPENING_STOCK_SUPPLIER_OPTION ||
     (openingHouse != null && supplierChoice === openingHouse.id)
 
-  const shopLabel =
-    shops.find((shop) => shop.id === branchId)?.name ||
-    shops.find((shop) => shop.id === branchId)?.code ||
-    "this shop"
+  const allShops = branchId === OPENING_STOCK_ALL_SHOPS
+  const shopLabel = allShops
+    ? "all shops"
+    : shops.find((shop) => shop.id === branchId)?.name ||
+      shops.find((shop) => shop.id === branchId)?.code ||
+      "this shop"
 
   const otherSuppliers = suppliers.filter(
     (row) => row.name.trim().toLowerCase() !== OPENING_STOCK_SUPPLIER_NAME.toLowerCase()
@@ -58,8 +60,8 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
 
   return (
     <SectionCard
-      title="Load a whole shop from the opening stock Excel sheet"
-      description="Once per shop for stock already on the shelf. Later cartons use Supplier bill."
+      title="Load opening stock from the Excel sheet"
+      description="Once per shop, or All shops for the same names on every open shop. Later cartons use Supplier bill."
     >
       <BrandBusyOverlay
         open={busy}
@@ -69,12 +71,13 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
       />
 
       <p className="text-sm leading-relaxed text-muted-foreground">
-        One file for one shop, with tabs for PHONES, ACCESSORIES, SCREEN and LAPTOPS. Pick the shop. If you do not know
-        every supplier yet, leave Supplier on Opening Stock. The file books phones and laptops In shop, sets the piece
-        counts, and stores the opening stock value from the unit costs. That value is not a bill to pay. A tab can list
-        only PRODUCT NAME. Pick How we count this file for this upload: all types from the tabs, phone IMEI, laptop
-        serial, or pieces. A TRACKING column on the sheet (IMEI, SERIAL, or NONE) can still set one row. IMEI, serial,
-        piece count, and prices can be added later on Correct and close opening stock.
+        One file, with tabs for PHONES, ACCESSORIES, SCREEN and LAPTOPS. Pick All shops to put the same names on every
+        open shop, or pick one shop. If you do not know every supplier yet, leave Supplier on Opening Stock. The file
+        books phones and laptops In shop, sets the piece counts, and stores the opening stock value from the unit costs.
+        That value is not a bill to pay. A tab can list only PRODUCT NAME. Pick How we count this file for this upload:
+        all types from the tabs, phone IMEI, laptop serial, or pieces. A TRACKING column on the sheet (IMEI, SERIAL, or
+        NONE) can still set one row. IMEI, serial, piece count, and prices can be added later on Correct and close
+        opening stock.
       </p>
 
       <ul className="mt-3 grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
@@ -82,7 +85,7 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
         <li>LAPTOPS tab: one row per laptop. Put the serial in that same column when you have it.</li>
         <li>ACCESSORIES and SCREEN tabs: how many pieces are on the shelf, or leave the count blank and type it later.</li>
         <li>How we count this file: pick All types when the sheet has phones, laptops, and pieces together. Pick one type when this file is only that kind.</li>
-        <li>Never make up an IMEI. Super Admin, CEO, accountant, records checker, and stock uploader can finish missing details on Correct and close opening stock.</li>
+        <li>Never make up an IMEI. An IMEI or serial belongs to one shop, so pick that shop when the sheet has those numbers. Super Admin, CEO, accountant, records checker, and stock uploader can finish missing details on Correct and close opening stock.</li>
       </ul>
 
       <form
@@ -94,7 +97,7 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
             return
           }
           if (!String(formData.get("branchId") || branchId).trim()) {
-            toast.error("Pick which shop this Excel belongs to.")
+            toast.error("Pick All shops, or pick which shop this Excel belongs to.")
             return
           }
           if (addingNewSupplier) {
@@ -124,7 +127,13 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
 
           const selectedId = String(formData.get("branchId") || branchId)
           const selectedShop = shops.find((shop) => shop.id === selectedId)
-          setBusyShop(selectedShop ? `${selectedShop.name} (${selectedShop.code})` : shopLabel)
+          setBusyShop(
+            selectedId === OPENING_STOCK_ALL_SHOPS
+              ? "all shops"
+              : selectedShop
+                ? `${selectedShop.name} (${selectedShop.code})`
+                : shopLabel
+          )
           setBusy(true)
           setProblems([])
           setSoftNotes([])
@@ -143,7 +152,11 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
             return
           }
           const parts = [
-            result.invoiceNumber ? `Opening stock ${result.invoiceNumber}` : null,
+            result.shopNames
+              ? `Opening stock for ${result.shopNames}`
+              : result.invoiceNumber
+                ? `Opening stock ${result.invoiceNumber}`
+                : null,
             result.products ? `${result.products} new item${result.products === 1 ? "" : "s"}` : null,
             result.phones ? `${result.phones} phone${result.phones === 1 ? "" : "s"} In shop` : null,
             result.pieces ? `${result.pieces} piece line${result.pieces === 1 ? "" : "s"}` : null,
@@ -159,8 +172,8 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
           setSoftNotes(result.problems ?? [])
           formRef.current?.reset()
           setSupplierChoice(OPENING_STOCK_SUPPLIER_OPTION)
-          setBranchId(shops[0]?.id || "")
           setTrackingChoice("ALL")
+          setBranchId(shops.length > 1 ? OPENING_STOCK_ALL_SHOPS : shops[0]?.id || "")
           router.refresh()
         }}
       >
@@ -175,12 +188,19 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
               disabled={busy}
             >
               {!shops.length ? <option value="">No shop available</option> : null}
+              {shops.length > 1 ? <option value={OPENING_STOCK_ALL_SHOPS}>All shops</option> : null}
               {shops.map((shop) => (
                 <option key={shop.id} value={shop.id}>
                   {shop.name} ({shop.code})
                 </option>
               ))}
             </Select>
+            {shops.length > 1 ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                All shops puts the same product names and piece counts on every open shop. An IMEI or serial belongs to
+                one shop, so pick that shop when the sheet has those numbers.
+              </p>
+            ) : null}
           </label>
 
           <label className="block text-sm">
