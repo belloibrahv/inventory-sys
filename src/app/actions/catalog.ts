@@ -119,9 +119,12 @@ export async function createProduct(formData: FormData) {
 
   const categoryName = String(formData.get("categoryName") || "").trim()
   const categoryIdField = String(formData.get("categoryId") || "").trim()
+  if (!categoryName && !categoryIdField) {
+    return { error: "Type the category, for example Phones, Laptops, Accessories, or Screen." }
+  }
   const categoryId = categoryName
     ? await findOrCreateCategory(categoryName)
-    : categoryIdField || (await findOrCreateCategory("Phones"))
+    : categoryIdField
 
   const condition = parseShopCondition(String(formData.get("condition") || "BRAND_NEW"))
   if (!condition) {
@@ -468,9 +471,13 @@ export async function importProducts(formData: FormData) {
     const skuCell = cell(row, "item_code", "sku", "code")
     const name = cell(row, "name", "product", "item", "product_name")
     const brandName = cell(row, "brand")
-    const categoryName = cell(row, "category") || "Phones"
+    const categoryName = cell(row, "category")
     if (!name || !brandName) {
-      errors.push(`Line ${line}: product name and brand are required.`)
+      errors.push(`Line ${line}: product name and brand are required. Use the real name, for example iPhone 13 or MacBook Pro M3.`)
+      continue
+    }
+    if (!categoryName) {
+      errors.push(`Line ${line}: type the category, for example Phones, Laptops, Accessories, or Screen.`)
       continue
     }
 

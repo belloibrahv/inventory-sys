@@ -127,7 +127,7 @@ const PAGES: Array<
     doThis: [
       "Search by item code or model.",
       "If you can add items, set cost, lowest price, and selling price. Pick the tracking that matches the thing: phones use IMEI, some accessories use serial, cords use no number.",
-      "Adding items has its own screens under Phones & items: Add one item for a single model, Add from a sheet for a long list. Type the product name and brand. Pick All shops or one shop. A sheet can be names and brands only. This does not put stock on the shelf.",
+      "Adding items has its own screens under Phones & items: Add one item for a single model, Add from a sheet for a long list. Type the real product name (iPhone 13, MacBook Pro M3) and the brand, then the category (Phones, Laptops, Accessories, Screen). Pick All shops or one shop. A sheet can be names, brands, and categories only. This does not put stock on the shelf.",
       "To change many selling prices at once, tick any mix of phones and accessories on the price list, type each new selling price, then click Update selected prices.",
       "On a price list line, click Change or remove. Change details edits the name and prices. Reduce stock takes pieces off the shelf, or writes off phone IMEIs by scanning them. Remove item hides or deletes the name.",
       "Warranty days live on their own screen, Phones & items then Warranty days. Keep defaults at 0. Cashiers type days on Sell now.",

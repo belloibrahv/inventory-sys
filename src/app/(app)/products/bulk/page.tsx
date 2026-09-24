@@ -17,7 +17,7 @@ export default async function BulkProductsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Add items from a sheet"
-        description="Register many product names and brands. Pick All shops or one shop. Names already on the system stay."
+        description="Register many real product names (iPhone 13, MacBook Pro M3) with brand and category. Pick All shops or one shop. Names already on the system stay."
       />
       <BulkProductUpload shops={lookups.branches} />
     </div>

@@ -11,8 +11,8 @@ import { ShopScopeFields } from "./shop-scope-fields"
 
 const SAMPLE: string[][] = [
   ["product_name", "brand", "category", "item_code", "tracking", "condition", "color", "storage", "cost", "minimum", "selling"],
-  ["Tecno Camon 30", "Tecno", "Phones", "", "IMEI", "Brand New", "Black", "256GB", "", "", ""],
-  ["iPhone 16 128GB", "Apple", "Phones", "", "IMEI", "UK", "Black", "128GB", "", "", ""],
+  ["iPhone 13", "Apple", "Phones", "", "IMEI", "Brand New", "", "", "", "", ""],
+  ["MacBook Pro M3", "Apple", "Laptops", "", "SERIAL", "UK", "", "", "", "", ""],
   ["Type-C charger cord", "Generic", "Accessories", "", "NONE", "Brand New", "Black", "", "", "", ""],
 ]
 
@@ -55,7 +55,7 @@ export function BulkProductUpload({ shops }: { shops: Array<{ id: string; name: 
       />
       <h3 className="mb-2 font-semibold">Upload many product names at once</h3>
       <p className="mb-4 text-sm text-muted-foreground">
-        The sheet needs a product name and a brand on each line. Item code, prices, and stock are optional. Pick All shops or one shop below so those names show where staff should pick them.
+        The sheet needs the real product name, brand, and category on each line. Write iPhone 13 under Phones, MacBook Pro M3 under Laptops, a cord under Accessories. Item code, prices, and stock are optional. Pick All shops or one shop below so those names show where staff should pick them.
       </p>
       <div className="mb-4">
         <ExportCsv filename="abu-twins-product-names-sample.csv" rows={SAMPLE} label="Download an example file" />
@@ -71,7 +71,7 @@ export function BulkProductUpload({ shops }: { shops: Array<{ id: string; name: 
           className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-foreground"
         />
         <p className="text-sm text-muted-foreground">
-          Required columns: product name, brand. Optional: category, item code, how we count it (IMEI, SERIAL, or NONE), How the phone looks, color, storage, cost, lowest price, sell price.
+          Required columns: product name, brand, category. Use the actual model name (iPhone 13, MacBook Pro M3). Category is Phones, Laptops, Accessories, or Screen. Optional: item code, how we count it (IMEI, SERIAL, or NONE), How it looks, color, storage, cost, lowest price, sell price.
         </p>
         <Button type="submit" disabled={busy} aria-busy={busy}>
           {busy ? "Uploading the list" : "Upload the list"}

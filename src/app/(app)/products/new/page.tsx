@@ -10,6 +10,8 @@ import { requireUser } from "@/lib/session"
 import { CatalogLocked } from "../catalog-locked"
 import { ShopScopeFields } from "../shop-scope-fields"
 
+const SUGGESTED_CATEGORIES = ["Phones", "Laptops", "Accessories", "Screen"]
+
 /** Register one product name, with a brand, onto the list. */
 export default async function NewProductPage() {
   const me = await requireUser()
@@ -17,13 +19,17 @@ export default async function NewProductPage() {
   if (!canEdit) return <CatalogLocked title="Add one item" />
 
   const lookups = await getProductLookups()
+  const categoryChoices = [
+    ...SUGGESTED_CATEGORIES,
+    ...lookups.categories.map((row) => row.name).filter((name) => !SUGGESTED_CATEGORIES.includes(name)),
+  ]
 
   return (
     <div className="space-y-6">
       <PageHeader
         backHref="/products"
         title="Add one item"
-        description="Register a product name and brand. Pick All shops or one shop. Prices can wait until you add stock."
+        description="Type the real product name, the same way you say it in the shop: iPhone 13, MacBook Pro M3, Type-C charger cord. Then pick the category that name belongs to."
       />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)]">
@@ -31,14 +37,14 @@ export default async function NewProductPage() {
           <ActionForm action={createProduct} submit="Save this product name" className="space-y-3">
             <label className="block text-sm">
               <span className="mb-1 block text-xs text-muted-foreground">Product name</span>
-              <Input name="name" placeholder="Product name, for example Tecno Camon 30" required />
+              <Input name="name" placeholder="iPhone 13, MacBook Pro M3, or Type-C charger cord" required />
             </label>
             <label className="block text-sm">
               <span className="mb-1 block text-xs text-muted-foreground">Brand name</span>
               <Input
                 name="brandName"
                 list="brand-names"
-                placeholder="Brand name, for example Tecno"
+                placeholder="Apple, Tecno, or Generic"
                 required
               />
               <datalist id="brand-names">
@@ -49,21 +55,28 @@ export default async function NewProductPage() {
             </label>
             <label className="block text-sm">
               <span className="mb-1 block text-xs text-muted-foreground">Category</span>
-              <Select name="categoryId" emptyLabel="Phones will be created if the list is empty">
-                {lookups.categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
+              <Input
+                name="categoryName"
+                list="category-names"
+                placeholder="Phones, Laptops, Accessories, or Screen"
+                required
+              />
+              <datalist id="category-names">
+                {categoryChoices.map((name) => (
+                  <option key={name} value={name} />
                 ))}
+              </datalist>
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs text-muted-foreground">How we count it</span>
+              <Select name="tracking" defaultValue="IMEI">
+                <option value="IMEI">Phone, IMEI</option>
+                <option value="SERIAL">Laptop or accessory with a serial</option>
+                <option value="NONE">No number. Use this for cords and chargers</option>
               </Select>
             </label>
-            <Select name="tracking" defaultValue="IMEI">
-              <option value="IMEI">Phone, IMEI</option>
-              <option value="SERIAL">Accessory with serial</option>
-              <option value="NONE">No number. Use this for cords and chargers</option>
-            </Select>
             <label className="block text-sm">
-              <span className="mb-1 block text-xs text-muted-foreground">How the phone looks</span>
+              <span className="mb-1 block text-xs text-muted-foreground">How it looks</span>
               <Select name="condition" defaultValue="BRAND_NEW">
                 {SHOP_CONDITION_OPTIONS.map((item) => (
                   <option key={item.value} value={item.value}>
@@ -92,20 +105,21 @@ export default async function NewProductPage() {
         <SectionCard title="What this does">
           <ul className="space-y-3 text-sm text-muted-foreground">
             <li>
-              <span className="font-medium text-foreground">Product name and brand</span> are what staff pick later on
-              Upload stock, One phone at a time, and Sell now. Type a new brand if it is not on the list yet.
+              <span className="font-medium text-foreground">Product name</span> is the name staff pick later. Use the
+              real model: iPhone 13, MacBook Pro M3, Galaxy S24, Type-C charger cord. Do not glue brand, storage, or
+              How it looks into that name unless that is how the shop already says it.
+            </li>
+            <li>
+              <span className="font-medium text-foreground">Category</span> groups those names: Phones, Laptops,
+              Accessories, Screen. Type a new one if you need it. Brand is Apple, Tecno, and the rest.
             </li>
             <li>
               <span className="font-medium text-foreground">All shops or one shop</span> decides where the name first
-              appears. All shops is the usual choice so Iwo Road, Bodija, and Challenge can all pick it.
+              appears. All shops is the usual choice so every branch can pick it.
             </li>
             <li>
-              <span className="font-medium text-foreground">This is not stock.</span> Saving a name does not put a phone
+              <span className="font-medium text-foreground">This is not stock.</span> Saving a name does not put a unit
               on the shelf. Use Upload stock or One phone at a time for units.
-            </li>
-            <li>
-              <span className="font-medium text-foreground">Sell price</span> can stay empty for now. Set it before a
-              cashier sells the item. Lowest price is the floor at the till.
             </li>
           </ul>
         </SectionCard>
