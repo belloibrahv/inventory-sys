@@ -228,7 +228,10 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
     return { error: "We could not read that Excel file. Save it again and try one more time." }
   }
 
-  const plan = planOpeningStock(sheets, { allowMissingPrices: true })
+  const trackingRaw = String(formData.get("tracking") || "ALL").trim().toUpperCase()
+  const tracking = trackingRaw === "IMEI" || trackingRaw === "SERIAL" || trackingRaw === "NONE" ? trackingRaw : undefined
+
+  const plan = planOpeningStock(sheets, { allowMissingPrices: true, tracking })
   if (plan.problems.length) {
     return {
       error: `${plan.problems.length} line(s) need fixing. Nothing was loaded.`,

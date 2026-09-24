@@ -96,6 +96,7 @@ function mapHeaders(cells: string[]) {
     else if (key === "name" && index.name == null) index.name = i
     else if (key === "brand") index.brand = i
     else if (key === "category") index.category = i
+    else if (key === "tracking" || key === "how_we_count" || key === "how_we_count_it") index.tracking = i
     else if (key.includes("qty") || key.includes("imei") || key.includes("serial")) index.identity = i
     else if (key === "condition") index.condition = i
     else if (key.includes("specification") || key.includes("storage") || key === "spec") index.spec = i
@@ -163,6 +164,33 @@ export function defaultTrackingForSheet(sheet: string): ProductTracking {
   const key = keyName(sheet)
   if (key.includes("accessor") || key.includes("screen")) return "NONE"
   return "IMEI"
+}
+
+/** Read IMEI, SERIAL, or NONE from a TRACKING cell or from the upload form. */
+export function parseOpeningTracking(raw: string): ProductTracking | null {
+  const key = keyName(raw)
+  if (!key) return null
+  if (key === "imei" || key === "phone" || key === "phones") return "IMEI"
+  if (key === "serial" || key === "laptop" || key === "laptops") return "SERIAL"
+  if (
+    key === "none" ||
+    key === "pieces" ||
+    key === "piece" ||
+    key === "qty" ||
+    key === "no_number" ||
+    key === "no_imei" ||
+    key === "all_pieces"
+  ) {
+    return "NONE"
+  }
+  return null
+}
+
+function classifyAsSheet(tracking: ProductTracking | undefined, sheet: string) {
+  if (tracking === "IMEI") return "PHONES"
+  if (tracking === "SERIAL") return "LAPTOPS"
+  if (tracking === "NONE") return "ACCESSORIES"
+  return sheet
 }
 
 function defaultCategory(sheet: string, written: string) {
@@ -247,6 +275,12 @@ export type OpeningOptions = {
    * piece count can be added later on Correct and close opening stock.
    */
   allowMissingPrices?: boolean
+  /**
+   * When set, every row in the file uses this tracking unless the row has its
+   * own TRACKING cell. Leave unset for All types: phones, laptops, and pieces
+   * follow the tab names.
+   */
+  tracking?: ProductTracking
 }
 
 export function planOpeningStock(
@@ -360,23 +394,38 @@ export function planOpeningStock(
         sellingPrice: minSell,
       })
 
+      const fromRow = parseOpeningTracking(at(row, headers.tracking))
+      const chosenTracking = fromRow || options.tracking
       const namesOnly = options.allowMissingPrices && isBlankOpeningIdentity(identityRaw)
       if (namesOnly) {
-        const tracking = defaultTrackingForSheet(sheet)
+        const tracking = chosenTracking || defaultTrackingForSheet(sheet)
         const key = putDraft(makeDraft(tracking), label, name)
         if (!key) continue
         continue
       }
 
-      const identity = classifyOpeningIdentity(sheet, identityRaw)
+      const identity = classifyOpeningIdentity(classifyAsSheet(chosenTracking, sheet), identityRaw)
       if (identity.kind === "bad") {
+        if (options.allowMissingPrices && chosenTracking && chosenTracking !== "NONE") {
+          const key = putDraft(makeDraft(chosenTracking), label, name)
+          if (!key) continue
+          continue
+        }
         setAside.push(`${label}: ${name}: ${identity.reason}.`)
         continue
       }
 
-      const tracking: ProductTracking = identity.kind === "qty" ? "NONE" : identity.kind === "imei" ? "IMEI" : "SERIAL"
+      const tracking: ProductTracking =
+        chosenTracking || (identity.kind === "qty" ? "NONE" : identity.kind === "imei" ? "IMEI" : "SERIAL")
       const key = putDraft(makeDraft(tracking), label, name)
       if (!key) continue
+
+      if (tracking === "NONE" && identity.kind !== "qty") {
+        continue
+      }
+      if (tracking !== "NONE" && identity.kind === "qty") {
+        continue
+      }
 
       if (identity.kind === "qty") {
         const prev = qtyByKey.get(key)
@@ -397,7 +446,15 @@ export function planOpeningStock(
         continue
       }
       seenCodes.add(identity.value)
-      units.push({ sheet, line, productKey: key, identity })
+      units.push({
+        sheet,
+        line,
+        productKey: key,
+        identity:
+          tracking === "SERIAL"
+            ? { kind: "serial", value: identity.value }
+            : { kind: "imei", value: identity.value },
+      })
     }
   }
 

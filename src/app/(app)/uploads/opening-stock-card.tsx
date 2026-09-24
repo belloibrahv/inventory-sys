@@ -41,6 +41,7 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
     suppliers.find((row) => row.name.trim().toLowerCase() === OPENING_STOCK_SUPPLIER_NAME.toLowerCase()) || null
   const [supplierChoice, setSupplierChoice] = useState(OPENING_STOCK_SUPPLIER_OPTION)
   const [branchId, setBranchId] = useState(shops[0]?.id || "")
+  const [trackingChoice, setTrackingChoice] = useState("ALL")
   const addingNewSupplier = supplierChoice === "__new__"
   const usingOpeningStock =
     supplierChoice === OPENING_STOCK_SUPPLIER_OPTION ||
@@ -71,13 +72,16 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
         One file for one shop, with tabs for PHONES, ACCESSORIES, SCREEN and LAPTOPS. Pick the shop. If you do not know
         every supplier yet, leave Supplier on Opening Stock. The file books phones and laptops In shop, sets the piece
         counts, and stores the opening stock value from the unit costs. That value is not a bill to pay. A tab can list
-        only PRODUCT NAME. IMEI, serial, piece count, and prices can be added later on Correct and close opening stock.
+        only PRODUCT NAME. Pick How we count this file for this upload: all types from the tabs, phone IMEI, laptop
+        serial, or pieces. A TRACKING column on the sheet (IMEI, SERIAL, or NONE) can still set one row. IMEI, serial,
+        piece count, and prices can be added later on Correct and close opening stock.
       </p>
 
       <ul className="mt-3 grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
         <li>PHONES tab: one row per phone. Put the IMEI in QTY/IMEI/SERIAL NO when you have it. Leave it blank if you will add it later.</li>
         <li>LAPTOPS tab: one row per laptop. Put the serial in that same column when you have it.</li>
         <li>ACCESSORIES and SCREEN tabs: how many pieces are on the shelf, or leave the count blank and type it later.</li>
+        <li>How we count this file: pick All types when the sheet has phones, laptops, and pieces together. Pick one type when this file is only that kind.</li>
         <li>Never make up an IMEI. Super Admin, CEO, accountant, records checker, and stock uploader can finish missing details on Correct and close opening stock.</li>
       </ul>
 
@@ -156,6 +160,7 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
           formRef.current?.reset()
           setSupplierChoice(OPENING_STOCK_SUPPLIER_OPTION)
           setBranchId(shops[0]?.id || "")
+          setTrackingChoice("ALL")
           router.refresh()
         }}
       >
@@ -203,6 +208,26 @@ export function OpeningStockCard({ shops, suppliers }: { shops: Shop[]; supplier
                 Use Opening Stock when the house that supplied these goods is not known yet. No phone number is needed.
               </p>
             ) : null}
+          </label>
+
+          <label className="block text-sm sm:col-span-2">
+            <span className="eyebrow mb-1 block">How we count this file</span>
+            <Select
+              name="tracking"
+              required
+              disabled={busy}
+              value={trackingChoice}
+              onChange={(event) => setTrackingChoice(event.target.value)}
+            >
+              <option value="ALL">All types (phones, laptops, and pieces from the tabs)</option>
+              <option value="IMEI">Phone IMEI only</option>
+              <option value="SERIAL">Laptop serial only</option>
+              <option value="NONE">Pieces only (no IMEI)</option>
+            </Select>
+            <p className="mt-1 text-xs text-muted-foreground">
+              All types follows PHONES, LAPTOPS, ACCESSORIES, and SCREEN tabs, or a TRACKING column on a row. Pick one
+              type when this upload is only phones, only laptops, or only pieces.
+            </p>
           </label>
 
           {addingNewSupplier ? (
