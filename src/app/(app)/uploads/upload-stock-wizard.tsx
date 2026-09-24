@@ -234,6 +234,38 @@ export function UploadStockWizard({
     })
   }
 
+  /**
+   * Per-item string display value for the "How many" field.
+   * Kept separate from items[].quantity so the user can clear the box
+   * and type a new number without React snapping it back to 1 mid-keystroke.
+   */
+  const [qtyDisplay, setQtyDisplay] = useState<Record<number, string>>({})
+
+  function getQtyDisplay(index: number) {
+    return qtyDisplay[index] ?? String(items[index]?.quantity ?? 1)
+  }
+
+  /** Called every keystroke — only updates the display string, no IMEI rebuild. */
+  function handleQtyInput(index: number, raw: string) {
+    const cleaned = raw.replace(/[^0-9]/g, "")
+    setQtyDisplay((prev) => ({ ...prev, [index]: cleaned }))
+  }
+
+  /** Called on blur — commits the integer and rebuilds IMEI boxes. */
+  function commitQty(index: number, raw: string) {
+    const n = parseInt(raw, 10)
+    const safe = isNaN(n) || n < 1 ? 1 : n
+    setQtyDisplay((prev) => ({ ...prev, [index]: String(safe) }))
+    handleQuantityChange(index, safe)
+  }
+
+  /** Called by the − and + buttons. */
+  function stepQty(index: number, delta: 1 | -1) {
+    const next = Math.max(1, (items[index]?.quantity ?? 1) + delta)
+    setQtyDisplay((prev) => ({ ...prev, [index]: String(next) }))
+    handleQuantityChange(index, next)
+  }
+
   function handleIdentityChange(itemIndex: number, idIndex: number, value: string) {
     setItems((prev) => {
       const copy = [...prev]
@@ -327,10 +359,19 @@ export function UploadStockWizard({
 
     let result: UploadResult
     try {
-      result = await batchUploadStock(payload)
-    } catch {
+      const UPLOAD_TIMEOUT_MS = 90_000
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), UPLOAD_TIMEOUT_MS)
+      )
+      result = await Promise.race([batchUploadStock(payload), timeoutPromise])
+    } catch (err) {
       setBusy(false)
-      toast.error("That did not reach the shop system. Check your network and try again.")
+      const isTimeout = err instanceof Error && err.message === "timeout"
+      toast.error(
+        isTimeout
+          ? "The upload is taking too long. The network may have dropped. Wait a moment and try again — duplicates are handled automatically."
+          : "That did not reach the shop system. Check your network and try again."
+      )
       return
     }
     setBusy(false)
@@ -644,19 +685,47 @@ export function UploadStockWizard({
                     />
                   </label>
 
-                  <label className="block text-sm sm:col-span-3">
+                  <div className="block text-sm sm:col-span-3">
                     <span className="eyebrow mb-1 block">How many</span>
-                    <Input
-                      type="number"
-                      min={1}
-                      step={1}
-                      value={item.quantity}
-                      onChange={(e) => handleQuantityChange(itemIdx, Number(e.target.value))}
-                      required
-                      disabled={busy}
-                      className="num"
-                    />
-                  </label>
+                    {/* Stepper: − | typed number | + */}
+                    <div className="flex h-10 items-stretch overflow-hidden rounded-md border border-input bg-card shadow-sm focus-within:ring-1 focus-within:ring-ring">
+                      <button
+                        type="button"
+                        aria-label="Remove one"
+                        disabled={busy || (items[itemIdx]?.quantity ?? 1) <= 1}
+                        onClick={() => stepQty(itemIdx, -1)}
+                        className="flex w-10 shrink-0 items-center justify-center text-lg font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        −
+                      </button>
+                      <input
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={getQtyDisplay(itemIdx)}
+                        onChange={(e) => handleQtyInput(itemIdx, e.target.value)}
+                        onBlur={(e) => commitQty(itemIdx, e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { e.preventDefault(); commitQty(itemIdx, (e.target as HTMLInputElement).value) }
+                          if (e.key === "ArrowUp") { e.preventDefault(); stepQty(itemIdx, 1) }
+                          if (e.key === "ArrowDown") { e.preventDefault(); stepQty(itemIdx, -1) }
+                        }}
+                        disabled={busy}
+                        required
+                        aria-label="How many"
+                        className="min-w-0 flex-1 bg-transparent text-center text-sm font-semibold tabular-nums focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                        style={{ MozAppearance: "textfield" } as React.CSSProperties}
+                      />
+                      <button
+                        type="button"
+                        aria-label="Add one"
+                        disabled={busy}
+                        onClick={() => stepQty(itemIdx, 1)}
+                        className="flex w-10 shrink-0 items-center justify-center text-lg font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
 
                   <label className="block text-sm sm:col-span-3">
                     <span className="eyebrow mb-1 block">Lowest selling price (₦)</span>
