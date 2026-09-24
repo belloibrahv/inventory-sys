@@ -97,7 +97,7 @@ const PAGES: Array<
     doThis: [
       "Upload stock is three screens. Pick the one you need from the tab strip at the top, or from the Upload stock fold in the menu.",
       "SUPPLIER BILL, for a new carton: pick the shop, the supplier (or add a new one), and whether it is paid.",
-      "Under What is on this bill, type the product name in the search bar and pick it. Only the name fills the item column. Then pick condition (Brand new, Uk, Open box, or Standard) and storage (32GB, 64GB, 128GB, 256GB, 1TB, or 2TB), the same way you fill cost and how many.",
+      "Under What is on this bill, type the product name in the search bar and pick it. Only the name fills the item column. Then pick How the phone looks (Brand New, Brand New (Locked), Brand New (N/A), UK, UK (Locked), Open Box, or Standard) and storage (32GB, 64GB, 128GB, 256GB, 1TB, or 2TB), the same way you fill cost and how many.",
       "Add each IMEI, serial, or piece count under that same bill. Scanning only fills the box. Press Upload this stock when the line is ready.",
       "OPENING STOCK SHEET, for a full shop count: fill the opening stock Excel one shop at a time, pick or add the supplier, and upload. There is no paid or unpaid on that sheet.",
       "PHONES: one row per phone with the IMEI. LAPTOPS: one row per laptop with the serial. ACCESSORIES and SCREEN: how many pieces.",
@@ -127,7 +127,7 @@ const PAGES: Array<
     doThis: [
       "Search by item code or model.",
       "If you can add items, set cost, lowest price, and selling price. Pick the tracking that matches the thing: phones use IMEI, some accessories use serial, cords use no number.",
-      "Adding items has its own screens under Phones & items: Add one item for a single model, Add from a sheet for a long list. A sheet adds names, not shelf stock.",
+      "Adding items has its own screens under Phones & items: Add one item for a single model, Add from a sheet for a long list. Type the product name and brand. Pick All shops or one shop. A sheet can be names and brands only. This does not put stock on the shelf.",
       "To change many selling prices at once, tick any mix of phones and accessories on the price list, type each new selling price, then click Update selected prices.",
       "On a price list line, click Change or remove. Change details edits the name and prices. Reduce stock takes pieces off the shelf, or writes off phone IMEIs by scanning them. Remove item hides or deletes the name.",
       "Warranty days live on their own screen, Phones & items then Warranty days. Keep defaults at 0. Cashiers type days on Sell now.",
@@ -151,7 +151,7 @@ const PAGES: Array<
       "Type an IMEI or serial in the search, or leave it empty and search.",
       "Open a number to see the shop, the invoice, the buyer, and the warranty days left.",
       "If you can receive goods, use One phone at a time to add a phone that is already in your hands. It sits under Phone IMEIs in the menu.",
-      "On One phone at a time, pick how the phone looks: Brand new, Uk, OPENBOX, Damaged, or Non Active. Pick a supplier from the list, or choose Add new supplier.",
+      "On One phone at a time, pick how the phone looks: Brand New, Brand New (Locked), Brand New (N/A), UK, UK (Locked), Open Box, or Standard. Pick a supplier from the list, or choose Add new supplier.",
       "Fill cost, lowest sell, and selling price. They update that item on the price list. A phone is always quantity 1. A no-number item lets you type how many pieces.",
       "Scan or type the IMEI. That only fills the number. Fill the item, prices, how it looks, and the supplier, then press Add phone to shop.",
       "For a carton with a bill, or many phones at once from Excel, use Upload stock.",

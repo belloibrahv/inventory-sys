@@ -363,8 +363,12 @@ export async function searchTillStock(query: string, branchId?: string) {
 
 function formatConditionSearch(condition: string) {
   if (condition === "BRAND_NEW") return "brand new new"
+  if (condition === "BRAND_NEW_LOCKED") return "brand new locked"
+  if (condition === "BRAND_NEW_NA") return "brand new n/a na"
   if (condition === "UK_USED") return "uk used uk"
-  if (condition === "OPEN_BOX" || condition === "OPENBOX") return "openbox open box"
+  if (condition === "UK_LOCKED") return "uk locked"
+  if (condition === "OPEN_BOX" || condition === "OPENBOX") return "open box openbox"
+  if (condition === "STANDARD") return "standard"
   return condition.toLowerCase()
 }
 

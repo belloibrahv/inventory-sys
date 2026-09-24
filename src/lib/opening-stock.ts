@@ -1,4 +1,5 @@
 import { keyName } from "@/lib/table-file"
+import { parseShopCondition } from "@/lib/conditions"
 import type { ProductCondition, ProductTracking } from "@prisma/client"
 
 /**
@@ -50,29 +51,6 @@ export type OpeningPlan = {
   skipped: string[]
 }
 
-const CONDITIONS: Record<string, ProductCondition> = {
-  brand_new: "BRAND_NEW",
-  brandnew: "BRAND_NEW",
-  new: "BRAND_NEW",
-  open_box: "OPEN_BOX",
-  openbox: "OPEN_BOX",
-  uk: "UK_USED",
-  uk_used: "UK_USED",
-  ukused: "UK_USED",
-  refurbished: "REFURBISHED",
-  swap: "SWAP_DEVICE",
-  swap_device: "SWAP_DEVICE",
-  faulty: "FAULTY",
-  non_active: "FAULTY",
-  nonactive: "FAULTY",
-  repair: "REPAIR_DEVICE",
-  repair_device: "REPAIR_DEVICE",
-  // Shop words on their own sheet that are not our enum names.
-  standard: "BRAND_NEW",
-  perfect: "BRAND_NEW",
-  like_new: "BRAND_NEW",
-  used: "UK_USED",
-}
 
 const HEADER_MARKERS = ["product_name", "s_n", "sn", "brand", "qty_imei_serial_no"]
 
@@ -136,22 +114,7 @@ function money(raw: string) {
 }
 
 function mapCondition(raw: string): ProductCondition | null {
-  if (!raw) return "BRAND_NEW"
-  const hit = CONDITIONS[keyName(raw)]
-  if (hit) return hit
-  // The sheet is filled in by hand, so the same condition arrives spelled a few
-  // ways: "BRAND NEW (N/A)" carries a note in brackets, "BRAN NEW" is a typo.
-  // Drop the bracketed note and try the shop's common misspellings before
-  // refusing the row and, with it, the whole workbook.
-  const withoutNote = raw.replace(/\([^)]*\)/g, " ")
-  const retry = CONDITIONS[keyName(withoutNote)]
-  if (retry) return retry
-  const words = keyName(withoutNote)
-  if (words.startsWith("bran_new") || words.startsWith("brand_new") || words.startsWith("bran_")) return "BRAND_NEW"
-  if (words.includes("uk")) return "UK_USED"
-  if (words.includes("open") && words.includes("box")) return "OPEN_BOX"
-  if (words.includes("non") && words.includes("active")) return "FAULTY"
-  return null
+  return parseShopCondition(raw)
 }
 
 /** The same reading of a hand-written condition, for the opening stock count sheet. */
@@ -297,7 +260,7 @@ export function planOpeningStock(
 
       const condition = mapCondition(at(row, headers.condition))
       if (!condition) {
-        problems.push(`${label}: condition "${at(row, headers.condition)}" is not one we know. Use Brand new, UK, Open box, Perfect, or similar.`)
+        problems.push(`${label}: condition "${at(row, headers.condition)}" is not one we know. Use Brand New, Brand New (Locked), Brand New (N/A), UK, UK (Locked), Open Box, or Standard.`)
         continue
       }
 

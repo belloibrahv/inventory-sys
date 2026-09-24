@@ -4,20 +4,13 @@ import { PageHeader, SectionCard } from "@/components/shared"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { SHOP_CONDITION_OPTIONS } from "@/lib/conditions"
 import { canManageCatalog } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { CatalogLocked } from "../catalog-locked"
+import { ShopScopeFields } from "../shop-scope-fields"
 
-const conditions = [
-  { value: "BRAND_NEW", label: "Brand new" },
-  { value: "UK_USED", label: "Uk" },
-  { value: "OPEN_BOX", label: "OPENBOX" },
-  { value: "FAULTY", label: "Faulty" },
-  { value: "SWAP_DEVICE", label: "Swap Deal" },
-  { value: "REPAIR_DEVICE", label: "Repair device" },
-]
-
-/** One new model onto the price list. */
+/** Register one product name, with a brand, onto the list. */
 export default async function NewProductPage() {
   const me = await requireUser()
   const canEdit = await canManageCatalog(me.role)
@@ -30,70 +23,89 @@ export default async function NewProductPage() {
       <PageHeader
         backHref="/products"
         title="Add one item"
-        description="A new model. Set the lowest price with care."
+        description="Register a product name and brand. Pick All shops or one shop. Prices can wait until you add stock."
       />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)]">
         <SectionCard title="The item">
-          <ActionForm action={createProduct} submit="Save this item" className="space-y-3">
-            <Input name="sku" placeholder="Item code" required />
-            <Input name="name" placeholder="Name" required />
-            <div className="grid grid-cols-2 gap-2">
-              <Select name="brandId" required>
+          <ActionForm action={createProduct} submit="Save this product name" className="space-y-3">
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs text-muted-foreground">Product name</span>
+              <Input name="name" placeholder="Product name, for example Tecno Camon 30" required />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs text-muted-foreground">Brand name</span>
+              <Input
+                name="brandName"
+                list="brand-names"
+                placeholder="Brand name, for example Tecno"
+                required
+              />
+              <datalist id="brand-names">
                 {lookups.brands.map((brand) => (
-                  <option key={brand.id} value={brand.id}>{brand.name}</option>
+                  <option key={brand.id} value={brand.name} />
                 ))}
-              </Select>
-              <Select name="categoryId" required>
+              </datalist>
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs text-muted-foreground">Category</span>
+              <Select name="categoryId" emptyLabel="Phones will be created if the list is empty">
                 {lookups.categories.map((category) => (
-                  <option key={category.id} value={category.id}>{category.name}</option>
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
                 ))}
               </Select>
-            </div>
+            </label>
             <Select name="tracking" defaultValue="IMEI">
               <option value="IMEI">Phone, IMEI</option>
               <option value="SERIAL">Accessory with serial</option>
               <option value="NONE">No number. Use this for cords and chargers</option>
             </Select>
-            <Select name="condition" defaultValue="BRAND_NEW">
-              {conditions.map((item) => (
-                <option key={item.value} value={item.value}>{item.label}</option>
-              ))}
-            </Select>
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs text-muted-foreground">How the phone looks</span>
+              <Select name="condition" defaultValue="BRAND_NEW">
+                {SHOP_CONDITION_OPTIONS.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <ShopScopeFields shops={lookups.branches} />
             <div className="grid grid-cols-3 gap-2">
               <Input name="color" placeholder="Color" />
               <Input name="storage" placeholder="Storage size (GB)" />
               <Input name="ram" placeholder="Memory (RAM)" />
             </div>
+            <Input name="sku" placeholder="Item code (leave empty and the system will make one)" />
             <div className="grid grid-cols-3 gap-2">
-              <Input name="costPrice" type="number" placeholder="Cost price" required />
-              <Input name="minimumPrice" type="number" placeholder="Lowest price" required />
-              <Input name="sellingPrice" type="number" placeholder="Sell price" required />
+              <Input name="costPrice" type="number" placeholder="Cost price" />
+              <Input name="minimumPrice" type="number" placeholder="Lowest price" />
+              <Input name="sellingPrice" type="number" placeholder="Sell price" />
             </div>
             <Input name="warrantyDays" type="number" defaultValue={0} placeholder="Warranty days (0 = no warranty)" />
             <Textarea name="description" placeholder="Short note about this item" />
           </ActionForm>
         </SectionCard>
 
-        <SectionCard title="What the three prices mean">
+        <SectionCard title="What this does">
           <ul className="space-y-3 text-sm text-muted-foreground">
             <li>
-              <span className="font-medium text-foreground">Cost price</span> is what you paid the supplier. Profit is
-              worked out from it, so a wrong cost makes every profit figure wrong. It is copied onto each
-              sale on the day it happens, so a later batch at a new rate never changes an old profit.
+              <span className="font-medium text-foreground">Product name and brand</span> are what staff pick later on
+              Upload stock, One phone at a time, and Sell now. Type a new brand if it is not on the list yet.
             </li>
             <li>
-              <span className="font-medium text-foreground">Lowest price</span> is the real floor at the till.
-              A seller may price a deal anywhere from this figure up — that is where a reseller price or a
-              bulk discount comes from. Going under it needs the CEO or Super Admin, and a reason.
+              <span className="font-medium text-foreground">All shops or one shop</span> decides where the name first
+              appears. All shops is the usual choice so Iwo Road, Bodija, and Challenge can all pick it.
             </li>
             <li>
-              <span className="font-medium text-foreground">Sell price</span> is only what the till offers first.
-              It is a starting point, not a fixed price.
+              <span className="font-medium text-foreground">This is not stock.</span> Saving a name does not put a phone
+              on the shelf. Use Upload stock or One phone at a time for units.
             </li>
             <li>
-              <span className="font-medium text-foreground">How we count it</span> cannot be changed easily later. Pick
-              IMEI for phones, serial for accessories that carry one, and no number for cords and chargers.
+              <span className="font-medium text-foreground">Sell price</span> can stay empty for now. Set it before a
+              cashier sells the item. Lowest price is the floor at the till.
             </li>
           </ul>
         </SectionCard>

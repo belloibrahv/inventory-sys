@@ -13,6 +13,7 @@ import { downloadTable } from "@/lib/download-table"
 import { formatCurrency, money } from "@/lib/utils"
 import { lowStockLimit } from "@/lib/stock-limits"
 import { formatCondition } from "@/lib/status"
+import { SHOP_CONDITION_OPTIONS } from "@/lib/conditions"
 import { countByStockCategory, matchesStockCategory, STOCK_CATEGORY_FILTERS } from "@/lib/stock-categories"
 
 type Branch = { id: string; name: string; code: string }
@@ -262,13 +263,11 @@ export function InventoryClientView({
             className="h-9 w-44"
           >
             <option value="ALL">How the phone looks: all</option>
-            <option value="BRAND_NEW">Brand new</option>
-            <option value="UK_USED">Uk</option>
-            <option value="OPEN_BOX">OPENBOX</option>
-            <option value="FAULTY">Faulty</option>
-            <option value="SWAP_DEVICE">Swap Deal</option>
-            <option value="REPAIR_DEVICE">Repair device</option>
-            <option value="REFURBISHED">Refurbished</option>
+            {SHOP_CONDITION_OPTIONS.map((row) => (
+              <option key={row.value} value={row.value}>
+                {row.label}
+              </option>
+            ))}
           </Select>
           <div className="relative min-w-[200px] flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

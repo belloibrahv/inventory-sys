@@ -6,19 +6,13 @@ import { ActionForm } from "@/components/action-form"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { formatCurrency } from "@/lib/utils"
+import { SHOP_CONDITION_OPTIONS } from "@/lib/conditions"
 
 type Product = { id: string; name: string }
 type Customer = { id: string; name: string; phone: string; branchId: string }
 type Branch = { id: string; name: string }
 
-const CONDITIONS = [
-  { value: "UK_USED", label: "Uk" },
-  { value: "BRAND_NEW", label: "Brand new" },
-  { value: "OPEN_BOX", label: "OPENBOX" },
-  { value: "REFURBISHED", label: "Refurbished" },
-  { value: "FAULTY", label: "Damaged" },
-  { value: "SWAP_DEVICE", label: "Swap device" },
-] as const
+const CONDITIONS = SHOP_CONDITION_OPTIONS
 
 export function SwapForm({
   customers,
@@ -116,7 +110,7 @@ export function SwapForm({
           <option key={product.id} value={product.id}>{product.name}</option>
         ))}
       </Select>
-      <Select name="oldDeviceCondition" defaultValue="UK_USED">
+              <Select name="oldDeviceCondition" defaultValue="UK_USED">
         {CONDITIONS.map((item) => (
           <option key={item.value} value={item.value}>{item.label}</option>
         ))}

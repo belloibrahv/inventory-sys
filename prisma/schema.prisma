@@ -22,8 +22,12 @@ enum UserRole {
 
 enum ProductCondition {
   BRAND_NEW
+  BRAND_NEW_LOCKED
+  BRAND_NEW_NA
   OPEN_BOX
   UK_USED
+  UK_LOCKED
+  STANDARD
   REFURBISHED
   SWAP_DEVICE
   FAULTY

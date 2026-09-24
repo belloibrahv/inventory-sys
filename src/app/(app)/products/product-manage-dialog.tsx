@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
-import { PHONE_LOOK_OPTIONS } from "@/lib/phone-look"
+import { SHOP_CONDITION_OPTIONS } from "@/lib/conditions"
 import type { PriceRow } from "./price-list"
 import { AlertTriangle, Edit3, MinusCircle, Trash2 } from "lucide-react"
 
@@ -126,14 +126,11 @@ export function ProductManageDialog({
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Condition</label>
                 <Select name="condition" defaultValue={product.condition} className="mt-1">
-                  {PHONE_LOOK_OPTIONS.map((opt) => (
+                  {SHOP_CONDITION_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
                       {opt.label}
                     </option>
                   ))}
-                  <option value="REFURBISHED">Refurbished</option>
-                  <option value="OPEN_BOX">Open box</option>
-                  <option value="UK_USED">UK used</option>
                 </Select>
               </div>
             </div>

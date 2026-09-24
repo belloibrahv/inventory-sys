@@ -10,6 +10,63 @@ import { canHardDelete, canManageCatalog } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { shopError } from "@/lib/shop-speak"
 import { UNSAFE_KEYS } from "@/lib/table-file"
+import { parseShopCondition } from "@/lib/conditions"
+import { makeOpeningSku } from "@/lib/opening-stock"
+
+async function findOrCreateBrand(name: string) {
+  const wanted = name.trim()
+  if (!wanted) return null
+  const brands = await prisma.brand.findMany({ select: { id: true, name: true } })
+  const hit = brands.find((row) => row.name.toLowerCase() === wanted.toLowerCase())
+  if (hit) return hit.id
+  const created = await prisma.brand.create({ data: { name: wanted } })
+  return created.id
+}
+
+async function findOrCreateCategory(name: string) {
+  const wanted = name.trim() || "Phones"
+  const categories = await prisma.category.findMany({ select: { id: true, name: true } })
+  const hit = categories.find((row) => row.name.toLowerCase() === wanted.toLowerCase())
+  if (hit) return hit.id
+  const created = await prisma.category.create({ data: { name: wanted } })
+  return created.id
+}
+
+async function uniqueSku(base: string) {
+  const cleaned = (base || "ITEM").slice(0, 60)
+  let sku = cleaned
+  let n = 2
+  while (await prisma.product.findUnique({ where: { sku } })) {
+    sku = `${cleaned.slice(0, 56)}-${n}`
+    n += 1
+    if (n > 99) return `${cleaned.slice(0, 50)}-${Date.now().toString(36).slice(-6)}`
+  }
+  return sku
+}
+
+async function shopsForScope(formData: FormData) {
+  const scope = String(formData.get("shopScope") || "all")
+  if (scope === "one") {
+    const branchId = String(formData.get("branchId") || "")
+    if (!branchId) return { error: "Pick the shop this name should show on, or choose All shops." }
+    const shop = await prisma.branch.findFirst({ where: { id: branchId, isActive: true } })
+    if (!shop) return { error: "That shop is not open." }
+    return { shops: [shop] }
+  }
+  const shops = await prisma.branch.findMany({ where: { isActive: true } })
+  if (shops.length === 0) return { error: "There is no open shop to put this name on." }
+  return { shops }
+}
+
+async function putNameOnShops(productId: string, shopIds: string[]) {
+  for (const branchId of shopIds) {
+    await prisma.inventory.upsert({
+      where: { productId_branchId: { productId, branchId } },
+      create: { productId, branchId, quantity: 0 },
+      update: {},
+    })
+  }
+}
 
 export async function getProductLookups() {
   await requireUser()
@@ -49,30 +106,68 @@ export async function createProduct(formData: FormData) {
   const user = await requireUser()
   if (!(await canManageCatalog(user.role))) return { error: "You are not allowed to add or change items. Ask the main admin." }
 
-  const sku = String(formData.get("sku") ?? "").trim()
   const name = String(formData.get("name") ?? "").trim()
-  if (!sku || !name) return { error: "Type the item code and the name." }
+  if (!name) return { error: "Type the product name." }
 
-  const existing = await prisma.product.findUnique({ where: { sku } })
-  if (existing) return { error: "That item code is already being used." }
+  const brandName = String(formData.get("brandName") || "").trim()
+  const brandIdField = String(formData.get("brandId") || "").trim()
+  let brandId = brandIdField
+  if (brandName) {
+    brandId = (await findOrCreateBrand(brandName)) || ""
+  }
+  if (!brandId) return { error: "Type or pick a brand name." }
+
+  const categoryName = String(formData.get("categoryName") || "").trim()
+  const categoryIdField = String(formData.get("categoryId") || "").trim()
+  const categoryId = categoryName
+    ? await findOrCreateCategory(categoryName)
+    : categoryIdField || (await findOrCreateCategory("Phones"))
+
+  const condition = parseShopCondition(String(formData.get("condition") || "BRAND_NEW"))
+  if (!condition) {
+    return { error: "Pick How the phone looks: Brand New, Brand New (Locked), Brand New (N/A), UK, UK (Locked), Open Box, or Standard." }
+  }
+
+  const storage = String(formData.get("storage") || "").trim()
+  const brand = await prisma.brand.findUnique({ where: { id: brandId } })
+  let sku = String(formData.get("sku") ?? "").trim()
+  if (sku) {
+    const existing = await prisma.product.findUnique({ where: { sku } })
+    if (existing) return { error: "That item code is already being used." }
+  } else {
+    sku = await uniqueSku(
+      makeOpeningSku({
+        brand: brand?.name || "ITEM",
+        name,
+        storage,
+        condition,
+      })
+    )
+  }
 
   const costPrice = Number(formData.get("costPrice") || 0)
   const sellingPrice = Number(formData.get("sellingPrice") || 0)
-  const minimumPrice = Number(formData.get("minimumPrice") || sellingPrice)
+  const minimumPrice = Number(formData.get("minimumPrice") || sellingPrice || 0)
+  if (!Number.isFinite(costPrice) || !Number.isFinite(sellingPrice) || sellingPrice < 0 || costPrice < 0) {
+    return { error: "Cost and sell price must be numbers. Use 0 if you will set prices later." }
+  }
+
+  const shops = await shopsForScope(formData)
+  if ("error" in shops) return { error: shops.error }
 
   const product = await prisma.product.create({
     data: {
       sku,
       name,
       description: String(formData.get("description") || "") || null,
-      brandId: String(formData.get("brandId")),
-      categoryId: String(formData.get("categoryId")),
-      condition: String(formData.get("condition")) as ProductCondition,
+      brandId,
+      categoryId,
+      condition,
       color: String(formData.get("color") || "") || null,
-      storage: String(formData.get("storage") || "") || null,
+      storage: storage || null,
       ram: String(formData.get("ram") || "") || null,
       costPrice: costPrice.toFixed(2),
-      minimumPrice: minimumPrice.toFixed(2),
+      minimumPrice: Math.max(0, minimumPrice).toFixed(2),
       sellingPrice: sellingPrice.toFixed(2),
       marketPrice: formData.get("marketPrice") ? Number(formData.get("marketPrice")).toFixed(2) : null,
       warrantyDays: Math.max(0, Number(formData.get("warrantyDays") || 0)),
@@ -80,14 +175,10 @@ export async function createProduct(formData: FormData) {
     },
   })
 
-  const branches = await prisma.branch.findMany({ where: { isActive: true } })
-  await prisma.inventory.createMany({
-    data: branches.map((branch) => ({
-      productId: product.id,
-      branchId: branch.id,
-      quantity: 0,
-    })),
-  })
+  await putNameOnShops(
+    product.id,
+    shops.shops.map((shop) => shop.id)
+  )
 
   await prisma.auditLog.create({
     data: {
@@ -95,12 +186,15 @@ export async function createProduct(formData: FormData) {
       action: "CREATE",
       entityType: "Product",
       entityId: product.id,
-      newValue: JSON.stringify({ sku, sellingPrice }),
+      newValue: JSON.stringify({ sku, name, shops: shops.shops.map((shop) => shop.code) }),
       branchId: user.branchId,
     },
   })
 
   revalidatePath("/products")
+  revalidatePath("/products/new")
+  revalidatePath("/inventory")
+  revalidatePath("/pos")
   return { success: true }
 }
 
@@ -235,22 +329,6 @@ export async function updateProductWarranty(formData: FormData) {
   return { success: true }
 }
 
-const CONDITIONS: Record<string, ProductCondition> = {
-  brand_new: "BRAND_NEW",
-  brandnew: "BRAND_NEW",
-  new: "BRAND_NEW",
-  open_box: "OPEN_BOX",
-  openbox: "OPEN_BOX",
-  uk_used: "UK_USED",
-  ukused: "UK_USED",
-  refurbished: "REFURBISHED",
-  swap_device: "SWAP_DEVICE",
-  swap: "SWAP_DEVICE",
-  faulty: "FAULTY",
-  repair_device: "REPAIR_DEVICE",
-  repair: "REPAIR_DEVICE",
-}
-
 const TRACKING: Record<string, ProductTracking> = {
   imei: "IMEI",
   phone: "IMEI",
@@ -368,10 +446,12 @@ export async function importProducts(formData: FormData) {
   if (rows.length === 0) return { error: "There is no item under the header line in that file." }
   if (rows.length > 400) return { error: "Upload up to 400 products at a time." }
 
-  const [brands, categories, shops] = await Promise.all([
+  const shopsPicked = await shopsForScope(formData)
+  if ("error" in shopsPicked) return { error: shopsPicked.error }
+
+  const [brands, categories] = await Promise.all([
     prisma.brand.findMany(),
     prisma.category.findMany(),
-    prisma.branch.findMany({ where: { isActive: true }, select: { id: true } }),
   ])
   const brandIds = new Map(brands.map((row) => [row.name.toLowerCase(), row.id]))
   const categoryIds = new Map(categories.map((row) => [row.name.toLowerCase(), row.id]))
@@ -385,41 +465,47 @@ export async function importProducts(formData: FormData) {
     const line = index + 2
     // Sample rows on the handed-out sheet are never loaded.
     if (cell(row, "row_type", "type", "row").toUpperCase() === "SAMPLE") continue
-    const sku = cell(row, "item_code", "sku", "code")
-    const name = cell(row, "name", "product", "item")
+    const skuCell = cell(row, "item_code", "sku", "code")
+    const name = cell(row, "name", "product", "item", "product_name")
     const brandName = cell(row, "brand")
-    const categoryName = cell(row, "category")
-    if (!sku || !name || !brandName || !categoryName) {
-      errors.push(`Line ${line}: item code, name, brand, and category are required.`)
-      continue
-    }
-
-    const existing = await prisma.product.findUnique({ where: { sku } })
-    if (existing) {
-      skipped += 1
+    const categoryName = cell(row, "category") || "Phones"
+    if (!name || !brandName) {
+      errors.push(`Line ${line}: product name and brand are required.`)
       continue
     }
 
     const trackingKey = keyName(cell(row, "tracking") || "IMEI")
-    const tracking = TRACKING[trackingKey]
-    if (!tracking) {
-      errors.push(`Line ${line}: say phone IMEI, serial, or no number.`)
-      continue
-    }
-    const conditionKey = keyName(cell(row, "condition") || "BRAND_NEW")
-    const condition = CONDITIONS[conditionKey]
+    const tracking = TRACKING[trackingKey] || "IMEI"
+    const condition = parseShopCondition(cell(row, "condition") || "BRAND_NEW")
     if (!condition) {
-      errors.push(`Line ${line}: condition is not one we know. Use Brand New, UK Used, Open Box, or similar.`)
+      errors.push(`Line ${line}: How the phone looks is not one we know. Use Brand New, Brand New (Locked), Brand New (N/A), UK, UK (Locked), Open Box, or Standard.`)
       continue
     }
 
     const costPrice = Number(cell(row, "cost", "cost_price") || 0)
     const sellingPrice = Number(cell(row, "selling", "selling_price") || 0)
-    // lowest_price is what the sheet Techvaults hands the shop calls it.
     const minimumPrice = Number(cell(row, "minimum", "minimum_price", "min", "lowest_price", "lowest") || sellingPrice)
-    if (!Number.isFinite(costPrice) || !Number.isFinite(sellingPrice) || sellingPrice <= 0) {
-      errors.push(`Line ${line}: selling price must be a number above 0.`)
+    if (!Number.isFinite(costPrice) || !Number.isFinite(sellingPrice) || sellingPrice < 0 || costPrice < 0) {
+      errors.push(`Line ${line}: cost and sell price must be numbers. Leave them empty to register the name only.`)
       continue
+    }
+
+    let sku = skuCell
+    if (sku) {
+      const existing = await prisma.product.findUnique({ where: { sku } })
+      if (existing) {
+        skipped += 1
+        continue
+      }
+    } else {
+      sku = await uniqueSku(
+        makeOpeningSku({
+          brand: brandName,
+          name,
+          storage: cell(row, "storage"),
+          condition,
+        })
+      )
     }
 
     let brandId = brandIds.get(brandName.toLowerCase())
@@ -453,11 +539,10 @@ export async function importProducts(formData: FormData) {
         description: cell(row, "description") || null,
       },
     })
-    if (shops.length) {
-      await prisma.inventory.createMany({
-        data: shops.map((shop) => ({ productId: product.id, branchId: shop.id, quantity: 0 })),
-      })
-    }
+    await putNameOnShops(
+      product.id,
+      shopsPicked.shops.map((shop) => shop.id)
+    )
     created += 1
   }
 
@@ -730,15 +815,17 @@ export async function updateProduct(formData: FormData) {
   const sku = String(formData.get("sku") || "").trim()
   const storage = String(formData.get("storage") || "").trim() || null
   const color = String(formData.get("color") || "").trim() || null
-  const condition = String(formData.get("condition") || "UK_USED") as ProductCondition
-  const costPrice = Number(formData.get("costPrice") || 0)
-  const sellingPrice = Number(formData.get("sellingPrice") || 0)
-  const minimumPrice = Number(formData.get("minimumPrice") || sellingPrice)
-
   if (!name || !sku) return { error: "Name and Item Code (SKU) are required." }
 
   const existing = await prisma.product.findUnique({ where: { id } })
   if (!existing) return { error: "Item not found." }
+
+  const condition = parseShopCondition(String(formData.get("condition") || existing.condition))
+  if (!condition) return { error: "Pick How the phone looks from the list." }
+
+  const costPrice = Number(formData.get("costPrice") || 0)
+  const sellingPrice = Number(formData.get("sellingPrice") || 0)
+  const minimumPrice = Number(formData.get("minimumPrice") || sellingPrice)
 
   if (sku !== existing.sku) {
     const clash = await prisma.product.findUnique({ where: { sku } })

@@ -17,6 +17,7 @@
  *
  *   npx tsx scripts/purge-demo-data.ts                       # dry run, deletes nothing
  *   npx tsx scripts/purge-demo-data.ts --keep owner@abutwins.com --apply
+ *   npx tsx scripts/purge-demo-data.ts --keep-all-users --apply
  */
 import { PrismaClient } from "@prisma/client"
 import { SEATS } from "./staff-roster"
@@ -37,6 +38,10 @@ function keepEmails() {
     for (const seat of SEATS) out.push(seat.email.toLowerCase())
   }
   return [...new Set(out)]
+}
+
+function keepAllUsers() {
+  return process.argv.includes("--keep-all-users")
 }
 
 async function main() {
@@ -75,11 +80,15 @@ async function main() {
     supplier: await prisma.supplier.count(),
     brand: await prisma.brand.count(),
     category: await prisma.category.count(),
+    stockMovement: await prisma.stockMovement.count(),
+    bankAccount: await prisma.bankAccount.count(),
   }
 
   const users = await prisma.user.findMany({ select: { email: true, name: true, role: true } })
-  const doomed = users.filter((user) => !keep.includes(user.email.toLowerCase()))
-  const kept = users.filter((user) => keep.includes(user.email.toLowerCase()))
+  const kept = keepAllUsers()
+    ? users
+    : users.filter((user) => keep.includes(user.email.toLowerCase()))
+  const doomed = keepAllUsers() ? [] : users.filter((user) => !keep.includes(user.email.toLowerCase()))
 
   console.log(APPLY ? "APPLYING - this cannot be undone\n" : "DRY RUN - nothing will be deleted\n")
   console.log("Rows to delete:")
@@ -108,7 +117,7 @@ async function main() {
   if (kept.length === 0) {
     throw new Error(
       "Refusing to delete every login: nobody could sign in afterwards. Name the real one with --keep, " +
-        "or create it first with scripts/create-owner.ts."
+        "pass --keep-all-users, or create it first with scripts/create-owner.ts."
     )
   }
 
@@ -121,6 +130,7 @@ async function main() {
   await prisma.financeEntry.deleteMany()
   await prisma.ledgerEntry.deleteMany()
   await prisma.payment.deleteMany()
+  await prisma.bankAccount.deleteMany()
   await prisma.saleItem.deleteMany()
   await prisma.stockReturn.deleteMany()
   await prisma.repair.deleteMany()
@@ -138,13 +148,19 @@ async function main() {
   await prisma.stockTransfer.deleteMany()
   await prisma.expense.deleteMany()
   await prisma.priceHistory.deleteMany()
+  await prisma.stockMovement.deleteMany()
   await prisma.inventory.deleteMany()
   await prisma.product.deleteMany()
   await prisma.customer.deleteMany()
   await prisma.supplier.deleteMany()
   await prisma.brand.deleteMany()
   await prisma.category.deleteMany()
-  await prisma.user.deleteMany({ where: { email: { notIn: kept.map((u) => u.email) } } })
+  if (doomed.length > 0) {
+    await prisma.user.deleteMany({ where: { email: { notIn: kept.map((u) => u.email) } } })
+  }
+  await prisma.branch.updateMany({
+    data: { openingCash: 0, openingCashAt: null, openingCashBy: null },
+  })
 
   console.log("\nDone. The shops, the company settings, the role permissions and the kept logins are still here.")
 }

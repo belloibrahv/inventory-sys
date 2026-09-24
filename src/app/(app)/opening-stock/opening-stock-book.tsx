@@ -23,6 +23,7 @@ import { downloadWorkbook } from "@/lib/download-table"
 import { bookSheets, cleanIdentity, type BookLine } from "@/lib/opening-book"
 import { countByStockCategory, matchesStockCategory, STOCK_CATEGORY_FILTERS } from "@/lib/stock-categories"
 import { formatCondition } from "@/lib/status"
+import { SHOP_CONDITION_OPTIONS } from "@/lib/conditions"
 import { formatCurrency, formatDate } from "@/lib/utils"
 
 type Edit = {
@@ -517,10 +518,11 @@ function AddItemModal({
               onChange={(e) => setForm((prev) => ({ ...prev, condition: e.target.value }))}
               className="mt-1 flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm shadow-sm"
             >
-              <option value="BRAND_NEW">Brand New</option>
-              <option value="UK_USED">Foreign Used (UK Used)</option>
-              <option value="OPEN_BOX">Open Box</option>
-              <option value="REFURBISHED">Refurbished</option>
+              {SHOP_CONDITION_OPTIONS.map((row) => (
+                <option key={row.value} value={row.value}>
+                  {row.label}
+                </option>
+              ))}
             </select>
           </div>
           <div>
