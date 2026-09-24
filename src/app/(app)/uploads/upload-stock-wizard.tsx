@@ -289,7 +289,7 @@ export function UploadStockWizard({
         return
       }
       if (!item.condition) {
-        toast.error(`Item line #${i + 1}: pick How the phone looks from Brand New, Brand New (Locked), Brand New (N/A), UK, UK (Locked), Open Box, or Standard.`)
+        toast.error(`Item line #${i + 1}: pick How the phone looks from Brand New, Brand New (Locked), Brand New (N/A), UK, UK (Locked), Open Box, Standard, or Faulty.`)
         return
       }
       if (item.tracking !== "NONE" && !item.storage) {
@@ -599,7 +599,7 @@ export function UploadStockWizard({
                       required
                     >
                       <option value="" disabled>
-                        Pick Brand New, Brand New (Locked), Brand New (N/A), UK, UK (Locked), Open Box, or Standard
+                        Pick Brand New, Brand New (Locked), Brand New (N/A), UK, UK (Locked), Open Box, Standard, or Faulty
                       </option>
                       {BILL_CONDITION_OPTIONS.map((row) => (
                         <option key={row.value} value={row.value}>

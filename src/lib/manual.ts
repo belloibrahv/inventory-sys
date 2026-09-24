@@ -97,7 +97,7 @@ const PAGES: Array<
     doThis: [
       "Upload stock is three screens. Pick the one you need from the tab strip at the top, or from the Upload stock fold in the menu.",
       "SUPPLIER BILL, for a new carton: pick the shop, the supplier (or add a new one), and whether it is paid.",
-      "Under What is on this bill, type the product name in the search bar and pick it. Only the name fills the item column. Then pick How the phone looks (Brand New, Brand New (Locked), Brand New (N/A), UK, UK (Locked), Open Box, or Standard) and storage (32GB, 64GB, 128GB, 256GB, 1TB, or 2TB), the same way you fill cost and how many.",
+      "Under What is on this bill, type the product name in the search bar and pick it. Only the name fills the item column. Then pick How the phone looks (Brand New, Brand New (Locked), Brand New (N/A), UK, UK (Locked), Open Box, Standard, or Faulty) and storage (32GB, 64GB, 128GB, 256GB, 1TB, or 2TB), the same way you fill cost and how many.",
       "Add each IMEI, serial, or piece count under that same bill. Scanning only fills the box. Press Upload this stock when the line is ready.",
       "OPENING STOCK SHEET, for a full shop count: fill the opening stock Excel one shop at a time, pick or add the supplier, and upload. There is no paid or unpaid on that sheet.",
       "PHONES: one row per phone with the IMEI. LAPTOPS: one row per laptop with the serial. ACCESSORIES and SCREEN: how many pieces.",
@@ -151,7 +151,7 @@ const PAGES: Array<
       "Type an IMEI or serial in the search, or leave it empty and search.",
       "Open a number to see the shop, the invoice, the buyer, and the warranty days left.",
       "If you can receive goods, use One phone at a time to add a phone that is already in your hands. It sits under Phone IMEIs in the menu.",
-      "On One phone at a time, pick how the phone looks: Brand New, Brand New (Locked), Brand New (N/A), UK, UK (Locked), Open Box, or Standard. Pick a supplier from the list, or choose Add new supplier.",
+      "On One phone at a time, pick how the phone looks: Brand New, Brand New (Locked), Brand New (N/A), UK, UK (Locked), Open Box, Standard, or Faulty. Pick a supplier from the list, or choose Add new supplier.",
       "Fill cost, lowest sell, and selling price. They update that item on the price list. A phone is always quantity 1. A no-number item lets you type how many pieces.",
       "Scan or type the IMEI. That only fills the number. Fill the item, prices, how it looks, and the supplier, then press Add phone to shop.",
       "For a carton with a bill, or many phones at once from Excel, use Upload stock.",
