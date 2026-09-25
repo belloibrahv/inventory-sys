@@ -4,11 +4,12 @@ import { useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { CheckCircle2, Download, Eye, Loader2, Lock, Plus, Save, Upload } from "lucide-react"
+import { CheckCircle2, Download, Eye, Loader2, Lock, Plus, Save, Trash2, Upload } from "lucide-react"
 import {
   addOpeningStockItem,
   closeOpeningStock,
   correctOpeningFromSheet,
+  removeOpeningStock,
   saveOpeningEdits,
   type CorrectionResult,
   type OpeningBook,
@@ -158,6 +159,16 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
         {book.canCorrect ? <SheetCorrection branchId={branchId} /> : null}
         {book.canClose ? <CloseCard branchId={branchId} value={record.totals.value} shop={record.shopName} /> : null}
       </div>
+
+      {book.canRemove ? (
+        <RemoveCard
+          branchId={branchId}
+          shop={record.shopName}
+          value={record.totals.value}
+          quantity={record.totals.quantity}
+          lines={record.totals.lines}
+        />
+      ) : null}
 
       {!closed && offShelf.length ? (
         <p className="rounded-lg border border-warning/30 bg-warning-soft p-3 text-sm text-warning">
@@ -779,6 +790,89 @@ function CloseCard({ branchId, value, shop }: { branchId: string; value: number;
       <p className="mt-3 text-xs text-muted-foreground">
         Want the paper first? Use Download above, or see <Link href="/reports" className="text-primary hover:underline">Reports</Link>.
       </p>
+    </SectionCard>
+  )
+}
+
+function RemoveCard({
+  branchId,
+  shop,
+  value,
+  quantity,
+  lines,
+}: {
+  branchId: string
+  shop: string
+  value: number
+  quantity: number
+  lines: number
+}) {
+  const router = useRouter()
+  const [typed, setTyped] = useState("")
+  const [reason, setReason] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [problems, setProblems] = useState<string[]>([])
+  const matches = typed.trim().toLowerCase() === shop.trim().toLowerCase()
+
+  async function remove() {
+    const data = new FormData()
+    data.set("branchId", branchId)
+    data.set("confirmName", typed)
+    data.set("reason", reason)
+    setBusy(true)
+    try {
+      const outcome = await removeOpeningStock(data)
+      setBusy(false)
+      if (outcome.error) {
+        toast.error(outcome.error)
+        setProblems(outcome.problems ?? [])
+        return
+      }
+      toast.success(`${shop}'s opening stock was removed. Load the sheet onto the right shop now.`)
+      router.refresh()
+    } catch {
+      setBusy(false)
+      toast.error("That did not reach the shop system. Check your network and try again.")
+    }
+  }
+
+  return (
+    <SectionCard
+      title="Remove all of this shop's opening stock"
+      description="CEO or main admin. For a sheet loaded onto the wrong shop."
+      className="border-danger/30"
+    >
+      <p className="text-sm">
+        This takes all <span className="num font-semibold">{quantity}</span> unit(s) on{" "}
+        <span className="num font-semibold">{lines}</span> line(s), worth{" "}
+        <span className="num font-semibold">{formatCurrency(value)}</span> at cost, off{" "}
+        <span className="font-semibold">{shop}</span>. Every IMEI and serial it loaded is deleted, so the same file can
+        then be loaded onto the right shop from Upload stock. Item names stay on the price list. Who did what keeps a
+        copy.
+      </p>
+      <p className="mt-2 text-xs text-muted-foreground">
+        If any of it was already sold, moved, sent back or repaired, nothing is removed and you will see which ones.
+      </p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <Input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Why, e.g. loaded onto Bodija instead of Iwo Road" />
+        <Input
+          value={typed}
+          onChange={(event) => setTyped(event.target.value)}
+          placeholder={`Type ${shop} to confirm`}
+          aria-label="Type the shop name to confirm"
+        />
+      </div>
+      <Button type="button" variant="destructive" className="mt-3" onClick={remove} disabled={!matches || busy}>
+        {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Trash2 className="mr-1.5 h-4 w-4" />}
+        Remove {shop}&apos;s opening stock
+      </Button>
+      {problems.length ? (
+        <ul className="mt-3 max-h-48 space-y-1 overflow-auto rounded-lg border border-danger/30 bg-danger-soft p-3 text-xs text-danger">
+          {problems.map((problem) => (
+            <li key={problem}>{problem}</li>
+          ))}
+        </ul>
+      ) : null}
     </SectionCard>
   )
 }

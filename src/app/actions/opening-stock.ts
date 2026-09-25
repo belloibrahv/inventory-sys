@@ -5,7 +5,7 @@ import type { Prisma, UserRole } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { recordMovement } from "@/lib/concurrency"
 import { can } from "@/lib/permissions"
-import { scopedBranchId } from "@/lib/rbac"
+import { isShopOwner, scopedBranchId } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { readWorkbookGrids } from "@/lib/table-file"
 import { makeOpeningSku, mapOpeningCondition } from "@/lib/opening-stock"
@@ -140,7 +140,7 @@ export async function getOpeningBook(branchId: string) {
     where: { branchId },
     include: { branch: true, purchase: { select: { id: true, invoiceNumber: true, createdAt: true } } },
   })
-  if (!record) return { record: null, lines: [] as BookLine[], canCorrect: false, canClose: false }
+  if (!record) return { record: null, lines: [] as BookLine[], canCorrect: false, canClose: false, canRemove: false }
 
   const closed = record.status === "CLOSED"
   let lines: BookLine[]
@@ -175,6 +175,7 @@ export async function getOpeningBook(branchId: string) {
     lines,
     canCorrect: !closed && canCorrect,
     canClose: !closed && canCloseRole(user.role),
+    canRemove: !closed && isShopOwner(user.role),
   }
 }
 
@@ -698,6 +699,150 @@ export async function addOpeningStockItem(formData: FormData): Promise<Correctio
   }
 
   return { applied: true, preview: describe(plan, gate.lines) }
+}
+
+/**
+ * Take a shop's whole opening stock off, while it is still open. For a sheet
+ * loaded onto the wrong shop: every IMEI and serial it booked is deleted (so the
+ * same file can be loaded onto the right shop), the shelf comes down by the
+ * opening counts, and the opening bill goes. The shop is back to Not loaded.
+ *
+ * Refused if any of it has already been sold, moved, sent back or repaired,
+ * because then the opening stock is part of the shop's history.
+ */
+export async function removeOpeningStock(formData: FormData): Promise<{ error?: string; problems?: string[]; success?: boolean }> {
+  const user = await requireUser()
+  if (!isShopOwner(user.role)) return { error: "Only the CEO or the main admin can remove a shop's opening stock." }
+
+  const branchId = String(formData.get("branchId") || "")
+  const record = await prisma.openingStock.findUnique({
+    where: { branchId },
+    include: { branch: true, purchase: { select: { invoiceNumber: true, notes: true, _count: { select: { incomingLots: true } } } } },
+  })
+  if (!record) return { error: "This shop has no opening stock to remove." }
+  if (record.status === "CLOSED") {
+    return { error: "This shop's opening stock is closed, so it can no longer be removed. Use Stock count or Reduce stock." }
+  }
+  const typed = String(formData.get("confirmName") || "").trim().toLowerCase()
+  if (typed !== record.branch.name.trim().toLowerCase()) {
+    return { error: `Type the shop name exactly as shown (${record.branch.name}) to confirm.` }
+  }
+  if (record.purchase._count.incomingLots > 0) {
+    return { error: "Goods on the way were booked against this opening bill. Cancel them on Goods on the way first." }
+  }
+
+  const invoiceNumber = record.purchase.invoiceNumber
+  const [lines, units] = await Promise.all([
+    liveLines(record.purchaseId, branchId),
+    prisma.imeiRecord.findMany({
+      where: { purchaseId: record.purchaseId },
+      select: {
+        id: true,
+        imei1: true,
+        serialNumber: true,
+        productId: true,
+        branchId: true,
+        status: true,
+        _count: { select: { saleItems: true, returns: true, returnReplacements: true, repairs: true, swapsOld: true, swapsNew: true } },
+      },
+    }),
+  ])
+
+  const problems: string[] = []
+  for (const unit of units) {
+    const used = Object.values(unit._count).some((n) => n > 0)
+    if (used) problems.push(`${identityOf(unit)} already has a sale, return, repair or swap on it.`)
+    else if (unit.branchId !== branchId) problems.push(`${identityOf(unit)} has been moved to another shop.`)
+    else if (unit.status !== "IN_STOCK" && unit.status !== "FAULTY") {
+      problems.push(`${identityOf(unit)} is no longer on the shelf (${unit.status.toLowerCase().replace(/_/g, " ")}).`)
+    }
+  }
+  const unitsOnShelf = new Map<string, number>()
+  for (const unit of units) {
+    if (unit.status === "IN_STOCK") unitsOnShelf.set(unit.productId, (unitsOnShelf.get(unit.productId) ?? 0) + 1)
+  }
+  const takeOff = lines
+    .map((line) => ({
+      line,
+      quantity: line.tracking === "NONE" ? line.openingQty : unitsOnShelf.get(line.productId) ?? 0,
+    }))
+    .filter((row) => row.quantity > 0)
+  for (const { line, quantity } of takeOff) {
+    if (line.tracking === "NONE" && quantity > line.shelfQty) {
+      problems.push(`${line.name}: opened with ${quantity} but the shelf holds ${line.shelfQty}. Some were sold or moved.`)
+    }
+  }
+  if (problems.length) {
+    return {
+      error: `${problems.length} item(s) from this opening stock have already been used, so it cannot be removed as a whole. Correct those lines instead.`,
+      problems: problems.slice(0, 60),
+    }
+  }
+
+  const before = totals(lines)
+  const reference = `Opening stock removed · ${invoiceNumber}`
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        // Claim it first, so two people pressing Remove cannot both run.
+        const claimed = await tx.openingStock.deleteMany({ where: { id: record.id, status: "OPEN" } })
+        if (claimed.count !== 1) throw new Error("gone")
+
+        for (const { line, quantity } of takeOff) {
+          const shelf = await tx.inventory.findUnique({
+            where: { productId_branchId: { productId: line.productId, branchId } },
+            select: { quantity: true },
+          })
+          const now = shelf?.quantity ?? 0
+          const next = Math.max(0, now - quantity)
+          if (next === now) continue
+          await tx.inventory.update({
+            where: { productId_branchId: { productId: line.productId, branchId } },
+            data: { quantity: next, lastStockCheck: new Date() },
+          })
+          await recordMovement(tx, {
+            productId: line.productId,
+            branchId,
+            quantity: next - now,
+            move: { kind: "OPENING", reference, userId: user.id },
+          })
+        }
+        await tx.imeiRecord.deleteMany({ where: { id: { in: units.map((unit) => unit.id) } } })
+        await tx.purchase.delete({ where: { id: record.purchaseId } })
+        await tx.auditLog.create({
+          data: {
+            userId: user.id,
+            action: "DELETE",
+            entityType: "OpeningStock",
+            entityId: invoiceNumber,
+            oldValue: JSON.stringify({ shop: record.branch.name, ...before }),
+            newValue: JSON.stringify({
+              removed: true,
+              shop: record.branch.name,
+              unitsDeleted: units.length,
+              numbers: units.map(identityOf).slice(0, 2000),
+              lines: takeOff.map(({ line, quantity }) => `${line.name} (${line.sku}) −${quantity}`).slice(0, 500),
+              reason: String(formData.get("reason") || "").trim() || null,
+              note: `Opening stock for ${record.branch.name} removed. The shop is back to Not loaded.`,
+            }),
+            branchId,
+            risk: "HIGH",
+          },
+        })
+      },
+      { timeout: 120_000, maxWait: 20_000 }
+    )
+  } catch (error) {
+    if (error instanceof Error && error.message === "gone") {
+      return { error: "Someone changed this opening stock a moment ago. Refresh to see it." }
+    }
+    return { error: "We could not remove this opening stock. Nothing was changed. Try again." }
+  }
+
+  revalidateOpening()
+  revalidatePath("/dashboard")
+  revalidatePath("/uploads")
+  return { success: true }
 }
 
 /**
