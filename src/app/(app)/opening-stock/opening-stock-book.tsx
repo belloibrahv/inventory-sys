@@ -9,6 +9,7 @@ import {
   addOpeningStockItem,
   closeOpeningStock,
   correctOpeningFromSheet,
+  removeOpeningLines,
   removeOpeningStock,
   saveOpeningEdits,
   type CorrectionResult,
@@ -47,6 +48,11 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
   const [unitsFor, setUnitsFor] = useState<BookLine | null>(null)
   const [newUnits, setNewUnits] = useState("")
   const [showAddModal, setShowAddModal] = useState(false)
+  const [ticked, setTicked] = useState<Set<string>>(() => new Set())
+  const [removeReason, setRemoveReason] = useState("")
+  const [confirmRemove, setConfirmRemove] = useState(false)
+  const [removing, setRemoving] = useState(false)
+  const [removeProblems, setRemoveProblems] = useState<string[]>([])
 
   const categoryCounts = useMemo(() => countByStockCategory(book.lines), [book.lines])
 
@@ -65,6 +71,53 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
   const dirty = Object.entries(edits).filter(([, edit]) => Object.values(edit).some((v) => (Array.isArray(v) ? v.length : v !== undefined)))
   const offShelf = book.lines.filter((line) => line.shelfQty !== line.openingQty)
   const fileBase = `opening-stock-${record.shopCode.toLowerCase()}-${new Date().toISOString().slice(0, 10)}`
+
+  const tickedLines = book.lines.filter((line) => ticked.has(line.productId))
+  const tickedUnits = tickedLines.reduce((sum, line) => sum + line.openingQty, 0)
+  const tickedValue = tickedLines.reduce((sum, line) => sum + line.openingQty * line.costPrice, 0)
+  const categoryLabel = STOCK_CATEGORY_FILTERS.find((row) => row.key === categoryFilter)?.label ?? "this view"
+  const allVisibleTicked = visible.length > 0 && visible.every((line) => ticked.has(line.productId))
+
+  function toggle(productIds: string[], on: boolean) {
+    setConfirmRemove(false)
+    setRemoveProblems([])
+    setTicked((prev) => {
+      const next = new Set(prev)
+      for (const id of productIds) {
+        if (on) next.add(id)
+        else next.delete(id)
+      }
+      return next
+    })
+  }
+
+  async function removeTicked() {
+    const data = new FormData()
+    data.set("branchId", branchId)
+    data.set("productIds", JSON.stringify([...ticked]))
+    data.set("reason", removeReason)
+    setRemoving(true)
+    try {
+      const outcome = await removeOpeningLines(data)
+      setRemoving(false)
+      if (outcome.error) {
+        toast.error(outcome.error)
+        setRemoveProblems(outcome.problems ?? [])
+        return
+      }
+      toast.success(
+        `Removed ${outcome.removedLines} item line(s)${outcome.removedUnits ? ` and ${outcome.removedUnits} IMEI or serial number(s)` : ""} from opening stock.`
+      )
+      setTicked(new Set())
+      setConfirmRemove(false)
+      setRemoveReason("")
+      setRemoveProblems([])
+      router.refresh()
+    } catch {
+      setRemoving(false)
+      toast.error("That did not reach the shop system. Check your network and try again.")
+    }
+  }
 
   function edit(sku: string, patch: Edit) {
     setEdits((prev) => ({ ...prev, [sku]: { ...prev[sku], ...patch } }))
@@ -188,6 +241,84 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
         }))}
       />
 
+      {book.canCorrect ? (
+        <div
+          className={`space-y-3 rounded-xl border p-3 text-sm ${
+            ticked.size ? "border-danger/40 bg-danger-soft/40" : "border-border bg-muted/30"
+          }`}
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium">
+              {ticked.size
+                ? `${ticked.size} item(s) ticked · ${tickedUnits} unit(s) · ${formatCurrency(tickedValue)} at cost`
+                : "Remove items: tick them in the list, or tick a whole category."}
+            </span>
+            <span className="flex flex-wrap gap-2 sm:ml-auto">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={visible.length === 0}
+                onClick={() => toggle(visible.map((line) => line.productId), !allVisibleTicked)}
+              >
+                {allVisibleTicked
+                  ? `Untick all ${visible.length} in ${categoryFilter === "ALL" && !query ? "the list" : categoryLabel}`
+                  : `Tick all ${visible.length} in ${categoryFilter === "ALL" && !query ? "the list" : categoryLabel}`}
+              </Button>
+              {ticked.size ? (
+                <>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => toggle([...ticked], false)}>
+                    Clear ticks
+                  </Button>
+                  <Button type="button" variant="destructive" size="sm" onClick={() => setConfirmRemove(true)}>
+                    <Trash2 className="mr-1.5 h-4 w-4" /> Remove {ticked.size} ticked
+                  </Button>
+                </>
+              ) : null}
+            </span>
+          </div>
+          {confirmRemove && ticked.size ? (
+            <div className="space-y-2 border-t border-danger/30 pt-3">
+              <p>
+                This takes {ticked.size} item line(s) and {tickedUnits} unit(s) off {record.shopName}&apos;s opening stock.
+                Their IMEIs and serials are deleted, so they can be loaded onto the right shop. Item names stay on the price
+                list. Who did what keeps a copy.
+              </p>
+              <ul className="max-h-32 overflow-auto text-xs text-muted-foreground">
+                {tickedLines.slice(0, 50).map((line) => (
+                  <li key={line.productId}>
+                    {line.name} · {line.category} · {line.openingQty}
+                  </li>
+                ))}
+                {tickedLines.length > 50 ? <li>and {tickedLines.length - 50} more</li> : null}
+              </ul>
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  value={removeReason}
+                  onChange={(event) => setRemoveReason(event.target.value)}
+                  placeholder="Why, e.g. these belong to Iwo Road"
+                  className="h-9 max-w-sm"
+                />
+                <Button type="button" variant="destructive" size="sm" onClick={removeTicked} disabled={removing}>
+                  {removing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Trash2 className="mr-1.5 h-4 w-4" />}
+                  Yes, remove {ticked.size} item(s)
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmRemove(false)} disabled={removing}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : null}
+          {removeProblems.length ? (
+            <ul className="max-h-48 space-y-1 overflow-auto rounded-lg border border-danger/30 bg-danger-soft p-3 text-xs text-danger">
+              {removeProblems.map((problem) => (
+                <li key={problem}>{problem}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+
       <TableShell
         caption={
           <>
@@ -221,6 +352,21 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
           </>
         }
         columns={[
+          ...(book.canCorrect
+            ? [
+                {
+                  label: (
+                    <input
+                      type="checkbox"
+                      aria-label="Tick every item on this page"
+                      checked={pager.pageRows.length > 0 && pager.pageRows.every((line) => ticked.has(line.productId))}
+                      onChange={(event) => toggle(pager.pageRows.map((line) => line.productId), event.target.checked)}
+                    />
+                  ),
+                  className: "w-8",
+                },
+              ]
+            : []),
           { label: "Item" },
           { label: "Category" },
           { label: "Count", align: "right" },
@@ -252,7 +398,17 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
           const cost = Number(e.costPrice ?? line.costPrice)
           const spec = [line.storage, formatCondition(line.condition)].filter(Boolean).join(" · ")
           return (
-            <tr key={line.sku}>
+            <tr key={line.sku} className={ticked.has(line.productId) ? "bg-danger-soft/40" : undefined}>
+              {book.canCorrect ? (
+                <td className="w-8">
+                  <input
+                    type="checkbox"
+                    aria-label={`Tick ${line.name} to remove`}
+                    checked={ticked.has(line.productId)}
+                    onChange={(event) => toggle([line.productId], event.target.checked)}
+                  />
+                </td>
+              ) : null}
               <td>
                 <p className="font-medium">{line.name}</p>
                 <p className="text-xs text-muted-foreground">
@@ -297,7 +453,7 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
             </tr>
           )
         })}
-        {visible.length === 0 ? <TableEmpty colSpan={7}>No item matches that category or search.</TableEmpty> : null}
+        {visible.length === 0 ? <TableEmpty colSpan={book.canCorrect ? 8 : 7}>No item matches that category or search.</TableEmpty> : null}
       </TableShell>
 
       <DrilldownModal

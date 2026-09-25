@@ -701,6 +701,179 @@ export async function addOpeningStockItem(formData: FormData): Promise<Correctio
   return { applied: true, preview: describe(plan, gate.lines) }
 }
 
+type RemoveResult = { error?: string; problems?: string[]; success?: boolean; removedLines?: number; removedUnits?: number }
+
+async function openingUnits(purchaseId: string, productIds?: string[]) {
+  return prisma.imeiRecord.findMany({
+    where: { purchaseId, ...(productIds ? { productId: { in: productIds } } : {}) },
+    select: {
+      id: true,
+      imei1: true,
+      serialNumber: true,
+      productId: true,
+      branchId: true,
+      status: true,
+      _count: { select: { saleItems: true, returns: true, returnReplacements: true, repairs: true, swapsOld: true, swapsNew: true } },
+    },
+  })
+}
+
+/**
+ * What taking these opening lines off would do to the shelf, and anything that
+ * stops it: a unit already sold, moved, sent back or repaired, or pieces the
+ * shelf no longer holds. Then the line is part of the shop's history.
+ */
+function planTakeOff(lines: BookLine[], units: Awaited<ReturnType<typeof openingUnits>>, branchId: string) {
+  const names = new Map(lines.map((line) => [line.productId, line.name]))
+  const problems: string[] = []
+  for (const unit of units) {
+    const who = `${names.get(unit.productId) ?? "Item"}: ${identityOf(unit)}`
+    const used = Object.values(unit._count).some((n) => n > 0)
+    if (used) problems.push(`${who} already has a sale, return, repair or swap on it.`)
+    else if (unit.branchId !== branchId) problems.push(`${who} has been moved to another shop.`)
+    else if (unit.status !== "IN_STOCK" && unit.status !== "FAULTY") {
+      problems.push(`${who} is no longer on the shelf (${unit.status.toLowerCase().replace(/_/g, " ")}).`)
+    }
+  }
+  const unitsOnShelf = new Map<string, number>()
+  for (const unit of units) {
+    if (unit.status === "IN_STOCK") unitsOnShelf.set(unit.productId, (unitsOnShelf.get(unit.productId) ?? 0) + 1)
+  }
+  const takeOff = lines
+    .map((line) => ({
+      line,
+      quantity: line.tracking === "NONE" ? line.openingQty : unitsOnShelf.get(line.productId) ?? 0,
+    }))
+    .filter((row) => row.quantity > 0)
+  for (const { line, quantity } of takeOff) {
+    if (line.tracking === "NONE" && quantity > line.shelfQty) {
+      problems.push(`${line.name}: opened with ${quantity} but the shelf holds ${line.shelfQty}. Some were sold or moved.`)
+    }
+  }
+  return { problems, takeOff }
+}
+
+async function lowerShelves(
+  tx: Tx,
+  takeOff: ReturnType<typeof planTakeOff>["takeOff"],
+  branchId: string,
+  reference: string,
+  userId: string
+) {
+  for (const { line, quantity } of takeOff) {
+    const shelf = await tx.inventory.findUnique({
+      where: { productId_branchId: { productId: line.productId, branchId } },
+      select: { quantity: true },
+    })
+    const now = shelf?.quantity ?? 0
+    const next = Math.max(0, now - quantity)
+    if (next === now) continue
+    await tx.inventory.update({
+      where: { productId_branchId: { productId: line.productId, branchId } },
+      data: { quantity: next, lastStockCheck: new Date() },
+    })
+    await recordMovement(tx, {
+      productId: line.productId,
+      branchId,
+      quantity: next - now,
+      move: { kind: "OPENING", reference, userId },
+    })
+  }
+}
+
+/**
+ * Take chosen lines off a shop's opening stock, while it is still open: ticked
+ * items, or every item in one category. Each line's IMEIs and serials are
+ * deleted (so they can be loaded onto the right shop), the shelf comes down by
+ * the opening count, and the line leaves the opening bill.
+ */
+export async function removeOpeningLines(formData: FormData): Promise<RemoveResult> {
+  const branchId = String(formData.get("branchId") || "")
+  const gate = await correctionGate(branchId)
+  if ("error" in gate) return { error: gate.error }
+  const { record, userId } = gate
+
+  let wanted: string[]
+  try {
+    const raw = JSON.parse(String(formData.get("productIds") || "[]"))
+    wanted = Array.isArray(raw) ? [...new Set(raw.map(String))] : []
+  } catch {
+    wanted = []
+  }
+  const lines = gate.lines.filter((line) => wanted.includes(line.productId))
+  if (!lines.length) return { error: "Tick the items to remove first." }
+  if (lines.length !== wanted.length) {
+    return { error: "Some of those items are no longer on this opening stock. Refresh and tick them again." }
+  }
+
+  const productIds = lines.map((line) => line.productId)
+  const units = await openingUnits(record.purchaseId, productIds)
+  const { problems, takeOff } = planTakeOff(lines, units, branchId)
+  if (problems.length) {
+    return {
+      error: `${problems.length} unit(s) on those items have already been used, so nothing was removed. Untick those items, or take off only the unused IMEIs.`,
+      problems: problems.slice(0, 60),
+    }
+  }
+
+  const before = totals(gate.lines)
+  const removedValue = totals(lines).value
+  const reason = String(formData.get("reason") || "").trim() || null
+  const reference = `Opening stock lines removed · ${record.invoiceNumber}`
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        const stillOpen = await tx.openingStock.updateMany({
+          where: { id: record.id, status: "OPEN" },
+          data: { updatedAt: new Date() },
+        })
+        if (stillOpen.count !== 1) throw new Error("gone")
+
+        await lowerShelves(tx, takeOff, branchId, reference, userId)
+        await tx.imeiRecord.deleteMany({ where: { id: { in: units.map((unit) => unit.id) } } })
+        await tx.purchaseItem.deleteMany({ where: { purchaseId: record.purchaseId, productId: { in: productIds } } })
+
+        const left = await tx.purchaseItem.findMany({ where: { purchaseId: record.purchaseId }, select: { totalAmount: true } })
+        const total = left.reduce((sum, row) => sum + money(row.totalAmount), 0)
+        await tx.purchase.update({
+          where: { id: record.purchaseId },
+          data: { totalAmount: total.toFixed(2), paidAmount: total.toFixed(2), paymentMethod: OPENING_STOCK_METHOD },
+        })
+        await tx.auditLog.create({
+          data: {
+            userId,
+            action: "DELETE",
+            entityType: "OpeningStock",
+            entityId: record.invoiceNumber,
+            oldValue: JSON.stringify(before),
+            newValue: JSON.stringify({
+              value: total,
+              removedLines: lines.length,
+              removedValue,
+              unitsDeleted: units.length,
+              numbers: units.map(identityOf).slice(0, 2000),
+              lines: lines.map((line) => `${line.name} (${line.sku}) · ${line.category} · ${line.openingQty}`).slice(0, 500),
+              reason,
+              note: `${lines.length} line(s) removed from opening stock.`,
+            }),
+            branchId,
+            risk: "HIGH",
+          },
+        })
+      },
+      { timeout: 120_000, maxWait: 20_000 }
+    )
+  } catch (error) {
+    if (error instanceof Error && error.message === "gone") {
+      return { error: "This opening stock was closed or removed a moment ago. Refresh to see it." }
+    }
+    return { error: "We could not remove those items. Nothing was changed. Try again." }
+  }
+
+  revalidateOpening()
+  return { success: true, removedLines: lines.length, removedUnits: units.length }
+}
+
 /**
  * Take a shop's whole opening stock off, while it is still open. For a sheet
  * loaded onto the wrong shop: every IMEI and serial it booked is deleted (so the
@@ -710,7 +883,7 @@ export async function addOpeningStockItem(formData: FormData): Promise<Correctio
  * Refused if any of it has already been sold, moved, sent back or repaired,
  * because then the opening stock is part of the shop's history.
  */
-export async function removeOpeningStock(formData: FormData): Promise<{ error?: string; problems?: string[]; success?: boolean }> {
+export async function removeOpeningStock(formData: FormData): Promise<RemoveResult> {
   const user = await requireUser()
   if (!isShopOwner(user.role)) return { error: "Only the CEO or the main admin can remove a shop's opening stock." }
 
@@ -732,49 +905,11 @@ export async function removeOpeningStock(formData: FormData): Promise<{ error?: 
   }
 
   const invoiceNumber = record.purchase.invoiceNumber
-  const [lines, units] = await Promise.all([
-    liveLines(record.purchaseId, branchId),
-    prisma.imeiRecord.findMany({
-      where: { purchaseId: record.purchaseId },
-      select: {
-        id: true,
-        imei1: true,
-        serialNumber: true,
-        productId: true,
-        branchId: true,
-        status: true,
-        _count: { select: { saleItems: true, returns: true, returnReplacements: true, repairs: true, swapsOld: true, swapsNew: true } },
-      },
-    }),
-  ])
-
-  const problems: string[] = []
-  for (const unit of units) {
-    const used = Object.values(unit._count).some((n) => n > 0)
-    if (used) problems.push(`${identityOf(unit)} already has a sale, return, repair or swap on it.`)
-    else if (unit.branchId !== branchId) problems.push(`${identityOf(unit)} has been moved to another shop.`)
-    else if (unit.status !== "IN_STOCK" && unit.status !== "FAULTY") {
-      problems.push(`${identityOf(unit)} is no longer on the shelf (${unit.status.toLowerCase().replace(/_/g, " ")}).`)
-    }
-  }
-  const unitsOnShelf = new Map<string, number>()
-  for (const unit of units) {
-    if (unit.status === "IN_STOCK") unitsOnShelf.set(unit.productId, (unitsOnShelf.get(unit.productId) ?? 0) + 1)
-  }
-  const takeOff = lines
-    .map((line) => ({
-      line,
-      quantity: line.tracking === "NONE" ? line.openingQty : unitsOnShelf.get(line.productId) ?? 0,
-    }))
-    .filter((row) => row.quantity > 0)
-  for (const { line, quantity } of takeOff) {
-    if (line.tracking === "NONE" && quantity > line.shelfQty) {
-      problems.push(`${line.name}: opened with ${quantity} but the shelf holds ${line.shelfQty}. Some were sold or moved.`)
-    }
-  }
+  const [lines, units] = await Promise.all([liveLines(record.purchaseId, branchId), openingUnits(record.purchaseId)])
+  const { problems, takeOff } = planTakeOff(lines, units, branchId)
   if (problems.length) {
     return {
-      error: `${problems.length} item(s) from this opening stock have already been used, so it cannot be removed as a whole. Correct those lines instead.`,
+      error: `${problems.length} item(s) from this opening stock have already been used, so it cannot be removed as a whole. Remove the other items by ticking them instead.`,
       problems: problems.slice(0, 60),
     }
   }
@@ -788,25 +923,7 @@ export async function removeOpeningStock(formData: FormData): Promise<{ error?: 
         const claimed = await tx.openingStock.deleteMany({ where: { id: record.id, status: "OPEN" } })
         if (claimed.count !== 1) throw new Error("gone")
 
-        for (const { line, quantity } of takeOff) {
-          const shelf = await tx.inventory.findUnique({
-            where: { productId_branchId: { productId: line.productId, branchId } },
-            select: { quantity: true },
-          })
-          const now = shelf?.quantity ?? 0
-          const next = Math.max(0, now - quantity)
-          if (next === now) continue
-          await tx.inventory.update({
-            where: { productId_branchId: { productId: line.productId, branchId } },
-            data: { quantity: next, lastStockCheck: new Date() },
-          })
-          await recordMovement(tx, {
-            productId: line.productId,
-            branchId,
-            quantity: next - now,
-            move: { kind: "OPENING", reference, userId: user.id },
-          })
-        }
+        await lowerShelves(tx, takeOff, branchId, reference, user.id)
         await tx.imeiRecord.deleteMany({ where: { id: { in: units.map((unit) => unit.id) } } })
         await tx.purchase.delete({ where: { id: record.purchaseId } })
         await tx.auditLog.create({

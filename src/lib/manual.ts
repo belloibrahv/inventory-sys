@@ -102,6 +102,7 @@ const PAGES: Array<
       "OPENING STOCK SHEET, for a full shop count: fill the opening stock Excel one shop at a time, pick or add the supplier, and upload. There is no paid or unpaid on that sheet.",
       "PHONES: one row per phone with the IMEI. LAPTOPS: one row per laptop with the serial. ACCESSORIES and SCREEN: how many pieces.",
       "Open Correct and close opening stock to count the shelf, then close it. After that, new cartons use Supplier bill.",
+      "Loaded onto the wrong shop? On Correct and close opening stock, tick the items, or tick a whole category, and click Remove ticked. The CEO or main admin can remove the whole shop's opening stock at the bottom. Then load the file onto the right shop.",
       "OLD EXCEL & CSV: use this only when the item list is already on the system and you are topping up from a plain sheet.",
     ],
     watch: [
