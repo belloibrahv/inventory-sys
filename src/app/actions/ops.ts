@@ -28,6 +28,10 @@ import { isOpeningStockPurchase, purchaseBalance } from "@/lib/purchase-money"
 import { isSupplierReturnableStatus, supplierReturnMoneyPlan } from "@/lib/vendor-return"
 import { assertCashAvailable } from "@/lib/shop-cash"
 import { shopPayChannel } from "@/lib/sale-money"
+import { parseShopCondition, shopConditionLabel } from "@/lib/conditions"
+import { normalizeStorage } from "@/lib/item-specs"
+import { makeOpeningSku } from "@/lib/opening-stock"
+import { unitCodeProblem, unitIdentityColumns, type UnitIdentityKind } from "@/lib/unit-identity"
 
 function parseImeis(raw: string) {
   return [...new Set(raw.split(/[\s,;]+/).map((item) => item.trim()).filter((item) => item.length >= 14))]
@@ -1307,7 +1311,7 @@ export async function getSwaps() {
     where: branchId ? { branchId } : undefined,
     include: {
       customer: true,
-      oldImei: { include: { product: true } },
+      oldImei: { include: { product: { include: { brand: true } } } },
       newImei: { include: { product: true } },
       newProduct: true,
       branch: true,
@@ -1324,6 +1328,74 @@ export async function getSwaps() {
   }))
 }
 
+type SwapInSpec = {
+  name: string
+  brand: string
+  category: string
+  storage: string | null
+  ram: string | null
+  color: string | null
+  condition: ProductCondition
+  tracking: "IMEI" | "SERIAL"
+  tradeValue: number
+}
+
+/**
+ * The item the customer's phone goes onto. The same model, brand, storage and
+ * condition reuses the name already on the price list; anything new is added,
+ * priced at the swap value until someone sets its selling price.
+ */
+async function resolveSwapInProduct(spec: SwapInSpec) {
+  const lower = (value: string) => value.trim().toLowerCase()
+  const candidates = await prisma.product.findMany({
+    where: { isActive: true, condition: spec.condition, storage: spec.storage, tracking: spec.tracking },
+    include: { brand: true },
+  })
+  const hit = candidates.find(
+    (row) => lower(row.name) === lower(spec.name) && lower(row.brand.name) === lower(spec.brand)
+  )
+  if (hit) return { productId: hit.id, created: false }
+
+  const brands = await prisma.brand.findMany({ select: { id: true, name: true } })
+  const brandId =
+    brands.find((row) => lower(row.name) === lower(spec.brand))?.id ??
+    (await prisma.brand.create({ data: { name: spec.brand } })).id
+  const categories = await prisma.category.findMany({ select: { id: true, name: true } })
+  const categoryId =
+    categories.find((row) => lower(row.name) === lower(spec.category))?.id ??
+    (await prisma.category.create({ data: { name: spec.category } })).id
+
+  const base = makeOpeningSku({ brand: spec.brand, name: spec.name, storage: spec.storage || "", condition: spec.condition })
+  let sku = base
+  for (let n = 2; await prisma.product.findUnique({ where: { sku }, select: { id: true } }); n += 1) {
+    sku = `${base.slice(0, 56)}-${n}`
+  }
+  const price = Math.max(0, spec.tradeValue).toFixed(2)
+  const created = await prisma.product.create({
+    data: {
+      sku,
+      name: spec.name,
+      brandId,
+      categoryId,
+      condition: spec.condition,
+      storage: spec.storage,
+      ram: spec.ram,
+      color: spec.color,
+      tracking: spec.tracking,
+      costPrice: price,
+      minimumPrice: price,
+      sellingPrice: price,
+      warrantyDays: 0,
+      description: "Added from a Swap Deal. Set the selling price on Phones & items.",
+    },
+  })
+  const shops = await prisma.branch.findMany({ where: { isActive: true }, select: { id: true } })
+  await prisma.inventory.createMany({
+    data: shops.map((shop) => ({ productId: created.id, branchId: shop.id, quantity: 0 })),
+  })
+  return { productId: created.id, created: true }
+}
+
 export async function createSwap(formData: FormData) {
   const user = await requireUser()
   if (!(await can(user.role, "action.swap"))) return { error: "You are not allowed to record a swap. Ask the main admin." }
@@ -1333,21 +1405,43 @@ export async function createSwap(formData: FormData) {
   const customerName = String(formData.get("customerName") || "").trim()
   const customerPhone = String(formData.get("customerPhone") || "").trim()
   const oldDeviceId = cleanDeviceId(String(formData.get("oldDeviceId") || formData.get("oldImei1") || ""))
+  const oldIdentityKind: UnitIdentityKind =
+    String(formData.get("oldIdentityKind") || (looksLikeImei(oldDeviceId) ? "IMEI" : "SERIAL")).toUpperCase() === "SERIAL"
+      ? "SERIAL"
+      : "IMEI"
+  const oldImei2 = cleanDeviceId(String(formData.get("oldImei2") || ""))
+  const oldName = String(formData.get("oldProductName") || "").trim().replace(/\s+/g, " ")
+  const oldBrand = String(formData.get("oldBrand") || "").trim()
+  const oldCategory = String(formData.get("oldCategory") || "").trim() || "Phones"
+  const oldStorage = normalizeStorage(String(formData.get("oldStorage") || "")) || null
+  const oldRam = String(formData.get("oldRam") || "").trim() || null
+  const oldColor = String(formData.get("oldColor") || "").trim() || null
+  const oldConditionNotes = String(formData.get("oldConditionNotes") || "").trim() || null
   const newDeviceId = cleanDeviceId(String(formData.get("newDeviceId") || formData.get("newImei1") || ""))
   const newImeiId = String(formData.get("newImeiId") || "")
-  const oldProductId = String(formData.get("oldProductId") || "")
+  let oldProductId = String(formData.get("oldProductId") || "")
   const tradeValue = Number(formData.get("tradeValue") || 0)
   const givenRaw = formData.get("givenValue")
-  const condition = String(formData.get("oldDeviceCondition")) as ProductCondition
+  const condition = parseShopCondition(String(formData.get("oldDeviceCondition") || ""))
 
   if (!branchId) return { error: "Pick the shop for this Swap Deal." }
   if (!existingCustomerId && (!customerName || !customerPhone)) {
     return { error: "Pick a customer on the list, or type the customer name and phone." }
   }
-  if (oldDeviceId.length < 5) return { error: "Enter the customer device IMEI or serial number." }
+  const oldCodeProblem = unitCodeProblem(oldIdentityKind, oldDeviceId)
+  if (oldCodeProblem) return { error: `Customer's phone: ${oldCodeProblem}` }
+  if (oldIdentityKind === "IMEI" && oldImei2) {
+    const imei2Problem = unitCodeProblem("IMEI", oldImei2)
+    if (imei2Problem) return { error: `Customer's phone IMEI 2: ${imei2Problem}` }
+  }
   if (!newImeiId && newDeviceId.length < 5) return { error: "Scan or type the shop device IMEI or serial number going out." }
-  if (!oldProductId) return { error: "Pick what the customer is bringing in." }
-  if (tradeValue < 0) return { error: "Enter the value of the swap-in item." }
+  if (!condition) return { error: "Pick the condition of the customer's phone." }
+  if (!oldProductId) {
+    if (!oldName) return { error: "Type the name of the customer's phone, for example iPhone 12 Pro." }
+    if (!oldBrand) return { error: "Type the brand of the customer's phone, for example Apple or Samsung." }
+    if (!oldStorage) return { error: "Pick the storage of the customer's phone." }
+  }
+  if (!Number.isFinite(tradeValue) || tradeValue < 0) return { error: "Enter the value of the swap-in item." }
 
   const scoped = await scopedBranchId(user.role, user.branchId)
   if (scoped && branchId !== scoped) return { error: "You can only record a swap for your own shop." }
@@ -1372,9 +1466,10 @@ export async function createSwap(formData: FormData) {
     return { error: "That customer belongs to another shop." }
   }
 
+  const oldCodes = [oldDeviceId, ...(oldIdentityKind === "IMEI" && oldImei2 ? [oldImei2] : [])]
   const exists = await prisma.imeiRecord.findFirst({
     where: {
-      OR: [{ imei1: oldDeviceId }, { imei2: oldDeviceId }, { serialNumber: oldDeviceId }],
+      OR: [{ imei1: { in: oldCodes } }, { imei2: { in: oldCodes } }, { serialNumber: { in: oldCodes } }],
     },
   })
   if (exists) return { error: "That IMEI or serial number is already on this system." }
@@ -1419,16 +1514,33 @@ export async function createSwap(formData: FormData) {
   }
   const balance = givenValue - tradeValue
 
+  if (!oldProductId) {
+    const resolved = await resolveSwapInProduct({
+      name: oldName,
+      brand: oldBrand,
+      category: oldCategory,
+      storage: oldStorage,
+      ram: oldRam,
+      color: oldColor,
+      condition,
+      tracking: oldIdentityKind,
+      tradeValue,
+    })
+    oldProductId = resolved.productId
+  }
+  const swapInLabel = [oldBrand, oldName, oldStorage, shopConditionLabel(condition), oldColor].filter(Boolean).join(" · ")
+
   // Hold only: swap-in stays off the shelf, shop device stays In shop until approval.
   const incoming = await prisma.imeiRecord.create({
     data: {
-      imei1: oldDeviceId,
-      serialNumber: looksLikeImei(oldDeviceId) ? null : oldDeviceId,
+      ...unitIdentityColumns({ kind: oldIdentityKind, imei1: oldDeviceId, imei2: oldImei2 }),
       productId: oldProductId,
       branchId,
       customerId: customer.id,
       status: "RECEIVED",
-      notes: `Swap Deal waiting for approval · ${condition} · swap value ${tradeValue}`,
+      cosmeticGrade: condition,
+      conditionNotes: [oldColor ? `Colour ${oldColor}` : null, oldConditionNotes].filter(Boolean).join(" · ") || null,
+      notes: `Swap Deal waiting for approval · ${swapInLabel || shopConditionLabel(condition)} · swap value ${tradeValue}`,
     },
   })
 
@@ -1455,7 +1567,7 @@ export async function createSwap(formData: FormData) {
       entityId: swap.id,
       entityType: "Swap",
       requestedBy: user.id,
-      reason: `${swap.swapNumber}: swap-in ₦${tradeValue} · given ₦${givenValue} · ${
+      reason: `${swap.swapNumber}: ${swapInLabel ? `${swapInLabel} (${oldDeviceId}) ` : ""}swap-in ₦${tradeValue} · given ₦${givenValue} · ${
         balance > 0 ? `Receivable ₦${balance}` : balance < 0 ? `Payable ₦${Math.abs(balance)}` : "Even"
       } · ${newImei.product.name}`,
     },

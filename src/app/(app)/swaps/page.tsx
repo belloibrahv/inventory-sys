@@ -25,7 +25,18 @@ export default async function SwapsPage() {
             phone: customer.phone,
             branchId: customer.branchId,
           }))}
-          products={products.map((product) => ({ id: product.id, name: product.name }))}
+          models={[
+            ...new Map(
+              products
+                .filter((product) => product.tracking !== "NONE")
+                .map((product) => [
+                  product.name.toLowerCase(),
+                  { name: product.name, brand: product.brand.name, category: product.category.name },
+                ])
+            ).values(),
+          ]}
+          brands={[...new Set(products.map((product) => product.brand.name))].sort()}
+          categories={[...new Set(products.map((product) => product.category.name))].sort()}
           branches={lookups.branches.map((branch) => ({ id: branch.id, name: branch.name }))}
           defaultBranchId={lookups.branchId}
         />

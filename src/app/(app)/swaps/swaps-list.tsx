@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { formatShopWhen } from "@/lib/lagos-day"
 import { formatCurrency, money } from "@/lib/utils"
+import { shopConditionLabel } from "@/lib/conditions"
 
 type SwapRow = {
   id: string
@@ -23,8 +24,14 @@ type SwapRow = {
   approvedAt: Date | null
   completedAt: Date | null
   customer: { name: string }
-  oldImei: { imei1: string; serialNumber?: string | null; product: { name: string } }
-  newProduct: { name: string }
+  oldDeviceCondition: string
+  oldImei: {
+    imei1: string
+    serialNumber?: string | null
+    conditionNotes?: string | null
+    product: { name: string; storage?: string | null; brand?: { name: string } | null }
+  }
+  newProduct: { name: string; storage?: string | null }
   newImei?: { imei1: string; serialNumber?: string | null } | null
   invoice: { id: string; invoiceNumber: string } | null
 }
@@ -80,9 +87,23 @@ export function SwapsList({ swaps }: { swaps: SwapRow[] }) {
                 <div>
                   <p className="font-semibold">{swap.swapNumber}</p>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    {swap.customer.name} brings {deviceLabel(swap.oldImei)} ({swap.oldImei.product.name}) and takes{" "}
-                    {givenOut}
+                    {swap.customer.name} brings{" "}
+                    <span className="font-medium text-foreground">
+                      {[
+                        swap.oldImei.product.brand?.name,
+                        swap.oldImei.product.name,
+                        swap.oldImei.product.storage,
+                        shopConditionLabel(swap.oldDeviceCondition),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>{" "}
+                    ({deviceLabel(swap.oldImei)}) and takes{" "}
+                    {[swap.newProduct.name, swap.newProduct.storage].filter(Boolean).join(" · ")} ({givenOut})
                   </p>
+                  {swap.oldImei.conditionNotes ? (
+                    <p className="mt-1 text-xs text-muted-foreground">{swap.oldImei.conditionNotes}</p>
+                  ) : null}
                   <p className="mt-1 text-sm">
                     Swap-in value {formatCurrency(money(swap.tradeValue))}
                     {" · "}
