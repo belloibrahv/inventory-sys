@@ -171,7 +171,7 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
             <p className="mb-4 text-sm text-muted-foreground">Scan the waybill. Stock does not rise yet.</p>
             <ActionForm action={bookPurchaseAsComing} submit="Book as goods on the way" enterDoesNotSubmit className="space-y-3">
               <input type="hidden" name="id" value={purchase.id} />
-              <ScanList name="imeis" required={item?.product.tracking !== "NONE"} />
+              <ScanList name="imeis" kind={item?.product.tracking === "SERIAL" ? "SERIAL" : "IMEI"} required={item?.product.tracking !== "NONE"} />
             </ActionForm>
           </div>
           <div className="surface-card p-5">
@@ -197,7 +197,7 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
                 <span className="mb-1 block text-muted-foreground">Note if the cost changed</span>
                 <Input name="costNote" placeholder="Example: supplier invoice showed a new cost" />
               </label>
-              <ScanList name="imeis" required={false} />
+              <ScanList name="imeis" kind={item?.product.tracking === "SERIAL" ? "SERIAL" : "IMEI"} required={false} />
             </ActionForm>
           </div>
         </div>

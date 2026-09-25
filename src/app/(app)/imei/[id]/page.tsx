@@ -10,14 +10,20 @@ import { statusLabel } from "@/lib/status"
 import { phoneLookLabel } from "@/lib/phone-look"
 import { formatRecordChange } from "@/lib/shop-speak"
 import { warrantyState } from "@/lib/warranty"
+import { canManageCatalog } from "@/lib/rbac"
+import { requireUser } from "@/lib/session"
+import { unitIdentityKind, unitIdentityLabel } from "@/lib/unit-identity"
+import { UnitIdentityForm } from "@/app/(app)/imei/identity-form"
 
 const lifecycle = ["RECEIVED", "IN_STOCK", "TRANSFERRED", "SOLD", "RETURNED", "FAULTY", "RETURNED_TO_SUPPLIER", "REPAIRED", "SWAPPED", "DISPOSED"]
 
 export default async function ImeiDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const data = await getImeiDetail(id)
+  const [data, me] = await Promise.all([getImeiDetail(id), requireUser()])
   if (!data) notFound()
   const { record, logs } = data
+  const canCorrectNumber = await canManageCatalog(me.role)
+  const identityKind = unitIdentityKind(record)
   const current = Math.max(0, lifecycle.indexOf(record.status))
   const swaps = [...record.swapsOld, ...record.swapsNew]
   const warranty = record.sale
@@ -26,7 +32,10 @@ export default async function ImeiDetailPage({ params }: { params: Promise<{ id:
 
   return (
     <div className="space-y-6">
-      <PageHeader title={record.imei1} description={`${record.product.name} · ${record.branch.name}`} />
+      <PageHeader
+        title={record.imei1}
+        description={`${unitIdentityLabel(identityKind)} · ${record.product.name} · ${record.branch.name}`}
+      />
       <WorkflowSteps steps={lifecycle.map(statusLabel)} current={current} />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <div className="surface-card p-5">
@@ -34,12 +43,15 @@ export default async function ImeiDetailPage({ params }: { params: Promise<{ id:
           <StatusBadge value={record.status} />
         </div>
         <div className="surface-card p-5">
-          <p className="text-sm text-muted-foreground">IMEI 2</p>
-          <p className="font-medium">{record.imei2 ?? "-"}</p>
+          <p className="text-sm text-muted-foreground">Known by</p>
+          <p className="font-medium">{unitIdentityLabel(identityKind)}</p>
+          {identityKind === "IMEI" && record.imei2 ? (
+            <p className="mt-1 font-mono text-xs text-muted-foreground">IMEI 2 {record.imei2}</p>
+          ) : null}
         </div>
         <div className="surface-card p-5">
           <p className="text-sm text-muted-foreground">Serial</p>
-          <p className="font-medium">{record.serialNumber ?? "-"}</p>
+          <p className="font-mono font-medium">{record.serialNumber ?? "-"}</p>
         </div>
         <div className="surface-card p-5">
           <p className="text-sm text-muted-foreground">Warranty</p>
@@ -80,7 +92,7 @@ export default async function ImeiDetailPage({ params }: { params: Promise<{ id:
                 {` · ${record.sale.branch.name}`}
               </p>
             ) : (
-              <p className="text-muted-foreground">This IMEI has not been sold yet.</p>
+              <p className="text-muted-foreground">This unit has not been sold yet.</p>
             )}
             {record.returns.map((row) => (
               <p key={row.id}>
@@ -123,10 +135,26 @@ export default async function ImeiDetailPage({ params }: { params: Promise<{ id:
               </div>
               )
             })}
-            {logs.length === 0 ? <p className="text-sm text-muted-foreground">Nothing has been written about this IMEI yet.</p> : null}
+            {logs.length === 0 ? <p className="text-sm text-muted-foreground">Nothing has been written about this unit yet.</p> : null}
           </div>
         </div>
       </div>
+      {canCorrectNumber ? (
+        <div className="surface-card p-5">
+          <h3 className="mb-1 font-semibold">Correct the IMEI or serial</h3>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Fix a number typed wrong, or say this unit is known by its serial number and not an IMEI. Its sale,
+            returns, repairs and swaps stay with it.
+          </p>
+          <UnitIdentityForm
+            id={record.id}
+            kind={identityKind}
+            imei1={record.imei1}
+            imei2={record.imei2}
+            serialNumber={record.serialNumber}
+          />
+        </div>
+      ) : null}
       <div className="surface-card p-5">
         <h3 className="mb-3 font-semibold">Good (sellable) or Damaged</h3>
         <ImeiShelfStateForm id={record.id} status={record.status} />

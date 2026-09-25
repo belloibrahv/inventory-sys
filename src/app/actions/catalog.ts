@@ -12,6 +12,8 @@ import { shopError } from "@/lib/shop-speak"
 import { UNSAFE_KEYS } from "@/lib/table-file"
 import { parseShopCondition, shopConditionHelp } from "@/lib/conditions"
 import { makeOpeningSku } from "@/lib/opening-stock"
+import { LIVE_UNIT_STATUSES } from "@/lib/unit-identity"
+import { money } from "@/lib/utils"
 
 async function findOrCreateBrand(name: string) {
   const wanted = name.trim()
@@ -155,6 +157,9 @@ export async function createProduct(formData: FormData) {
     return { error: "Cost and sell price must be numbers. Use 0 if you will set prices later." }
   }
 
+  const tracking = String(formData.get("tracking") || "IMEI")
+  if (!(tracking in ProductTracking)) return { error: "Pick how we count this item: IMEI, Serial number, or No number." }
+
   const shops = await shopsForScope(formData)
   if ("error" in shops) return { error: shops.error }
 
@@ -174,7 +179,7 @@ export async function createProduct(formData: FormData) {
       sellingPrice: sellingPrice.toFixed(2),
       marketPrice: formData.get("marketPrice") ? Number(formData.get("marketPrice")).toFixed(2) : null,
       warrantyDays: Math.max(0, Number(formData.get("warrantyDays") || 0)),
-      tracking: (String(formData.get("tracking") || "IMEI") as ProductTracking),
+      tracking: tracking as ProductTracking,
     },
   })
 
@@ -820,53 +825,161 @@ export async function updateProduct(formData: FormData) {
 
   const name = String(formData.get("name") || "").trim()
   const sku = String(formData.get("sku") || "").trim()
-  const storage = String(formData.get("storage") || "").trim() || null
-  const color = String(formData.get("color") || "").trim() || null
+  const text = (key: string) => String(formData.get(key) || "").trim() || null
   if (!name || !sku) return { error: "Name and Item Code (SKU) are required." }
 
-  const existing = await prisma.product.findUnique({ where: { id } })
+  const existing = await prisma.product.findUnique({
+    where: { id },
+    include: { brand: true, category: true, inventory: { include: { branch: true } } },
+  })
   if (!existing) return { error: "Item not found." }
 
   const condition = parseShopCondition(String(formData.get("condition") || existing.condition))
   if (!condition) return { error: "Pick How the phone looks from the list." }
 
+  const trackingRaw = String(formData.get("tracking") || existing.tracking)
+  if (!(trackingRaw in ProductTracking)) return { error: "Pick how we count this item: IMEI, Serial number, or No number." }
+  const tracking = trackingRaw as ProductTracking
+
   const costPrice = Number(formData.get("costPrice") || 0)
   const sellingPrice = Number(formData.get("sellingPrice") || 0)
   const minimumPrice = Number(formData.get("minimumPrice") || sellingPrice)
+  if (![costPrice, sellingPrice, minimumPrice].every((value) => Number.isFinite(value) && value >= 0)) {
+    return { error: "Cost, lowest price and selling price must be numbers. Use 0 if you will set them later." }
+  }
+  const warrantyDays = Math.floor(Number(formData.get("warrantyDays") ?? existing.warrantyDays))
+  if (!Number.isFinite(warrantyDays) || warrantyDays < 0) return { error: "Warranty days must be 0 or more." }
 
   if (sku !== existing.sku) {
     const clash = await prisma.product.findUnique({ where: { sku } })
     if (clash) return { error: "That item code is already used by another item." }
   }
 
-  await prisma.product.update({
-    where: { id },
-    data: {
-      name,
-      sku,
-      storage,
-      color,
-      condition,
-      costPrice: costPrice.toFixed(2),
-      minimumPrice: minimumPrice.toFixed(2),
-      sellingPrice: sellingPrice.toFixed(2),
-    },
-  })
+  const brandName = String(formData.get("brandName") || "").trim()
+  const brandId = brandName ? await findOrCreateBrand(brandName) : existing.brandId
+  if (!brandId) return { error: "Type or pick a brand name." }
+  const categoryName = String(formData.get("categoryName") || "").trim()
+  const categoryId = categoryName ? await findOrCreateCategory(categoryName) : existing.categoryId
 
-  await prisma.auditLog.create({
-    data: {
-      userId: user.id,
-      action: "UPDATE",
-      entityType: "Product",
-      entityId: id,
-      oldValue: JSON.stringify({ name: existing.name, costPrice: existing.costPrice, sellingPrice: existing.sellingPrice }),
-      newValue: JSON.stringify({ name, costPrice, sellingPrice, storage, color, condition, note: `Product details modified: ${name} (${sku})` }),
-      branchId: user.branchId,
-    },
-  })
+  // Switching between IMEI and Serial number is always safe: each unit keeps
+  // the number it was booked with, and new units follow the new choice.
+  // Switching to or from No number is not, because the shelf count and the
+  // numbered units would stop agreeing.
+  if (tracking !== existing.tracking) {
+    if (tracking === "NONE") {
+      const liveUnits = await prisma.imeiRecord.count({
+        where: { productId: id, status: { in: [...LIVE_UNIT_STATUSES] } },
+      })
+      if (liveUnits > 0) {
+        return {
+          error: `${liveUnits} unit(s) of ${existing.name} still have an IMEI or serial in a shop, on the way, or with the engineer. Sell, send back, or write them off on Reduce stock first, then change it to No number.`,
+        }
+      }
+    } else if (existing.tracking === "NONE") {
+      const holding = existing.inventory.filter((row) => row.quantity > 0 || row.incomingQty > 0)
+      if (holding.length > 0) {
+        const where = holding
+          .map((row) => `${row.branch.name} (${row.quantity + row.incomingQty})`)
+          .join(", ")
+        return {
+          error: `These shops still hold ${existing.name} as pieces with no number: ${where}. Reduce those to 0 on Reduce stock, change how we count it, then receive them again with each ${tracking === "SERIAL" ? "serial" : "IMEI"}.`,
+        }
+      }
+    }
+  }
+
+  const before = {
+    name: existing.name,
+    sku: existing.sku,
+    brand: existing.brand.name,
+    category: existing.category.name,
+    tracking: existing.tracking,
+    condition: existing.condition,
+    storage: existing.storage,
+    ram: existing.ram,
+    color: existing.color,
+    warrantyDays: existing.warrantyDays,
+    description: existing.description,
+    costPrice: money(existing.costPrice),
+    minimumPrice: money(existing.minimumPrice),
+    sellingPrice: money(existing.sellingPrice),
+  }
+  const after = {
+    name,
+    sku,
+    brand: brandName || existing.brand.name,
+    category: categoryName || existing.category.name,
+    tracking,
+    condition,
+    storage: text("storage"),
+    ram: text("ram"),
+    color: text("color"),
+    warrantyDays,
+    description: text("description"),
+    costPrice: Number(costPrice.toFixed(2)),
+    minimumPrice: Number(minimumPrice.toFixed(2)),
+    sellingPrice: Number(sellingPrice.toFixed(2)),
+  }
+  const changed = (Object.keys(after) as Array<keyof typeof after>).filter(
+    (key) => String(before[key] ?? "") !== String(after[key] ?? "")
+  )
+  if (changed.length === 0) return { success: true, message: "Nothing changed." }
+
+  const reason = String(formData.get("reason") || "").trim() || null
+  const priceMoves = (["costPrice", "minimumPrice", "sellingPrice"] as const)
+    .filter((key) => changed.includes(key))
+    .map((key) => ({
+      productId: id,
+      oldPrice: before[key].toFixed(2),
+      newPrice: after[key].toFixed(2),
+      priceType: key === "costPrice" ? "COST_PRICE" : key === "minimumPrice" ? "MINIMUM_PRICE" : "SELLING_PRICE",
+      reason: reason || "Changed on Change details",
+      changedBy: user.id,
+    }))
+
+  await prisma.$transaction([
+    prisma.product.update({
+      where: { id },
+      data: {
+        name,
+        sku,
+        brandId,
+        categoryId,
+        tracking,
+        condition,
+        storage: after.storage,
+        ram: after.ram,
+        color: after.color,
+        warrantyDays,
+        description: after.description,
+        costPrice: costPrice.toFixed(2),
+        minimumPrice: minimumPrice.toFixed(2),
+        sellingPrice: sellingPrice.toFixed(2),
+      },
+    }),
+    ...priceMoves.map((data) => prisma.priceHistory.create({ data })),
+    prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "UPDATE",
+        entityType: "Product",
+        entityId: id,
+        oldValue: JSON.stringify(Object.fromEntries(changed.map((key) => [key, before[key]]))),
+        newValue: JSON.stringify({
+          ...Object.fromEntries(changed.map((key) => [key, after[key]])),
+          reason,
+          note: `Item details changed: ${name} (${sku}). Changed: ${changed.join(", ")}.`,
+        }),
+        branchId: user.branchId,
+        risk: changed.includes("tracking") || changed.includes("costPrice") ? "MEDIUM" : "LOW",
+      },
+    }),
+  ])
 
   revalidatePath("/products")
   revalidatePath("/inventory")
+  revalidatePath("/imei")
+  revalidatePath("/imei/intake")
   revalidatePath("/pos")
   return { success: true }
 }

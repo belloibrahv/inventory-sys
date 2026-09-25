@@ -13,7 +13,9 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import { SHOP_CONDITION_OPTIONS } from "@/lib/conditions"
+import { TRACKING_OPTIONS, trackingLabel } from "@/lib/unit-identity"
 import type { PriceRow } from "./price-list"
 import { AlertTriangle, Edit3, MinusCircle, Trash2 } from "lucide-react"
 
@@ -22,14 +24,27 @@ export function ProductManageDialog({
   open,
   onOpenChange,
   canRemove = false,
+  brandNames = [],
+  categoryNames = [],
 }: {
   product: PriceRow | null
   open: boolean
   onOpenChange: (open: boolean) => void
   canRemove?: boolean
+  brandNames?: string[]
+  categoryNames?: string[]
 }) {
   const router = useRouter()
   const [tab, setTab] = useState<"edit" | "stock" | "delete">("edit")
+  const [tracking, setTracking] = useState(product?.tracking ?? "IMEI")
+  const [shownFor, setShownFor] = useState(product?.id)
+
+  // The dialog stays mounted between items, so reset the picks when a new item opens.
+  if (product && product.id !== shownFor) {
+    setShownFor(product.id)
+    setTracking(product.tracking)
+    setTab("edit")
+  }
 
   if (!product) return null
 
@@ -110,18 +125,57 @@ export function ProductManageDialog({
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-medium text-muted-foreground">Item code</label>
-                <Input name="sku" defaultValue={product.sku} required className="mt-1 font-mono" />
+                <label className="text-xs font-medium text-muted-foreground">Brand</label>
+                <Input name="brandName" list="manage-brand-names" defaultValue={product.brand} required className="mt-1" />
+                <datalist id="manage-brand-names">
+                  {brandNames.map((name) => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground">Storage</label>
-                <Input name="storage" defaultValue={product.storage ?? ""} placeholder="128GB or 256GB" className="mt-1" />
+                <label className="text-xs font-medium text-muted-foreground">Category</label>
+                <Input
+                  name="categoryName"
+                  list="manage-category-names"
+                  defaultValue={product.category ?? ""}
+                  placeholder="Phones, Tablets, Laptops"
+                  className="mt-1"
+                />
+                <datalist id="manage-category-names">
+                  {categoryNames.map((name) => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
               </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">How we count it</label>
+              <Select name="tracking" value={tracking} onChange={(event) => setTracking(event.target.value)} className="mt-1">
+                {TRACKING_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </Select>
+              {tracking !== product.tracking ? (
+                <p className="mt-1.5 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                  {tracking === "NONE"
+                    ? "Every unit of this item with an IMEI or serial must be sold, sent back, or written off first. After this, staff count it by pieces."
+                    : product.tracking === "NONE"
+                      ? `Every shop must be at 0 pieces first. After this, each unit is received with its ${tracking === "SERIAL" ? "serial number" : "IMEI"}.`
+                      : `Units already on the shelf keep the number they were booked with. New units will ask for ${tracking === "SERIAL" ? "a serial number" : "an IMEI"} first, and staff can still pick the other one on each unit.`}
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Now: {trackingLabel(product.tracking)}. Pick Serial number for tablets and laptops that have no IMEI.
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-medium text-muted-foreground">Color</label>
-                <Input name="color" defaultValue={product.color ?? ""} placeholder="Blue or Black" className="mt-1" />
+                <label className="text-xs font-medium text-muted-foreground">Item code</label>
+                <Input name="sku" defaultValue={product.sku} required className="mt-1 font-mono" />
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Condition</label>
@@ -136,17 +190,43 @@ export function ProductManageDialog({
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div>
+                <label className="text-xs font-medium text-muted-foreground">Storage</label>
+                <Input name="storage" defaultValue={product.storage ?? ""} placeholder="128GB" className="mt-1" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Memory (RAM)</label>
+                <Input name="ram" defaultValue={product.ram ?? ""} placeholder="8GB" className="mt-1" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Color</label>
+                <Input name="color" defaultValue={product.color ?? ""} placeholder="Blue" className="mt-1" />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
                 <label className="text-xs font-medium text-muted-foreground">Cost</label>
-                <Input name="costPrice" type="number" step="0.01" defaultValue={product.costPrice} required className="mt-1" />
+                <Input name="costPrice" type="number" min={0} step="0.01" defaultValue={product.costPrice} required className="mt-1" />
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Lowest price</label>
-                <Input name="minimumPrice" type="number" step="0.01" defaultValue={product.minimumPrice} required className="mt-1" />
+                <Input name="minimumPrice" type="number" min={0} step="0.01" defaultValue={product.minimumPrice} required className="mt-1" />
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Selling price</label>
-                <Input name="sellingPrice" type="number" step="0.01" defaultValue={product.sellingPrice} required className="mt-1" />
+                <Input name="sellingPrice" type="number" min={0} step="0.01" defaultValue={product.sellingPrice} required className="mt-1" />
               </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Warranty days (0 = no warranty)</label>
+              <Input name="warrantyDays" type="number" min={0} step={1} defaultValue={product.warrantyDays} className="mt-1" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Short note about this item</label>
+              <Textarea name="description" defaultValue={product.description ?? ""} rows={2} className="mt-1" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Why you are changing it (optional)</label>
+              <Input name="reason" placeholder="Wrong brand, tablet has serial not IMEI, new supplier price" className="mt-1" />
             </div>
           </ActionForm>
         ) : null}
@@ -169,7 +249,7 @@ export function ProductManageDialog({
               )}
               {tracked ? (
                 <p className="mt-2 text-muted-foreground leading-relaxed">
-                  This item uses IMEI or serial. Scan or type each unit you are writing off. The shelf count moves with those numbers.
+                  This item is counted by {trackingLabel(product.tracking)}. Scan or type each unit you are writing off. The shelf count moves with those numbers.
                 </p>
               ) : (
                 <p className="mt-2 text-muted-foreground leading-relaxed">

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { PHONE_LOOK_OPTIONS } from "@/lib/phone-look"
 import { listedSupplierClash } from "@/lib/party-key"
+import { defaultIdentityFor, UNIT_IDENTITY_OPTIONS, type UnitIdentityKind } from "@/lib/unit-identity"
 
 export type IntakeProduct = {
   id: string
@@ -39,6 +40,9 @@ export function ImeiIntakeForm({
   const [costPrice, setCostPrice] = useState(String(products[0]?.costPrice ?? 0))
   const [minimumPrice, setMinimumPrice] = useState(String(products[0]?.minimumPrice ?? 0))
   const [sellingPrice, setSellingPrice] = useState(String(products[0]?.sellingPrice ?? 0))
+  const [identityKind, setIdentityKind] = useState<UnitIdentityKind>(
+    defaultIdentityFor(products[0]?.tracking ?? "IMEI")
+  )
 
   const selected = useMemo(
     () => products.find((product) => product.id === productId) ?? null,
@@ -55,6 +59,8 @@ export function ImeiIntakeForm({
     setCostPrice(String(product.costPrice))
     setMinimumPrice(String(product.minimumPrice))
     setSellingPrice(String(product.sellingPrice))
+    setIdentityKind(defaultIdentityFor(product.tracking))
+    setImei1("")
   }
 
   const addingNewSupplier = supplierChoice === "__new__"
@@ -76,18 +82,53 @@ export function ImeiIntakeForm({
         }
         return result
       }}
-      submit="Add phone to shop"
-      successMessage="Phone added to the shop"
+      submit={tracked ? "Add unit to shop" : "Add pieces to shop"}
+      successMessage="Added to the shop"
       enterDoesNotSubmit
       className="space-y-3"
     >
       {tracked ? (
         <>
-          <ScanField onScan={setImei1} placeholder="Scan IMEI 1, then Enter" />
+          <div>
+            <p className="mb-1 text-xs font-medium text-muted-foreground">This unit is known by</p>
+            <input type="hidden" name="identityKind" value={identityKind} />
+            <div className="flex gap-1 rounded-xl border border-border bg-muted/60 p-1">
+              {UNIT_IDENTITY_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    setIdentityKind(option.value)
+                    setImei1("")
+                  }}
+                  className={`flex-1 rounded-lg py-2 text-xs font-semibold transition-all ${
+                    identityKind === option.value
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "text-muted-foreground hover:bg-card hover:text-foreground"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Tablets, laptops and some phones have no IMEI. Pick Serial number for those.
+            </p>
+          </div>
+          <ScanField
+            key={identityKind}
+            kind={identityKind}
+            onScan={setImei1}
+            placeholder={identityKind === "SERIAL" ? "Scan the serial number, then Enter" : "Scan IMEI 1, then Enter"}
+          />
           <input type="hidden" name="imei1" value={imei1} />
           {imei1 ? <p className="font-mono text-xs">{imei1}</p> : null}
-          <Input name="imei2" placeholder="IMEI 2" />
-          <Input name="serialNumber" placeholder="Serial" />
+          {identityKind === "IMEI" ? (
+            <>
+              <Input name="imei2" placeholder="IMEI 2 (optional)" />
+              <Input name="serialNumber" placeholder="Serial (optional)" />
+            </>
+          ) : null}
         </>
       ) : (
         <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">

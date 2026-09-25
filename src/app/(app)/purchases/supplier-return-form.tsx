@@ -64,11 +64,12 @@ export function SupplierReturnForm() {
       onSuccess={() => setItems([])}
     >
       <ScanField
+        kind="ANY"
         onScan={(code) => {
           void add(code)
         }}
-        placeholder="Scan IMEI, then Enter"
-        hint="Scan every phone for this one send-back. The IMEI names the house."
+        placeholder="Scan IMEI or serial, then Enter"
+        hint="Scan every unit for this one send-back. The IMEI or serial names the house."
       />
       <textarea
         name="imeis"

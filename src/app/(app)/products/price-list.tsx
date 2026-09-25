@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { formatCurrency } from "@/lib/utils"
 import { ProductManageDialog } from "./product-manage-dialog"
 import { Settings2 } from "lucide-react"
+import { trackingLabel } from "@/lib/unit-identity"
 
 export type PriceRow = {
   id: string
@@ -19,8 +20,11 @@ export type PriceRow = {
   brandId?: string
   brand: string
   categoryId?: string
+  category?: string
   color: string | null
   storage: string | null
+  ram?: string | null
+  description?: string | null
   tracking: string
   condition: string
   costPrice: number
@@ -31,22 +35,20 @@ export type PriceRow = {
   inventory?: Array<{ branchId: string; branchName: string; quantity: number }>
 }
 
-function trackingLabel(tracking: string) {
-  if (tracking === "SERIAL") return "Serial"
-  if (tracking === "NONE") return "No number"
-  return "Phone, IMEI"
-}
-
 export function ProductPriceList({
   products,
   canEdit,
   canRemove = false,
   initialQuery = "",
+  brandNames = [],
+  categoryNames = [],
 }: {
   products: PriceRow[]
   canEdit: boolean
   canRemove?: boolean
   initialQuery?: string
+  brandNames?: string[]
+  categoryNames?: string[]
 }) {
   const router = useRouter()
   const [query, setQuery] = useState(initialQuery)
@@ -286,6 +288,8 @@ export function ProductPriceList({
         open={Boolean(managingProduct)}
         onOpenChange={(open) => !open && setManagingProduct(null)}
         canRemove={canRemove}
+        brandNames={brandNames}
+        categoryNames={categoryNames}
       />
     </div>
   )

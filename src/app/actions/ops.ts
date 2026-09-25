@@ -33,6 +33,12 @@ function parseImeis(raw: string) {
   return [...new Set(raw.split(/[\s,;]+/).map((item) => item.trim()).filter((item) => item.length >= 14))]
 }
 
+/** IMEIs or serials, one unit each. Serial-only items (tablets, laptops) have short numbers. */
+function parseUnitCodes(raw: string, tracking: string) {
+  if (tracking !== "SERIAL") return parseImeis(raw)
+  return [...new Set(raw.split(/[\s,;]+/).map((item) => item.trim()).filter((item) => item.length >= 4))]
+}
+
 function parseTransferIds(raw: string) {
   const match = raw.match(/IMEIs:\s*(.+)/i)
   const list = match ? match[1] : raw
@@ -402,7 +408,8 @@ export async function receivePurchaseImeis(formData: FormData) {
     }
   }
 
-  const imeis = parseImeis(String(formData.get("imeis") || ""))
+  const serialOnly = item.product.tracking === "SERIAL"
+  const imeis = parseUnitCodes(String(formData.get("imeis") || ""), item.product.tracking)
   const remaining = item.quantity - item.receivedQty
 
   if (imeis.length === 0) {
@@ -438,16 +445,17 @@ export async function receivePurchaseImeis(formData: FormData) {
     return { success: true }
   }
 
+  const numberWord = serialOnly ? "serials" : "IMEIs"
   if (imeis.length > remaining) {
-    return { error: `Only ${remaining} units are still expected. You pasted ${imeis.length} IMEIs.` }
+    return { error: `Only ${remaining} units are still expected. You pasted ${imeis.length} ${numberWord}.` }
   }
 
   const duplicates = await prisma.imeiRecord.findMany({
-    where: { OR: [{ imei1: { in: imeis } }, { imei2: { in: imeis } }] },
+    where: { OR: [{ imei1: { in: imeis } }, { imei2: { in: imeis } }, { serialNumber: { in: imeis } }] },
     select: { imei1: true },
   })
   if (duplicates.length) {
-    return { error: `This IMEI is already in the shop: ${duplicates.map((row) => row.imei1).join(", ")}` }
+    return { error: `Already in the shop: ${duplicates.map((row) => row.imei1).join(", ")}` }
   }
 
   const receivedQty = item.receivedQty + imeis.length
@@ -469,6 +477,7 @@ export async function receivePurchaseImeis(formData: FormData) {
       await tx.imeiRecord.create({
         data: {
           imei1,
+          serialNumber: serialOnly ? imei1 : null,
           productId: item.productId,
           supplierId: purchase.supplierId,
           branchId: purchase.branchId,
@@ -2523,13 +2532,13 @@ function toReturnLookup(row: SupplierReturnImei) {
 export async function lookupSupplierReturnImei(imei: string) {
   const user = await requireUser()
   const code = imei.replace(/[\s-]/g, "").trim()
-  if (code.length < 14) return { error: "That IMEI is too short. Scan the box again, or type every digit." }
+  if (code.length < 4) return { error: "That number is too short. Scan the box again, or type every digit." }
 
-  const row = await prisma.imeiRecord.findUnique({
-    where: { imei1: code },
+  const row = await prisma.imeiRecord.findFirst({
+    where: { OR: [{ imei1: code }, { serialNumber: code }] },
     include: supplierReturnImeiInclude,
   })
-  if (!row) return { error: "We could not find that IMEI on the system." }
+  if (!row) return { error: "We could not find that IMEI or serial on the system." }
 
   const scoped = await scopedBranchId(user.role, user.branchId)
   if (scoped && row.branchId !== scoped) {
@@ -2552,14 +2561,16 @@ export async function sendUnitsToSupplier(formData: FormData) {
   if (!(await can(user.role, "action.intake")) && !(await can(user.role, "action.return"))) {
     return { error: "You are not allowed to send goods back to a supplier. Ask the main admin." }
   }
-  const imeis = parseImeis(String(formData.get("imeis") || ""))
-  if (!imeis.length) return { error: "Scan the IMEIs going back to the supplier." }
+  // The send-back list holds each unit's main number, which for a tablet or
+  // laptop is its serial, so short numbers are allowed here.
+  const imeis = parseUnitCodes(String(formData.get("imeis") || ""), "SERIAL")
+  if (!imeis.length) return { error: "Scan the IMEIs or serials going back to the supplier." }
 
   const records = await prisma.imeiRecord.findMany({
     where: { imei1: { in: imeis } },
     include: supplierReturnImeiInclude,
   })
-  if (records.length !== imeis.length) return { error: "We could not find one or more of those IMEIs." }
+  if (records.length !== imeis.length) return { error: "We could not find one or more of those IMEIs or serials." }
   if (records.some((row) => !isSupplierReturnableStatus(row.status))) {
     return { error: "You can only send back a phone that is in the shop, returned, or faulty." }
   }

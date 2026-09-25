@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { SHOP_CONDITION_OPTIONS } from "@/lib/conditions"
+import { TRACKING_OPTIONS } from "@/lib/unit-identity"
 import { canManageCatalog } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { CatalogLocked } from "../catalog-locked"
@@ -70,10 +71,15 @@ export default async function NewProductPage() {
             <label className="block text-sm">
               <span className="mb-1 block text-xs text-muted-foreground">How we count it</span>
               <Select name="tracking" defaultValue="IMEI">
-                <option value="IMEI">Phone, IMEI</option>
-                <option value="SERIAL">Laptop or accessory with a serial</option>
-                <option value="NONE">No number. Use this for cords and chargers</option>
+                {TRACKING_OPTIONS.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
               </Select>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                Tablets often have a serial number and no IMEI. You can still pick IMEI or serial on each unit when it is received, and change this later on the price list.
+              </span>
             </label>
             <label className="block text-sm">
               <span className="mb-1 block text-xs text-muted-foreground">How it looks</span>

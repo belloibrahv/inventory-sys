@@ -29,7 +29,7 @@ export function ScanField({
   hint,
 }: {
   onScan: (value: string) => void
-  kind?: "IMEI" | "SERIAL"
+  kind?: "IMEI" | "SERIAL" | "ANY"
   placeholder?: string
   hint?: string
 }) {
@@ -46,8 +46,8 @@ export function ScanField({
       toast.error("That IMEI is too short. Scan the box again, or type every digit.")
       return
     }
-    if (kind === "SERIAL" && code.length < 4) {
-      toast.error("That serial number is too short.")
+    if (kind !== "IMEI" && code.length < 4) {
+      toast.error(kind === "SERIAL" ? "That serial number is too short." : "That number is too short.")
       return
     }
     onScan(code)
@@ -117,7 +117,14 @@ export function ScanField({
               commit(value)
             }
           }}
-          placeholder={placeholder ?? (kind === "IMEI" ? "Scan or type IMEI, then Enter" : "Scan or type serial, then Enter")}
+          placeholder={
+            placeholder ??
+            (kind === "IMEI"
+              ? "Scan or type IMEI, then Enter"
+              : kind === "SERIAL"
+                ? "Scan or type serial, then Enter"
+                : "Scan or type IMEI or serial, then Enter")
+          }
           autoComplete="off"
           inputMode="numeric"
           className="min-h-12"
@@ -144,7 +151,7 @@ export function ScanList({
   required = true,
 }: {
   name: string
-  kind?: "IMEI" | "SERIAL"
+  kind?: "IMEI" | "SERIAL" | "ANY"
   required?: boolean
 }) {
   const [items, setItems] = useState<string[]>([])

@@ -6,13 +6,42 @@ import { prisma } from "@/lib/prisma"
 import { recordMovement } from "@/lib/concurrency"
 import { canReachBranch, viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
-import { scopedBranchId } from "@/lib/rbac"
+import { canManageCatalog, scopedBranchId } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { recentWatDays, watBounds } from "@/lib/lagos-day"
 import { IMEI_LIFE } from "@/lib/imei-life"
 import { displayPartyName } from "@/lib/party-key"
 import { findDuplicateSupplier } from "@/lib/supplier-identity"
 import { money } from "@/lib/utils"
+import {
+  cleanUnitCode,
+  defaultIdentityFor,
+  unitCodeProblem,
+  unitIdentityColumns,
+  unitIdentityKind,
+  unitIdentityLabel,
+  type UnitIdentityKind,
+} from "@/lib/unit-identity"
+
+/** Every number on the system that already names a unit, other than `exceptId`. */
+async function unitCodesTaken(codes: string[], exceptId?: string) {
+  const wanted = [...new Set(codes.filter(Boolean))]
+  if (!wanted.length) return []
+  const rows = await prisma.imeiRecord.findMany({
+    where: {
+      ...(exceptId ? { id: { not: exceptId } } : {}),
+      OR: [{ imei1: { in: wanted } }, { imei2: { in: wanted } }, { serialNumber: { in: wanted } }],
+    },
+    select: { imei1: true, imei2: true, serialNumber: true },
+  })
+  const used = new Set(rows.flatMap((row) => [row.imei1, row.imei2, row.serialNumber].filter(Boolean) as string[]))
+  return wanted.filter((code) => used.has(code))
+}
+
+function readIdentityKind(formData: FormData, fallback: UnitIdentityKind): UnitIdentityKind {
+  const raw = String(formData.get("identityKind") || fallback).toUpperCase()
+  return raw === "SERIAL" ? "SERIAL" : "IMEI"
+}
 
 function whenBounds(when?: string) {
   if (!when || when === "all") return null
@@ -102,7 +131,7 @@ export async function getImeiRecords(search?: string, status?: string, life?: st
 export async function intakeImei(formData: FormData) {
   const user = await requireUser()
   if (!(await can(user.role, "action.intake"))) return { error: "You are not allowed to receive phones. Ask the main admin." }
-  const imei1 = String(formData.get("imei1") ?? "").trim()
+  const imei1 = cleanUnitCode(String(formData.get("imei1") ?? ""))
   const productId = String(formData.get("productId") ?? "")
   const branchId = String(formData.get("branchId") ?? user.branchId ?? "")
 
@@ -117,8 +146,20 @@ export async function intakeImei(formData: FormData) {
   if (!tracked && (!Number.isFinite(quantity) || quantity < 1)) {
     return { error: "Enter how many pieces you are putting on the shelf." }
   }
-  if (tracked && (!imei1 || imei1.length < 14)) {
-    return { error: "Type the full IMEI. It must be at least 14 digits." }
+  const identityKind = readIdentityKind(formData, defaultIdentityFor(product.tracking))
+  const identity = unitIdentityColumns({
+    kind: identityKind,
+    imei1,
+    imei2: cleanUnitCode(String(formData.get("imei2") || "")),
+    serialNumber: cleanUnitCode(String(formData.get("serialNumber") || "")),
+  })
+  if (tracked) {
+    const problem = unitCodeProblem(identityKind, imei1)
+    if (problem) return { error: problem }
+    if (identity.imei2) {
+      const imei2Problem = unitCodeProblem("IMEI", identity.imei2)
+      if (imei2Problem) return { error: `IMEI 2: ${imei2Problem}` }
+    }
   }
 
   const costPrice = Number(formData.get("costPrice") || 0)
@@ -135,10 +176,8 @@ export async function intakeImei(formData: FormData) {
   }
 
   if (tracked) {
-    const duplicate = await prisma.imeiRecord.findFirst({
-      where: { OR: [{ imei1 }, { imei2: imei1 }] },
-    })
-    if (duplicate) return { error: "That IMEI is already in the shop." }
+    const taken = await unitCodesTaken([identity.imei1, identity.imei2 ?? "", identity.serialNumber ?? ""])
+    if (taken.length) return { error: `Already on the system: ${taken.join(", ")}.` }
   }
 
   let supplierId = String(formData.get("supplierId") || "").trim()
@@ -183,9 +222,7 @@ export async function intakeImei(formData: FormData) {
     if (tracked) {
       await tx.imeiRecord.create({
         data: {
-          imei1,
-          imei2: String(formData.get("imei2") || "") || null,
-          serialNumber: String(formData.get("serialNumber") || "") || null,
+          ...identity,
           productId,
           supplierId: supplierId || null,
           branchId,
@@ -225,6 +262,7 @@ export async function intakeImei(formData: FormData) {
           branchId,
           status: tracked ? status : "IN_STOCK",
           cosmeticGrade,
+          identity: tracked ? unitIdentityLabel(identityKind) : null,
           quantity: tracked ? 1 : quantity,
           costPrice,
           minimumPrice,
@@ -442,6 +480,83 @@ async function applyShelfState(input: {
   return { success: true }
 }
 
+/**
+ * Correct the number a unit is known by, or say it is a serial and not an IMEI.
+ * Tablets and some phones arrive with only a serial, and a number typed wrong at
+ * intake used to be stuck on the unit for good. The unit keeps its own id, so
+ * its sale, returns, repairs and swaps stay attached.
+ */
+export async function updateUnitIdentity(formData: FormData) {
+  const user = await requireUser()
+  if (!(await canManageCatalog(user.role))) {
+    return { error: "Only the main admin, the CEO, or someone given Add items and change prices can correct a unit's number." }
+  }
+  const id = String(formData.get("id") || "")
+  if (!id) return { error: "Unit record missing." }
+  const reason = String(formData.get("reason") || "").trim()
+  if (!reason) return { error: "Write why you are changing this number, for example typed wrong at intake." }
+
+  const current = await prisma.imeiRecord.findUnique({ where: { id }, include: { product: true } })
+  if (!current) return { error: "We could not find that unit." }
+  if (!(await canReachBranch(user, current.branchId))) return { error: "That unit belongs to another shop." }
+
+  const kind = readIdentityKind(formData, unitIdentityKind(current))
+  const next = unitIdentityColumns({
+    kind,
+    imei1: cleanUnitCode(String(formData.get("imei1") || "")),
+    imei2: cleanUnitCode(String(formData.get("imei2") || "")),
+    serialNumber: cleanUnitCode(String(formData.get("serialNumber") || "")),
+  })
+  const problem = unitCodeProblem(kind, next.imei1)
+  if (problem) return { error: problem }
+  if (next.imei2) {
+    const imei2Problem = unitCodeProblem("IMEI", next.imei2)
+    if (imei2Problem) return { error: `IMEI 2: ${imei2Problem}` }
+    if (next.imei2 === next.imei1) return { error: "IMEI 2 cannot be the same as IMEI 1." }
+  }
+
+  const before = { imei1: current.imei1, imei2: current.imei2, serialNumber: current.serialNumber }
+  const beforeKind = unitIdentityKind(current)
+  if (
+    beforeKind === kind &&
+    before.imei1 === next.imei1 &&
+    (before.imei2 ?? null) === next.imei2 &&
+    (before.serialNumber ?? null) === next.serialNumber
+  ) {
+    return { success: true, message: "Nothing changed." }
+  }
+
+  const taken = await unitCodesTaken([next.imei1, next.imei2 ?? "", next.serialNumber ?? ""], id)
+  if (taken.length) return { error: `Another unit already has: ${taken.join(", ")}.` }
+
+  await prisma.$transaction([
+    prisma.imeiRecord.update({ where: { id }, data: next }),
+    prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "UPDATE",
+        entityType: "IMEIRecord",
+        entityId: id,
+        oldValue: JSON.stringify({ ...before, identity: unitIdentityLabel(beforeKind) }),
+        newValue: JSON.stringify({
+          ...next,
+          identity: unitIdentityLabel(kind),
+          reason,
+          note: `Unit number corrected on ${current.product.name}: ${before.imei1} to ${next.imei1} (${unitIdentityLabel(kind)}).`,
+        }),
+        branchId: current.branchId,
+        risk: "MEDIUM",
+      },
+    }),
+  ])
+
+  revalidatePath("/imei")
+  revalidatePath(`/imei/${id}`)
+  revalidatePath("/inventory")
+  revalidatePath("/pos")
+  return { success: true }
+}
+
 export async function getImeiDetail(id: string) {
   const user = await requireUser()
   const record = await prisma.imeiRecord.findFirst({
@@ -463,9 +578,23 @@ export async function getImeiDetail(id: string) {
   // become a way to read another shop's stock and sales history.
   if (!(await canReachBranch(user, record?.branchId))) return null
   if (!record) return null
+  // Older lines were written against the unit's number. If the number was
+  // corrected since, find the lines written under the earlier numbers too.
+  const corrections = await prisma.auditLog.findMany({
+    where: { entityType: "IMEIRecord", entityId: record.id, oldValue: { contains: "imei1" } },
+    select: { oldValue: true },
+  })
+  const earlierNumbers = corrections.flatMap((row) => {
+    try {
+      const old = JSON.parse(row.oldValue || "{}") as { imei1?: unknown }
+      return typeof old.imei1 === "string" ? [old.imei1] : []
+    } catch {
+      return []
+    }
+  })
   const logs = await prisma.auditLog.findMany({
     where: {
-      OR: [{ entityId: record.id }, { entityId: record.imei1 }],
+      entityId: { in: [...new Set([record.id, record.imei1, ...earlierNumbers])] },
     },
     include: { user: true },
     orderBy: { createdAt: "desc" },

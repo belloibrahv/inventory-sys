@@ -10,6 +10,7 @@ import { TablePager, usePagedRows } from "@/components/table-pager"
 import { Button } from "@/components/ui/button"
 import { formatShopWhen } from "@/lib/lagos-day"
 import { warrantyState } from "@/lib/warranty"
+import { unitIdentityKind } from "@/lib/unit-identity"
 
 type ImeiRow = {
   id: string
@@ -75,7 +76,7 @@ export function ImeiTable({
         <table className="w-full text-sm">
           <thead className="text-left text-muted-foreground">
             <tr className="border-b border-border">
-              <th className="px-4 py-3">IMEI</th>
+              <th className="px-4 py-3">IMEI or serial</th>
               <th className="px-4 py-3">Item</th>
               <th className="px-4 py-3">Shop</th>
               <th className="px-4 py-3">Owner</th>
@@ -90,7 +91,11 @@ export function ImeiTable({
                   <Link href={`/imei/${row.id}`} className="font-medium text-primary">
                     {row.imei1}
                   </Link>
-                  {row.serialNumber ? <p className="text-xs text-muted-foreground">{row.serialNumber}</p> : null}
+                  {unitIdentityKind(row) === "SERIAL" ? (
+                    <p className="text-xs text-muted-foreground">Serial number</p>
+                  ) : row.serialNumber ? (
+                    <p className="text-xs text-muted-foreground">Serial {row.serialNumber}</p>
+                  ) : null}
                 </td>
                 <td className="px-4 py-3">{row.product.name}</td>
                 <td className="px-4 py-3">{row.branch.code}</td>
