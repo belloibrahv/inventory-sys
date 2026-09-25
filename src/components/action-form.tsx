@@ -78,6 +78,8 @@ export function ActionForm({
   confirmModal,
   enterDoesNotSubmit = false,
   onSuccess,
+  onCancel,
+  cancelLabel = "Cancel",
 }: {
   action: (formData: FormData) => Promise<{ error?: string; success?: boolean; redirectTo?: string } | void>
   children: ReactNode
@@ -99,6 +101,9 @@ export function ActionForm({
    */
   enterDoesNotSubmit?: boolean
   onSuccess?: () => void
+  /** Shows a Cancel button beside save, for forms that sit in a modal. */
+  onCancel?: () => void
+  cancelLabel?: string
 }) {
   const router = useRouter()
   const ref = useRef<HTMLFormElement>(null)
@@ -183,15 +188,26 @@ export function ActionForm({
 
         {children}
 
-        <SubmitButton
-          variant={variant}
-          size={size}
-          className={cn(buttonClassName)}
-          pendingLabel={pendingLabel}
-          disabled={isPending}
-        >
-          {submit}
-        </SubmitButton>
+        {onCancel ? (
+          <div className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end", buttonClassName)}>
+            <Button type="button" variant="outline" size={size} onClick={onCancel} disabled={isPending}>
+              {cancelLabel}
+            </Button>
+            <SubmitButton variant={variant} size={size} pendingLabel={pendingLabel} disabled={isPending}>
+              {submit}
+            </SubmitButton>
+          </div>
+        ) : (
+          <SubmitButton
+            variant={variant}
+            size={size}
+            className={cn(buttonClassName)}
+            pendingLabel={pendingLabel}
+            disabled={isPending}
+          >
+            {submit}
+          </SubmitButton>
+        )}
       </form>
 
       {confirmModal ? (

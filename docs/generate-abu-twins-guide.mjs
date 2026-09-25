@@ -212,8 +212,8 @@ const children = [
       ["Prepared by", "Product Team, Techvaults Limited"],
       ["Document type", "User guide and test plan"],
       ["Date", "25 September 2026"],
-      ["Version", "1.75"],
-      ["Status", "Updated: full item edit, IMEI or serial on each unit, remove opening stock items"],
+      ["Version", "1.76"],
+      ["Status", "Updated: every pop-up window has an X and a Cancel or Close button"],
     ].map(([k, v]) =>
       new TableRow({
         children: [
@@ -280,6 +280,7 @@ const children = [
   body("The left menu is strict by job. Super Admin, the CEO, and the Internal Auditor still see every shop page for oversight. Other jobs, including the Financial Accountant, only see the pages that belong to that job. Money in and out no longer opens Check the books for a cashier."),
   body("Cash in the till cannot go below zero for new pay-outs. Shop expenses, cash refunds, and cash swap pay-outs are refused when the till does not hold enough. Waiting expenses do not take cash until a manager says yes. Cash sales still add to the till as usual."),
   body("Change on the price list now edits every detail of an item: name, brand, category, How we count it (IMEI, serial number, or no number), storage, memory, colour, condition, prices, warranty days, and a short note. Tablets and some phones have a serial number and no IMEI. Each unit can now be booked and corrected as IMEI or serial number. On Correct and close opening stock, staff can tick items, or tick a whole category, and remove them. The CEO or main admin can remove a shop's whole opening stock when a sheet went onto the wrong shop."),
+  body("Every pop-up window now closes the same way: an X in the top corner, and a Cancel or Close button at the bottom. Nothing is saved when you close it."),
   body("The system has grown steadily since we began. Section 16 lists what each release added, in order, if you want that history. You do not need to read it to use the system."),
   para("", { after: 160 }),
   para("Product Team", { bold: true, after: 40 }),
@@ -1833,6 +1834,7 @@ h1("5. Words we use"),
   body("Version 1.71 lets Many at once (Excel) load opening stock from a tab that only has PRODUCT NAME. IMEI, serial, piece count, and prices can be empty. Super Admin, CEO, accountant, records checker, and stock uploader finish those details on Correct and close opening stock. Never invent an IMEI just to make the sheet load."),
   body("Version 1.72 lets staff pick How we count this file on Many at once (Excel): all types from the tabs, phone IMEI, laptop serial, or pieces, for that one upload. A TRACKING column on the sheet can still set one row."),
   body("Version 1.73 lets Many at once (Excel) pick All shops. The same product names and piece counts go on every open shop in one upload. An IMEI or serial still belongs to one shop, so pick Iwo Road, Bodija, or Challenge when the sheet has those numbers."),
+  body("Version 1.76 gives every pop-up window the same way out: an X in the top corner and a Cancel or Close button at the bottom. Esc and a click outside the window also close it, except while it is saving. The phone menu has an X too."),
   body("Version 1.75 lets the admin edit every detail of an item, including How we count it: IMEI, serial number, or no number. Each unit can be booked as IMEI or serial number on One phone at a time, a supplier bill, and send back to supplier, and the admin can correct a unit's number. Correct and close opening stock can remove ticked items or a whole category, and the CEO or main admin can remove a whole opening stock that went onto the wrong shop."),
   body("Version 1.74 adds Faulty to the How the phone looks condition list. Staff can now book a phone in as Faulty on Supplier bill, One phone at a time, and all other intake screens. A Faulty phone does not go on sellable In shop stock. Sell now refuses it until someone sets Good (sellable) on All phones."),
 

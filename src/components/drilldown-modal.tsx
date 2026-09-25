@@ -23,6 +23,7 @@ export function DrilldownModal({
   children,
   width = "wide",
   download,
+  footer = true,
 }: {
   open: boolean
   onClose: () => void
@@ -33,6 +34,8 @@ export function DrilldownModal({
   width?: "wide" | "narrow"
   /** Every row behind the figure, header first, for the Excel and CSV buttons. */
   download?: { filename: string; rows: () => Array<Array<string | number>> }
+  /** False when the body already ends with its own Cancel and save buttons. */
+  footer?: boolean
 }) {
   useEffect(() => {
     if (!open) return
@@ -83,11 +86,13 @@ export function DrilldownModal({
 
         <div className="min-h-0 flex-1 overflow-auto">{children}</div>
 
-        <div className="flex justify-end border-t border-border px-5 py-3">
-          <Button variant="outline" size="sm" onClick={onClose}>
-            Close
-          </Button>
-        </div>
+        {footer ? (
+          <div className="flex justify-end border-t border-border px-5 py-3">
+            <Button variant="outline" size="sm" onClick={onClose}>
+              Close
+            </Button>
+          </div>
+        ) : null}
       </div>
     </div>
   )

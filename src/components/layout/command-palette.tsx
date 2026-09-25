@@ -67,7 +67,7 @@ export function CommandPalette({ allowedHrefs = [] }: { allowedHrefs?: string[] 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="overflow-hidden p-0 sm:max-w-xl">
-        <div className="border-b border-border p-3">
+        <div className="border-b border-border p-3 pr-12">
           <Input
             autoFocus
             placeholder="Find an IMEI, an invoice, a supplier bill, or a customer"

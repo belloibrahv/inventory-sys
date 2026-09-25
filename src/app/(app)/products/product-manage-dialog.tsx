@@ -54,7 +54,7 @@ export function ProductManageDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+        <DialogHeader className="pr-8">
           <DialogTitle className="text-lg font-bold">
             {canRemove ? `Change or remove: ${product.name}` : `Change: ${product.name}`}
           </DialogTitle>
@@ -115,6 +115,7 @@ export function ProductManageDialog({
               return res
             }}
             submit="Save item details"
+            onCancel={() => onOpenChange(false)}
             successMessage="Item details saved"
             className="space-y-3 pt-2"
           >
@@ -268,6 +269,7 @@ export function ProductManageDialog({
                 return res
               }}
               submit="Reduce stock now"
+              onCancel={() => onOpenChange(false)}
               successMessage="Stock reduced"
               className="space-y-3"
             >
@@ -345,6 +347,7 @@ export function ProductManageDialog({
                 return res
               }}
               submit="Remove this item"
+              onCancel={() => onOpenChange(false)}
               successMessage="Item removed from the active list"
               confirmModal={{
                 title: `Remove ${product.name}?`,

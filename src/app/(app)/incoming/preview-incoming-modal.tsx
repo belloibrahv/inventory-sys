@@ -1,8 +1,8 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { AlertCircle, Eye, Loader2, PackageCheck } from "lucide-react"
+import { AlertCircle, Eye, Loader2, PackageCheck, X } from "lucide-react"
 import { toast } from "sonner"
 import { previewAndReceiveIncoming, type ReceiveItemAdjustment } from "@/app/actions/incoming"
 import { Button } from "@/components/ui/button"
@@ -52,6 +52,15 @@ export function PreviewIncomingModal({ lot }: { lot: IncomingLot }) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notes, setNotes] = useState("")
+
+  useEffect(() => {
+    if (!open) return
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape" && !busy) setOpen(false)
+    }
+    document.addEventListener("keydown", onKey)
+    return () => document.removeEventListener("keydown", onKey)
+  }, [open, busy])
 
   const [adjustments, setAdjustments] = useState<Record<string, LineAdj>>(() => {
     const map: Record<string, LineAdj> = {}
@@ -190,14 +199,24 @@ export function PreviewIncomingModal({ lot }: { lot: IncomingLot }) {
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-          <button type="button" aria-label="Close" className="absolute inset-0 cursor-default" onClick={() => setOpen(false)} />
+          <button type="button" aria-label="Close" className="absolute inset-0 cursor-default" onClick={() => !busy && setOpen(false)} />
           <div
             role="dialog"
             aria-modal="true"
             aria-label={`Check what arrived on ${lot.lotNumber}`}
             className="surface-card relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-b-none shadow-xl sm:rounded-lg"
           >
-            <div className="border-b border-border px-5 py-3.5">
+            <div className="relative border-b border-border px-5 py-3.5 pr-14">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                disabled={busy}
+                aria-label="Close"
+                title="Close"
+                className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+              >
+                <X className="h-5 w-5" />
+              </button>
               <p className="eyebrow">Check count and cost before it enters the shop</p>
               <h2 className="text-base font-semibold tracking-tight">{lot.lotNumber}</h2>
               <p className="mt-0.5 text-xs text-muted-foreground">

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { ChevronRight, PanelLeftClose } from "lucide-react"
+import { ChevronRight, PanelLeftClose, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { BrandLockup } from "@/components/brand-mark"
 import { isOnItem, navGroups, type NavChild, type NavItem } from "@/components/layout/nav"
@@ -70,6 +70,15 @@ export function Sidebar({ allowedHrefs }: { allowedHrefs: string[] }) {
             title="Hide menu"
           >
             <PanelLeftClose className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-sidebar-foreground/70 transition-colors hover:bg-sidebar-muted hover:text-white lg:hidden"
+            onClick={() => setSidebar(false)}
+            aria-label="Close menu"
+            title="Close menu"
+          >
+            <X className="h-5 w-5" />
           </button>
         </div>
         <nav className="flex-1 space-y-6 overflow-y-auto px-3 pb-10 pt-4">

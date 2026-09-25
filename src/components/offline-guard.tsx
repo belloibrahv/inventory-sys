@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Smartphone, Boxes, Receipt, Users, WifiOff } from "lucide-react"
+import { Smartphone, Boxes, Receipt, Users, WifiOff, X } from "lucide-react"
 import { ImeiTable } from "@/app/(app)/imei/imei-table"
 import { Button } from "@/components/ui/button"
 import { useNetworkStatus } from "@/lib/network-status"
@@ -90,12 +90,36 @@ export function OfflineGuard() {
     return () => document.removeEventListener("click", onClick, true)
   }, [offline])
 
+  useEffect(() => {
+    if (!offline || !open) return
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false)
+    }
+    document.addEventListener("keydown", onKey)
+    return () => document.removeEventListener("keydown", onKey)
+  }, [offline, open])
+
   if (!offline || !open) return null
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/45 p-3 sm:items-center">
-      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl">
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4">
+      <button type="button" aria-label="Close" className="absolute inset-0 cursor-default" onClick={() => setOpen(false)} />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="The line is down"
+        className="relative flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"
+      >
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          aria-label="Close"
+          title="Close"
+          className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <X className="h-5 w-5" />
+        </button>
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4 pr-14">
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/15 text-amber-700">
               <WifiOff className="h-5 w-5" />

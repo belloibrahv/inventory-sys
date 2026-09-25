@@ -652,6 +652,7 @@ function AddItemModal({
       eyebrow="Opening stock"
       title="Add a missing item"
       width="narrow"
+      footer={false}
     >
       <form onSubmit={submit} className="space-y-4 p-5">
         <p className="text-xs text-muted-foreground">
