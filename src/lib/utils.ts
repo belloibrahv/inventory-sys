@@ -15,6 +15,19 @@ export function formatCurrency(amount: number | string | null | undefined, curre
   }).format(Number.isFinite(value) ? value : 0)
 }
 
+/** Short naira for tight spaces: ₦2.47m, ₦405k, ₦950. The full figure goes in a title. */
+export function formatCurrencyShort(amount: number | string | null | undefined) {
+  const value = Number(typeof amount === "string" ? Number(amount) : amount ?? 0)
+  if (!Number.isFinite(value)) return "₦0"
+  const sign = value < 0 ? "-" : ""
+  const abs = Math.abs(value)
+  const trim = (n: number) => String(Number(n.toFixed(n >= 100 ? 0 : n >= 10 ? 1 : 2)))
+  if (abs >= 1e9) return `${sign}₦${trim(abs / 1e9)}bn`
+  if (abs >= 1e6) return `${sign}₦${trim(abs / 1e6)}m`
+  if (abs >= 1e4) return `${sign}₦${trim(abs / 1e3)}k`
+  return `${sign}₦${Math.round(abs).toLocaleString("en-NG")}`
+}
+
 export function formatDate(date: Date | string) {
   return new Intl.DateTimeFormat("en-NG", {
     year: "numeric",

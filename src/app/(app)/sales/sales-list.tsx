@@ -2,308 +2,394 @@
 
 import { useMemo, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { ExternalLink, FileSpreadsheet } from "lucide-react"
+import { DataTable, type DataColumn } from "@/components/data-table"
+import { DayRangeFilter } from "@/components/day-range-filter"
 import { FilterChips } from "@/components/filter-chips"
 import { StatusBadge } from "@/components/shared"
-import { TablePager, usePagedRows } from "@/components/table-pager"
-import { Input } from "@/components/ui/input"
-import {
-  formatShopWhen,
-  matchesDayRange,
-  type WhenFilter,
-  whenChipFromRange,
-  whenFilterRange,
-} from "@/lib/lagos-day"
-import { formatCurrency, money } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { downloadTable } from "@/lib/download-table"
+import { formatShopWhen, matchesDayRange } from "@/lib/lagos-day"
 import { statusLabel } from "@/lib/status"
+import { cn, formatCurrency, formatCurrencyShort } from "@/lib/utils"
 
-type SaleRow = {
+export type SaleRow = {
   id: string
   invoiceNumber: string
-  saleDate: Date
-  totalAmount: unknown
-  paidAmount: unknown
+  saleDate: string
+  totalAmount: number
+  paidAmount: number
+  discount: number
   paymentMethod: string
   status: string
-  customer: { name: string } | null
-  branch: { code: string; name?: string }
+  isWholesale: boolean
+  customer: { name: string; phone: string | null } | null
+  branch: { code: string; name: string }
+  soldBy: string | null
+  items: Array<{ id: string; name: string; imei: string | null; quantity: number; unitPrice: number; totalPrice: number }>
 }
 
 type PayFilter = "all" | "paid" | "part" | "unpaid"
 
 function payKey(sale: SaleRow): Exclude<PayFilter, "all"> {
-  const total = money(sale.totalAmount)
-  const paid = money(sale.paidAmount)
-  if (paid <= 0) return "unpaid"
-  if (paid + 0.001 >= total) return "paid"
+  if (sale.paidAmount <= 0) return "unpaid"
+  if (sale.paidAmount + 0.001 >= sale.totalAmount) return "paid"
   return "part"
 }
 
 /** Paid minus sales. Zero when settled. Negative when the buyer still owes. */
 function saleBalance(sale: SaleRow) {
-  return money(sale.paidAmount) - money(sale.totalAmount)
+  return sale.paidAmount - sale.totalAmount
+}
+
+function balanceTone(balance: number) {
+  return balance < -0.005 ? "text-danger" : balance > 0.005 ? "text-success" : "text-muted-foreground"
+}
+
+function searchText(sale: SaleRow) {
+  return [
+    sale.invoiceNumber,
+    sale.customer?.name,
+    sale.customer?.phone,
+    sale.branch.name,
+    sale.branch.code,
+    sale.soldBy,
+    ...sale.items.flatMap((item) => [item.name, item.imei]),
+  ]
+    .filter(Boolean)
+    .join(" ")
+}
+
+function exportRows(rows: SaleRow[]) {
+  return [
+    ["Invoice", "Date", "Shop", "Buyer", "Sold by", "Items", "Sales", "Paid", "Balance", "Payment", "Status"],
+    ...rows.map((sale) => [
+      sale.invoiceNumber,
+      formatShopWhen(sale.saleDate),
+      sale.branch.name,
+      sale.customer?.name ?? "Walk-in",
+      sale.soldBy ?? "",
+      sale.items.map((item) => `${item.quantity} × ${item.name}${item.imei ? ` (${item.imei})` : ""}`).join("; "),
+      sale.totalAmount,
+      sale.paidAmount,
+      saleBalance(sale),
+      statusLabel(sale.paymentMethod),
+      statusLabel(sale.status),
+    ]),
+  ]
 }
 
 export function SalesList({ sales }: { sales: SaleRow[] }) {
+  const router = useRouter()
   const [pay, setPay] = useState<PayFilter>("all")
-  const [from, setFrom] = useState("")
-  const [to, setTo] = useState("")
+  const [range, setRange] = useState({ from: "", to: "" })
+  const [open, setOpen] = useState<SaleRow | null>(null)
+  const [query, setQuery] = useState("")
 
-  const when = whenChipFromRange(from, to)
-
-  const inRange = (sale: SaleRow) => matchesDayRange(sale.saleDate, from, to)
-
+  const inRange = useMemo(
+    () => sales.filter((sale) => matchesDayRange(sale.saleDate, range.from, range.to)),
+    [sales, range]
+  )
   const filtered = useMemo(
+    () => (pay === "all" ? inRange : inRange.filter((sale) => payKey(sale) === pay)),
+    [inRange, pay]
+  )
+  // The figures and the totals row follow the search box too, not only the chips.
+  const visible = useMemo(() => {
+    const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+    if (!words.length) return filtered
+    return filtered.filter((sale) => {
+      const hay = searchText(sale).toLowerCase()
+      return words.every((word) => hay.includes(word))
+    })
+  }, [filtered, query])
+  const counts = useMemo(
+    () => ({
+      all: inRange.length,
+      paid: inRange.filter((sale) => payKey(sale) === "paid").length,
+      part: inRange.filter((sale) => payKey(sale) === "part").length,
+      unpaid: inRange.filter((sale) => payKey(sale) === "unpaid").length,
+    }),
+    [inRange]
+  )
+  const totals = useMemo(
     () =>
-      sales.filter((sale) => {
-        if (pay !== "all" && payKey(sale) !== pay) return false
-        return inRange(sale)
-      }),
-    [sales, pay, from, to]
+      visible.reduce(
+        (acc, sale) => {
+          acc.sales += sale.totalAmount
+          acc.paid += sale.paidAmount
+          acc.balance += saleBalance(sale)
+          return acc
+        },
+        { sales: 0, paid: 0, balance: 0 }
+      ),
+    [visible]
   )
 
-  const counts = useMemo(() => {
-    const base = sales.filter(inRange)
-    return {
-      all: base.length,
-      paid: base.filter((sale) => payKey(sale) === "paid").length,
-      part: base.filter((sale) => payKey(sale) === "part").length,
-      unpaid: base.filter((sale) => payKey(sale) === "unpaid").length,
-    }
-  }, [sales, from, to])
-
-  const totals = useMemo(() => {
-    return filtered.reduce(
-      (acc, sale) => {
-        const salesValue = money(sale.totalAmount)
-        const paid = money(sale.paidAmount)
-        acc.sales += salesValue
-        acc.paid += paid
-        acc.balance += paid - salesValue
-        return acc
+  const columns: DataColumn<SaleRow>[] = [
+    {
+      id: "invoice",
+      header: "Invoice",
+      sortValue: (sale) => sale.invoiceNumber,
+      cell: (sale) => (
+        <div className="flex items-center gap-2">
+          <Link href={`/sales/${sale.id}`} className="whitespace-nowrap font-medium text-primary hover:underline">
+            {sale.invoiceNumber}
+          </Link>
+          {sale.status !== "COMPLETED" ? <StatusBadge value={sale.status} /> : null}
+        </div>
+      ),
+    },
+    {
+      id: "when",
+      header: "When",
+      sortValue: (sale) => sale.saleDate,
+      cell: (sale) => <span className="whitespace-nowrap tabular-nums">{formatShopWhen(sale.saleDate)}</span>,
+    },
+    {
+      id: "buyer",
+      header: "Buyer",
+      sortValue: (sale) => sale.customer?.name ?? "",
+      cell: (sale) =>
+        sale.customer ? (
+          <span className="whitespace-nowrap font-medium">{sale.customer.name}</span>
+        ) : (
+          <span className="whitespace-nowrap text-muted-foreground">
+            Walk-in <span className="ml-1 rounded-full bg-warning-soft px-1.5 py-0.5 text-[10px] font-medium text-warning">no name</span>
+          </span>
+        ),
+    },
+    {
+      id: "shop",
+      header: "Shop",
+      hideBelow: "lg",
+      sortValue: (sale) => sale.branch.name,
+      cell: (sale) => (
+        <span className="whitespace-nowrap" title={sale.branch.name}>
+          {sale.branch.name}
+        </span>
+      ),
+    },
+    {
+      id: "sales",
+      header: "Sales",
+      align: "right",
+      sortValue: (sale) => sale.totalAmount,
+      cell: (sale) => <span className="font-medium">{formatCurrency(sale.totalAmount)}</span>,
+    },
+    {
+      id: "paid",
+      header: "Paid",
+      align: "right",
+      hideBelow: "xl",
+      sortValue: (sale) => sale.paidAmount,
+      cell: (sale) => formatCurrency(sale.paidAmount),
+    },
+    {
+      id: "balance",
+      header: "Balance",
+      align: "right",
+      sortValue: (sale) => saleBalance(sale),
+      cell: (sale) => {
+        const balance = saleBalance(sale)
+        return <span className={cn("font-semibold", balanceTone(balance))}>{formatCurrency(balance)}</span>
       },
-      { sales: 0, paid: 0, balance: 0 }
-    )
-  }, [filtered])
-
-  const pager = usePagedRows(filtered, `${pay}|${from}|${to}`)
-
-  function pickChip(key: WhenFilter) {
-    if (key === "custom") return
-    const range = whenFilterRange(key)
-    setFrom(range.from)
-    setTo(range.to)
-  }
+    },
+    {
+      id: "method",
+      header: "Payment",
+      hideBelow: "lg",
+      sortValue: (sale) => statusLabel(sale.paymentMethod),
+      cell: (sale) => <span className="whitespace-nowrap">{statusLabel(sale.paymentMethod)}</span>,
+    },
+  ]
 
   return (
     <div className="space-y-4">
-      <div className="surface-card space-y-4 p-4">
-        <FilterChips
-          label="Money on the bill"
-          activeKey={pay}
-          onSelect={(key) => setPay(key as PayFilter)}
-          chips={[
-            { key: "all", label: "All sales", count: counts.all },
-            { key: "paid", label: "Paid up", count: counts.paid, tone: "success" },
-            { key: "part", label: "Part paid", count: counts.part, tone: "warning" },
-            { key: "unpaid", label: "Unpaid", count: counts.unpaid, tone: "danger" },
-          ]}
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <Figure label="Sales value" value={totals.sales} hint={`${visible.length} sale${visible.length === 1 ? "" : "s"}`} />
+        <Figure label="Received" value={totals.paid} hint="Money already taken" />
+        <Figure
+          label="Balance"
+          value={totals.balance}
+          hint={totals.balance < -0.005 ? "Buyers still owe" : "Nothing owed"}
+          tone={balanceTone(totals.balance)}
         />
-        <FilterChips
-          label="When it was sold"
-          activeKey={when}
-          onSelect={(key) => pickChip(key as WhenFilter)}
-          chips={[
-            { key: "all", label: "Any day" },
-            { key: "today", label: "Today", tone: "primary" },
-            { key: "week", label: "Last 7 days" },
-            { key: "month", label: "Last 30 days" },
-            ...(when === "custom" ? [{ key: "custom", label: "Chosen days", tone: "primary" as const }] : []),
-          ]}
-        />
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="text-sm">
-            <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              First day
-            </span>
-            <Input
-              type="date"
-              value={from}
-              onChange={(event) => setFrom(event.target.value)}
-              aria-label="First day sold"
-            />
-          </label>
-          <label className="text-sm">
-            <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Last day
-            </span>
-            <Input
-              type="date"
-              value={to}
-              onChange={(event) => setTo(event.target.value)}
-              aria-label="Last day sold"
-            />
-          </label>
-          {from || to ? (
-            <button
-              type="button"
-              className="min-h-10 rounded-lg border border-border px-3 text-sm font-medium hover:bg-muted"
-              onClick={() => {
-                setFrom("")
-                setTo("")
-              }}
-            >
-              Clear chosen days
-            </button>
-          ) : null}
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Tap a chip for a quick stretch, or pick First day and Last day for any dates you need. Totals follow those days.
-        </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="surface-card p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sales value</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums">{formatCurrency(totals.sales)}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {filtered.length} sale{filtered.length === 1 ? "" : "s"} on this filter
-          </p>
-        </div>
-        <div className="surface-card p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Payments received</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums">{formatCurrency(totals.paid)}</p>
-          <p className="mt-1 text-xs text-muted-foreground">Money already taken on these bills</p>
-        </div>
-        <div className="surface-card p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Balance</p>
-          <p
-            className={`mt-1 text-2xl font-semibold tabular-nums ${
-              totals.balance < -0.005 ? "text-danger" : totals.balance > 0.005 ? "text-success" : "text-foreground"
-            }`}
+      <DataTable
+        rows={filtered}
+        columns={columns}
+        rowKey={(sale) => sale.id}
+        noun="sales"
+        filterKey={`${pay}|${range.from}|${range.to}`}
+        initialSort={{ id: "when", dir: "desc" }}
+        onRowClick={setOpen}
+        searchText={searchText}
+        query={query}
+        onQueryChange={setQuery}
+        searchPlaceholder="Search invoice, buyer, phone, IMEI or item"
+        actions={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-10"
+            onClick={() => downloadTable(exportRows(visible), "sales.xlsx", "xlsx")}
+            aria-label="Download these sales as Excel"
           >
-            {formatCurrency(totals.balance)}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Paid minus sales. Negative means buyers still owe.
-          </p>
+            <FileSpreadsheet className="h-4 w-4 sm:mr-1.5" />
+            <span className="hidden sm:inline">Excel</span>
+          </Button>
+        }
+        filters={
+          <div className="grid gap-3 lg:grid-cols-2">
+            <FilterChips
+              label="Money on the bill"
+              activeKey={pay}
+              onSelect={(key) => setPay(key as PayFilter)}
+              chips={[
+                { key: "all", label: "All", count: counts.all },
+                { key: "paid", label: "Paid up", count: counts.paid, tone: "success" },
+                { key: "part", label: "Part paid", count: counts.part, tone: "warning" },
+                { key: "unpaid", label: "Unpaid", count: counts.unpaid, tone: "danger" },
+              ]}
+            />
+            <DayRangeFilter label="When it was sold" from={range.from} to={range.to} onChange={setRange} />
+          </div>
+        }
+        card={(sale) => {
+          const balance = saleBalance(sale)
+          return {
+            title: sale.customer?.name ?? "Walk-in",
+            subtitle: `${sale.invoiceNumber} · ${formatShopWhen(sale.saleDate)}`,
+            value: formatCurrency(sale.totalAmount),
+            valueHint:
+              balance < -0.005 ? <span className="text-danger">Owes {formatCurrency(-balance)}</span> : <span className="text-success">Paid</span>,
+            meta: (
+              <>
+                <span>{sale.branch.name}</span>
+                <span>· {statusLabel(sale.paymentMethod)}</span>
+                <span>· {sale.items.length} item{sale.items.length === 1 ? "" : "s"}</span>
+              </>
+            ),
+          }
+        }}
+        bulkActions={(picked) => (
+          <button
+            type="button"
+            className="rounded-md bg-background/15 px-2.5 py-1 font-medium hover:bg-background/25"
+            onClick={() => downloadTable(exportRows(picked), "sales-ticked.xlsx", "xlsx")}
+          >
+            Excel of ticked
+          </button>
+        )}
+        footer={(rows) => (
+          <tr>
+            <td />
+            <td colSpan={3} className="text-sm">Totals for {rows.length} sale{rows.length === 1 ? "" : "s"}</td>
+            <td className="hidden lg:table-cell" />
+            <td className="whitespace-nowrap text-right tabular-nums">{formatCurrency(totals.sales)}</td>
+            <td className="hidden whitespace-nowrap text-right tabular-nums xl:table-cell">{formatCurrency(totals.paid)}</td>
+            <td className={cn("whitespace-nowrap text-right tabular-nums", balanceTone(totals.balance))}>{formatCurrency(totals.balance)}</td>
+            <td className="hidden lg:table-cell" />
+          </tr>
+        )}
+        empty={sales.length === 0 ? "No sales on the books yet." : "No sale matches these filters."}
+      />
+
+      <Sheet open={Boolean(open)} onOpenChange={(value) => !value && setOpen(null)}>
+        {open ? (
+          <SheetContent
+            title={open.invoiceNumber}
+            description={`${formatShopWhen(open.saleDate)} · ${open.branch.name}${open.soldBy ? ` · sold by ${open.soldBy}` : ""}`}
+            footer={
+              <div className="flex gap-2">
+                <Button className="flex-1" onClick={() => router.push(`/sales/${open.id}`)}>
+                  <ExternalLink className="mr-1.5 h-4 w-4" /> Open invoice
+                </Button>
+                <Button variant="outline" onClick={() => router.push(`/sales/${open.id}?receipt=1`)}>
+                  Print receipt
+                </Button>
+              </div>
+            }
+          >
+            <SaleQuickLook sale={open} />
+          </SheetContent>
+        ) : null}
+      </Sheet>
+    </div>
+  )
+}
+
+function Figure({ label, value, hint, tone }: { label: string; value: number; hint: string; tone?: string }) {
+  return (
+    <div className="surface-card min-w-0 p-3 sm:p-4" title={formatCurrency(value)}>
+      <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sm:text-xs">{label}</p>
+      <p className={cn("mt-1 truncate text-base font-semibold tabular-nums sm:text-2xl", tone)}>
+        <span className="sm:hidden">{formatCurrencyShort(value)}</span>
+        <span className="hidden sm:inline">{formatCurrency(value)}</span>
+      </p>
+      <p className="mt-0.5 hidden truncate text-xs text-muted-foreground sm:block">{hint}</p>
+    </div>
+  )
+}
+
+function SaleQuickLook({ sale }: { sale: SaleRow }) {
+  const balance = saleBalance(sale)
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-3 gap-2 rounded-xl bg-muted/60 p-3 text-center">
+        <div>
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Sales</p>
+          <p className="font-semibold tabular-nums">{formatCurrency(sale.totalAmount)}</p>
+        </div>
+        <div>
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Paid</p>
+          <p className="font-semibold tabular-nums">{formatCurrency(sale.paidAmount)}</p>
+        </div>
+        <div>
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Balance</p>
+          <p className={cn("font-semibold tabular-nums", balanceTone(balance))}>{formatCurrency(balance)}</p>
         </div>
       </div>
 
-      <div className="surface-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[960px] text-sm">
-            <thead className="text-left text-muted-foreground">
-              <tr className="border-b border-border">
-                <th className="px-4 py-3">Invoice</th>
-                <th className="px-4 py-3">Branch</th>
-                <th className="px-4 py-3">Customer</th>
-                <th className="px-4 py-3 text-right">Sales</th>
-                <th className="px-4 py-3 text-right">Paid</th>
-                <th className="px-4 py-3 text-right">Balance</th>
-                <th className="px-4 py-3">Payment method</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">When</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pager.pageRows.map((sale) => {
-                const salesValue = money(sale.totalAmount)
-                const paid = money(sale.paidAmount)
-                const balance = saleBalance(sale)
-                return (
-                  <tr key={sale.id} className="border-b border-border/70">
-                    <td className="px-4 py-3">
-                      <Link href={`/sales/${sale.id}`} className="font-medium text-primary">
-                        {sale.invoiceNumber}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="font-medium">{sale.branch.name || sale.branch.code}</p>
-                      {sale.branch.name ? (
-                        <p className="text-xs text-muted-foreground">{sale.branch.code}</p>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3">
-                      {sale.customer ? (
-                        sale.customer.name
-                      ) : (
-                        <span>
-                          Walk-in
-                          <span className="block text-xs text-warning">
-                            Needs a buyer name before anybody can return it
-                          </span>
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right font-medium tabular-nums">
-                      {formatCurrency(salesValue)}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(paid)}</td>
-                    <td
-                      className={`px-4 py-3 text-right font-semibold tabular-nums ${
-                        balance < -0.005
-                          ? "text-danger"
-                          : balance > 0.005
-                            ? "text-success"
-                            : "text-foreground"
-                      }`}
-                    >
-                      {formatCurrency(balance)}
-                    </td>
-                    <td className="px-4 py-3">{statusLabel(sale.paymentMethod)}</td>
-                    <td className="px-4 py-3">
-                      <StatusBadge value={sale.status} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="font-medium tabular-nums">{formatShopWhen(sale.saleDate)}</p>
-                    </td>
-                  </tr>
-                )
-              })}
-              {filtered.length === 0 ? (
-                <tr>
-                  <td className="px-4 py-8 text-sm text-muted-foreground" colSpan={9}>
-                    {sales.length === 0
-                      ? "No sales on the books yet."
-                      : "No sale matches this filter. Pick other days or money chips above."}
-                  </td>
-                </tr>
-              ) : (
-                <tr className="border-t-2 border-border bg-muted/40 font-semibold">
-                  <td className="px-4 py-3" colSpan={3}>
-                    Totals for this filter
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(totals.sales)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(totals.paid)}</td>
-                  <td
-                    className={`px-4 py-3 text-right tabular-nums ${
-                      totals.balance < -0.005 ? "text-danger" : "text-foreground"
-                    }`}
-                  >
-                    {formatCurrency(totals.balance)}
-                  </td>
-                  <td className="px-4 py-3" colSpan={3}>
-                    <span className="text-xs font-normal text-muted-foreground">
-                      Balance is paid minus sales across {filtered.length} sale
-                      {filtered.length === 1 ? "" : "s"}
-                    </span>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <TablePager
-          page={pager.page}
-          pageCount={pager.pageCount}
-          pageSize={pager.pageSize}
-          total={pager.total}
-          start={pager.start}
-          end={pager.end}
-          onPageChange={pager.setPage}
-          onPageSizeChange={pager.setPageSize}
-          noun="sales"
-        />
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+        <dt className="text-muted-foreground">Buyer</dt>
+        <dd className="font-medium">
+          {sale.customer ? `${sale.customer.name}${sale.customer.phone ? ` · ${sale.customer.phone}` : ""}` : "Walk-in"}
+        </dd>
+        <dt className="text-muted-foreground">Payment</dt>
+        <dd>{statusLabel(sale.paymentMethod)}{sale.isWholesale ? " · reseller" : ""}</dd>
+        <dt className="text-muted-foreground">Status</dt>
+        <dd><StatusBadge value={sale.status} /></dd>
+        {sale.discount > 0 ? (
+          <>
+            <dt className="text-muted-foreground">Discount</dt>
+            <dd className="tabular-nums">{formatCurrency(sale.discount)}</dd>
+          </>
+        ) : null}
+      </dl>
+
+      <div>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {sale.items.length} item{sale.items.length === 1 ? "" : "s"}
+        </p>
+        <ul className="divide-y divide-border rounded-xl border border-border">
+          {sale.items.map((item) => (
+            <li key={item.id} className="flex items-start justify-between gap-3 px-3 py-2.5 text-sm">
+              <div className="min-w-0">
+                <p className="font-medium">{item.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {item.imei ? <span className="font-mono">{item.imei}</span> : `${item.quantity} × ${formatCurrency(item.unitPrice)}`}
+                </p>
+              </div>
+              <span className="shrink-0 font-semibold tabular-nums">{formatCurrency(item.totalPrice)}</span>
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   )

@@ -267,6 +267,12 @@ body {
   .page-split {
     @apply grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,25rem)] xl:items-start;
   }
+
+  /* A grid child defaults to the width of its widest content, which let one
+     wide table push a whole phone page sideways. */
+  .page-split > * {
+    @apply min-w-0;
+  }
 }
 
 ::-webkit-scrollbar {
@@ -421,4 +427,13 @@ body {
   body:has(.till-bar) .shop-calculator > div {
     bottom: 10.5rem;
   }
+}
+
+/* A figure sizes itself to its card, so ₦555,780,500 never breaks onto two
+   lines in a narrow card and still reads large in a wide one. */
+.stat-card {
+  container-type: inline-size;
+}
+.stat-value {
+  font-size: clamp(1rem, 13cqi, 1.7rem);
 }

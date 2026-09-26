@@ -28,7 +28,18 @@ export default async function ExpensesPage() {
     <div className="page-split">
       <div>
         <PageHeader title="Shop expenses" description="Write the bill. A manager must say yes before money leaves. Cash bills cannot exceed cash in the till." />
-        <ExpensesList expenses={finance.expenses} />
+        <ExpensesList
+          expenses={finance.expenses.map((row) => ({
+            id: row.id,
+            description: row.description,
+            expenseNumber: row.expenseNumber,
+            category: row.category,
+            amount: money(row.amount),
+            when: (row.createdAt ?? row.date).toISOString(),
+            approvedAt: row.approvedAt?.toISOString() ?? null,
+            shop: row.branch.name ?? row.branch.code,
+          }))}
+        />
       </div>
       <div className="surface-card p-5">
         <h3 className="mb-4 font-semibold">Ask for this shop bill</h3>

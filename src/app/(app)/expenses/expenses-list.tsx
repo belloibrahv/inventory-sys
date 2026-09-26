@@ -1,23 +1,25 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { FileSpreadsheet } from "lucide-react"
+import { DataTable, type DataColumn } from "@/components/data-table"
 import { FilterChips } from "@/components/filter-chips"
 import { StatusBadge } from "@/components/shared"
-import { TablePager, usePagedRows } from "@/components/table-pager"
+import { Button } from "@/components/ui/button"
+import { downloadTable } from "@/lib/download-table"
 import { formatShopWhen } from "@/lib/lagos-day"
 import { statusLabel } from "@/lib/status"
-import { formatCurrency, money } from "@/lib/utils"
+import { formatCurrency } from "@/lib/utils"
 
-type ExpenseRow = {
+export type ExpenseRow = {
   id: string
   description: string
   expenseNumber: string
-  date: Date
   category: string
-  amount: unknown
-  approvedAt: Date | null
-  createdAt?: Date
-  branch: { code: string }
+  amount: number
+  when: string
+  approvedAt: string | null
+  shop: string
 }
 
 type ExpenseFilter = "all" | "waiting" | "approved"
@@ -34,7 +36,6 @@ export function ExpensesList({ expenses }: { expenses: ExpenseRow[] }) {
       }),
     [expenses, status]
   )
-
   const counts = useMemo(
     () => ({
       all: expenses.length,
@@ -44,79 +45,110 @@ export function ExpensesList({ expenses }: { expenses: ExpenseRow[] }) {
     [expenses]
   )
 
-  const pager = usePagedRows(filtered, status)
+  const columns: DataColumn<ExpenseRow>[] = [
+    {
+      id: "expense",
+      header: "Expense",
+      sortValue: (row) => row.description,
+      cell: (row) => (
+        <div>
+          <p className="font-medium">{row.description}</p>
+          <p className="text-xs text-muted-foreground">{row.expenseNumber}</p>
+        </div>
+      ),
+    },
+    { id: "category", header: "Category", sortValue: (row) => statusLabel(row.category), cell: (row) => statusLabel(row.category) },
+    { id: "shop", header: "Shop", hideBelow: "lg", sortValue: (row) => row.shop, cell: (row) => <span className="whitespace-nowrap">{row.shop}</span> },
+    {
+      id: "amount",
+      header: "Amount",
+      align: "right",
+      sortValue: (row) => row.amount,
+      cell: (row) => <span className="font-medium">{formatCurrency(row.amount)}</span>,
+    },
+    {
+      id: "approval",
+      header: "Approval",
+      sortValue: (row) => (row.approvedAt ? 1 : 0),
+      cell: (row) => <StatusBadge value={row.approvedAt ? "APPROVED" : "PENDING"} />,
+    },
+    {
+      id: "when",
+      header: "When",
+      sortValue: (row) => row.when,
+      cell: (row) => (
+        <div className="whitespace-nowrap">
+          <p className="tabular-nums">{formatShopWhen(row.when)}</p>
+          {row.approvedAt ? <p className="text-xs text-muted-foreground">Approved {formatShopWhen(row.approvedAt)}</p> : null}
+        </div>
+      ),
+    },
+  ]
+
+  const exportRows = (rows: ExpenseRow[]) => [
+    ["Expense", "Number", "Category", "Shop", "Amount", "Approved", "When"],
+    ...rows.map((row) => [
+      row.description,
+      row.expenseNumber,
+      statusLabel(row.category),
+      row.shop,
+      row.amount,
+      row.approvedAt ? formatShopWhen(row.approvedAt) : "Waiting",
+      formatShopWhen(row.when),
+    ]),
+  ]
 
   return (
-    <div className="space-y-4">
-      <div className="surface-card p-4">
+    <DataTable
+      rows={filtered}
+      columns={columns}
+      rowKey={(row) => row.id}
+      noun="expenses"
+      filterKey={status}
+      initialSort={{ id: "when", dir: "desc" }}
+      searchText={(row) => [row.description, row.expenseNumber, statusLabel(row.category), row.shop].join(" ")}
+      searchPlaceholder="Search what it was for, number or shop"
+      actions={
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-10"
+          onClick={() => downloadTable(exportRows(filtered), "expenses.xlsx", "xlsx")}
+          aria-label="Download these expenses as Excel"
+        >
+          <FileSpreadsheet className="h-4 w-4 sm:mr-1.5" />
+          <span className="hidden sm:inline">Excel</span>
+        </Button>
+      }
+      filters={
         <FilterChips
           label="Approval"
           activeKey={status}
           onSelect={(key) => setStatus(key as ExpenseFilter)}
           chips={[
-            { key: "all", label: "All expenses", count: counts.all },
+            { key: "all", label: "All", count: counts.all },
             { key: "waiting", label: "Waiting", count: counts.waiting, tone: "warning" },
             { key: "approved", label: "Approved", count: counts.approved, tone: "success" },
           ]}
         />
-      </div>
-
-      <div className="surface-card overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="text-left text-muted-foreground">
-            <tr className="border-b border-border">
-              <th className="px-4 py-3">Expense</th>
-              <th className="px-4 py-3">Category</th>
-              <th className="px-4 py-3">Shop</th>
-              <th className="px-4 py-3">Amount</th>
-              <th className="px-4 py-3">Approval</th>
-              <th className="px-4 py-3">When</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pager.pageRows.map((expense) => (
-              <tr key={expense.id} className="border-b border-border/70">
-                <td className="px-4 py-3">
-                  <p className="font-medium">{expense.description}</p>
-                  <p className="text-xs text-muted-foreground">{expense.expenseNumber}</p>
-                </td>
-                <td className="px-4 py-3">{statusLabel(expense.category)}</td>
-                <td className="px-4 py-3">{expense.branch.code}</td>
-                <td className="px-4 py-3">{formatCurrency(money(expense.amount))}</td>
-                <td className="px-4 py-3">
-                  <StatusBadge value={expense.approvedAt ? "APPROVED" : "PENDING"} />
-                </td>
-                <td className="px-4 py-3">
-                  <p className="font-medium tabular-nums">{formatShopWhen(expense.createdAt ?? expense.date)}</p>
-                  {expense.approvedAt ? (
-                    <p className="text-xs text-muted-foreground">Approved {formatShopWhen(expense.approvedAt)}</p>
-                  ) : null}
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 ? (
-              <tr>
-                <td className="px-4 py-8 text-sm text-muted-foreground" colSpan={6}>
-                  {expenses.length === 0
-                    ? "No expenses recorded yet."
-                    : "No expense matches this filter. Tap another chip above."}
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-        <TablePager
-          page={pager.page}
-          pageCount={pager.pageCount}
-          pageSize={pager.pageSize}
-          total={pager.total}
-          start={pager.start}
-          end={pager.end}
-          onPageChange={pager.setPage}
-          onPageSizeChange={pager.setPageSize}
-          noun="expenses"
-        />
-      </div>
-    </div>
+      }
+      card={(row) => ({
+        title: row.description,
+        subtitle: `${statusLabel(row.category)} · ${row.shop}`,
+        value: formatCurrency(row.amount),
+        badge: <StatusBadge value={row.approvedAt ? "APPROVED" : "PENDING"} />,
+        meta: <span>{formatShopWhen(row.when)}</span>,
+      })}
+      footer={(rows) => (
+        <tr>
+          <td colSpan={2} className="text-sm">Total for {rows.length} expense{rows.length === 1 ? "" : "s"}</td>
+          <td className="hidden lg:table-cell" />
+          <td className="whitespace-nowrap text-right tabular-nums">{formatCurrency(rows.reduce((sum, row) => sum + row.amount, 0))}</td>
+          <td colSpan={2} />
+        </tr>
+      )}
+      empty={expenses.length === 0 ? "No expenses recorded yet." : "No expense matches this filter."}
+    />
   )
 }

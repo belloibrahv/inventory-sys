@@ -138,22 +138,29 @@ export function StatCard({
 
   const body = (
     <>
-      <div className="flex items-start justify-between gap-3">
-        <p className="eyebrow">{label}</p>
+      <div className="flex items-start justify-between gap-2 sm:gap-3">
+        <p className="eyebrow min-w-0 leading-snug">{label}</p>
         {icon ? (
-          <span className={cn("inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md", toneIcon[tone])}>
+          <span className={cn("hidden h-7 w-7 shrink-0 items-center justify-center rounded-md sm:inline-flex", toneIcon[tone])}>
             {icon}
           </span>
         ) : null}
       </div>
-      <p className={cn("mt-2 text-[1.7rem] font-semibold leading-tight tracking-tight num", toneText[tone])}>{value}</p>
-      {hint ? <p className="mt-1 text-xs leading-snug text-muted-foreground">{hint}</p> : null}
+      <p
+        className={cn(
+          "stat-value mt-1.5 whitespace-nowrap font-semibold leading-tight tracking-tight num sm:mt-2",
+          toneText[tone]
+        )}
+      >
+        {value}
+      </p>
+      {hint ? <p className="mt-1 line-clamp-2 text-xs leading-snug text-muted-foreground">{hint}</p> : null}
     </>
   )
 
   const classes = cn(
     interactive ? "surface-card-interactive group" : "surface-card",
-    "block p-4",
+    "stat-card block min-w-0 p-3 text-left sm:p-4",
     className
   )
 
@@ -176,7 +183,8 @@ export function StatCard({
 
 /** Responsive row of StatCards. Keeps every page's figure row on the same grid. */
 export function StatGrid({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn("grid gap-3 sm:grid-cols-2 xl:grid-cols-4", className)}>{children}</div>
+  // Two to a row even on a phone, so the figures do not fill the first screen.
+  return <div className={cn("grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4", className)}>{children}</div>
 }
 
 /** The filter / search / export strip that sits above a table. */

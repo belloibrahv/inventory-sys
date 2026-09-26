@@ -2,13 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { AlertTriangle, Coins, FileSpreadsheet, Layers, Printer, Search, TrendingUp } from "lucide-react"
+import { AlertTriangle, Coins, FileSpreadsheet, Layers, Printer, TrendingUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
+import { DataTable, type DataColumn } from "@/components/data-table"
 import { FilterChips } from "@/components/filter-chips"
-import { ShopTag, StatCard, StatGrid, TableEmpty, TableShell, TonePill, Toolbar } from "@/components/shared"
-import { TablePager, usePagedRows } from "@/components/table-pager"
+import { ShopTag, StatCard, StatGrid, TonePill } from "@/components/shared"
 import { downloadTable } from "@/lib/download-table"
 import { formatCurrency, money } from "@/lib/utils"
 import { lowStockLimit } from "@/lib/stock-limits"
@@ -62,6 +61,7 @@ export function InventoryClientView({
   const [conditionFilter, setConditionFilter] = useState("ALL")
   const [categoryFilter, setCategoryFilter] = useState("ALL")
   const [search, setSearch] = useState("")
+  const [stockFilter, setStockFilter] = useState<"ALL" | "LOW" | "GAP">("ALL")
   const serialized = useMemo(() => new Set(serializedIds), [serializedIds])
 
   const scoped = useMemo(() => {
@@ -96,19 +96,25 @@ export function InventoryClientView({
     if ((categoryCounts[categoryFilter] ?? 0) === 0) setCategoryFilter("ALL")
   }, [categoryCounts, categoryFilter])
 
-  const filtered = useMemo(
-    () =>
-      scoped.filter((row) => matchesStockCategory(row.product.category.name, categoryFilter)),
-    [scoped, categoryFilter]
-  )
-
-  const pager = usePagedRows(filtered, `${selectedBranch}|${conditionFilter}|${categoryFilter}|${search}`)
-
   const imeiFor = useMemo(() => {
     const map = new Map<string, number>()
     for (const item of vault) map.set(`${item.productId}:${item.branchId}`, item.count)
     return map
   }, [vault])
+
+  const isLow = (row: InventoryRow) => row.quantity <= lowStockLimit(row.minStock, lowStockThreshold)
+  const hasGap = (row: InventoryRow) =>
+    serialized.has(row.productId) && (imeiFor.get(`${row.productId}:${row.branchId}`) ?? 0) !== row.quantity
+
+  const inCategory = useMemo(
+    () => scoped.filter((row) => matchesStockCategory(row.product.category.name, categoryFilter)),
+    [scoped, categoryFilter]
+  )
+  const filtered = useMemo(
+    () => inCategory.filter((row) => (stockFilter === "LOW" ? isLow(row) : stockFilter === "GAP" ? hasGap(row) : true)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [inCategory, stockFilter, imeiFor, serialized, lowStockThreshold]
+  )
 
   const gaps = useMemo(
     () =>
@@ -176,6 +182,91 @@ export function InventoryClientView({
     ]
   }
 
+  const columns: DataColumn<InventoryRow>[] = [
+    {
+      id: "item",
+      header: "Item",
+      sortValue: (row) => row.product.name,
+      cell: (row) => (
+        <div>
+          <p className="font-medium">{row.product.name}</p>
+          <p className="text-xs text-muted-foreground">
+            {row.product.brand.name} · {formatCondition(row.product.condition)} · <span className="font-mono">{row.product.sku}</span>
+          </p>
+        </div>
+      ),
+    },
+    { id: "shop", header: "Shop", sortValue: (row) => row.branch.code, cell: (row) => <ShopTag>{row.branch.code}</ShopTag> },
+    { id: "cost", header: "Cost", align: "right", hideBelow: "lg", sortValue: (row) => money(row.product.costPrice), cell: (row) => formatCurrency(money(row.product.costPrice)) },
+    {
+      id: "sell",
+      header: "Sell price",
+      align: "right",
+      sortValue: (row) => money(row.product.sellingPrice),
+      cell: (row) => <span className="font-medium">{formatCurrency(money(row.product.sellingPrice))}</span>,
+    },
+    {
+      id: "profit",
+      header: "Profit",
+      align: "right",
+      hideBelow: "xl",
+      sortValue: (row) => marginPct(money(row.product.costPrice), money(row.product.sellingPrice)),
+      cell: (row) => {
+        const margin = marginPct(money(row.product.costPrice), money(row.product.sellingPrice))
+        return (
+          <TonePill tone={margin >= 20 ? "success" : margin > 0 ? "warning" : "danger"}>
+            {margin > 0 ? "+" : ""}
+            {margin.toFixed(1)}%
+          </TonePill>
+        )
+      },
+    },
+    {
+      id: "shelf",
+      header: "On shelf",
+      align: "center",
+      sortValue: (row) => row.quantity,
+      cell: (row) => (
+        <div>
+          <span className={`num font-semibold ${isLow(row) ? "text-danger" : "text-foreground"}`}>{row.quantity}</span>
+          {isLow(row) ? <p className="text-[11px] font-medium text-danger">Low stock</p> : null}
+        </div>
+      ),
+    },
+    {
+      id: "incoming",
+      header: "On the way",
+      align: "center",
+      hideBelow: "xl",
+      sortValue: (row) => row.incomingQty,
+      cell: (row) => <span className="num text-muted-foreground">{row.incomingQty > 0 ? `+${row.incomingQty}` : "—"}</span>,
+    },
+    {
+      id: "imeis",
+      header: "IMEIs",
+      align: "center",
+      hideBelow: "lg",
+      cell: (row) => {
+        if (!serialized.has(row.productId)) return <span className="text-xs text-muted-foreground">No IMEI</span>
+        const imeis = imeiFor.get(`${row.productId}:${row.branchId}`) ?? 0
+        const mismatch = imeis !== row.quantity
+        return (
+          <div>
+            <span className={`num text-sm ${mismatch ? "font-semibold text-warning" : "text-muted-foreground"}`}>{imeis}</span>
+            {mismatch ? <p className="text-[11px] font-medium text-warning">Does not match</p> : null}
+          </div>
+        )
+      },
+    },
+    {
+      id: "value",
+      header: "Value at cost",
+      align: "right",
+      sortValue: (row) => row.quantity * money(row.product.costPrice),
+      cell: (row) => <span className="font-semibold">{formatCurrency(row.quantity * money(row.product.costPrice))}</span>,
+    },
+  ]
+
   const stamp = new Date().toISOString().slice(0, 10)
   const categorySlug =
     categoryFilter === "ALL"
@@ -224,7 +315,7 @@ export function InventoryClientView({
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <div className="min-w-0 flex-1">
             <p className="font-semibold">
-              {gaps.length} item${gaps.length === 1 ? "" : "s"} where shop count and IMEI list do not match
+              {gaps.length} item{gaps.length === 1 ? "" : "s"} where shop count and IMEI list do not match
             </p>
             <ul className="mt-1 space-y-0.5 text-xs">
               {gaps.slice(0, 4).map((item) => (
@@ -247,148 +338,140 @@ export function InventoryClientView({
         one controlling what we want to view ... it would reduce the time we
         waste sorting out which shop has what."
       */}
-      <Toolbar className="justify-between print:hidden">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <Select value={selectedBranch} onChange={(event) => setSelectedBranch(event.target.value)} className="h-9 w-52">
-            <option value="ALL">All shops</option>
-            {branches.map((branch) => (
-              <option key={branch.id} value={branch.id}>
-                {branch.name} ({branch.code})
-              </option>
-            ))}
-          </Select>
-          <Select
-            value={conditionFilter}
-            onChange={(event) => setConditionFilter(event.target.value)}
-            className="h-9 w-44"
-          >
-            <option value="ALL">How the phone looks: all</option>
-            {SHOP_CONDITION_OPTIONS.map((row) => (
-              <option key={row.value} value={row.value}>
-                {row.label}
-              </option>
-            ))}
-          </Select>
-          <div className="relative min-w-[200px] flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Find item code, name, or brand"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              className="h-9 pl-9"
-            />
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => downloadTable(tableRows(), `${fileBase}.csv`, "csv")}>
-            <FileSpreadsheet className="mr-1.5 h-4 w-4" /> CSV
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => downloadTable(tableRows(), `${fileBase}.xlsx`, "xlsx")}>
-            <FileSpreadsheet className="mr-1.5 h-4 w-4" /> Excel
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => window.print()}>
-            <Printer className="mr-1.5 h-4 w-4" /> Print / PDF
-          </Button>
-        </div>
-      </Toolbar>
-
-      <FilterChips
-        label="Show by category"
+      <DataTable
         className="print:hidden"
-        activeKey={categoryFilter}
-        onSelect={setCategoryFilter}
-        chips={STOCK_CATEGORY_FILTERS.filter(
-          (row) => row.key === "ALL" || (categoryCounts[row.key] ?? 0) > 0
-        ).map((row) => ({
-          key: row.key,
-          label: row.label,
-          count: categoryCounts[row.key] ?? 0,
-        }))}
-      />
-
-      <TableShell
-        columns={[
-          { label: "Item" },
-          { label: "Shop" },
-          { label: "Cost", align: "right" },
-          { label: "Sell price", align: "right" },
-          { label: "Profit", align: "right" },
-          { label: "On shelf", align: "center" },
-          { label: "On the way", align: "center" },
-          { label: "IMEIs", align: "center" },
-          { label: "Value at cost", align: "right" },
-        ]}
-        footer={
-          <TablePager
-            page={pager.page}
-            pageCount={pager.pageCount}
-            pageSize={pager.pageSize}
-            total={pager.total}
-            start={pager.start}
-            end={pager.end}
-            onPageChange={pager.setPage}
-            onPageSizeChange={pager.setPageSize}
-            noun="items"
-          />
+        rows={filtered}
+        columns={columns}
+        rowKey={(row) => row.id}
+        noun="items"
+        filterKey={`${selectedBranch}|${conditionFilter}|${categoryFilter}|${stockFilter}`}
+        query={search}
+        onQueryChange={setSearch}
+        searchText={(row) => [row.product.name, row.product.sku, row.product.brand.name, row.product.category.name].join(" ")}
+        searchPlaceholder="Find item code, name or brand"
+        actions={
+          <>
+            <Button variant="outline" size="sm" className="h-10" onClick={() => downloadTable(tableRows(), `${fileBase}.xlsx`, "xlsx")} aria-label="Download as Excel">
+              <FileSpreadsheet className="h-4 w-4 sm:mr-1.5" />
+              <span className="hidden sm:inline">Excel</span>
+            </Button>
+            <Button variant="outline" size="sm" className="hidden h-10 sm:inline-flex" onClick={() => downloadTable(tableRows(), `${fileBase}.csv`, "csv")}>
+              CSV
+            </Button>
+            <Button variant="outline" size="sm" className="hidden h-10 sm:inline-flex" onClick={() => window.print()}>
+              <Printer className="mr-1.5 h-4 w-4" /> Print
+            </Button>
+          </>
         }
-      >
-        {pager.pageRows.map((row) => {
+        filters={
+          <>
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+              {branches.length > 1 ? (
+                <Select value={selectedBranch} onChange={(event) => setSelectedBranch(event.target.value)} className="h-9 sm:w-52" aria-label="Shop">
+                  <option value="ALL">All shops</option>
+                  {branches.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </option>
+                  ))}
+                </Select>
+              ) : null}
+              <Select value={conditionFilter} onChange={(event) => setConditionFilter(event.target.value)} className="h-9 sm:w-48" aria-label="How the phone looks">
+                <option value="ALL">Any look</option>
+                {SHOP_CONDITION_OPTIONS.map((row) => (
+                  <option key={row.value} value={row.value}>
+                    {row.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+              <FilterChips
+                label="Category"
+                activeKey={categoryFilter}
+                onSelect={setCategoryFilter}
+                chips={STOCK_CATEGORY_FILTERS.filter((row) => row.key === "ALL" || (categoryCounts[row.key] ?? 0) > 0).map((row) => ({
+                  key: row.key,
+                  label: row.label,
+                  count: categoryCounts[row.key] ?? 0,
+                }))}
+              />
+              <FilterChips
+                label="Stock"
+                activeKey={stockFilter}
+                onSelect={(key) => setStockFilter(key as typeof stockFilter)}
+                chips={[
+                  { key: "ALL", label: "Everything" },
+                  { key: "LOW", label: "Low stock", count: inCategory.filter(isLow).length, tone: "danger" },
+                  { key: "GAP", label: "IMEI does not match", count: inCategory.filter(hasGap).length, tone: "warning" },
+                ]}
+              />
+            </div>
+          </>
+        }
+        card={(row) => {
           const cost = money(row.product.costPrice)
           const selling = money(row.product.sellingPrice)
           const margin = marginPct(cost, selling)
-          const imeis = imeiFor.get(`${row.productId}:${row.branchId}`) ?? 0
-          const isSerialized = serialized.has(row.productId)
-          const mismatch = isSerialized && imeis !== row.quantity
-          const isLow = row.quantity <= lowStockLimit(row.minStock, lowStockThreshold)
+          return {
+            title: row.product.name,
+            subtitle: `${row.product.brand.name} · ${formatCondition(row.product.condition)} · ${row.branch.name}`,
+            value: formatCurrency(selling),
+            valueHint: <span className={margin >= 20 ? "text-success" : margin > 0 ? "text-warning" : "text-danger"}>{margin > 0 ? "+" : ""}{margin.toFixed(1)}%</span>,
+            meta: (
+              <>
+                <span className={isLow(row) ? "font-semibold text-danger" : "font-medium text-foreground"}>
+                  {row.quantity} on shelf{isLow(row) ? " · low" : ""}
+                </span>
+                {row.incomingQty > 0 ? <span>· +{row.incomingQty} on the way</span> : null}
+                {hasGap(row) ? <span className="text-warning">· IMEI count {imeiFor.get(`${row.productId}:${row.branchId}`) ?? 0}</span> : null}
+                <span>· cost {formatCurrency(cost)}</span>
+              </>
+            ),
+          }
+        }}
+        footer={(rows) => (
+          <tr>
+            <td colSpan={2} className="text-sm">Totals for {rows.length} item{rows.length === 1 ? "" : "s"}</td>
+            <td className="hidden lg:table-cell" />
+            <td />
+            <td className="hidden xl:table-cell" />
+            <td className="text-center tabular-nums">{rows.reduce((sum, row) => sum + row.quantity, 0).toLocaleString("en-NG")}</td>
+            <td className="hidden xl:table-cell" />
+            <td className="hidden lg:table-cell" />
+            <td className="whitespace-nowrap text-right tabular-nums">
+              {formatCurrency(rows.reduce((sum, row) => sum + row.quantity * money(row.product.costPrice), 0))}
+            </td>
+          </tr>
+        )}
+        empty="No items match this shop, look, category or search."
+      />
 
-          return (
+      {/* Printing keeps the full ledger on paper. */}
+      <table className="data-table hidden print:table">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Shop</th>
+            <th className="text-right">Cost</th>
+            <th className="text-right">Sell</th>
+            <th className="text-center">On shelf</th>
+            <th className="text-right">Value at cost</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filtered.map((row) => (
             <tr key={row.id}>
-              <td>
-                <p className="font-medium">{row.product.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {row.product.brand.name} · {formatCondition(row.product.condition)} ·{" "}
-                  <span className="font-mono">{row.product.sku}</span>
-                </p>
-              </td>
-              <td>
-                <ShopTag>{row.branch.code}</ShopTag>
-              </td>
-              <td className="text-right num">{formatCurrency(cost)}</td>
-              <td className="text-right num font-medium">{formatCurrency(selling)}</td>
-              <td className="text-right">
-                <TonePill tone={margin >= 20 ? "success" : margin > 0 ? "warning" : "danger"}>
-                  {margin > 0 ? "+" : ""}
-                  {margin.toFixed(1)}%
-                </TonePill>
-              </td>
-              <td className="text-center">
-                <span className={`num font-semibold ${isLow ? "text-danger" : "text-foreground"}`}>{row.quantity}</span>
-                {isLow ? <p className="text-[11px] font-medium text-danger">Low stock</p> : null}
-              </td>
-              <td className="text-center num text-muted-foreground">
-                {row.incomingQty > 0 ? `+${row.incomingQty}` : "—"}
-              </td>
-              <td className="text-center">
-                {isSerialized ? (
-                  <>
-                    <span className={`num text-sm ${mismatch ? "font-semibold text-warning" : "text-muted-foreground"}`}>
-                      {imeis}
-                    </span>
-                    {mismatch ? <p className="text-[11px] font-medium text-warning">Does not match</p> : null}
-                  </>
-                ) : (
-                  <span className="text-xs text-muted-foreground">No IMEI</span>
-                )}
-              </td>
-              <td className="text-right num font-semibold">{formatCurrency(row.quantity * cost)}</td>
+              <td>{row.product.name} · {row.product.sku}</td>
+              <td>{row.branch.code}</td>
+              <td className="text-right">{formatCurrency(money(row.product.costPrice))}</td>
+              <td className="text-right">{formatCurrency(money(row.product.sellingPrice))}</td>
+              <td className="text-center">{row.quantity}</td>
+              <td className="text-right">{formatCurrency(row.quantity * money(row.product.costPrice))}</td>
             </tr>
-          )
-        })}
-        {filtered.length === 0 ? (
-          <TableEmpty colSpan={9}>No items match this shop, how the phone looks, or the search.</TableEmpty>
-        ) : null}
-      </TableShell>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

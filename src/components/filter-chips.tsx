@@ -32,13 +32,14 @@ export function FilterChips({
   onSelect?: (key: string) => void
 }) {
   return (
-    <div className={cn("space-y-2", className)}>
+    <div className={cn("min-w-0 space-y-2", className)}>
       <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
-      <div className="flex flex-wrap gap-2">
+      {/* One line that scrolls sideways on a phone, instead of four rows of chips. */}
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible [&::-webkit-scrollbar]:hidden">
         {chips.map((chip) => {
           const active = chip.key === activeKey
           const classes = cn(
-            "inline-flex min-h-9 items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all",
+            "inline-flex min-h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all",
             active
               ? toneActive(chip.tone)
               : "border-border bg-card text-foreground hover:border-primary/40 hover:bg-muted"

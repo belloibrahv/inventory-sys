@@ -2,9 +2,12 @@
 
 import { useMemo, useState } from "react"
 import Link from "next/link"
-import { ChevronDown, Coins, HandCoins, Undo2, Users, Wallet } from "lucide-react"
-import { StatCard, StatGrid, StatusBadge, TableEmpty, TableShell, TonePill } from "@/components/shared"
-import { TablePager, usePagedRows } from "@/components/table-pager"
+import { Coins, HandCoins, Undo2, Wallet } from "lucide-react"
+import { DataTable, type DataColumn } from "@/components/data-table"
+import { FilterChips } from "@/components/filter-chips"
+import { StatCard, StatGrid, StatusBadge, TonePill } from "@/components/shared"
+import { Button } from "@/components/ui/button"
+import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { groupByPartyIdentity } from "@/lib/party-key"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import {
@@ -103,18 +106,10 @@ function buildHouses(suppliers: SupplierRow[]): House[] {
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
-const FILTER_LABEL: Record<HouseFilter, string> = {
-  all: "Every house",
-  bought: "Houses we bought from",
-  paid: "Houses with payment",
-  owing: "Houses with - value owing",
-  credit: "Houses with + value owing",
-}
-
 export function SuppliersList({ suppliers }: { suppliers: SupplierRow[] }) {
   const houses = useMemo(() => buildHouses(suppliers), [suppliers])
   const [filter, setFilter] = useState<HouseFilter>("all")
-  const [openKey, setOpenKey] = useState<string | null>(null)
+  const [open, setOpen] = useState<House | null>(null)
 
   const totalInvoiced = houses.reduce((sum, house) => sum + house.purchased, 0)
   const totalPaid = houses.reduce((sum, house) => sum + house.paid, 0)
@@ -132,49 +127,81 @@ export function SuppliersList({ suppliers }: { suppliers: SupplierRow[] }) {
     })
   }, [houses, filter])
 
-  const pager = usePagedRows(filtered, filter)
-
   function pickFilter(next: HouseFilter) {
     setFilter(next)
-    setOpenKey(null)
     requestAnimationFrame(() => {
       document.getElementById("supplier-houses")?.scrollIntoView({ behavior: "smooth", block: "start" })
     })
   }
 
+  const columns: DataColumn<House>[] = [
+    {
+      id: "name",
+      header: "Supplier",
+      sortValue: (house) => house.name,
+      cell: (house) => (
+        <div>
+          <p className="font-medium">{house.name}</p>
+          <p className="text-xs text-muted-foreground">
+            {house.kind === "NEIGHBOR" ? "Neighbouring shop" : "Carton supplier"} · {house.phone}
+            {house.copies.length > 1 ? ` · ${house.copies.length} copies` : ""}
+          </p>
+        </div>
+      ),
+    },
+    { id: "from", header: "From", hideBelow: "xl", sortValue: (house) => house.from, cell: (house) => <span className="text-muted-foreground">{house.from}</span> },
+    { id: "bills", header: "Bills", align: "right", hideBelow: "lg", sortValue: (house) => house.bills.length, cell: (house) => house.bills.length },
+    {
+      id: "bought",
+      header: "Bought",
+      align: "right",
+      sortValue: (house) => house.purchased,
+      cell: (house) => <span className="font-medium">{formatCurrency(house.purchased)}</span>,
+    },
+    {
+      id: "paid",
+      header: "Paid",
+      align: "right",
+      hideBelow: "lg",
+      sortValue: (house) => house.paid,
+      cell: (house) => <span className="text-success">{formatCurrency(house.paid)}</span>,
+    },
+    {
+      id: "balance",
+      header: "Balance",
+      align: "right",
+      sortValue: (house) => house.surplus - house.owed,
+      cell: (house) => <HouseBalance house={house} />,
+    },
+  ]
+
   return (
     <div className="space-y-5">
       <StatGrid>
         <StatCard
-          label="Suppliers on the books"
-          value={String(houses.length)}
-          hint={owingCount > 0 ? `${owingCount} we still owe` : undefined}
-          icon={<Users className="h-4 w-4" />}
-          onClick={() => pickFilter("all")}
-        />
-        <StatCard
-          label="Bought from them, all time"
+          label="Bought, all time"
           value={formatCurrency(totalInvoiced)}
           icon={<Coins className="h-4 w-4" />}
           tone="primary"
           onClick={() => pickFilter("bought")}
         />
         <StatCard
-          label="Payment"
+          label="Paid"
           value={formatCurrency(totalPaid)}
           icon={<HandCoins className="h-4 w-4" />}
           tone="success"
           onClick={() => pickFilter("paid")}
         />
         <StatCard
-          label="Value owing"
+          label="We owe"
           value={formatValueOwingMinus(totalOwed)}
+          hint={owingCount > 0 ? `${owingCount} supplier${owingCount === 1 ? "" : "s"}` : undefined}
           icon={<Wallet className="h-4 w-4" />}
           tone={totalOwed > 0 ? "warning" : "neutral"}
           onClick={() => pickFilter("owing")}
         />
         <StatCard
-          label="Value owing"
+          label="They owe us"
           value={formatValueOwingPlus(totalSurplus)}
           icon={<Undo2 className="h-4 w-4" />}
           tone={totalSurplus > 0 ? "success" : "neutral"}
@@ -182,149 +209,96 @@ export function SuppliersList({ suppliers }: { suppliers: SupplierRow[] }) {
         />
       </StatGrid>
 
-      <TableShell
-        className="scroll-mt-4"
-        caption={
-          <p id="supplier-houses" className="text-sm text-muted-foreground">
-            {FILTER_LABEL[filter]}
-          </p>
-        }
-        columns={[
-          { label: "Supplier" },
-          { label: "From" },
-          { label: "Bought from them", align: "right" },
-          { label: "Payment", align: "right" },
-          { label: "Balance", align: "right" },
-          { label: "", align: "center" },
-        ]}
-        footer={
-          <TablePager
-            page={pager.page}
-            pageCount={pager.pageCount}
-            pageSize={pager.pageSize}
-            total={pager.total}
-            start={pager.start}
-            end={pager.end}
-            onPageChange={pager.setPage}
-            onPageSizeChange={pager.setPageSize}
-            noun="houses"
-          />
-        }
-      >
-        {pager.pageRows.map((house) => {
-          const expanded = openKey === house.key
-          return (
-            <HouseRows
-              key={house.key}
-              house={house}
-              expanded={expanded}
-              onToggle={() => setOpenKey(expanded ? null : house.key)}
+      <div id="supplier-houses" className="scroll-mt-20">
+        <DataTable
+          rows={filtered}
+          columns={columns}
+          rowKey={(house) => house.key}
+          noun="suppliers"
+          filterKey={filter}
+          onRowClick={setOpen}
+          searchText={(house) =>
+            [house.name, house.phone, house.from, ...house.copies.map((copy) => copy.name), ...house.bills.map((bill) => bill.invoiceNumber)].join(" ")
+          }
+          searchPlaceholder="Search supplier, phone, place or bill number"
+          filters={
+            <FilterChips
+              label="Show"
+              activeKey={filter}
+              onSelect={(key) => setFilter(key as HouseFilter)}
+              chips={[
+                { key: "all", label: "Every supplier", count: houses.length },
+                { key: "owing", label: "We owe", count: houses.filter((house) => house.owed > 0).length, tone: "warning" },
+                { key: "credit", label: "They owe us", count: houses.filter((house) => house.surplus > 0).length, tone: "success" },
+                { key: "bought", label: "Bought from", count: houses.filter((house) => house.purchased > 0).length },
+                { key: "paid", label: "Paid", count: houses.filter((house) => house.paid > 0).length },
+              ]}
             />
-          )
-        })}
-        {filtered.length === 0 ? (
-          <TableEmpty colSpan={6}>
-            {houses.length === 0
-              ? "No suppliers on the books yet. Add one on the right."
-              : "No house matches that box. Click Suppliers on the books to see every house."}
-          </TableEmpty>
+          }
+          card={(house) => ({
+            title: house.name,
+            subtitle: `${house.phone} · ${house.bills.length} bill${house.bills.length === 1 ? "" : "s"}`,
+            value: formatCurrency(house.purchased),
+            valueHint: <HouseBalance house={house} />,
+          })}
+          empty={houses.length === 0 ? "No suppliers on the books yet. Add one with the form." : "No supplier matches this filter."}
+        />
+      </div>
+
+      <Sheet open={Boolean(open)} onOpenChange={(value) => !value && setOpen(null)}>
+        {open ? (
+          <SheetContent
+            title={open.name}
+            description={`${open.kind === "NEIGHBOR" ? "Neighbouring shop" : "Carton supplier"} · ${open.phone} · ${open.from}`}
+            className="sm:w-[560px]"
+            footer={
+              <Button asChild className="w-full">
+                <Link href={open.openHref}>Open the full supplier page</Link>
+              </Button>
+            }
+          >
+            <HouseBreakdown house={open} />
+          </SheetContent>
         ) : null}
-      </TableShell>
+      </Sheet>
     </div>
   )
 }
 
-function HouseRows({
-  house,
-  expanded,
-  onToggle,
-}: {
-  house: House
-  expanded: boolean
-  onToggle: () => void
-}) {
-  return (
-    <>
-      <tr
-        className="cursor-pointer"
-        onClick={onToggle}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault()
-            onToggle()
-          }
-        }}
-        tabIndex={0}
-        aria-expanded={expanded}
-      >
-        <td>
-          <div className="flex items-start gap-2">
-            <ChevronDown
-              className={`mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-0" : "-rotate-90"}`}
-              aria-hidden
-            />
-            <div>
-              <p className="font-medium">{house.name}</p>
-              <p className="text-xs text-muted-foreground">
-                {house.kind === "NEIGHBOR" ? "Neighbouring shop" : "Carton supplier"} · {house.phone}
-                {house.copies.length > 1 ? ` · ${house.copies.length} copies on the books` : ""}
-                {house.bills.length
-                  ? ` · ${house.bills.length} bill${house.bills.length === 1 ? "" : "s"}`
-                  : " · no bill yet"}
-              </p>
-            </div>
-          </div>
-        </td>
-        <td className="text-xs text-muted-foreground">{house.from}</td>
-        <td className="text-right num font-medium">{formatCurrency(house.purchased)}</td>
-        <td className="text-right num text-success">{formatCurrency(house.paid)}</td>
-        <td className="text-right num font-semibold">
-          {formatPurchaseBalanceCell(house.owed, house.surplus)}
-        </td>
-        <td className="text-center">
-          {house.surplus > 0 ? (
-            <TonePill tone="success">{formatValueOwingPlus(house.surplus)}</TonePill>
-          ) : house.owed === 0 ? (
-            <TonePill tone="success">Settled</TonePill>
-          ) : (
-            <TonePill tone="warning">{formatValueOwingMinus(house.owed)}</TonePill>
-          )}
-        </td>
-      </tr>
-      {expanded ? (
-        <tr className="hover:bg-transparent">
-          <td colSpan={6} className="bg-muted/30 p-4">
-            <HouseBreakdown house={house} />
-          </td>
-        </tr>
-      ) : null}
-    </>
-  )
+function HouseBalance({ house }: { house: House }) {
+  if (house.surplus > 0) return <TonePill tone="success">{formatValueOwingPlus(house.surplus)}</TonePill>
+  if (house.owed === 0) return <TonePill tone="success">Settled</TonePill>
+  return <TonePill tone="warning">{formatValueOwingMinus(house.owed)}</TonePill>
 }
 
 function HouseBreakdown({ house }: { house: House }) {
   return (
-    <div className="space-y-4" onClick={(event) => event.stopPropagation()}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-semibold">What makes up {house.name}</p>
-        <Link href={house.openHref} className="text-sm font-medium text-primary hover:underline">
-          Open the full {house.name} page
-        </Link>
+    <div className="space-y-5">
+      <div className="grid grid-cols-3 gap-2 rounded-xl bg-muted/60 p-3 text-center">
+        <div>
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Bought</p>
+          <p className="font-semibold tabular-nums">{formatCurrency(house.purchased)}</p>
+        </div>
+        <div>
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Paid</p>
+          <p className="font-semibold tabular-nums text-success">{formatCurrency(house.paid)}</p>
+        </div>
+        <div>
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Balance</p>
+          <p className="font-semibold tabular-nums">{formatPurchaseBalanceCell(house.owed, house.surplus)}</p>
+        </div>
       </div>
 
       {house.copies.length > 1 ? (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground">
-            This house was saved more than once. New copies are refused. Use one name going forward.
+            This supplier was saved more than once. New copies are refused. Use one name going forward.
           </p>
           <ul className="space-y-1 text-sm">
             {house.copies.map((copy) => (
-              <li key={copy.id} className="flex flex-wrap items-baseline justify-between gap-2 rounded-lg bg-card px-3 py-2">
+              <li key={copy.id} className="flex flex-wrap items-baseline justify-between gap-2 rounded-lg border border-border px-3 py-2">
                 <span>
                   {copy.name} · {copy.phone}
-                  {copy.city || copy.country
-                    ? ` · ${[copy.city, copy.country].filter(Boolean).join(", ")}`
-                    : ""}
                 </span>
                 <Link href={`/suppliers/${copy.id}`} className="font-medium text-primary hover:underline">
                   Open this copy
@@ -335,50 +309,43 @@ function HouseBreakdown({ house }: { house: House }) {
         </div>
       ) : null}
 
-      {house.bills.length ? (
-        <div className="overflow-x-auto rounded-lg border border-border bg-card">
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2 font-medium">Bill</th>
-                <th className="px-3 py-2 font-medium">Shop</th>
-                <th className="px-3 py-2 text-right font-medium">Invoice value</th>
-                <th className="px-3 py-2 text-right font-medium">Payment</th>
-                <th className="px-3 py-2 text-right font-medium">Stock return</th>
-                <th className="px-3 py-2 text-right font-medium">Balance</th>
-                <th className="px-3 py-2 text-center font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {house.bills.map((bill) => {
-                const bal = purchaseBalance(bill.totalAmount, bill.paidAmount, bill.returnedAmount)
-                return (
-                  <tr key={bill.id} className="border-t border-border">
-                    <td className="px-3 py-2">
+      <div>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {house.bills.length} bill{house.bills.length === 1 ? "" : "s"}
+        </p>
+        {house.bills.length ? (
+          <ul className="divide-y divide-border rounded-xl border border-border">
+            {house.bills.map((bill) => {
+              const bal = purchaseBalance(bill.totalAmount, bill.paidAmount, bill.returnedAmount)
+              return (
+                <li key={bill.id} className="px-3 py-2.5 text-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
                       <Link href={`/purchases/${bill.id}`} className="font-medium text-primary hover:underline">
                         {bill.invoiceNumber}
                       </Link>
-                      <p className="text-xs text-muted-foreground">{formatDate(bill.createdAt)}</p>
-                    </td>
-                    <td className="px-3 py-2">{bill.branchName || bill.branchCode || "Not recorded"}</td>
-                    <td className="px-3 py-2 text-right num">{formatCurrency(bill.totalAmount)}</td>
-                    <td className="px-3 py-2 text-right num text-success">{formatCurrency(bill.paidAmount)}</td>
-                    <td className="px-3 py-2 text-right num">{formatCurrency(bal.sentBack)}</td>
-                    <td className="px-3 py-2 text-right num font-semibold">
-                      {formatPurchaseBalanceCell(bal.owed, bal.surplus)}
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      <StatusBadge value={bill.status} />
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <p className="text-sm text-muted-foreground">No supplier bill yet for this house.</p>
-      )}
+                      <p className="text-xs text-muted-foreground">
+                        {formatDate(bill.createdAt)} · {bill.branchName || bill.branchCode || "Shop not recorded"}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="font-semibold tabular-nums">{formatCurrency(bill.totalAmount)}</p>
+                      <p className="text-xs tabular-nums">{formatPurchaseBalanceCell(bal.owed, bal.surplus)}</p>
+                    </div>
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <StatusBadge value={bill.status} />
+                    <span className="tabular-nums">Paid {formatCurrency(bill.paidAmount)}</span>
+                    {bal.sentBack > 0 ? <span className="tabular-nums">· Sent back {formatCurrency(bal.sentBack)}</span> : null}
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted-foreground">No supplier bill yet.</p>
+        )}
+      </div>
       {house.extraCredit > 0 ? (
         <p className="text-sm text-muted-foreground">
           Extra send-back credit not on a bill: {formatCurrency(house.extraCredit)}.
