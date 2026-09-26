@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { BILL_CONDITION_OPTIONS, STORAGE_OPTIONS, mapBillCondition, normalizeStorage } from "@/lib/item-specs"
 import { listedSupplierClash } from "@/lib/party-key"
+import { isOpeningStockSupplierName } from "@/lib/upload-purchase"
 import { formatCurrency, generateDocNumber } from "@/lib/utils"
 
 type Shop = { id: string; name: string; code: string }
@@ -505,7 +506,7 @@ export function UploadStockWizard({
                 disabled={busy || suppliers.length === 0}
                 emptyLabel="No supplier is on the list yet. Choose New supplier."
               >
-                {suppliers.map((supplier) => (
+                {suppliers.filter((supplier) => !isOpeningStockSupplierName(supplier.name)).map((supplier) => (
                   <option key={supplier.id} value={supplier.id}>
                     {supplier.name}
                     {supplier.city || supplier.country

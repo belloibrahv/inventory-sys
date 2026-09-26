@@ -17,6 +17,7 @@ import {
   UPLOAD_STOCK_SOURCE,
   attachPurchaseLine,
   isMarkedPaidOnUpload,
+  isOpeningStockSupplierName,
 } from "@/lib/upload-purchase"
 import { generateDocNumber, money } from "@/lib/utils"
 import { mapBillCondition, normalizeStorage } from "@/lib/item-specs"
@@ -1188,7 +1189,14 @@ export async function batchUploadStock(payload: BatchUploadPayload): Promise<Upl
   // 1. Resolve Supplier
   let supplierId = payload.supplierId || ""
   let supplierName = ""
+  // A shop's starting stock loaded here as "Opening Stock" became 85 million
+  // naira of money owed that nobody owes. Opening stock has its own door.
+  const openingStockRefusal = {
+    error:
+      "Opening stock does not go on a Supplier bill, because a Supplier bill is money owed. Use Upload stock → Many at once (Excel) for opening stock, or Correct & close opening stock to add a missing item. Pick the real supplier here.",
+  }
   if (!supplierId && payload.newSupplierName) {
+    if (isOpeningStockSupplierName(payload.newSupplierName)) return openingStockRefusal
     const sName = displayPartyName(payload.newSupplierName)
     const sPhone = (payload.newSupplierPhone || "").trim()
     if (!sPhone) return { error: "Type the new supplier phone number." }
@@ -1208,6 +1216,7 @@ export async function batchUploadStock(payload: BatchUploadPayload): Promise<Upl
   } else if (supplierId) {
     const supp = await prisma.supplier.findUnique({ where: { id: supplierId } })
     if (!supp) return { error: "We could not find that supplier." }
+    if (isOpeningStockSupplierName(supp.name)) return openingStockRefusal
     supplierName = supp.name
   } else {
     return { error: "Pick a supplier, or type the name of a new one." }

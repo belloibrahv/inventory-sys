@@ -8,6 +8,11 @@ export const OPENING_STOCK_METHOD = "OPENING_STOCK"
 
 /** System house for stock already on the shelf when the real supplier is not known yet. */
 export const OPENING_STOCK_SUPPLIER_NAME = "Opening Stock"
+
+/** "Opening Stock", "OPENING STOCK (FAULTY)", "opening-stock": never a real house to owe. */
+export function isOpeningStockSupplierName(name: string | null | undefined) {
+  return /opening[\s_-]*stock/i.test(String(name ?? ""))
+}
 /** Stored when no phone is needed. Digits-only phone checks ignore this. */
 export const OPENING_STOCK_SUPPLIER_PHONE = "not-required"
 /** Form value for the Opening Stock option on Many at once (Excel). */
