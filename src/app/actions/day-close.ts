@@ -130,7 +130,7 @@ export async function getDayClosePreview(branchId?: string, businessDate?: strin
       },
       include: {
         customer: true,
-        user: true,
+        user: { select: { id: true, name: true, email: true, role: true, branchId: true } },
         items: { include: { product: true, imei: true } },
         payments: true,
       },
@@ -158,7 +158,7 @@ export async function getDayClosePreview(branchId?: string, businessDate?: strin
             branchId: shopId,
             OR: [{ businessDate: day }, { closeDate: { gte: start, lt: end } }],
           },
-          include: { user: true },
+          include: { user: { select: { id: true, name: true, email: true, role: true, branchId: true } } },
         })
       : Promise.resolve(null),
   ])
@@ -386,7 +386,7 @@ export async function getDayCloses(requestedBranchId?: string) {
   const branchId = await resolveShop(user, requestedBranchId)
   const rows = await prisma.dayClose.findMany({
     where: branchId ? { branchId } : {},
-    include: { branch: true, user: true },
+    include: { branch: true, user: { select: { id: true, name: true, email: true, role: true, branchId: true } } },
     orderBy: { closeDate: "desc" },
     take: 40,
   })

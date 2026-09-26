@@ -25,7 +25,7 @@ export async function getSales() {
   const branchId = await viewBranchFilter(user)
   return prisma.sale.findMany({
     where: branchId ? { branchId } : undefined,
-    include: { customer: true, branch: true, user: true, items: { include: { product: true, imei: true } } },
+    include: { customer: true, branch: true, user: { select: { id: true, name: true, email: true, role: true, branchId: true } }, items: { include: { product: true, imei: true } } },
     orderBy: { saleDate: "desc" },
     take: 500,
   })
@@ -41,7 +41,7 @@ export async function getSale(id: string) {
     include: {
       customer: true,
       branch: true,
-      user: true,
+      user: { select: { id: true, name: true, email: true, role: true, branchId: true } },
       items: { include: { product: true, imei: true } },
       payments: true,
     },

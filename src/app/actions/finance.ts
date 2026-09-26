@@ -100,7 +100,7 @@ export async function getFinance() {
     }),
     prisma.expense.findMany({
       where,
-      include: { branch: true, user: true },
+      include: { branch: true, user: { select: { id: true, name: true, email: true, role: true, branchId: true } } },
       orderBy: { date: "desc" },
     }),
     prisma.purchase.findMany({
@@ -592,7 +592,7 @@ export async function getApprovals() {
   const user = await requireUser()
   if (!(await can(user.role, "view.approvals"))) return []
   return prisma.approval.findMany({
-    include: { requester: true, decider: true },
+    include: { requester: { select: { id: true, name: true, email: true, role: true, branchId: true } }, decider: { select: { id: true, name: true, email: true, role: true, branchId: true } } },
     orderBy: { requestedAt: "desc" },
   })
 }
@@ -775,7 +775,7 @@ export async function getReconciliations() {
   const branchId = await viewBranchFilter(user)
   return prisma.reconciliation.findMany({
     where: branchId ? { branchId } : undefined,
-    include: { branch: true, user: true, items: { include: { product: true } } },
+    include: { branch: true, user: { select: { id: true, name: true, email: true, role: true, branchId: true } }, items: { include: { product: true } } },
     orderBy: { createdAt: "desc" },
   })
 }
@@ -840,7 +840,7 @@ export async function getAuditLogs() {
   const user = await requireUser()
   if (!(await can(user.role, "view.audit"))) return []
   return prisma.auditLog.findMany({
-    include: { user: true },
+    include: { user: { select: { id: true, name: true, email: true, role: true, branchId: true } } },
     orderBy: { createdAt: "desc" },
     take: 150,
   })

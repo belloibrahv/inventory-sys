@@ -43,7 +43,7 @@ export async function getIncomingLots() {
     include: {
       branch: true,
       supplier: true,
-      user: true,
+      user: { select: { id: true, name: true, email: true, role: true, branchId: true } },
       purchase: {
         include: {
           items: { select: { productId: true, costPrice: true, quantity: true } },

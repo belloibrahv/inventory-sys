@@ -189,7 +189,7 @@ async function accessorySoldSince(productId: string, branchId: string, since: Da
 const purchaseInclude = {
   supplier: true,
   branch: true,
-  user: true,
+  user: { select: { id: true, name: true, email: true, role: true, branchId: true } },
   items: { include: { product: true } },
   incomingLots: { select: { id: true, lotNumber: true, status: true, createdAt: true } },
   openingStock: { select: { id: true } },
@@ -627,7 +627,7 @@ export async function getReturns() {
       replacementImei: { include: { product: true } },
       saleItem: { include: { product: true } },
       branch: true,
-      user: true,
+      user: { select: { id: true, name: true, email: true, role: true, branchId: true } },
     },
     orderBy: { createdAt: "desc" },
   })
@@ -1872,7 +1872,7 @@ export async function getRepairs() {
   const branchId = await viewBranchFilter(user)
   return prisma.repair.findMany({
     where: branchId ? { branchId } : undefined,
-    include: { imei: { include: { product: true } }, customer: true, branch: true, user: true },
+    include: { imei: { include: { product: true } }, customer: true, branch: true, user: { select: { id: true, name: true, email: true, role: true, branchId: true } } },
     orderBy: { createdAt: "desc" },
   })
 }
@@ -2030,7 +2030,7 @@ export async function getTransfers() {
     include: {
       fromBranch: true,
       toBranch: true,
-      user: true,
+      user: { select: { id: true, name: true, email: true, role: true, branchId: true } },
       items: { include: { product: true } },
     },
     orderBy: { createdAt: "desc" },

@@ -599,7 +599,7 @@ export async function getImeiDetail(id: string) {
     where: {
       entityId: { in: [...new Set([record.id, record.imei1, ...earlierNumbers])] },
     },
-    include: { user: true },
+    include: { user: { select: { id: true, name: true, email: true, role: true, branchId: true } } },
     orderBy: { createdAt: "desc" },
     take: 40,
   })
