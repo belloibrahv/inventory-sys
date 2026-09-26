@@ -59,7 +59,7 @@ export function AppShell({
         <div className={cn("transition-[padding] duration-200", desktopSidebar ? "lg:pl-[264px]" : "lg:pl-0")}>
           <Header title={title} unread={unread} user={user} shops={shops} />
           <div className="mx-auto w-full max-w-[1600px] px-4 md:px-6">
-            <div className="pt-4">
+            <div className="pt-4 empty:hidden">
               <OfflineBanner />
             </div>
             {allowed ? <SectionTabs allowedHrefs={allowedHrefs} /> : null}

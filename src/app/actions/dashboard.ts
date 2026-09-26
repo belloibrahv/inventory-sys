@@ -9,6 +9,7 @@ import { healOpeningStockBills } from "@/lib/opening-stock-money"
 import { payablePurchaseWhere, groupSupplierLedgers } from "@/lib/purchase-money"
 import { getUnclosedBusinessDays } from "@/app/actions/day-close"
 import { getParkedWatch } from "@/app/actions/parked"
+import { watBounds, watDayKey } from "@/lib/lagos-day"
 
 export async function getDashboardData() {
   const user = await requireUser()
@@ -309,9 +310,31 @@ export async function getDashboardData() {
     )
     .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta) || a.product.localeCompare(b.product))
 
+  // Today, in Lagos time: the whole view, and this person's own sales.
+  const day = watBounds(watDayKey())
+  const [todayAll, todayMine] = await Promise.all([
+    prisma.sale.aggregate({
+      where: { ...saleWhere, saleDate: { gte: day.start, lt: day.end } },
+      _sum: { totalAmount: true, paidAmount: true },
+      _count: true,
+    }),
+    prisma.sale.aggregate({
+      where: { ...saleWhere, userId: user.id, saleDate: { gte: day.start, lt: day.end } },
+      _sum: { totalAmount: true },
+      _count: true,
+    }),
+  ])
+
   return {
     user,
     unread,
+    today: {
+      sales: money(todayAll._sum.totalAmount),
+      paid: money(todayAll._sum.paidAmount),
+      count: todayAll._count,
+      mine: money(todayMine._sum.totalAmount),
+      mineCount: todayMine._count,
+    },
     kpis: {
       totalSales: thisSales,
       totalExpense: thisExp,
@@ -390,7 +413,9 @@ export async function getDashboardData() {
 }
 
 function trend(current: number, previous: number) {
-  if (!previous) return { value: "+0%", up: true }
+  // Nothing last month means there is nothing to compare with. "+0%" read as
+  // "no change", which was not true.
+  if (!previous) return undefined
   const change = ((current - previous) / previous) * 100
   return {
     value: `${change >= 0 ? "+" : ""}${change.toFixed(0)}%`,

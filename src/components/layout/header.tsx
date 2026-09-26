@@ -53,8 +53,8 @@ export function Header({
   const [leaving, setLeaving] = useState(false)
 
   return (
-    <header className="app-header sticky top-0 z-30 flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-border bg-background/85 px-4 py-2 backdrop-blur-xl md:px-6">
-      <div className="flex min-w-0 items-center gap-2">
+    <header className="app-header sticky top-0 z-30 flex min-h-14 items-center justify-between gap-2 border-b border-border bg-background/85 px-3 py-2 backdrop-blur-xl sm:px-4 md:px-6">
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
         <Button
           variant="ghost"
           size="icon"
@@ -74,19 +74,27 @@ export function Header({
                 router.push("/dashboard")
               }
             }}
-            className="inline-flex items-center gap-2 rounded-lg border-2 border-primary/50 bg-primary/10 px-3 py-2 text-sm font-bold text-primary shadow-sm transition-all hover:border-primary hover:bg-primary hover:text-primary-foreground active:scale-95"
+            className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg border-2 border-primary/50 bg-primary/10 px-2.5 text-sm font-bold text-primary shadow-sm transition-all hover:border-primary hover:bg-primary hover:text-primary-foreground active:scale-95 sm:px-3"
             aria-label="Back to previous page"
             title="Go back to the page you were on"
           >
             <ArrowLeft className="h-4 w-4" />
-            <span>Back</span>
+            <span className="hidden sm:inline">Back</span>
           </button>
         ) : null}
-        <h1 className="min-w-0 text-base font-semibold tracking-tight whitespace-normal break-words">{title}</h1>
+        <h1 className="min-w-0 truncate text-base font-semibold tracking-tight" title={title}>
+          {title}
+        </h1>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5">
-        {shops ? <ShopSwitch branches={shops.branches} active={shops.active} /> : null}
+      <div className="flex shrink-0 items-center gap-0.5 sm:gap-1.5">
+        {shops ? (
+          <div className="hidden md:block">
+            <ShopSwitch branches={shops.branches} active={shops.active} />
+          </div>
+        ) : null}
+        {/* The network dot lands here; see NetworkStatusIndicator. */}
+        <span id="network-slot" className="contents" />
 
         <button
           onClick={() => setCommandOpen(true)}
@@ -103,6 +111,7 @@ export function Header({
         <Button
           variant="ghost"
           size="icon"
+          className="hidden sm:inline-flex"
           onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
           aria-label="Change between bright and dark screen"
         >
@@ -147,6 +156,19 @@ export function Header({
               </span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            {shops ? (
+              <div className="px-2 py-1.5 md:hidden">
+                <ShopSwitch branches={shops.branches} active={shops.active} />
+              </div>
+            ) : null}
+            <DropdownMenuItem
+              className="sm:hidden"
+              onSelect={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+            >
+              <Sun className="mr-2 h-4 w-4 dark:hidden" />
+              <Moon className="mr-2 hidden h-4 w-4 dark:block" />
+              {resolvedTheme === "dark" ? "Bright screen" : "Dark screen"}
+            </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <a href="/help">
                 <BookOpen className="mr-2 h-4 w-4" /> How to use this

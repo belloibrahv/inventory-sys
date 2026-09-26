@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { createPortal } from "react-dom"
 import { useRouter } from "next/navigation"
 import {
   Wifi,
@@ -46,6 +47,12 @@ export function NetworkStatusIndicator() {
   const [events, setEvents] = React.useState<OfflineEvent[]>([])
   const [deviceId, setDeviceId] = React.useState<string>("")
   const [syncing, setSyncing] = React.useState(false)
+  // The top bar's slot for the green dot. Found after mount, since the header
+  // renders beside this component rather than around it.
+  const [slot, setSlot] = React.useState<HTMLElement | null>(null)
+  React.useEffect(() => {
+    setSlot(document.getElementById("network-slot"))
+  }, [])
   const [drawerOpen, setDrawerOpen] = React.useState(false)
   const isFlushing = React.useRef(false)
 
@@ -140,24 +147,26 @@ export function NetworkStatusIndicator() {
   const hasQueue = queue.length > 0
 
   if (!isOffline && !isReconnecting && !hasQueue) {
-    // Healthy online state with no pending queue: show collapsed subtle indicator
+    // All is well, so it takes no room on the page: a small green dot in the
+    // top bar, which opens the sync centre. It used to be a pill on a row of
+    // its own above every screen.
+    const dot = (
+      <button
+        type="button"
+        onClick={() => setDrawerOpen(true)}
+        className="inline-flex h-10 w-10 items-center justify-center rounded-lg hover:bg-muted"
+        title={`Online${network.latencyMs ? ` · ${network.latencyMs}ms` : ""}. Open the sync centre.`}
+        aria-label="Online. Open the sync centre"
+      >
+        <span className="relative flex h-2.5 w-2.5">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60 [animation-duration:2.5s]" />
+          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+        </span>
+      </button>
+    )
     return (
-      <div className="flex items-center justify-end px-1 pb-2">
-        <button
-          type="button"
-          onClick={() => setDrawerOpen(true)}
-          className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/80 px-2.5 py-1 text-[11px] font-medium text-muted-foreground shadow-xs backdrop-blur-sm transition-colors hover:border-border hover:text-foreground"
-          title="Click to open Offline Sync & Diagnostic Center"
-        >
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-          </span>
-          <span>Cloud Online</span>
-          {network.latencyMs ? (
-            <span className="tabular-nums text-muted-foreground/80">({network.latencyMs}ms)</span>
-          ) : null}
-        </button>
+      <>
+        {slot ? createPortal(dot, slot) : null}
 
         <OfflineSyncCenterDialog
           open={drawerOpen}
@@ -169,7 +178,7 @@ export function NetworkStatusIndicator() {
           onSyncNow={() => handleSync("manual")}
           onTestConnection={() => network.checkNow()}
         />
-      </div>
+      </>
     )
   }
 
