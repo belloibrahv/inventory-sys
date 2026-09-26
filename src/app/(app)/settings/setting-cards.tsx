@@ -73,8 +73,10 @@ export function SettingCards({ settings, canEdit }: { settings: SettingRow[]; ca
                 <p className="text-xs text-muted-foreground">
                   On Sell now, each item&apos;s lowest allowed price is the floor. Sellers may price a deal
                   anywhere from that figure up, so a reseller price or a bulk discount needs nobody&apos;s
-                  permission. Going under the floor, or under what an item cost us, always needs a reason
-                  and shows up on Price changes. The sale always records the price that was charged.
+                  permission. There is no percentage limit. Going under the floor, or under what an item
+                  cost us, always needs a reason and shows up on Price changes. With this set to No, the
+                  CEO or Super Admin approves those prices on the seller&apos;s till with their own password.
+                  With Yes, any seller may do it alone. The sale always records the price that was charged.
                 </p>
               ) : null}
             </ActionForm>

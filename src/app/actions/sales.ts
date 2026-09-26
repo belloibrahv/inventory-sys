@@ -16,6 +16,9 @@ import { isBlockedFromSell } from "@/lib/phone-look"
 import { reservedTransferImeiSet, reservedSwapImeiSet } from "@/app/actions/ops"
 import { shopPayChannel } from "@/lib/sale-money"
 import { belowCost, discountOff, needsReason, sellFloor } from "@/lib/pricing"
+import { readPriceApproval, signPriceApproval, type ApprovedDeal } from "@/lib/price-approval"
+import { writeAudit } from "@/lib/audit"
+import * as bcrypt from "bcryptjs"
 
 export async function getSales() {
   const user = await requireUser()
@@ -403,6 +406,82 @@ export async function getShopImeiSheet(branchId: string) {
   }
 }
 
+/**
+ * The CEO or Super Admin signs off a price the seller may not give alone:
+ * under the lowest allowed price, under cost, or an order discount that goes
+ * under either. They type their own email and password on the seller's till.
+ * Nothing is sold here; the till gets back an approval for this exact deal and
+ * sends it with the sale.
+ */
+export async function approveTillPrice(input: {
+  email: string
+  password: string
+  branchId: string
+  deal: ApprovedDeal
+}) {
+  const seller = await requireUser()
+  if (!(await canSell(seller.role))) return { error: "You are not allowed to sell. Ask the main admin." }
+  if (!input.deal?.items?.length) return { error: "Add at least one item." }
+
+  // Five wrong passwords in ten minutes on this seller's till stops the box for
+  // a while, so it cannot be used to guess the CEO's password.
+  const since = new Date(Date.now() - 10 * 60 * 1000)
+  const recentFails = await prisma.auditLog.count({
+    where: { userId: seller.id, entityType: "PriceApproval", success: false, createdAt: { gte: since } },
+  })
+  if (recentFails >= 5) {
+    return { error: "Too many wrong tries. Wait ten minutes, or have the CEO sign in and make the sale." }
+  }
+
+  const email = String(input.email || "").toLowerCase().trim()
+  const password = String(input.password || "")
+  if (!email || !password) return { error: "The CEO or Super Admin types their own email and password." }
+
+  const approver = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, name: true, role: true, isActive: true, password: true },
+  })
+  const valid = approver?.isActive ? await bcrypt.compare(password, approver.password) : false
+  const allowed = valid && approver ? await can(approver.role, "action.override_floor") : false
+  if (!approver || !valid || !allowed) {
+    await writeAudit({
+      userId: seller.id,
+      action: "DENIED",
+      entityType: "PriceApproval",
+      entityId: email,
+      newValue: JSON.stringify({ reason: !approver || !valid ? "bad_login" : "no_permission" }),
+      branchId: input.branchId || seller.branchId || null,
+      success: false,
+      risk: "HIGH",
+    })
+    return {
+      error: valid
+        ? `${approver?.name || email} is not allowed to approve prices. Only the CEO or Super Admin can.`
+        : "That email and password do not match.",
+    }
+  }
+
+  const approverName = approver.name || email
+  await writeAudit({
+    userId: approver.id,
+    action: "APPROVE",
+    entityType: "PriceApproval",
+    entityId: seller.id,
+    newValue: JSON.stringify({
+      seller: seller.name ?? seller.id,
+      wholesale: Boolean(input.deal.wholesale),
+      orderDiscount: money(input.deal.orderDiscount ?? 0),
+      items: input.deal.items.map((item) => ({ productId: item.productId, imeiId: item.imeiId, unitPrice: money(item.unitPrice), quantity: item.quantity })),
+    }),
+    branchId: input.branchId || seller.branchId || null,
+    risk: "MEDIUM",
+  })
+  return {
+    approval: signPriceApproval({ approverId: approver.id, approverName, sellerId: seller.id, deal: input.deal }),
+    approverName,
+  }
+}
+
 export async function checkoutSale(input: {
   customerId?: string
   branchId: string
@@ -422,6 +501,8 @@ export async function checkoutSale(input: {
   discountReason?: string
   queuedAt?: string
   offlineId?: string
+  /** The CEO or Super Admin's sign-off for this deal, from approveTillPrice. */
+  priceApproval?: string
   items: Array<{
     productId: string
     imeiId?: string
@@ -460,7 +541,26 @@ export async function checkoutSale(input: {
   // Credit limits are a separate judgement. Turning the price switch on must not
   // quietly hand out credit as well.
   const canOverrideCredit = hasFloorPermission
-  const canOverrideFloor = settings.allowBelowMinimum || hasFloorPermission
+  // A seller without the permission can still sell under the floor when the CEO
+  // or Super Admin signed this exact deal off on the till. The approver is
+  // checked again here, so a signer who has since lost the right, or left, no
+  // longer counts.
+  let approvedBy: { id: string; name: string } | null = null
+  if (!settings.allowBelowMinimum && !hasFloorPermission && input.priceApproval) {
+    const claim = readPriceApproval(input.priceApproval, user.id, input)
+    if (!claim) {
+      return { error: "The CEO's approval no longer fits this sale. A price changed, or it is more than a day old. Ask them to approve it again." }
+    }
+    const approver = await prisma.user.findUnique({
+      where: { id: claim.approverId },
+      select: { id: true, name: true, role: true, isActive: true },
+    })
+    if (!approver?.isActive || !(await can(approver.role, "action.override_floor"))) {
+      return { error: `${claim.approverName} can no longer approve prices. Ask the CEO or Super Admin.` }
+    }
+    approvedBy = { id: approver.id, name: approver.name || claim.approverName }
+  }
+  const canOverrideFloor = settings.allowBelowMinimum || hasFloorPermission || Boolean(approvedBy)
   const isReseller = Boolean(input.wholesale)
   // Worked out here, once, and reused for the floor check, the cost snapshot and
   // the discount recorded against each line.
@@ -532,7 +632,7 @@ export async function checkoutSale(input: {
     if (item.unitPrice < floorPrice) {
       if (!canOverrideFloor) {
         return {
-          error: `${product.name} is below the lowest allowed price (₦${floorPrice.toLocaleString("en-NG")}). Raise it for this buyer, or ask the CEO or Super Admin.`,
+          error: `${product.name} is below its lowest allowed price (₦${floorPrice.toLocaleString("en-NG")}). Raise it, or have the CEO or Super Admin approve this price on the till.`,
         }
       }
       if (!reason) {
@@ -542,7 +642,7 @@ export async function checkoutSale(input: {
     if (belowCost(item.unitPrice, basis.costPrice)) {
       if (!canOverrideFloor) {
         return {
-          error: `${product.name} is below what it cost us (₦${basis.costPrice.toLocaleString("en-NG")}). The shop loses money at that price. Ask the CEO or Super Admin.`,
+          error: `${product.name} is below what it cost us (₦${basis.costPrice.toLocaleString("en-NG")}). The shop loses money at that price. Have the CEO or Super Admin approve it on the till.`,
         }
       }
       if (!reason) {
@@ -626,7 +726,7 @@ export async function checkoutSale(input: {
       const guard = Math.max(floorTotal, costTotal)
       if (!canOverrideFloor) {
         return {
-          error: `That discount takes the sale to ₦${afterDiscount.toLocaleString("en-NG")}, under the ₦${guard.toLocaleString("en-NG")} this stock may go for. Lower the discount, or ask the CEO or Super Admin.`,
+          error: `That discount takes the sale to ₦${afterDiscount.toLocaleString("en-NG")}, under the ₦${guard.toLocaleString("en-NG")} this stock may go for. Lower the discount, or have the CEO or Super Admin approve it on the till.`,
         }
       }
       if (!discountReason) {
@@ -748,6 +848,8 @@ export async function checkoutSale(input: {
           subtotal: grossTotal.toFixed(2),
           discount: orderDiscount.toFixed(2),
           discountReason: orderDiscount > 0 ? discountReason || null : null,
+          priceApprovedById: approvedBy?.id ?? null,
+          priceApprovedBy: approvedBy?.name ?? null,
           totalAmount: subtotal.toFixed(2),
           paidAmount: paid.toFixed(2),
           paymentMethod: method,
@@ -926,6 +1028,7 @@ export async function checkoutSale(input: {
               ? { orderDiscount, discountReason: discountReason || null }
               : {}),
             ...(isSplit ? { splitTenders: validSplits } : {}),
+            ...(approvedBy ? { priceApprovedBy: approvedBy.name, priceApprovedById: approvedBy.id } : {}),
             ...(input.queuedAt
               ? { postedFromOffline: true, queuedAt: input.queuedAt, offlineId: input.offlineId ?? null }
               : {}),

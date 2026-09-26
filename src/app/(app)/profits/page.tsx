@@ -40,7 +40,7 @@ export default async function ProfitsPage() {
   ]
 
   const priceCsvRows = [
-    ["Invoice", "Date", "Shop", "Sold by", "Customer", "Item", "Standard", "Charged", "Off", "Off %", "Cost", "Below cost", "Reseller", "Reason"],
+    ["Invoice", "Date", "Shop", "Sold by", "Customer", "Item", "Standard", "Charged", "Off", "Off %", "Cost", "Below cost", "Reseller", "Reason", "Approved by"],
     ...priceChanges.lines.map((row) => [
       row.invoice,
       formatDate(row.date),
@@ -56,6 +56,7 @@ export default async function ProfitsPage() {
       row.belowCost ? "Yes" : "No",
       row.reseller ? "Yes" : "No",
       row.reason,
+      row.approvedBy,
     ]),
   ]
 
@@ -222,6 +223,9 @@ export default async function ProfitsPage() {
                       <p className="text-muted-foreground">
                         Whole order also had {formatCurrency(row.orderDiscount)} off
                       </p>
+                    ) : null}
+                    {row.approvedBy ? (
+                      <p className="text-muted-foreground">Approved by {row.approvedBy}</p>
                     ) : null}
                   </td>
                 </tr>

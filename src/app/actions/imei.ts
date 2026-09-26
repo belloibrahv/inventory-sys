@@ -168,8 +168,11 @@ export async function intakeImei(formData: FormData) {
   if (![costPrice, minimumPrice, sellingPrice].every((value) => Number.isFinite(value) && value >= 0)) {
     return { error: "Enter cost, lowest sell, and selling price as numbers." }
   }
-  if (minimumPrice < costPrice) {
-    return { error: "Lowest sell cannot sit below cost." }
+  // A price that has fallen since we bought is a real thing (a phone ordered
+  // last week can be worth less by the time it lands). The CEO or Super Admin
+  // may mark the lowest sell under cost; everyone else is stopped here.
+  if (minimumPrice < costPrice && !(await can(user.role, "action.override_floor"))) {
+    return { error: "Lowest sell cannot sit below cost. Only the CEO or Super Admin can mark an item down under what it cost." }
   }
   if (sellingPrice < minimumPrice) {
     return { error: "Selling price cannot sit below the lowest sell." }

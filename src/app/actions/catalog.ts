@@ -238,7 +238,9 @@ export async function updateSelectedPrices(formData: FormData) {
   })
   const byId = new Map(products.map((product) => [product.id, product]))
   const problems: string[] = []
-  const work: Array<{ id: string; name: string; oldPrice: string; next: number }> = []
+  // oldMinimum is set when a mark-down goes under the item's lowest allowed
+  // price. The lowest follows it down, so staff can sell at the new price.
+  const work: Array<{ id: string; name: string; oldPrice: string; next: number; oldMinimum?: string }> = []
 
   for (const change of changes) {
     const product = byId.get(change.id)
@@ -260,6 +262,7 @@ export async function updateSelectedPrices(formData: FormData) {
       name: product.name,
       oldPrice: String(product.sellingPrice),
       next: change.sellingPrice,
+      oldMinimum: change.sellingPrice < Number(product.minimumPrice) ? String(product.minimumPrice) : undefined,
     })
   }
 
@@ -272,8 +275,20 @@ export async function updateSelectedPrices(formData: FormData) {
         const newPrice = row.next.toFixed(2)
         await tx.product.update({
           where: { id: row.id },
-          data: { sellingPrice: newPrice },
+          data: row.oldMinimum ? { sellingPrice: newPrice, minimumPrice: newPrice } : { sellingPrice: newPrice },
         })
+        if (row.oldMinimum) {
+          await tx.priceHistory.create({
+            data: {
+              productId: row.id,
+              oldPrice: row.oldMinimum,
+              newPrice,
+              priceType: "MINIMUM_PRICE",
+              reason,
+              changedBy: user.id,
+            },
+          })
+        }
         await tx.priceHistory.create({
           data: {
             productId: row.id,

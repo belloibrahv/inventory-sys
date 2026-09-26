@@ -16,6 +16,8 @@ export type QueuedSale = {
     /** Money off the whole order, carried so a parked bulk deal replays as struck. */
     orderDiscount?: number
     discountReason?: string
+    /** The CEO's sign-off for a price under the floor, given while online. */
+    priceApproval?: string
     items: Array<{
       productId: string
       imeiId?: string

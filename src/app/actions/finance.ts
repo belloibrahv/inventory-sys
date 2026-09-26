@@ -1376,6 +1376,7 @@ export async function getPriceChanges(limit = 200) {
           isWholesale: true,
           discount: true,
           discountReason: true,
+          priceApprovedBy: true,
           branch: { select: { name: true } },
           customer: { select: { name: true } },
           user: { select: { name: true } },
@@ -1411,6 +1412,7 @@ export async function getPriceChanges(limit = 200) {
         reason: row.priceReason ?? "",
         orderDiscount: money(row.sale.discount),
         orderDiscountReason: row.sale.discountReason ?? "",
+        approvedBy: row.sale.priceApprovedBy ?? "",
       }
     })
     .filter((row) => row.off > 0 || row.belowCost || Boolean(row.reason))
@@ -1438,6 +1440,8 @@ export type PriceChangeLine = {
   reason: string
   orderDiscount: number
   orderDiscountReason: string
+  /** The CEO or Super Admin who approved the price on the seller's till. */
+  approvedBy: string
 }
 
 export async function getProfitData() {

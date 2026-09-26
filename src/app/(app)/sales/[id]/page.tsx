@@ -115,6 +115,9 @@ export default async function SaleDetailPage({
           <p className="text-sm text-muted-foreground">Status</p>
           <StatusBadge value={sale.status} />
           <p className="mt-2 text-sm text-muted-foreground">{statusLabel(sale.paymentMethod)}{sale.isWholesale ? " · wholesale" : ""}</p>
+          {sale.priceApprovedBy ? (
+            <p className="mt-1 text-sm text-muted-foreground">Price approved by {sale.priceApprovedBy}</p>
+          ) : null}
         </div>
         <div className="surface-card p-5">
           <p className="text-sm text-muted-foreground">Amount paid</p>

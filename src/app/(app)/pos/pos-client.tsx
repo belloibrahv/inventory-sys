@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { createCustomer } from "@/app/actions/parties"
 import { createBankAccount } from "@/app/actions/finance"
-import { checkoutSale, findInStockImei, searchTillStock } from "@/app/actions/sales"
+import { approveTillPrice, checkoutSale, findInStockImei, searchTillStock } from "@/app/actions/sales"
 import { TillLookup } from "@/components/till-lookup"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { PasswordInput } from "@/components/ui/password-input"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select } from "@/components/ui/select"
 import { pushSaleQueue } from "@/lib/offline-sales"
 import { requestParkedFlush } from "@/lib/flush-parked"
@@ -144,6 +146,14 @@ export function PosClient({
   const [orderDiscount, setOrderDiscount] = useState(0)
   const [discountReason, setDiscountReason] = useState("")
   const [busy, setBusy] = useState(false)
+  // The CEO or Super Admin's sign-off for a price this seller may not give
+  // alone. It belongs to the deal it was given for: change a price, a quantity
+  // or the discount and it no longer applies.
+  const [approval, setApproval] = useState<{ token: string; name: string; key: string } | null>(null)
+  const [approvalOpen, setApprovalOpen] = useState(false)
+  const [approverEmail, setApproverEmail] = useState("")
+  const [approverPassword, setApproverPassword] = useState("")
+  const [approving, setApproving] = useState(false)
   const [remoteImeis, setRemoteImeis] = useState<TillImei[]>([])
   const [remoteAccessories, setRemoteAccessories] = useState<TillProduct[]>([])
   const [searchingRemote, setSearchingRemote] = useState(false)
@@ -160,6 +170,7 @@ export function PosClient({
     setOrderDiscount(0)
     setDiscountReason("")
     setQuery("")
+    setApproval(null)
   }
 
   const handleClearCart = async () => {
@@ -384,6 +395,23 @@ export function PosClient({
   const total = Math.max(0, grossTotal - appliedDiscount)
   const discountGuard = Math.max(floorTotal, costTotal)
   const discountBreaksFloor = appliedDiscount > 0 && total < discountGuard
+  const deal = useMemo(
+    () => ({
+      wholesale,
+      orderDiscount: appliedDiscount,
+      items: cart.map((line) => ({
+        productId: line.productId,
+        imeiId: line.imeiId,
+        quantity: line.quantity,
+        unitPrice: Number.isFinite(line.unitPrice) ? line.unitPrice : 0,
+      })),
+    }),
+    [cart, wholesale, appliedDiscount]
+  )
+  const dealKey = useMemo(() => JSON.stringify(deal), [deal])
+  const activeApproval = approval && approval.key === dealKey ? approval : null
+  /** May this sale go under the floor or under cost, with a reason? */
+  const mayGoUnder = canOverrideFloor || Boolean(activeApproval)
   const marginTotal = total - costTotal
   const customer = customers.find((row) => row.id === customerId)
   const shopBanks = useMemo(
@@ -756,18 +784,6 @@ export function PosClient({
     }
     const underFloor = cart.filter((line) => line.unitPrice < line.minPrice)
     const underCost = cart.filter((line) => belowCost(line.unitPrice, line.costPrice))
-    if (underFloor.length > 0 && !canOverrideFloor) {
-      toast.error(
-        `${underFloor[0].name} is under the lowest allowed price of ${formatCurrency(underFloor[0].minPrice)}. Raise it, or ask the CEO or Super Admin.`
-      )
-      return
-    }
-    if (underCost.length > 0 && !canOverrideFloor) {
-      toast.error(
-        `${underCost[0].name} is under what it cost us. The shop loses money at that price. Ask the CEO or Super Admin.`
-      )
-      return
-    }
     const missingReason = cart.find(
       (line) =>
         needsReason({ unitPrice: line.unitPrice, floor: line.minPrice, costPrice: line.costPrice }) &&
@@ -777,14 +793,20 @@ export function PosClient({
       toast.error(`Say why ${missingReason.name} is going below the lowest allowed price.`)
       return
     }
-    if (discountBreaksFloor && !canOverrideFloor) {
-      toast.error(
-        `That discount takes the sale under the ${formatCurrency(discountGuard)} this stock may go for. Lower it, or ask the CEO or Super Admin.`
-      )
-      return
-    }
     if (discountBreaksFloor && !discountReason.trim()) {
       toast.error("Say why this order is going below what the stock may be sold for.")
+      return
+    }
+    // Any price is allowed, but going under the floor or under cost needs the
+    // CEO or Super Admin. When the seller cannot do it alone, the CEO approves
+    // this deal on this till with their own password.
+    if ((underFloor.length > 0 || underCost.length > 0 || discountBreaksFloor) && !mayGoUnder) {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        toast.error("The CEO's approval needs the network. Wait for it to come back, or raise the price.")
+        return
+      }
+      setApproverPassword("")
+      setApprovalOpen(true)
       return
     }
     // A price below cost is the one the shop feels straight away, so it is
@@ -861,6 +883,7 @@ export function PosClient({
       wholesale,
       orderDiscount: appliedDiscount,
       discountReason: discountReason.trim() || undefined,
+      priceApproval: activeApproval?.token,
       items: cart.map((line) => ({
         productId: line.productId,
         imeiId: line.imeiId,
@@ -1071,8 +1094,10 @@ export function PosClient({
                       <p className="text-xs text-danger">
                         Below the lowest allowed price {formatCurrency(line.minPrice)}
                         {canOverrideFloor
-                          ? " · CEO or Super Admin may still sell this, with a reason"
-                          : " · raise the price, or ask the CEO or Super Admin"}
+                          ? " · you may still sell at this price, with a reason"
+                          : activeApproval
+                            ? ` · approved by ${activeApproval.name}`
+                            : " · the CEO or Super Admin approves it on this till when you tap Complete sale"}
                       </p>
                     ) : null}
                     {isUnderCost ? (
@@ -1517,17 +1542,17 @@ export function PosClient({
             <>
               <p className="text-xs text-danger">
                 This takes the sale under the {formatCurrency(discountGuard)} this stock may go for.
-                {canOverrideFloor ? " Say why below." : " Lower it, or ask the CEO or Super Admin."}
+                {mayGoUnder
+                  ? " Say why below."
+                  : " Say why below. The CEO or Super Admin approves it when you tap Complete sale."}
               </p>
-              {canOverrideFloor ? (
-                <Input
-                  className="h-9 text-xs"
-                  value={discountReason}
-                  onChange={(event) => setDiscountReason(event.target.value)}
-                  placeholder="Why this discount?"
-                  aria-label="Reason for this discount"
-                />
-              ) : null}
+              <Input
+                className="h-9 text-xs"
+                value={discountReason}
+                onChange={(event) => setDiscountReason(event.target.value)}
+                placeholder="Why this discount?"
+                aria-label="Reason for this discount"
+              />
             </>
           ) : appliedDiscount > 0 ? (
             <p className="text-xs text-muted-foreground">
@@ -1564,6 +1589,11 @@ export function PosClient({
             <p className="mt-1 text-xs text-muted-foreground">After this sale they would owe {formatCurrency(nextDebt)}</p>
           ) : null}
         </div>
+        {activeApproval ? (
+          <p className="rounded-lg bg-success-soft px-3 py-2 text-xs text-success">
+            Price approved by {activeApproval.name}. Change a price and it will need approving again.
+          </p>
+        ) : null}
         <Button className="min-h-12 w-full" disabled={!cart.length || busy} onClick={checkout}>
           {busy ? "Saving this sale" : "Complete sale"}
         </Button>
@@ -1571,6 +1601,88 @@ export function PosClient({
           USB scanners work like a keyboard. Print the invoice after the sale. If a receipt printer is attached, printing can open the cash drawer.
         </p>
       </div>
+
+      <Dialog open={approvalOpen} onOpenChange={(open) => !approving && setApprovalOpen(open)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader className="pr-8">
+            <DialogTitle>CEO approval for this price</DialogTitle>
+            <DialogDescription>
+              This sale goes under the lowest allowed price or under what we paid. The CEO or Super
+              Admin types their own email and password to approve it. Their name is kept on the
+              invoice and on Price changes.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="space-y-1 rounded-lg bg-muted p-3 text-xs">
+            {cart
+              .filter((line) => line.unitPrice < line.minPrice || belowCost(line.unitPrice, line.costPrice))
+              .map((line, index) => (
+                <li key={`${line.imeiId ?? line.productId}-${index}`}>
+                  {line.name}: {formatCurrency(line.unitPrice)}
+                  {line.listPrice > 0 ? ` (standard ${formatCurrency(line.listPrice)})` : ""}
+                  {belowCost(line.unitPrice, line.costPrice) ? " · under cost" : ""}
+                </li>
+              ))}
+            {discountBreaksFloor ? (
+              <li>Order discount {formatCurrency(appliedDiscount)}, sale total {formatCurrency(total)}</li>
+            ) : null}
+          </ul>
+          <form
+            className="space-y-3"
+            onSubmit={async (event) => {
+              event.preventDefault()
+              setApproving(true)
+              try {
+                const result = await approveTillPrice({
+                  email: approverEmail,
+                  password: approverPassword,
+                  branchId,
+                  deal,
+                })
+                if ("error" in result && result.error) {
+                  toast.error(result.error)
+                  return
+                }
+                if ("approval" in result && result.approval) {
+                  setApproval({ token: result.approval, name: result.approverName, key: dealKey })
+                  setApprovalOpen(false)
+                  toast.success(`Approved by ${result.approverName}. Tap Complete sale to finish.`)
+                }
+              } catch {
+                toast.error("The shop system did not answer. Check the network and try again.")
+              } finally {
+                setApproverPassword("")
+                setApproving(false)
+              }
+            }}
+          >
+            <Input
+              type="email"
+              autoComplete="off"
+              placeholder="CEO or Super Admin email"
+              value={approverEmail}
+              onChange={(event) => setApproverEmail(event.target.value)}
+              aria-label="Approver email"
+              required
+            />
+            <PasswordInput
+              autoComplete="off"
+              placeholder="Their password"
+              value={approverPassword}
+              onChange={(event) => setApproverPassword(event.target.value)}
+              aria-label="Approver password"
+              required
+            />
+            <DialogFooter className="gap-2">
+              <Button type="button" variant="outline" disabled={approving} onClick={() => setApprovalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={approving}>
+                {approving ? "Checking" : "Approve this price"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

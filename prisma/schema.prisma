@@ -607,6 +607,11 @@ model Sale {
   /// Why money was taken off the whole order. Staff must give it when the
   /// discount takes the sale under what the stock may be sold for.
   discountReason String?
+  /// Who let this sale go under the lowest allowed price or under cost, when
+  /// the seller could not. The CEO or Super Admin signs it off on the till with
+  /// their own password. Name is copied in so the record reads the same later.
+  priceApprovedById String?
+  priceApprovedBy   String?
   isWholesale   Boolean       @default(false)
   saleDate      DateTime      @default(now())
   createdAt     DateTime      @default(now())
