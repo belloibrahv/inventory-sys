@@ -104,7 +104,7 @@ export function TillLookup({
     <div className="space-y-3">
       <label className="block">
         <span className="mb-2 block text-sm font-semibold text-foreground">
-          Scan or type to add to this sale
+          Scan or type to add
         </span>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
           <div className="relative min-w-0 flex-1">
@@ -114,6 +114,7 @@ export function TillLookup({
             />
             <Input
               ref={inputRef}
+              id="till-lookup"
               value={value}
               disabled={disabled}
               autoComplete="off"
@@ -155,9 +156,9 @@ export function TillLookup({
           playsInline
         />
       ) : (
-        <p className="text-sm text-muted-foreground">
-          One box for everything. USB scanners type the number and press Enter. That adds the item. It does not finish the sale.
-          {searching ? " Looking across this shop stock." : ""}
+        <p className="text-xs text-muted-foreground">
+          A USB scanner adds the item when it presses Enter. It never finishes the sale.
+          {searching ? " Looking across this shop's stock." : ""}
         </p>
       )}
     </div>

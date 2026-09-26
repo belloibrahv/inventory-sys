@@ -411,3 +411,14 @@ body {
     transform: translateX(18%) rotate(-2deg);
   }
 }
+
+/* Sell now keeps a pay bar at the bottom of a phone screen. The calculator
+   button lifts above it instead of covering the Complete sale button. */
+@media (max-width: 1023px) {
+  body:has(.till-bar) .shop-calculator > button {
+    bottom: 6.5rem;
+  }
+  body:has(.till-bar) .shop-calculator > div {
+    bottom: 10.5rem;
+  }
+}
