@@ -14,8 +14,22 @@ export default async function ReturnsPage() {
           description="Return value, replacement value, and the balance. Stock and money move after approval."
         />
         <ReturnsList
+          // Only what the list shows. Spreading the whole row sent the staff
+          // member's login record, password hash included, to the browser.
           rows={rows.map((row) => ({
-            ...row,
+            id: row.id,
+            returnNumber: row.returnNumber,
+            status: row.status,
+            reason: row.reason,
+            outcome: row.outcome,
+            faultClass: row.faultClass,
+            notes: row.notes,
+            refundAmount: row.refundAmount != null ? money(row.refundAmount) : null,
+            createdAt: row.createdAt,
+            approvedAt: row.approvedAt,
+            completedAt: row.completedAt,
+            customer: { id: row.customer.id, name: row.customer.name },
+            invoice: row.invoice,
             returnValue: row.returnValue != null ? money(row.returnValue) : row.refundAmount != null ? money(row.refundAmount) : null,
             replacementValue: row.replacementValue != null ? money(row.replacementValue) : null,
             balanceAmount: row.balanceAmount != null ? money(row.balanceAmount) : null,

@@ -1,3 +1,4 @@
+import { money } from "@/lib/utils"
 import { createRepair, getRepairs } from "@/app/actions/ops"
 import { ActionForm } from "@/components/action-form"
 import { PageHeader } from "@/components/shared"
@@ -18,7 +19,22 @@ export default async function RepairsPage() {
           title="Repairs"
           description="Take the phone, find the fault, fix it, give it back."
         />
-        <RepairsList rows={rows} />
+        <RepairsList
+          // Only what the list shows. Passing the whole row sent the staff
+          // member's login record, password hash included, to the browser.
+          rows={rows.map((row) => ({
+            id: row.id,
+            repairNumber: row.repairNumber,
+            status: row.status,
+            issue: row.issue,
+            diagnosis: row.diagnosis,
+            repairCost: row.repairCost != null ? money(row.repairCost) : null,
+            createdAt: row.createdAt,
+            completedAt: row.completedAt,
+            imei: { id: row.imei.id, imei1: row.imei.imei1, product: { name: row.imei.product.name } },
+            customer: row.customer ? { name: row.customer.name } : null,
+          }))}
+        />
       </div>
       {canOpen ? (
         <div className="surface-card p-5">

@@ -6,7 +6,8 @@ import { Package, Smartphone } from "lucide-react"
 import { completeReturn } from "@/app/actions/ops"
 import { ActionForm } from "@/components/action-form"
 import { StatusBadge } from "@/components/shared"
-import { TablePager, usePagedRows } from "@/components/table-pager"
+import { DataTable, type DataColumn } from "@/components/data-table"
+import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { WorkflowSteps } from "@/components/workflow-steps"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
@@ -170,7 +171,7 @@ function BalanceLine({ row }: { row: ReturnRow }) {
 
 // ─── Apply form (shown when status === APPROVED) ──────────────────────────────
 
-function ApplyForm({ row, stock }: { row: ReturnRow; stock: StockUnit[] }) {
+function ApplyForm({ row, stock, onDone }: { row: ReturnRow; stock: StockUnit[]; onDone?: () => void }) {
   const returnValue = row.returnValue ?? money(row.refundAmount)
   const balance = row.balanceAmount ?? 0
   const receivable = Math.max(balance, 0)
@@ -178,7 +179,7 @@ function ApplyForm({ row, stock }: { row: ReturnRow; stock: StockUnit[] }) {
 
   return (
     <div className="mt-4 border-t border-border pt-4">
-      <ActionForm action={completeReturn} submit="Apply outcome" className="space-y-3">
+      <ActionForm action={completeReturn} submit="Apply outcome" className="space-y-3" onSuccess={onDone}>
         <input type="hidden" name="id" value={row.id} />
 
         {row.outcome === "REPLACEMENT" ? (
@@ -250,7 +251,77 @@ export function ReturnsList({ rows, stock }: { rows: ReturnRow[]; stock: StockUn
     return byStatus
   }, [rows])
 
-  const pager = usePagedRows(filtered, status)
+  const [open, setOpen] = useState<ReturnRow | null>(null)
+  const whenOf = (row: ReturnRow) => row.completedAt ?? row.approvedAt ?? row.createdAt
+  const valueOf = (row: ReturnRow) => row.returnValue ?? money(row.refundAmount)
+  const itemName = (row: ReturnRow) => row.imei?.productName ?? row.saleItem?.productName ?? ""
+
+  const columns: DataColumn<ReturnRow>[] = [
+    {
+      id: "number",
+      header: "Return",
+      sortValue: (row) => row.returnNumber,
+      cell: (row) => (
+        <div className="flex items-center gap-2">
+          <span className="whitespace-nowrap font-medium text-primary">{row.returnNumber}</span>
+          <TypeTag row={row} />
+        </div>
+      ),
+    },
+    {
+      id: "buyer",
+      header: "Customer and item",
+      sortValue: (row) => row.customer.name,
+      cell: (row) => (
+        <div className="min-w-0">
+          <p className="font-medium">{row.customer.name}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {row.imei ? deviceLabel(row.imei) : ""}
+            {row.imei && itemName(row) ? " · " : ""}
+            {itemName(row)}
+          </p>
+        </div>
+      ),
+    },
+    {
+      id: "outcome",
+      header: "Outcome",
+      hideBelow: "lg",
+      sortValue: (row) => outcomeLabel(row.outcome),
+      cell: (row) => (
+        <div>
+          <p className="whitespace-nowrap">{outcomeLabel(row.outcome)}</p>
+          <p className="text-xs text-muted-foreground">{reasonLabel(row.reason)}</p>
+        </div>
+      ),
+    },
+    {
+      id: "value",
+      header: "Value",
+      align: "right",
+      hideBelow: "xl",
+      sortValue: (row) => valueOf(row) ?? 0,
+      cell: (row) => (valueOf(row) != null ? formatCurrency(valueOf(row)) : "—"),
+    },
+    {
+      id: "status",
+      header: "Status",
+      sortValue: (row) => row.status,
+      cell: (row) => (
+        <div className="whitespace-nowrap">
+          <StatusBadge value={row.status} />
+          {row.status === "APPROVED" ? <p className="mt-1 text-[11px] font-medium text-warning">Apply the outcome</p> : null}
+        </div>
+      ),
+    },
+    {
+      id: "when",
+      header: "When",
+      hideBelow: "xl",
+      sortValue: (row) => new Date(whenOf(row)).getTime(),
+      cell: (row) => <span className="whitespace-nowrap tabular-nums">{formatShopWhen(whenOf(row))}</span>,
+    },
+  ]
 
   return (
     <div className="space-y-4">
@@ -265,106 +336,106 @@ export function ReturnsList({ rows, stock }: { rows: ReturnRow[]; stock: StockUn
         ]}
       />
 
-      <div className="space-y-3">
-        {pager.pageRows.map((row) => {
-          const when = row.completedAt ?? row.approvedAt ?? row.createdAt
-          const returnValue = row.returnValue ?? money(row.refundAmount)
-
-          return (
-            <div key={row.id} className="surface-card p-5">
-              {/* Header row */}
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1 space-y-1">
-                  {/* Return number + type tag */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-semibold">{row.returnNumber}</p>
-                    <TypeTag row={row} />
-                  </div>
-
-                  {/* Customer + device/item + invoice link */}
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted-foreground">
-                    <Link href={`/customers/${row.customer.id}`} className="text-primary hover:underline">
-                      {row.customer.name}
-                    </Link>
-                    <span className="text-muted-foreground/40">·</span>
-                    <ItemChip row={row} />
-                    {row.invoice ? (
-                      <>
-                        <span className="text-muted-foreground/40">·</span>
-                        <Link href={`/sales/${row.invoice.id}`} className="text-primary hover:underline">
-                          {row.invoice.invoiceNumber}
-                        </Link>
-                      </>
-                    ) : null}
-                  </div>
-
-                  {/* Outcome + return value */}
-                  <p className="text-sm">
-                    <span className="font-medium">{outcomeLabel(row.outcome)}</span>
-                    <span className="text-muted-foreground"> · {reasonLabel(row.reason)}</span>
-                    {returnValue != null ? (
-                      <span className="text-muted-foreground"> · Return value {formatCurrency(returnValue)}</span>
-                    ) : null}
-                  </p>
-
-                  {/* Replacement line */}
-                  {row.outcome === "REPLACEMENT" && (
-                    <p className="text-sm text-muted-foreground">
-                      {row.replacementImei
-                        ? `Replacement: ${deviceLabel(row.replacementImei)}${row.replacementImei.productName ? ` · ${row.replacementImei.productName}` : ""}${row.replacementValue != null ? ` · ${formatCurrency(row.replacementValue)}` : ""}`
-                        : "Replacement not locked yet"}
-                    </p>
-                  )}
-
-                  {/* Balance */}
-                  <BalanceLine row={row} />
-                </div>
-
-                {/* Status + timestamp */}
-                <div className="shrink-0 text-right">
-                  <StatusBadge value={row.status} />
-                  <p className="mt-2 text-xs tabular-nums text-muted-foreground">
-                    {row.completedAt ? "Finished" : row.approvedAt ? "Approved" : "Asked"}{" "}
-                    {formatShopWhen(when)}
-                  </p>
-                </div>
-              </div>
-
-              {/* Waiting notice */}
-              {row.status === "PENDING" && (
-                <p className="mt-3 rounded-lg border border-warning/20 bg-warning/10 px-3 py-2 text-sm text-warning">
-                  Waiting for approval. Stock and money do not move until Needs approval says yes.
-                </p>
-              )}
-
-              {/* Apply form for approved returns */}
-              {row.status === "APPROVED" && <ApplyForm row={row} stock={stock} />}
-            </div>
-          )
+      <DataTable
+        rows={filtered}
+        columns={columns}
+        rowKey={(row) => row.id}
+        noun="returns"
+        filterKey={status}
+        onRowClick={setOpen}
+        searchText={(row) =>
+          [row.returnNumber, row.customer.name, row.imei?.imei1, row.imei?.serialNumber, itemName(row), row.invoice?.invoiceNumber]
+            .filter(Boolean)
+            .join(" ")
+        }
+        searchPlaceholder="Search return, customer, IMEI or invoice"
+        card={(row) => ({
+          title: row.customer.name,
+          subtitle: `${row.returnNumber} · ${itemName(row) || "No item recorded"}`,
+          value: valueOf(row) != null ? formatCurrency(valueOf(row)) : undefined,
+          badge: <StatusBadge value={row.status} />,
+          meta: (
+            <>
+              <span>{outcomeLabel(row.outcome)}</span>
+              <span>· {formatShopWhen(whenOf(row))}</span>
+              {row.status === "APPROVED" ? <span className="font-medium text-warning">· Apply the outcome</span> : null}
+            </>
+          ),
         })}
+        empty={rows.length === 0 ? "No returns on the books yet." : "No return matches this stage. Tap another step above."}
+      />
 
-        {filtered.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
-            {rows.length === 0
-              ? "No returns on the books yet."
-              : "No return matches this stage. Tap another step above."}
-          </p>
-        ) : (
-          <div className="surface-card overflow-hidden">
-            <TablePager
-              page={pager.page}
-              pageCount={pager.pageCount}
-              pageSize={pager.pageSize}
-              total={pager.total}
-              start={pager.start}
-              end={pager.end}
-              onPageChange={pager.setPage}
-              onPageSizeChange={pager.setPageSize}
-              noun="returns"
-            />
-          </div>
-        )}
+      <Sheet open={Boolean(open)} onOpenChange={(value) => !value && setOpen(null)}>
+        {open ? (
+          <SheetContent
+            title={open.returnNumber}
+            description={`${open.customer.name} · ${formatShopWhen(whenOf(open))}`}
+            className="sm:w-[520px]"
+          >
+            <ReturnDetail row={open} stock={stock} onDone={() => setOpen(null)} />
+          </SheetContent>
+        ) : null}
+      </Sheet>
+    </div>
+  )
+}
+
+function ReturnDetail({ row, stock, onDone }: { row: ReturnRow; stock: StockUnit[]; onDone: () => void }) {
+  const returnValue = row.returnValue ?? money(row.refundAmount)
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusBadge value={row.status} />
+        <TypeTag row={row} />
       </div>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+        <dt className="text-muted-foreground">Customer</dt>
+        <dd>
+          <Link href={`/customers/${row.customer.id}`} className="font-medium text-primary hover:underline">
+            {row.customer.name}
+          </Link>
+        </dd>
+        <dt className="text-muted-foreground">Item</dt>
+        <dd><ItemChip row={row} /></dd>
+        {row.invoice ? (
+          <>
+            <dt className="text-muted-foreground">Invoice</dt>
+            <dd>
+              <Link href={`/sales/${row.invoice.id}`} className="text-primary hover:underline">
+                {row.invoice.invoiceNumber}
+              </Link>
+            </dd>
+          </>
+        ) : null}
+        <dt className="text-muted-foreground">Outcome</dt>
+        <dd className="font-medium">{outcomeLabel(row.outcome)}</dd>
+        <dt className="text-muted-foreground">Reason</dt>
+        <dd>{reasonLabel(row.reason)}</dd>
+        {returnValue != null ? (
+          <>
+            <dt className="text-muted-foreground">Return value</dt>
+            <dd className="tabular-nums">{formatCurrency(returnValue)}</dd>
+          </>
+        ) : null}
+        {row.outcome === "REPLACEMENT" ? (
+          <>
+            <dt className="text-muted-foreground">Replacement</dt>
+            <dd>
+              {row.replacementImei
+                ? `${deviceLabel(row.replacementImei)}${row.replacementImei.productName ? ` · ${row.replacementImei.productName}` : ""}${row.replacementValue != null ? ` · ${formatCurrency(row.replacementValue)}` : ""}`
+                : "Not locked yet"}
+            </dd>
+          </>
+        ) : null}
+      </dl>
+      <BalanceLine row={row} />
+      {row.notes ? <p className="rounded-lg bg-muted/60 px-3 py-2 text-sm text-muted-foreground">{row.notes}</p> : null}
+      {row.status === "PENDING" ? (
+        <p className="rounded-lg border border-warning/20 bg-warning/10 px-3 py-2 text-sm text-warning">
+          Waiting for approval. Stock and money do not move until Needs approval says yes.
+        </p>
+      ) : null}
+      {row.status === "APPROVED" ? <ApplyForm row={row} stock={stock} onDone={onDone} /> : null}
     </div>
   )
 }

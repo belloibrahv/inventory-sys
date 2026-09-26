@@ -99,8 +99,8 @@ export default async function ImeiPage({
         />
       </div>
 
-      <div className="surface-card overflow-hidden">
-        <form className="grid gap-2 border-b border-border p-4 md:grid-cols-[1fr_auto]">
+      <div className="space-y-3">
+        <form className="surface-card grid grid-cols-[1fr_auto] gap-2 p-3">
           <Input name="q" defaultValue={q} placeholder="Search IMEI, serial, or item name" />
           {status ? <input type="hidden" name="status" value={status} /> : null}
           {life && !status ? <input type="hidden" name="life" value={life} /> : null}

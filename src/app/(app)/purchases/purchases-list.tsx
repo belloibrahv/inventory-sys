@@ -2,39 +2,32 @@
 
 import { useMemo, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { DataTable, type DataColumn } from "@/components/data-table"
 import { FilterChips } from "@/components/filter-chips"
 import { EmptyState, StatusBadge } from "@/components/shared"
-import { TablePager, usePagedRows } from "@/components/table-pager"
 import { formatShopWhen } from "@/lib/lagos-day"
-import { formatCurrency, money } from "@/lib/utils"
-import { isOpeningStockPurchase, purchaseBalance } from "@/lib/purchase-money"
+import { cn, formatCurrency } from "@/lib/utils"
 
-type PurchaseRow = {
+export type PurchaseRow = {
   id: string
   invoiceNumber: string
-  source: string | null
   status: string
-  originCity: string | null
-  originCountry: string | null
-  expectedDate: Date | null
-  receivedDate: Date | null
-  createdAt: Date
-  openingStock?: { id: string } | null
-  totalAmount: unknown
-  paidAmount: unknown
-  returnedAmount?: unknown
-  supplier: { name: string; city: string | null; country: string | null }
-  branch: { name: string }
-  items: Array<{ product: { name: string } }>
-  incomingLots: Array<{ status: string }>
-  trace: {
-    expected: number
-    recorded: number
-    sold: number
-    soldToday: number
-    inShop: number
-    shortVsBill: number
-  }
+  isOpening: boolean
+  supplier: string
+  origin: string
+  shop: string
+  item: string
+  itemCount: number
+  expectedDate: string | null
+  when: string
+  received: boolean
+  total: number
+  paid: number
+  owed: number
+  surplus: number
+  comingLots: number
+  trace: { expected: number; recorded: number; sold: number; soldToday: number; inShop: number; shortVsBill: number }
 }
 
 const STATUS_CHIPS = [
@@ -46,29 +39,26 @@ const STATUS_CHIPS = [
   { key: "CANCELLED", label: "Cancelled", tone: "danger" as const },
 ]
 
-export function PurchasesList({
-  purchases,
-  search,
-}: {
-  purchases: PurchaseRow[]
-  search?: string
-}) {
+function Owing({ row }: { row: PurchaseRow }) {
+  if (row.isOpening) return <span className="text-xs text-muted-foreground">Value only</span>
+  if (row.surplus > 0) return <span className="font-semibold text-success">+{formatCurrency(row.surplus)}</span>
+  if (row.owed > 0) return <span className="font-semibold text-warning">-{formatCurrency(row.owed)}</span>
+  return <span className="text-success">Settled</span>
+}
+
+export function PurchasesList({ purchases, search }: { purchases: PurchaseRow[]; search?: string }) {
+  const router = useRouter()
   const [status, setStatus] = useState("all")
 
   const filtered = useMemo(
-    () => purchases.filter((purchase) => (status === "all" ? true : purchase.status === status)),
+    () => purchases.filter((row) => (status === "all" ? true : row.status === status)),
     [purchases, status]
   )
-
   const counts = useMemo(() => {
     const byStatus: Record<string, number> = { all: purchases.length }
-    for (const purchase of purchases) {
-      byStatus[purchase.status] = (byStatus[purchase.status] ?? 0) + 1
-    }
+    for (const row of purchases) byStatus[row.status] = (byStatus[row.status] ?? 0) + 1
     return byStatus
   }, [purchases])
-
-  const pager = usePagedRows(filtered, `${search ?? ""}|${status}`)
 
   if (purchases.length === 0) {
     return (
@@ -76,16 +66,104 @@ export function PurchasesList({
         title={search?.trim() ? "No supplier bill matches that search" : "No supplier goods booked yet"}
         hint={
           search?.trim()
-            ? "Try an IMEI, a bill number, a supplier name, or an item name."
-            : "Use the form on the right to book goods from China, Dubai, Lagos, or any supplier you have named."
+            ? "Try another IMEI, or clear the search."
+            : "Use the form to book goods from China, Dubai, Lagos, or any supplier you have named."
         }
       />
     )
   }
 
+  const columns: DataColumn<PurchaseRow>[] = [
+    {
+      id: "bill",
+      header: "Bill",
+      sortValue: (row) => row.invoiceNumber,
+      cell: (row) => (
+        <div>
+          <div className="flex items-center gap-2">
+            <Link href={`/purchases/${row.id}`} className="whitespace-nowrap font-medium text-primary hover:underline">
+              {row.invoiceNumber}
+            </Link>
+            {row.isOpening ? (
+              <span className="rounded-full bg-primary-soft px-2 py-0.5 text-[10px] font-semibold text-primary">Opening stock</span>
+            ) : null}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {row.isOpening ? "Opening count" : row.supplier}
+            {row.origin && !row.isOpening ? ` · ${row.origin}` : ""} · {row.shop}
+          </p>
+        </div>
+      ),
+    },
+    {
+      id: "goods",
+      header: "Goods",
+      hideBelow: "xl",
+      cell: (row) => (
+        <div className="text-xs">
+          <p className="font-medium text-foreground">
+            {row.item}
+            {row.itemCount > 1 ? ` +${row.itemCount - 1} more` : ""}
+          </p>
+          <p className="tabular-nums text-muted-foreground">
+            {row.trace.expected} on bill · {row.trace.recorded} in · {row.trace.sold} sold · {row.trace.inShop} on shelf
+          </p>
+          {row.trace.shortVsBill > 0 ? (
+            <p className="text-warning">{row.trace.shortVsBill} never scanned in</p>
+          ) : null}
+          {row.comingLots ? <p className="text-warning">{row.comingLots} carton list still coming</p> : null}
+        </div>
+      ),
+    },
+    {
+      id: "value",
+      header: "Value",
+      align: "right",
+      sortValue: (row) => row.total,
+      cell: (row) => <span className="font-medium">{formatCurrency(row.total)}</span>,
+    },
+    {
+      id: "paid",
+      header: "Paid",
+      align: "right",
+      hideBelow: "lg",
+      sortValue: (row) => row.paid,
+      cell: (row) => (row.isOpening ? <span className="text-muted-foreground">—</span> : <span className="text-success">{formatCurrency(row.paid)}</span>),
+    },
+    {
+      id: "owing",
+      header: "Owing",
+      align: "right",
+      sortValue: (row) => row.surplus - row.owed,
+      cell: (row) => <Owing row={row} />,
+    },
+    {
+      id: "status",
+      header: "Status",
+      hideBelow: "lg",
+      sortValue: (row) => row.status,
+      cell: (row) => (
+        <div className="whitespace-nowrap">
+          <StatusBadge value={row.status} />
+          <p className="mt-1 text-xs tabular-nums text-muted-foreground">
+            {row.received ? "Received" : "Booked"} {formatShopWhen(row.when)}
+          </p>
+        </div>
+      ),
+    },
+  ]
+
   return (
-    <div className="space-y-3">
-      <div className="surface-card p-4">
+    <DataTable
+      rows={filtered}
+      columns={columns}
+      rowKey={(row) => row.id}
+      noun="bills"
+      filterKey={status}
+      onRowClick={(row) => router.push(`/purchases/${row.id}`)}
+      searchText={(row) => [row.invoiceNumber, row.supplier, row.origin, row.shop, row.item].join(" ")}
+      searchPlaceholder="Filter by bill, supplier, place or item"
+      filters={
         <FilterChips
           label="Bill status"
           activeKey={status}
@@ -95,131 +173,21 @@ export function PurchasesList({
             count: counts[chip.key] ?? 0,
           }))}
         />
-      </div>
-
-      {filtered.length === 0 ? (
-        <EmptyState title="No bill matches this filter" hint="Tap another status chip above." />
-      ) : (
-        pager.pageRows.map((purchase) => {
-          const item = purchase.items[0]
-          const origin = [purchase.originCity || purchase.supplier.city, purchase.originCountry || purchase.supplier.country]
-            .filter(Boolean)
-            .join(", ")
-          const comingLots = purchase.incomingLots.filter((lot) => lot.status === "COMING").length
-          const { trace } = purchase
-          const totalVal = money(purchase.totalAmount)
-          const paidVal = money(purchase.paidAmount)
-          const billMoney = purchaseBalance(purchase.totalAmount, purchase.paidAmount, purchase.returnedAmount)
-          const owedVal = billMoney.owed
-          const surplusVal = billMoney.surplus
-          const when = purchase.receivedDate ?? purchase.createdAt
-
-          const isOpening = isOpeningStockPurchase(purchase)
-
-          return (
-            <Link key={purchase.id} href={`/purchases/${purchase.id}`} className="surface-card block p-5 hover:bg-muted/40">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className="font-semibold">{purchase.invoiceNumber}</p>
-                    {isOpening ? (
-                      <span className="badge badge-outline text-[11px] font-semibold text-primary">
-                        Independent Opening Stock
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {isOpening ? "Physical Opening Count & Baseline" : purchase.supplier.name}
-                    {origin && !isOpening ? ` · from ${origin}` : ""}
-                    {" · "}
-                    {purchase.branch.name}
-                  </p>
-                  <p className="mt-1 text-sm">
-                    {item?.product.name}
-                    {" · on bill "}
-                    {trace.expected}
-                    {" · scanned in "}
-                    {trace.recorded}
-                    {" · sold "}
-                    {trace.sold}
-                    {trace.soldToday ? ` · sold today ${trace.soldToday}` : ""}
-                    {" · still on shelf "}
-                    {trace.inShop}
-                  </p>
-                  {trace.shortVsBill > 0 ? (
-                    <p className="mt-1 text-sm text-warning">
-                      {trace.shortVsBill} unit{trace.shortVsBill === 1 ? "" : "s"} on this bill were never put into the
-                      shop.
-                    </p>
-                  ) : null}
-                  {purchase.expectedDate && !isOpening ? (
-                    <p className="mt-1 text-sm text-muted-foreground">Due {formatShopWhen(purchase.expectedDate)}</p>
-                  ) : null}
-                  {comingLots ? (
-                    <p className="mt-1 text-sm text-warning">
-                      {comingLots} carton list booked as Coming. Not for sale yet.
-                    </p>
-                  ) : null}
-                </div>
-                <div className="text-right">
-                  <StatusBadge value={purchase.status} />
-                  <p className="mt-2 text-xs font-medium tabular-nums text-muted-foreground">
-                    {purchase.receivedDate ? "Received" : "Booked"} {formatShopWhen(when)}
-                  </p>
-                </div>
-              </div>
-              {isOpening ? (
-                <div className="mt-3 grid gap-3 border-t border-border pt-3 text-sm sm:grid-cols-2">
-                  <span>
-                    <span className="eyebrow block">Value</span>
-                    <strong className="num">{formatCurrency(totalVal)}</strong>
-                  </span>
-                  <span className="sm:col-span-2">
-                    <span className="eyebrow block">Not a bill to pay</span>
-                    <span className="text-xs font-medium text-muted-foreground">Opening stock. Value only.</span>
-                  </span>
-                </div>
-              ) : (
-                <div className="mt-3 grid gap-3 border-t border-border pt-3 text-sm sm:grid-cols-3">
-                  <span>
-                    <span className="eyebrow block">Invoice value</span>
-                    <strong className="num">{formatCurrency(totalVal)}</strong>
-                  </span>
-                  <span>
-                    <span className="eyebrow block">Payment</span>
-                    <strong className="num text-success">{formatCurrency(paidVal)}</strong>
-                  </span>
-                  <span>
-                    <span className="eyebrow block">Value owing</span>
-                    <strong className={`num ${owedVal > 0 ? "text-warning" : "text-success"}`}>
-                      {surplusVal > 0
-                        ? `+${formatCurrency(surplusVal)}`
-                        : owedVal > 0
-                          ? `-${formatCurrency(owedVal)}`
-                          : formatCurrency(0)}
-                    </strong>
-                  </span>
-                </div>
-              )}
-            </Link>
-          )
-        })
-      )}
-      {filtered.length > 0 ? (
-        <div className="surface-card overflow-hidden">
-          <TablePager
-            page={pager.page}
-            pageCount={pager.pageCount}
-            pageSize={pager.pageSize}
-            total={pager.total}
-            start={pager.start}
-            end={pager.end}
-            onPageChange={pager.setPage}
-            onPageSizeChange={pager.setPageSize}
-            noun="bills"
-          />
-        </div>
-      ) : null}
-    </div>
+      }
+      card={(row) => ({
+        title: row.isOpening ? `${row.invoiceNumber} · Opening stock` : row.supplier,
+        subtitle: `${row.isOpening ? row.shop : row.invoiceNumber} · ${formatShopWhen(row.when)}`,
+        value: formatCurrency(row.total),
+        valueHint: <Owing row={row} />,
+        badge: <StatusBadge value={row.status} />,
+        meta: (
+          <span className={cn(row.trace.shortVsBill > 0 && "text-warning")}>
+            {row.trace.expected} on bill · {row.trace.inShop} on shelf
+            {row.trace.shortVsBill > 0 ? ` · ${row.trace.shortVsBill} never scanned` : ""}
+          </span>
+        ),
+      })}
+      empty="No bill matches this filter."
+    />
   )
 }

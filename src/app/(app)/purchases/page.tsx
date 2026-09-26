@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { formatCurrency, money } from "@/lib/utils"
 import { isOpeningStockPurchase, purchaseBalance } from "@/lib/purchase-money"
-import { PurchasesList } from "./purchases-list"
+import { PurchasesList, type PurchaseRow } from "./purchases-list"
 import { SupplierReturnForm } from "./supplier-return-form"
 
 export default async function PurchasesPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
@@ -47,10 +47,18 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
         description="Supplier bills, what we paid, and what is still owed."
       />
 
-      <form className="grid gap-2 md:grid-cols-[1fr_auto]">
-        <Input name="q" defaultValue={q} placeholder="Find an IMEI, a bill number, a supplier, or a product" />
-        <Button type="submit">Search</Button>
+      <form className="grid grid-cols-[1fr_auto] gap-2">
+        <Input name="q" defaultValue={q} placeholder="Which bill did a phone come on? Type its IMEI" aria-label="Find the bill by IMEI" />
+        <Button type="submit">Find</Button>
       </form>
+      {q ? (
+        <p className="-mt-3 text-sm text-muted-foreground">
+          Showing bills that match “{q}”.{" "}
+          <Link href="/purchases" className="font-medium text-primary hover:underline">
+            Show every bill
+          </Link>
+        </p>
+      ) : null}
 
       {openingPurchases.length > 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary-soft p-4 text-sm text-foreground">
@@ -105,7 +113,34 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
       </StatGrid>
 
       <div className="page-split">
-        <PurchasesList purchases={purchases} search={q} />
+        <PurchasesList
+          search={q}
+          purchases={purchases.map(
+            (row): PurchaseRow => {
+              const balance = purchaseBalance(row.totalAmount, row.paidAmount, row.returnedAmount)
+              return {
+                id: row.id,
+                invoiceNumber: row.invoiceNumber,
+                status: row.status,
+                isOpening: isOpeningStockPurchase(row),
+                supplier: row.supplier.name,
+                origin: [row.originCity || row.supplier.city, row.originCountry || row.supplier.country].filter(Boolean).join(", "),
+                shop: row.branch.name,
+                item: row.items[0]?.product.name ?? "",
+                itemCount: row.items.length,
+                expectedDate: row.expectedDate?.toISOString() ?? null,
+                when: (row.receivedDate ?? row.createdAt).toISOString(),
+                received: Boolean(row.receivedDate),
+                total: money(row.totalAmount),
+                paid: money(row.paidAmount),
+                owed: balance.owed,
+                surplus: balance.surplus,
+                comingLots: row.incomingLots.filter((lot) => lot.status === "COMING").length,
+                trace: row.trace,
+              }
+            }
+          )}
+        />
         <div className="space-y-4">
           <SectionCard title="Book expected goods" description="A supplier carton. After save, open the bill to scan IMEIs.">
             <PurchaseForm
