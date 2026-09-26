@@ -351,7 +351,7 @@ export function DataTable<T>({
       </div>
 
       {selectable && selectedRows.length ? (
-        <div className="sticky bottom-4 z-30 mx-auto flex w-fit max-w-full flex-wrap items-center gap-3 rounded-xl border border-border bg-foreground px-4 py-2.5 text-sm text-background shadow-2xl">
+        <div className="sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] z-30 mx-auto lg:bottom-4 flex w-fit max-w-full flex-wrap items-center gap-3 rounded-xl border border-border bg-foreground px-4 py-2.5 text-sm text-background shadow-2xl">
           <span className="font-medium tabular-nums">{selectedRows.length} ticked</span>
           <div className="flex flex-wrap items-center gap-2">{bulkActions!(selectedRows, clear)}</div>
           <button type="button" onClick={clear} className="rounded-md px-2 py-1 text-background/70 hover:text-background">

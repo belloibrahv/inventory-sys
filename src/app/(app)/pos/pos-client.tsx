@@ -1024,7 +1024,7 @@ export function PosClient({
       : "Complete sale"
 
   return (
-    <div className="till-page pb-28 lg:pb-0">
+    <div className="till-page pb-6 lg:pb-0">
       {usingDeviceList || lineDown ? (
         <div className="mb-4 rounded-xl bg-warning-soft px-4 py-3 text-sm text-warning">
           You are selling from the last shop list saved on this phone. You can only use names already on this phone. Phones still on the way are not here. The real invoice is created when the network comes back.

@@ -59,8 +59,8 @@ export function Header({
           variant="ghost"
           size="icon"
           onClick={toggleNav}
-          aria-label={navShown ? "Hide menu" : "Show menu"}
-          title={navShown ? "Hide menu" : "Show menu"}
+          aria-label="Menu"
+          title={navShown ? "Hide or show the menu" : "Show menu"}
         >
           <Menu className="h-5 w-5" />
         </Button>

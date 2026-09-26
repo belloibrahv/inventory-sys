@@ -422,7 +422,7 @@ export function ProductPriceList({
         noun="items"
       />
       {canEdit ? (
-        <div className="sticky bottom-0 z-20 space-y-3 border-t border-border bg-card/95 p-4 backdrop-blur">
+        <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 space-y-3 lg:bottom-0 border-t border-border bg-card/95 p-4 backdrop-blur">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm font-semibold">
               {selected.length === 1 ? "1 item ticked" : `${selected.length} items ticked`}

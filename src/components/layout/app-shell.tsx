@@ -8,6 +8,7 @@ import { Header } from "@/components/layout/header"
 import { CommandPalette } from "@/components/layout/command-palette"
 import { AccessGate } from "@/components/layout/access-gate"
 import { SectionTabs } from "@/components/layout/section-tabs"
+import { MobileTabBar } from "@/components/layout/mobile-tab-bar"
 import { pathIsAllowed } from "@/lib/access-path"
 import { OfflineBanner } from "@/components/offline-banner"
 import { OfflineGuard } from "@/components/offline-guard"
@@ -63,9 +64,11 @@ export function AppShell({
               <OfflineBanner />
             </div>
             {allowed ? <SectionTabs allowedHrefs={allowedHrefs} /> : null}
-            <main className="space-y-5 py-5 md:py-6">{allowed ? children : null}</main>
+            {/* Room under the last card for the phone tab bar. */}
+            <main className="space-y-5 pb-24 pt-5 md:pt-6 lg:pb-6">{allowed ? children : null}</main>
           </div>
         </div>
+        <MobileTabBar allowedHrefs={allowedHrefs} />
         <CommandPalette allowedHrefs={allowedHrefs} />
         <ShopCalculator />
         <OfflineGuard />
