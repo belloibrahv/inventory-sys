@@ -4,13 +4,14 @@ import { useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { CheckCircle2, Download, Eye, Loader2, Lock, Plus, Save, Trash2, Upload } from "lucide-react"
+import { CheckCircle2, Download, Eye, Loader2, Lock, LockOpen, Plus, Save, Trash2, Upload } from "lucide-react"
 import {
   addOpeningStockItem,
   closeOpeningStock,
   correctOpeningFromSheet,
   removeOpeningLines,
   removeOpeningStock,
+  reopenOpeningStock,
   saveOpeningEdits,
   type CorrectionResult,
   type OpeningBook,
@@ -189,8 +190,10 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
           value={closed ? "Closed" : "Open"}
           hint={
             closed
-              ? `Closed ${record.closedAt ? formatDate(record.closedAt) : ""} by ${record.closedByName ?? "—"}. It can never change.`
-              : "Being counted and corrected. This shop cannot sell until it is closed."
+              ? `Closed ${record.closedAt ? formatDate(record.closedAt) : ""} by ${record.closedByName ?? "—"}. Only the CEO or Super Admin can reopen it.`
+              : record.reopenedAt
+                ? "Reopened to fix. Close it again when it is right."
+                : "Being counted and corrected."
           }
           tone={closed ? "success" : "warning"}
         />
@@ -203,10 +206,20 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
             <li><span className="font-semibold text-foreground">1. Download the count sheet.</span> Every item, category, count, cost, both selling prices, and every IMEI.</li>
             <li><span className="font-semibold text-foreground">2. Count the shelf.</span> Tap Phones, Accessories, Screen, or Laptop above the list to give each person their own group. Write what you really find in COUNTED QTY. Mark a missing phone NO.</li>
             <li><span className="font-semibold text-foreground">3. Correct.</span> Upload the filled sheet and check the preview, or change a line on screen below. Add a missing IMEI, serial, or piece count here. Super Admin, CEO, accountant, records checker, and stock uploader can change the list until it is closed.</li>
-            <li><span className="font-semibold text-foreground">4. Close.</span> The CEO or main admin closes it. After that it is final and the shop can sell.</li>
+            <li><span className="font-semibold text-foreground">4. Close.</span> The CEO or main admin closes it when the count and every price are right. If something is found later, the CEO or Super Admin can reopen it.</li>
           </ol>
         </SectionCard>
       ) : null}
+
+      {!closed && record.reopenedAt ? (
+        <p className="rounded-lg border border-warning/30 bg-warning-soft p-3 text-sm text-warning">
+          Reopened {formatDate(record.reopenedAt)} by {record.reopenedByName ?? "—"}
+          {record.reopenReason ? `: ${record.reopenReason}` : ""}. Fix the lines below, then close it again.
+          The shop keeps selling while it is open.
+        </p>
+      ) : null}
+
+      {book.canReopen ? <ReopenCard branchId={branchId} shop={record.shopName} /> : null}
 
       <div className="grid gap-4 xl:grid-cols-2">
         {book.canCorrect ? <SheetCorrection branchId={branchId} /> : null}
@@ -927,7 +940,7 @@ function CloseCard({ branchId, value, shop }: { branchId: string; value: number;
       <p className="text-sm">
         Closing fixes <span className="font-semibold">{shop}</span>&apos;s opening stock at{" "}
         <span className="num font-semibold">{formatCurrency(value)}</span> at cost, with today&apos;s counts, IMEIs and prices.
-        It can never be edited again. Later changes go through Stock count and supplier bills.
+        Nobody can edit it after that. If a price or count turns out wrong, the CEO or Super Admin can reopen it.
       </p>
       <label className="mt-3 flex items-start gap-2 text-sm">
         <input type="checkbox" checked={confirm} onChange={(event) => setConfirm(event.target.checked)} className="mt-1" />
@@ -947,6 +960,58 @@ function CloseCard({ branchId, value, shop }: { branchId: string; value: number;
       <p className="mt-3 text-xs text-muted-foreground">
         Want the paper first? Use Download above, or see <Link href="/reports" className="text-primary hover:underline">Reports</Link>.
       </p>
+    </SectionCard>
+  )
+}
+
+function ReopenCard({ branchId, shop }: { branchId: string; shop: string }) {
+  const router = useRouter()
+  const [reason, setReason] = useState("")
+  const [busy, setBusy] = useState(false)
+
+  async function reopen() {
+    const data = new FormData()
+    data.set("branchId", branchId)
+    data.set("reason", reason)
+    setBusy(true)
+    try {
+      const outcome = await reopenOpeningStock(data)
+      setBusy(false)
+      if (outcome.error) {
+        toast.error(outcome.error)
+        return
+      }
+      toast.success(`${shop}'s opening stock is open again. Fix it, then close it.`)
+      router.refresh()
+    } catch {
+      setBusy(false)
+      toast.error("That did not reach the shop system. Check your network and try again.")
+    }
+  }
+
+  return (
+    <SectionCard
+      title="Reopen opening stock"
+      description="CEO or Super Admin. Use this when a count or a price was wrong after closing."
+    >
+      <p className="text-sm">
+        Reopening lets staff correct <span className="font-semibold">{shop}</span>&apos;s opening stock again: counts,
+        IMEIs, cost, lowest and standard selling price. The shop keeps selling. Anything already sold stays sold.
+        Close it again when it is right.
+      </p>
+      <label className="mt-3 block text-sm">
+        <span className="eyebrow mb-1 block">Why reopen?</span>
+        <Input
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+          placeholder="For example: prices on the sheet were guesses"
+          aria-label="Reason for reopening"
+        />
+      </label>
+      <Button type="button" variant="outline" className="mt-3" onClick={reopen} disabled={reason.trim().length < 5 || busy}>
+        {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <LockOpen className="mr-1.5 h-4 w-4" />}
+        Reopen opening stock
+      </Button>
     </SectionCard>
   )
 }

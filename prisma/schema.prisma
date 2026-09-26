@@ -1167,6 +1167,12 @@ model OpeningStock {
   /// JSON copy of every line (code, name, qty, cost, lowest and standard price,
   /// IMEIs) as closed, so later price changes never rewrite the opening.
   snapshot       String?
+  /// Set when the CEO or Super Admin opened a closed opening stock again to
+  /// fix it (a guessed price from the sheet, say). The last reopen is kept
+  /// here; every one is on Who did what.
+  reopenedAt     DateTime?
+  reopenedBy     String?
+  reopenReason   String?
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 

@@ -25,7 +25,8 @@ import { money } from "@/lib/utils"
 
 /**
  * Opening stock, per shop: loaded, corrected against a physical count, then
- * closed for good.
+ * closed. The CEO or Super Admin can open a closed one again to fix it, with a
+ * reason, and close it again when it is right.
  *
  * The opening bill's lines are the opening
  * figures: quantity, unit cost, and the IMEIs tied to the bill. A correction
@@ -149,9 +150,11 @@ export async function getOpeningBook(branchId: string) {
   } else {
     lines = await liveLines(record.purchaseId, branchId)
   }
-  const closer = record.closedBy
-    ? await prisma.user.findUnique({ where: { id: record.closedBy }, select: { name: true, email: true } })
-    : null
+  const [closer, reopener] = await Promise.all(
+    [record.closedBy, record.reopenedBy].map((id) =>
+      id ? prisma.user.findUnique({ where: { id }, select: { name: true, email: true } }) : null
+    )
+  )
 
   return {
     record: {
@@ -164,6 +167,9 @@ export async function getOpeningBook(branchId: string) {
       loadedAt: record.purchase.createdAt.toISOString(),
       closedAt: record.closedAt?.toISOString() ?? null,
       closedByName: closer ? closer.name || closer.email : null,
+      reopenedAt: record.reopenedAt?.toISOString() ?? null,
+      reopenedByName: reopener ? reopener.name || reopener.email : null,
+      reopenReason: record.reopenReason,
       totals: closed
         ? {
             value: money(record.closedValue),
@@ -176,6 +182,7 @@ export async function getOpeningBook(branchId: string) {
     canCorrect: !closed && canCorrect,
     canClose: !closed && canCloseRole(user.role),
     canRemove: !closed && isShopOwner(user.role),
+    canReopen: closed && isShopOwner(user.role),
   }
 }
 
@@ -963,7 +970,7 @@ export async function removeOpeningStock(formData: FormData): Promise<RemoveResu
 }
 
 /**
- * Close a shop's opening stock. After this it can never change, and the shop
+ * Close a shop's opening stock. After this only a CEO or Super Admin reopen can change it, and the shop
  * can start selling.
  */
 export async function closeOpeningStock(formData: FormData): Promise<{ error?: string; problems?: string[]; success?: boolean }> {
@@ -1026,6 +1033,79 @@ export async function closeOpeningStock(formData: FormData): Promise<{ error?: s
       entityType: "OpeningStock",
       entityId: record.purchase.invoiceNumber,
       newValue: JSON.stringify({ closed: true, shop: record.branch.name, ...sum }),
+      branchId,
+      risk: "HIGH",
+    },
+  })
+
+  revalidateOpening()
+  revalidatePath("/dashboard")
+  return { success: true }
+}
+
+/**
+ * Open a closed opening stock again, so a wrong count or a guessed price can be
+ * fixed. CEO or Super Admin only, and always with a reason.
+ *
+ * The shop keeps selling. Everything already sold stays sold: a correction
+ * still cannot take the count below what is on the shelf, or take off a unit
+ * that was sold. When it is right, close it again as before.
+ */
+export async function reopenOpeningStock(formData: FormData): Promise<{ error?: string; success?: boolean }> {
+  const user = await requireUser()
+  if (!isShopOwner(user.role)) return { error: "Only the CEO or Super Admin can reopen opening stock." }
+  const branchId = String(formData.get("branchId") || "")
+  const reason = String(formData.get("reason") || "").trim()
+  if (reason.length < 5) return { error: "Say why it is being reopened, for example: prices on the sheet were guesses." }
+
+  const record = await prisma.openingStock.findUnique({
+    where: { branchId },
+    include: { branch: true, purchase: { select: { invoiceNumber: true, notes: true } } },
+  })
+  if (!record) return { error: "This shop has no opening stock." }
+  if (record.status !== "CLOSED") return { error: "This shop's opening stock is already open." }
+
+  const reopenedAt = new Date()
+  const done = await prisma.openingStock.updateMany({
+    where: { id: record.id, status: "CLOSED" },
+    data: {
+      status: "OPEN",
+      closedAt: null,
+      closedBy: null,
+      closedValue: null,
+      closedQuantity: null,
+      closedLines: null,
+      snapshot: null,
+      reopenedAt,
+      reopenedBy: user.id,
+      reopenReason: reason,
+    },
+  })
+  if (done.count !== 1) return { error: "Someone reopened this opening stock a moment ago. Refresh to see it." }
+
+  await prisma.purchase.update({
+    where: { id: record.purchaseId },
+    data: {
+      notes: [record.purchase.notes, `Opening stock reopened ${reopenedAt.toISOString().slice(0, 10)}: ${reason}.`]
+        .filter(Boolean)
+        .join(" "),
+    },
+  })
+  await prisma.auditLog.create({
+    data: {
+      userId: user.id,
+      action: "UPDATE",
+      entityType: "OpeningStock",
+      entityId: record.purchase.invoiceNumber,
+      // The figures it was closed at, so the first close can still be read later.
+      oldValue: JSON.stringify({
+        closedAt: record.closedAt,
+        closedBy: record.closedBy,
+        value: money(record.closedValue),
+        quantity: record.closedQuantity,
+        lines: record.closedLines,
+      }),
+      newValue: JSON.stringify({ reopened: true, shop: record.branch.name, reason }),
       branchId,
       risk: "HIGH",
     },
