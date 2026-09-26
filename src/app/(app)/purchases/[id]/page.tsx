@@ -109,25 +109,25 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
           ) : null}
         </div>
       ) : null}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="surface-card p-5">
+      <div className="grid grid-cols-2 gap-2 sm:gap-4 xl:grid-cols-4">
+        <div className="surface-card min-w-0 p-3 sm:p-5">
           <p className="text-sm text-muted-foreground">Status</p>
           <StatusBadge value={purchase.status} />
           <p className="mt-3 text-sm">Value {formatCurrency(money(purchase.totalAmount))}</p>
         </div>
-        <div className="surface-card p-5">
+        <div className="surface-card min-w-0 p-3 sm:p-5">
           <p className="text-sm text-muted-foreground">On the supplier bill</p>
           <p className="text-2xl font-semibold">{trace.expected}</p>
           <p className="text-sm text-muted-foreground">{item?.product.name}</p>
           {origin ? <p className="mt-2 text-sm text-muted-foreground">{origin}</p> : null}
           {purchase.expectedDate ? <p className="text-sm text-muted-foreground">Due {formatDate(purchase.expectedDate)}</p> : null}
         </div>
-        <div className="surface-card p-5">
+        <div className="surface-card min-w-0 p-3 sm:p-5">
           <p className="text-sm text-muted-foreground">Scanned into the shop</p>
           <p className="text-2xl font-semibold">{trace.recorded}</p>
           <p className="text-sm text-muted-foreground">Never scanned {trace.shortVsBill}</p>
         </div>
-        <div className="surface-card p-5">
+        <div className="surface-card min-w-0 p-3 sm:p-5">
           <p className="text-sm text-muted-foreground">{isOpening ? "Not a bill to pay" : surplus > 0 ? "Value owing (+)" : "Value owing (-)"}</p>
           <p className="text-xl font-semibold text-success">
             {isOpening ? "Value only" : formatCurrency(surplus > 0 ? surplus : due)}
@@ -139,20 +139,20 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
             </p>
           )}
         </div>
-        <div className="surface-card p-5">
+        <div className="surface-card min-w-0 p-3 sm:p-5">
           <p className="text-sm text-muted-foreground">Coming</p>
           <p className="text-2xl font-semibold">{trace.coming}</p>
         </div>
-        <div className="surface-card p-5">
+        <div className="surface-card min-w-0 p-3 sm:p-5">
           <p className="text-sm text-muted-foreground">Still on our shelf</p>
           <p className="text-2xl font-semibold">{trace.inShop}</p>
         </div>
-        <div className="surface-card p-5">
+        <div className="surface-card min-w-0 p-3 sm:p-5">
           <p className="text-sm text-muted-foreground">Sold</p>
           <p className="text-2xl font-semibold">{trace.sold}</p>
           <p className="text-sm text-muted-foreground">Sold today (Lagos day) {trace.soldToday}</p>
         </div>
-        <div className="surface-card p-5">
+        <div className="surface-card min-w-0 p-3 sm:p-5">
           <p className="text-sm text-muted-foreground">Other known places</p>
           <p className="text-2xl font-semibold">{trace.inTransit + trace.backToSupplier + trace.otherKnown}</p>
           <p className="text-sm text-muted-foreground">

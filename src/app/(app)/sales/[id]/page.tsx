@@ -128,54 +128,48 @@ export default async function SaleDetailPage({
           </p>
         </div>
       </div>
+      {/* A list, not a four-column table, so a phone name and its price
+          both fit on a phone screen. */}
       <div className="surface-card overflow-hidden print:hidden">
-        <table className="w-full text-sm">
-          <thead className="text-left text-muted-foreground">
-            <tr className="border-b border-border">
-              <th className="px-4 py-3">Item</th>
-              <th className="px-4 py-3">IMEI</th>
-              <th className="px-4 py-3">Qty</th>
-              <th className="px-4 py-3">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sale.items.map((item) => (
-              <tr key={item.id} className="border-b border-border/70">
-                <td className="px-4 py-3">
-                  <p className="font-medium">{item.product.name}</p>
-                  {(item.product.storage || item.product.condition || item.product.color) ? (
-                    <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                      {item.product.storage ? (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200 font-semibold text-[10px]">
-                          {item.product.storage}
-                        </span>
-                      ) : null}
-                      {item.product.condition ? (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 font-medium text-[10px]">
-                          {formatCondition(item.product.condition)}
-                        </span>
-                      ) : null}
-                      {item.product.color ? (
-                        <span className="text-[11px] text-muted-foreground">
-                          · {item.product.color}
-                        </span>
-                      ) : null}
-                    </div>
+        <div className="flex items-center justify-between border-b border-border px-5 py-3">
+          <h3 className="text-sm font-semibold">
+            {sale.items.length} item{sale.items.length === 1 ? "" : "s"}
+          </h3>
+          <span className="text-sm font-semibold tabular-nums">{formatCurrency(money(sale.totalAmount))}</span>
+        </div>
+        <ul className="divide-y divide-border">
+          {sale.items.map((item) => (
+            <li key={item.id} className="flex items-start justify-between gap-4 px-5 py-3.5">
+              <div className="min-w-0">
+                <p className="font-medium">{item.product.name}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+                  {item.product.storage ? (
+                    <span className="rounded bg-info-soft px-1.5 py-0.5 font-semibold text-info">{item.product.storage}</span>
                   ) : null}
-                </td>
-                <td className="px-4 py-3">
+                  {item.product.condition ? (
+                    <span className="rounded bg-success-soft px-1.5 py-0.5 font-medium text-success">
+                      {formatCondition(item.product.condition)}
+                    </span>
+                  ) : null}
+                  {item.product.color ? <span className="text-muted-foreground">{item.product.color}</span> : null}
                   {item.imei ? (
-                    <Link href={`/imei/${item.imei.id}`} className="text-primary">{item.imei.imei1}</Link>
-                  ) : (
-                    "-"
-                  )}
-                </td>
-                <td className="px-4 py-3">{item.quantity}</td>
-                <td className="px-4 py-3">{formatCurrency(money(item.totalPrice))}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                    <Link href={`/imei/${item.imei.id}`} className="font-mono text-primary hover:underline">
+                      {item.imei.imei1}
+                    </Link>
+                  ) : null}
+                </div>
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="font-semibold tabular-nums">{formatCurrency(money(item.totalPrice))}</p>
+                {item.quantity > 1 ? (
+                  <p className="text-xs tabular-nums text-muted-foreground">
+                    {item.quantity} × {formatCurrency(money(item.unitPrice))}
+                  </p>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ul>
       </div>
       {sale.payments.length ? (
         <div className="surface-card p-5 print:hidden">
@@ -183,8 +177,8 @@ export default async function SaleDetailPage({
           <div className="space-y-2 text-sm">
             {sale.payments.map((payment) => (
               <div key={payment.id} className="flex justify-between border-b border-border/70 pb-2">
-                <span>{payment.method}{payment.notes ? ` · ${payment.notes}` : ""}</span>
-                <span>{formatCurrency(money(payment.amount))}</span>
+                <span>{statusLabel(payment.method)}{payment.notes ? ` · ${payment.notes}` : ""}</span>
+                <span className="tabular-nums">{formatCurrency(money(payment.amount))}</span>
               </div>
             ))}
           </div>
@@ -227,7 +221,10 @@ export default async function SaleDetailPage({
           </ActionForm>
         </div>
       ) : null}
-      <div className="surface-card overflow-hidden print:border-0 print:shadow-none">
+      {/* The invoice is a paper document: on a phone it keeps its paper width
+          and scrolls sideways inside this box instead of squeezing its columns. */}
+      <div className="surface-card overflow-x-auto print:overflow-visible print:border-0 print:shadow-none">
+        <div className="min-w-[600px] print:min-w-0">
         <Receipt
           brand={brand}
           invoiceNumber={sale.invoiceNumber}
@@ -252,6 +249,7 @@ export default async function SaleDetailPage({
           method={statusLabel(sale.paymentMethod)}
           notes={sale.notes}
         />
+        </div>
       </div>
     </div>
     </>

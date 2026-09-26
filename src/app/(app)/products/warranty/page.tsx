@@ -39,7 +39,7 @@ export default async function WarrantyPage() {
       />
 
       {aboveZero > 0 ? (
-        <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+        <div className="rounded-xl border border-warning/40 bg-warning-soft px-4 py-3 text-sm text-warning">
           {aboveZero === 1
             ? "1 item still has a default above 0 days. Click Set every item to 0 days, or change that line below."
             : `${aboveZero} items still have a default above 0 days. Click Set every item to 0 days, or change each line below.`}

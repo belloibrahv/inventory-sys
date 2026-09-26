@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react"
 import Link from "next/link"
+import { pageTitles } from "@/components/layout/titles"
 import { ArrowLeft } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { statusLabel, statusTone } from "@/lib/status"
@@ -52,19 +53,19 @@ export function PageHeader({
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
-        <div className="flex items-center gap-2.5">
-          {backHref ? (
-            <Link
-              href={backHref}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border-2 border-primary/50 bg-primary/10 px-3 text-sm font-bold text-primary shadow-sm transition-all hover:border-primary hover:bg-primary hover:text-primary-foreground active:scale-95 shrink-0"
-              title="Go back"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              <span>Back</span>
-            </Link>
-          ) : null}
-          <h1 className="text-xl font-semibold tracking-tight md:text-2xl">{title}</h1>
-        </div>
+        {/* Up to the list this page belongs to. The top bar's Back goes to the
+            previous screen; this goes to the parent list, so it is a small
+            link naming where it leads rather than a second Back button. */}
+        {backHref ? (
+          <Link
+            href={backHref}
+            className="mb-1 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            {pageTitles[backHref] ?? "Back to the list"}
+          </Link>
+        ) : null}
+        <h1 className="text-xl font-semibold tracking-tight [overflow-wrap:anywhere] md:text-2xl">{title}</h1>
         {description ? (
           <p className="mt-1 max-w-2xl text-sm leading-snug text-muted-foreground">{description}</p>
         ) : null}

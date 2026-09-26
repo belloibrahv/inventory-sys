@@ -72,9 +72,9 @@ export function OfflineTill() {
       </header>
 
       <main className={`mx-auto space-y-5 px-6 py-8 ${snapshot ? "max-w-6xl" : "max-w-xl"}`}>
-        <div className="rounded-lg bg-white p-5 shadow-sm">
+        <div className="rounded-lg bg-card p-5 shadow-sm">
           <h1 className="text-xl font-semibold">This phone cannot reach the shop system</h1>
-          <p className="mt-2 text-sm text-slate-700">
+          <p className="mt-2 text-sm text-foreground/80">
             {online
               ? "The network is back. Open Sell now to keep selling, or send the waiting work from here."
               : snapshot
@@ -95,30 +95,30 @@ export function OfflineTill() {
             ) : null}
           </div>
           {snapshot ? (
-            <p className="mt-3 text-xs text-slate-600">
+            <p className="mt-3 text-xs text-muted-foreground">
               Last shop list saved {formatLagosStamp(new Date(snapshot.savedAt))}. {snapshot.imeis.length} In shop IMEIs. {snapshot.customers.length} named customers.
             </p>
           ) : null}
           {lists.length ? (
-            <p className="mt-2 text-xs text-slate-600">
+            <p className="mt-2 text-xs text-muted-foreground">
               Also saved on this phone: {lists.map((row) => row.title).join(", ")}.
             </p>
           ) : null}
-          {message ? <p className="mt-3 text-sm text-slate-700">{message}</p> : null}
+          {message ? <p className="mt-3 text-sm text-foreground/80">{message}</p> : null}
         </div>
 
-        <div className="rounded-lg bg-white p-5 shadow-sm">
+        <div className="rounded-lg bg-card p-5 shadow-sm">
           <h2 className="text-sm font-semibold">Waiting sales on this phone</h2>
           {queue.length === 0 ? (
-            <p className="mt-2 text-sm text-slate-600">No waiting sale is here.</p>
+            <p className="mt-2 text-sm text-muted-foreground">No waiting sale is here.</p>
           ) : (
             <ul className="mt-3 space-y-3">
               {queue.map((row) => (
-                <li key={row.id} className="rounded-xl border border-slate-200 px-4 py-3 text-sm">
+                <li key={row.id} className="rounded-xl border border-border px-4 py-3 text-sm">
                   <p className="font-medium">
                     {row.payload.items.length} item{row.payload.items.length === 1 ? "" : "s"} · {formatCurrency(row.payload.paidAmount)} · {statusLabel(row.payload.paymentMethod)}
                   </p>
-                  <p className="mt-1 text-slate-600">Waiting since {formatLagosStamp(new Date(row.createdAt))}</p>
+                  <p className="mt-1 text-muted-foreground">Waiting since {formatLagosStamp(new Date(row.createdAt))}</p>
                 </li>
               ))}
             </ul>
@@ -126,7 +126,7 @@ export function OfflineTill() {
         </div>
 
         {snapshot ? (
-          <div className="rounded-lg bg-white p-5 shadow-sm">
+          <div className="rounded-lg bg-card p-5 shadow-sm">
             <h2 className="mb-4 text-sm font-semibold">Sell from the list saved on this phone</h2>
             <PosClient
               products={snapshot.products}

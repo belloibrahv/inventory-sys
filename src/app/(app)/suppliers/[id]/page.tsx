@@ -71,7 +71,7 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
           <h3 className="font-semibold">Every bill from this supplier</h3>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[760px] text-sm">
             <thead className="text-left text-muted-foreground bg-muted/40 text-xs uppercase tracking-wider">
               <tr className="border-b border-border">
                 <th className="px-5 py-3">Bill number</th>
@@ -92,7 +92,7 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
                 return (
                   <tr key={row.id} className="hover:bg-muted/30 transition-colors">
                     <td className="px-5 py-3">
-                      <Link href={`/purchases/${row.id}`} className="font-semibold text-primary hover:underline">
+                      <Link href={`/purchases/${row.id}`} className="whitespace-nowrap font-semibold text-primary hover:underline">
                         {row.invoiceNumber}
                       </Link>
                       <p className="text-xs text-muted-foreground">{formatDate(row.createdAt)}</p>

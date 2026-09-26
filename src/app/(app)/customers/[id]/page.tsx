@@ -58,15 +58,21 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
           <h3 className="mb-4 font-semibold">Purchases</h3>
           <div className="space-y-3 text-sm">
             {customer.sales.map((sale) => (
-              <div key={sale.id} className="flex justify-between gap-3">
-                <a href={`/sales/${sale.id}`} className="font-medium text-primary">{sale.invoiceNumber}</a>
-                <StatusBadge value={money(sale.paidAmount) >= money(sale.totalAmount) ? "SETTLED" : "DUE"} />
-                <span>
-                  {formatCurrency(money(sale.paidAmount))} / {formatCurrency(money(sale.totalAmount))}
-                  {money(sale.totalAmount) - money(sale.paidAmount) > 0
-                    ? ` · still ${formatCurrency(money(sale.totalAmount) - money(sale.paidAmount))}`
-                    : ""}
-                </span>
+              <div key={sale.id} className="flex items-start justify-between gap-3 border-b border-border/70 pb-3 last:border-0 last:pb-0">
+                <div className="min-w-0">
+                  <a href={`/sales/${sale.id}`} className="whitespace-nowrap font-medium text-primary hover:underline">{sale.invoiceNumber}</a>
+                  <div className="mt-1">
+                    <StatusBadge value={money(sale.paidAmount) >= money(sale.totalAmount) ? "SETTLED" : "DUE"} />
+                  </div>
+                </div>
+                <div className="shrink-0 text-right tabular-nums">
+                  <p className="font-medium">{formatCurrency(money(sale.totalAmount))}</p>
+                  {money(sale.totalAmount) - money(sale.paidAmount) > 0 ? (
+                    <p className="text-xs text-warning">Still {formatCurrency(money(sale.totalAmount) - money(sale.paidAmount))}</p>
+                  ) : (
+                    <p className="text-xs text-success">Paid</p>
+                  )}
+                </div>
               </div>
             ))}
           </div>

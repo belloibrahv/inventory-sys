@@ -110,7 +110,7 @@ export function LetterheadEditor({
           documentTitle="INV-SAMPLE"
           meta={["Preview of the header every shop will print"]}
         />
-        <div className="px-6 py-4 text-sm text-slate-600">
+        <div className="px-6 py-4 text-sm text-muted-foreground">
           This is how invoices, receipts, reports and the how-to book will look at the top.
         </div>
         <DocumentPaperFooter brand={preview} />

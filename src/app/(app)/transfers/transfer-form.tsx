@@ -515,7 +515,7 @@ export function TransferForm({
         </div>
       </div>
 
-      <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+      <div className="rounded-xl border border-warning/40 bg-warning-soft px-3 py-2 text-xs text-warning">
         After you submit, wait for the receiving branch to accept or reject. Stock stays on the sending branch In shop record until they accept. Accept and Reject stay the same.
       </div>
 

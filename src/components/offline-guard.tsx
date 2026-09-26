@@ -121,7 +121,7 @@ export function OfflineGuard() {
         </button>
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4 pr-14">
           <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/15 text-amber-700">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-warning-soft text-warning">
               <WifiOff className="h-5 w-5" />
             </div>
             <div>
