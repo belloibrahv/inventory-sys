@@ -1,0 +1,100 @@
+# The whole shop system on one Hostinger VPS: the app, its Postgres database,
+# Caddy in front for HTTPS, and a nightly backup.
+#
+#   cd deploy/hostinger
+#   cp .env.example .env   # then fill it in
+#   BUILD_ID=$(git rev-parse --short HEAD) docker compose up -d --build
+#
+# See README.md in this folder for the full first-time setup and the move
+# from Railway.
+
+name: abutwins
+
+services:
+  db:
+    # Same major version as Railway (18), so a dump from there restores here.
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-abutwins}
+      POSTGRES_USER: ${POSTGRES_USER:-abutwins}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/hostinger/.env}
+    volumes:
+      # Postgres 18 keeps its data under /var/lib/postgresql/18/docker.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Not published to the internet. Only the app and the backup reach it.
+
+  app:
+    build:
+      context: ../..
+      dockerfile: deploy/hostinger/Dockerfile
+      args:
+        BUILD_ID: ${BUILD_ID:-manual}
+    image: abutwins-app:${BUILD_ID:-manual}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-abutwins}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-abutwins}?schema=public&connection_limit=10
+      NEXT_PUBLIC_BUILD_ID: ${BUILD_ID:-manual}
+    expose:
+      - "3000"
+
+  caddy:
+    # Gets and renews the HTTPS certificate for DOMAIN by itself.
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in deploy/hostinger/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  backup:
+    # A full copy of the database every night, kept for BACKUP_KEEP_DAYS days
+    # in ./backups on the server. Copy that folder off the server too.
+    image: postgres:18-alpine
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:-abutwins}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-abutwins}
+      KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+    volumes:
+      - ./backups:/backups
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          stamp=$$(date +%Y%m%d-%H%M)
+          if pg_dump -Fc -f /backups/abutwins-$$stamp.dump; then
+            echo "backup written: abutwins-$$stamp.dump"
+          else
+            echo "BACKUP FAILED at $$stamp"
+          fi
+          find /backups -name 'abutwins-*.dump' -mtime +$$KEEP_DAYS -delete
+          sleep 86400
+        done
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

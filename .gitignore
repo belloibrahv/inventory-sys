@@ -18,3 +18,7 @@ public/swe-worker*
 # Live first passwords. Regenerate with: node docs/generate-staff-logins.mjs
 docs/staff-logins.secrets.json
 docs/Abu-Twins-Staff-Logins.docx
+
+# Hostinger deploy: the filled-in env file and the server backups stay off git.
+deploy/hostinger/.env
+deploy/hostinger/backups/

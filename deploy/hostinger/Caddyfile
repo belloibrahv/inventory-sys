@@ -1,0 +1,12 @@
+# HTTPS for the shop system. Caddy fetches and renews the certificate for
+# DOMAIN from Let's Encrypt by itself once the domain's DNS points at this
+# server. No email is needed for that.
+
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:3000 {
+		# The app reads these to know the real visitor and that the link is HTTPS.
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Real-IP {remote_host}
+	}
+}

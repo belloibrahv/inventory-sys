@@ -1,0 +1,19 @@
+# Read by BuildKit for deploy/hostinger/Dockerfile only; Railway never sees it.
+# Secrets and local data stay out of the image.
+.env
+.env.*
+!.env.example
+node_modules
+.next
+.git
+prisma/dev.db*
+*.log
+*.zip
+*.xlsx
+*.jpeg
+*.jpg
+!public/**/*.jpg
+docs/staff-logins.secrets.json
+docs/*.docx
+deploy/hostinger/backups
+deploy/hostinger/.env
