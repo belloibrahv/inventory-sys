@@ -8,6 +8,7 @@ import { getAppSettings, lowStockLimit } from "@/lib/settings"
 import { requireUser } from "@/lib/session"
 import { money } from "@/lib/utils"
 import { saleTenders } from "@/lib/sale-money"
+import { plainMoney } from "@/lib/plain"
 import { ReportsClientView } from "./reports-client-view"
 
 function asRange(value?: string): ShopRange {
@@ -127,13 +128,13 @@ export default async function ReportsPage({
       />
       <ReportsClientView
         pack={pack}
-        sales={data.sales}
-        expenses={data.expenses}
-        inventory={data.inventory}
-        swaps={data.swaps}
-        returns={data.returns}
-        opening={opening}
-        branches={branches}
+        sales={plainMoney(data.sales)}
+        expenses={plainMoney(data.expenses)}
+        inventory={plainMoney(data.inventory)}
+        swaps={plainMoney(data.swaps)}
+        returns={plainMoney(data.returns)}
+        opening={plainMoney(opening)}
+        branches={branches.map(({ id, name, code }) => ({ id, name, code }))}
         selectedBranchId={selectedBranchId}
         range={range}
         date={date}

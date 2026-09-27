@@ -1,5 +1,6 @@
 import { getFinance } from "@/app/actions/finance"
 import { PageHeader } from "@/components/shared"
+import { plainMoney } from "@/lib/plain"
 import { FinanceClientView } from "./finance-client-view"
 
 export default async function FinancePage() {
@@ -10,7 +11,7 @@ export default async function FinancePage() {
         title="Money in & out"
         description="Cash, banks, money in from sales, and money out."
       />
-      <FinanceClientView data={data} />
+      <FinanceClientView data={plainMoney(data)} />
     </div>
   )
 }
