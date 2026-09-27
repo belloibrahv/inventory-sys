@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { redirect } from "next/navigation"
 import { getRoleMatrix, saveRoleAccess } from "@/app/actions/access"
 import { ActionForm } from "@/components/action-form"
@@ -5,6 +6,7 @@ import { PageHeader } from "@/components/shared"
 import { ACTION_PERMS, VIEW_PERMS } from "@/lib/permissions"
 import { ROLE_LABELS, isShopOwner } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
+import { cn } from "@/lib/utils"
 import { UserRole } from "@prisma/client"
 
 const editableRoles = (Object.keys(ROLE_LABELS) as UserRole[]).filter(
@@ -58,37 +60,53 @@ function RoleAccessCard({
   )
 }
 
-export default async function AccessPage() {
+const ROLE_NOTES: Partial<Record<UserRole, string>> = {
+  AUDITOR: "Internal Auditor: full shop oversight on the left menu. Post money. Cannot sell, load stock, or change this list.",
+  ACCOUNTANT:
+    "Financial Accountant: money and books pages only. Keep Sell now, Upload stock, repairs, and other floor jobs off unless you mean to give them.",
+}
+
+/** Auditor and Accountant first: they are the jobs owners adjust most. */
+const roleOrder = [
+  ...editableRoles.filter((role) => role === "AUDITOR" || role === "ACCOUNTANT"),
+  ...editableRoles.filter((role) => role !== "AUDITOR" && role !== "ACCOUNTANT"),
+]
+
+export default async function AccessPage({ searchParams }: { searchParams: Promise<{ role?: string }> }) {
   const user = await requireUser()
   if (!isShopOwner(user.role)) redirect("/staff")
   const matrix = await getRoleMatrix()
   if ("error" in matrix) redirect("/staff")
   const allowed = new Map(matrix.rows.map((row) => [`${row.role}:${row.permKey}`, row.allowed]))
+  const { role: asked } = await searchParams
+  const role = roleOrder.find((row) => row === asked) ?? roleOrder[0]
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Who can see what"
-        description="Tick the pages each job may open. The left menu only shows what is ticked for that job. Super Admin and the CEO always keep every page."
+        description="Pick a job, then tick the pages it may open. The left menu only shows what is ticked for that job. Super Admin and the CEO always keep every page."
       />
 
-      <div className="space-y-6">
-        <RoleAccessCard
-          role="AUDITOR"
-          allowed={allowed}
-          note="Internal Auditor: full shop oversight on the left menu. Post money. Cannot sell, load stock, or change this list."
-        />
-        <RoleAccessCard
-          role="ACCOUNTANT"
-          allowed={allowed}
-          note="Financial Accountant: money and books pages only. Keep Sell now, Upload stock, repairs, and other floor jobs off unless you mean to give them."
-        />
-        {editableRoles
-          .filter((role) => role !== "AUDITOR" && role !== "ACCOUNTANT")
-          .map((role) => (
-            <RoleAccessCard key={role} role={role} allowed={allowed} />
-          ))}
-      </div>
+      <nav aria-label="Pick a job" className="flex flex-wrap gap-2">
+        {roleOrder.map((row) => (
+          <Link
+            key={row}
+            href={`/staff/access?role=${row}`}
+            aria-current={row === role ? "page" : undefined}
+            className={cn(
+              "rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
+              row === role
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            {ROLE_LABELS[row]}
+          </Link>
+        ))}
+      </nav>
+
+      <RoleAccessCard key={role} role={role} allowed={allowed} note={ROLE_NOTES[role]} />
     </div>
   )
 }

@@ -379,15 +379,15 @@ export function TransferForm({
           </div>
         ) : null}
 
-        <div className="overflow-x-auto rounded-lg border border-border">
+        <div className="max-h-[60vh] overflow-auto rounded-lg border border-border">
           <table className="min-w-full text-sm">
-            <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
+            <thead className="sticky top-0 z-10 bg-muted text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-3 py-2 font-semibold">Item</th>
-                <th className="px-3 py-2 font-semibold">IMEI or item code</th>
+                <th className="hidden px-3 py-2 font-semibold sm:table-cell">IMEI or item code</th>
                 <th className="px-3 py-2 text-center font-semibold">On hand</th>
                 <th className="px-3 py-2 text-center font-semibold">Qty to send</th>
-                <th className="px-3 py-2 text-right font-semibold">Unit cost</th>
+                <th className="hidden px-3 py-2 text-right font-semibold sm:table-cell">Unit cost</th>
                 <th className="px-3 py-2 text-right font-semibold">Cost value</th>
               </tr>
             </thead>
@@ -420,8 +420,9 @@ export function TransferForm({
                     <td className="px-3 py-2">
                       <p className="font-medium">{phone.name}</p>
                       <p className="text-xs text-muted-foreground">Phone · qty 1</p>
+                      <p className="font-mono text-xs text-muted-foreground sm:hidden">{phone.imei}</p>
                     </td>
-                    <td className="px-3 py-2 font-mono text-xs">{phone.imei}</td>
+                    <td className="hidden px-3 py-2 font-mono text-xs sm:table-cell">{phone.imei}</td>
                     <td className="px-3 py-2 text-center tabular-nums">1</td>
                     <td className="px-3 py-2 text-center">
                       <label className="inline-flex items-center gap-2">
@@ -437,7 +438,7 @@ export function TransferForm({
                         <span className="tabular-nums font-semibold">{sending ? "1" : "0"}</span>
                       </label>
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(unit)}</td>
+                    <td className="hidden px-3 py-2 text-right tabular-nums sm:table-cell">{formatCurrency(unit)}</td>
                     <td className="px-3 py-2 text-right tabular-nums font-medium">
                       {formatCurrency(sending ? unit : 0)}
                     </td>
@@ -456,8 +457,9 @@ export function TransferForm({
                       <p className="text-xs text-muted-foreground">
                         {[product.brand?.name, product.category?.name].filter(Boolean).join(" · ") || "Piece item"}
                       </p>
+                      <p className="font-mono text-xs text-muted-foreground sm:hidden">{product.sku}</p>
                     </td>
-                    <td className="px-3 py-2 font-mono text-xs">{product.sku}</td>
+                    <td className="hidden px-3 py-2 font-mono text-xs sm:table-cell">{product.sku}</td>
                     <td className="px-3 py-2 text-center tabular-nums font-semibold">{product.onShelf}</td>
                     <td className="px-3 py-2 text-center">
                       <Input
@@ -471,10 +473,10 @@ export function TransferForm({
                         }
                         placeholder="0"
                         aria-label={`Qty to send of ${product.name}`}
-                        className="mx-auto h-9 w-24 text-center font-semibold tabular-nums"
+                        className="mx-auto h-9 w-20 text-center sm:w-24 font-semibold tabular-nums"
                       />
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(unit)}</td>
+                    <td className="hidden px-3 py-2 text-right tabular-nums sm:table-cell">{formatCurrency(unit)}</td>
                     <td className="px-3 py-2 text-right tabular-nums font-medium">
                       {formatCurrency(qty * unit)}
                     </td>
@@ -522,7 +524,7 @@ export function TransferForm({
         After you submit, wait for the receiving branch to accept or reject. Stock stays on the sending branch In shop record until they accept. Accept and Reject stay the same.
       </div>
 
-      <Button type="submit" disabled={busy || totalQty < 1}>
+      <Button type="submit" disabled={busy || totalQty < 1} className="w-full sm:w-auto">
         {busy ? "Submitting this transfer" : "Submit the transfer"}
       </Button>
 

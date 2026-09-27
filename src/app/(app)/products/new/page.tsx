@@ -1,6 +1,7 @@
 import { createProduct, getProductLookups } from "@/app/actions/catalog"
 import { ActionForm } from "@/components/action-form"
-import { PageHeader, SectionCard } from "@/components/shared"
+import { FormField, FormSection } from "@/components/form-field"
+import { FormScreen, SectionCard } from "@/components/shared"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
@@ -26,88 +27,11 @@ export default async function NewProductPage() {
   ]
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        backHref="/products"
-        title="Add one item"
-        description="Type the real product name, the same way you say it in the shop: iPhone 13, MacBook Pro M3, Type-C charger cord. Then pick the category that name belongs to."
-      />
-
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)]">
-        <SectionCard title="The item">
-          <ActionForm action={createProduct} submit="Save this product name" className="space-y-3">
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs text-muted-foreground">Product name</span>
-              <Input name="name" placeholder="iPhone 13, MacBook Pro M3, or Type-C charger cord" required />
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs text-muted-foreground">Brand name</span>
-              <Input
-                name="brandName"
-                list="brand-names"
-                placeholder="Apple, Tecno, or Generic"
-                required
-              />
-              <datalist id="brand-names">
-                {lookups.brands.map((brand) => (
-                  <option key={brand.id} value={brand.name} />
-                ))}
-              </datalist>
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs text-muted-foreground">Category</span>
-              <Input
-                name="categoryName"
-                list="category-names"
-                placeholder="Phones, Laptops, Accessories, or Screen"
-                required
-              />
-              <datalist id="category-names">
-                {categoryChoices.map((name) => (
-                  <option key={name} value={name} />
-                ))}
-              </datalist>
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs text-muted-foreground">How we count it</span>
-              <Select name="tracking" defaultValue="IMEI">
-                {TRACKING_OPTIONS.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </Select>
-              <span className="mt-1 block text-xs text-muted-foreground">
-                Tablets often have a serial number and no IMEI. You can still pick IMEI or serial on each unit when it is received, and change this later on the price list.
-              </span>
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs text-muted-foreground">How it looks</span>
-              <Select name="condition" defaultValue="BRAND_NEW">
-                {SHOP_CONDITION_OPTIONS.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </Select>
-            </label>
-            <ShopScopeFields shops={lookups.branches} />
-            <div className="grid gap-2 sm:grid-cols-3">
-              <Input name="color" placeholder="Color" />
-              <Input name="storage" placeholder="Storage size (GB)" />
-              <Input name="ram" placeholder="Memory (RAM)" />
-            </div>
-            <Input name="sku" placeholder="Item code (leave empty and the system will make one)" />
-            <div className="grid gap-2 sm:grid-cols-3">
-              <Input name="costPrice" type="number" placeholder="Cost price" />
-              <Input name="minimumPrice" type="number" placeholder="Lowest price" />
-              <Input name="sellingPrice" type="number" placeholder="Sell price" />
-            </div>
-            <Input name="warrantyDays" type="number" defaultValue={0} placeholder="Warranty days (0 = no warranty)" />
-            <Textarea name="description" placeholder="Short note about this item" />
-          </ActionForm>
-        </SectionCard>
-
+    <FormScreen
+      backHref="/products"
+      title="Add one item"
+      description="Type the real product name, the same way you say it in the shop: iPhone 13, MacBook Pro M3, Type-C charger cord. Then pick the category that name belongs to."
+      aside={
         <SectionCard title="What this does">
           <ul className="space-y-3 text-sm text-muted-foreground">
             <li>
@@ -129,7 +53,92 @@ export default async function NewProductPage() {
             </li>
           </ul>
         </SectionCard>
-      </div>
-    </div>
+      }
+    >
+      <ActionForm action={createProduct} submit="Save this product name" className="space-y-6">
+        <FormSection title="The item">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField label="Product name" className="sm:col-span-2">
+              <Input name="name" placeholder="iPhone 13, MacBook Pro M3, or Type-C charger cord" required />
+            </FormField>
+            <FormField label="Brand name">
+              <Input name="brandName" list="brand-names" placeholder="Apple, Tecno, or Generic" required />
+              <datalist id="brand-names">
+                {lookups.brands.map((brand) => (
+                  <option key={brand.id} value={brand.name} />
+                ))}
+              </datalist>
+            </FormField>
+            <FormField label="Category">
+              <Input name="categoryName" list="category-names" placeholder="Phones, Laptops, Accessories, or Screen" required />
+              <datalist id="category-names">
+                {categoryChoices.map((name) => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
+            </FormField>
+            <FormField
+              label="How we count it"
+              hint="Tablets often have a serial number and no IMEI. You can still pick IMEI or serial on each unit when it is received."
+            >
+              <Select name="tracking" defaultValue="IMEI">
+                {TRACKING_OPTIONS.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+            <FormField label="How it looks">
+              <Select name="condition" defaultValue="BRAND_NEW">
+                {SHOP_CONDITION_OPTIONS.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+          </div>
+          <ShopScopeFields shops={lookups.branches.map(({ id, name, code }) => ({ id, name, code }))} />
+        </FormSection>
+
+        <FormSection title="Details (optional)">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <FormField label="Colour">
+              <Input name="color" placeholder="Blue" />
+            </FormField>
+            <FormField label="Storage size">
+              <Input name="storage" placeholder="128GB" />
+            </FormField>
+            <FormField label="Memory (RAM)">
+              <Input name="ram" placeholder="8GB" />
+            </FormField>
+            <FormField label="Item code" hint="Leave empty and the system will make one." className="sm:col-span-3">
+              <Input name="sku" />
+            </FormField>
+          </div>
+        </FormSection>
+
+        <FormSection title="Prices (₦)">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <FormField label="Cost price">
+              <Input name="costPrice" type="number" inputMode="decimal" min={0} />
+            </FormField>
+            <FormField label="Lowest price">
+              <Input name="minimumPrice" type="number" inputMode="decimal" min={0} />
+            </FormField>
+            <FormField label="Selling price">
+              <Input name="sellingPrice" type="number" inputMode="decimal" min={0} />
+            </FormField>
+            <FormField label="Warranty days" hint="0 means no warranty. Cashiers can add days on Sell now.">
+              <Input name="warrantyDays" type="number" min={0} defaultValue={0} />
+            </FormField>
+            <FormField label="Short note (optional)" className="sm:col-span-2">
+              <Textarea name="description" rows={2} placeholder="Anything staff should know about this item" />
+            </FormField>
+          </div>
+        </FormSection>
+      </ActionForm>
+    </FormScreen>
   )
 }

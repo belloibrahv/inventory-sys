@@ -19,7 +19,7 @@ export default async function BulkProductsPage() {
         title="Add items from a sheet"
         description="Register many real product names (iPhone 13, MacBook Pro M3) with brand and category. Pick All shops or one shop. Names already on the system stay."
       />
-      <BulkProductUpload shops={lookups.branches} />
+      <BulkProductUpload shops={lookups.branches.map(({ id, name, code }) => ({ id, name, code }))} />
     </div>
   )
 }
