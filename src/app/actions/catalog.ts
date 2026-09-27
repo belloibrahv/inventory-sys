@@ -748,7 +748,7 @@ export async function createCategory(formData: FormData) {
     return { error: shopError(error, "Could not add that category.") }
   }
   revalidatePath("/products")
-  revalidatePath("/products/brands")
+  revalidatePath("/products/categories")
   revalidatePath("/products/new")
   revalidatePath("/pos")
   return { success: true }
@@ -792,7 +792,7 @@ export async function updateCategory(formData: FormData) {
     return { error: shopError(error, "Could not edit that category.") }
   }
   revalidatePath("/products")
-  revalidatePath("/products/brands")
+  revalidatePath("/products/categories")
   revalidatePath("/products/new")
   revalidatePath("/pos")
   return { success: true }
@@ -827,7 +827,7 @@ export async function deleteCategory(formData: FormData) {
     },
   })
   revalidatePath("/products")
-  revalidatePath("/products/brands")
+  revalidatePath("/products/categories")
   revalidatePath("/products/new")
   return { success: true }
 }

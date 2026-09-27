@@ -8,6 +8,7 @@ export const pageTitles: Record<string, string> = {
   "/products/new": "Add one item",
   "/products/bulk": "Add from a sheet",
   "/products/brands": "Brands",
+  "/products/categories": "Categories",
   "/products/warranty": "Warranty days",
   "/imei": "Phone numbers (IMEI)",
   "/imei/intake": "One phone at a time",

@@ -2,7 +2,6 @@ import { getProducts, resetAllProductWarrantiesToZero, updateProductWarranty } f
 import { ActionForm } from "@/components/action-form"
 import { PageHeader, SectionCard } from "@/components/shared"
 import { Input } from "@/components/ui/input"
-import { Select } from "@/components/ui/select"
 import { canManageCatalog } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { CatalogLocked } from "../catalog-locked"
@@ -50,30 +49,13 @@ export default async function WarrantyPage() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
-        <SectionCard title="Change one item">
-          <ActionForm action={updateProductWarranty} submit="Save warranty days" className="space-y-3">
-            <Select name="id" required>
-              {products.map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.name} · {product.warrantyDays} days
-                </option>
-              ))}
-            </Select>
-            <Input name="warrantyDays" type="number" min={0} defaultValue={0} required />
-            <p className="text-xs text-muted-foreground">
-              Use 0 unless this model must always start with cover. Cashiers can still raise the days on the till.
-            </p>
-          </ActionForm>
-        </SectionCard>
-
         <SectionCard title="What each item starts with" flush>
-          <div className="max-h-[520px] overflow-y-auto">
+          <div className="max-h-[70vh] overflow-auto">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-muted/60 text-left text-xs uppercase tracking-wider text-muted-foreground">
                 <tr>
                   <th className="px-5 py-2 font-medium">Item</th>
-                  <th className="px-5 py-2 font-medium">Item code</th>
+                  <th className="hidden px-5 py-2 font-medium sm:table-cell">Item code</th>
                   <th className="px-5 py-2 text-right font-medium">Days</th>
                   <th className="px-5 py-2 font-medium">Save</th>
                 </tr>
@@ -82,7 +64,7 @@ export default async function WarrantyPage() {
                 {products.map((product) => (
                   <tr key={product.id} className="border-t border-border">
                     <td className="px-5 py-2">{product.name}</td>
-                    <td className="px-5 py-2 font-mono text-xs text-muted-foreground">{product.sku}</td>
+                    <td className="hidden px-5 py-2 font-mono text-xs text-muted-foreground sm:table-cell">{product.sku}</td>
                     <td className="px-5 py-2" colSpan={2}>
                       <ActionForm
                         action={updateProductWarranty}
@@ -114,7 +96,6 @@ export default async function WarrantyPage() {
             </table>
           </div>
         </SectionCard>
-      </div>
     </div>
   )
 }

@@ -9,6 +9,7 @@ import {
   ClipboardCheck,
   DatabaseBackup,
   Factory,
+  FolderTree,
   FileSpreadsheet,
   Gauge,
   GitBranch,
@@ -114,7 +115,8 @@ export const navGroups: NavGroup[] = [
         icon: Smartphone,
         children: [
           { name: "Price list", href: "/products", icon: Tags, hint: "Names, cost, lowest price, and selling price" },
-          { name: "Brands", href: "/products/brands", icon: Factory, hint: "Brand names and kinds of items" },
+          { name: "Brands", href: "/products/brands", icon: Factory, hint: "Samsung, Tecno, Apple and the rest" },
+          { name: "Categories", href: "/products/categories", icon: FolderTree, hint: "Kinds of items and the reseller markup" },
           { name: "Add one item", href: "/products/new", icon: PlusCircle, hint: "Register one product name and brand" },
           { name: "Add from a sheet", href: "/products/bulk", icon: FileSpreadsheet, hint: "Upload a list of product names" },
           { name: "Warranty days", href: "/products/warranty", icon: ShieldCheck, hint: "Default warranty days on an item" },

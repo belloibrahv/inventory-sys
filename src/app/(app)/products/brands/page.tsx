@@ -1,36 +1,32 @@
 import {
   createBrand,
-  createCategory,
   deleteBrand,
-  deleteCategory,
   getCatalogTaxonomy,
   updateBrand,
-  updateCategory,
 } from "@/app/actions/catalog"
 import { ActionForm } from "@/components/action-form"
 import { EmptyState, PageHeader, SectionCard } from "@/components/shared"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { canHardDelete, canManageCatalog } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { CatalogLocked } from "../catalog-locked"
 
-export default async function BrandsCategoriesPage() {
+export default async function BrandsPage() {
   const me = await requireUser()
   const canEdit = await canManageCatalog(me.role)
-  if (!canEdit) return <CatalogLocked title="Brands & categories" />
+  if (!canEdit) return <CatalogLocked title="Brands" />
 
   const canRemove = canHardDelete(me.role)
-  const { brands, categories } = await getCatalogTaxonomy()
+  const { brands } = await getCatalogTaxonomy()
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Brands & categories"
-        description="Add Samsung, Tecno, and the rest once. New items pick from this list. A category also carries the reseller markup over cost."
+        title="Brands"
+        description="Add Samsung, Tecno, and the rest once. New items pick from this list."
       />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="max-w-3xl">
         <SectionCard title="Brands" description={`${brands.length} on the list`}>
           <ActionForm
             action={createBrand}
@@ -93,114 +89,6 @@ export default async function BrandsCategoriesPage() {
           )}
         </SectionCard>
 
-        <SectionCard title="Categories" description={`${categories.length} on the list`}>
-          <ActionForm
-            action={createCategory}
-            submit="Add category"
-            successMessage="Category added"
-            className="mb-4 space-y-2"
-            buttonClassName="mt-2"
-          >
-            <label className="block text-xs text-muted-foreground">
-              Category name
-              <Input name="name" placeholder="e.g. Smartphones" required className="mt-1" />
-            </label>
-            <label className="block text-xs text-muted-foreground">
-              Short note (optional)
-              <Textarea name="description" placeholder="What belongs here" className="mt-1" rows={2} />
-            </label>
-            <label className="block text-xs text-muted-foreground">
-              Reseller markup over cost (%)
-              <Input
-                name="resellerMarkup"
-                type="number"
-                min={0}
-                step="0.01"
-                placeholder="e.g. 12"
-                className="mt-1"
-              />
-              <span className="mt-1 block text-[11px]">
-                What a reseller is quoted, worked out from cost. 12 means cost plus 12%. It follows
-                cost, so when the exchange rate moves you change nothing here.
-              </span>
-            </label>
-          </ActionForm>
-
-          {categories.length === 0 ? (
-            <EmptyState title="No categories yet" hint="Add Smartphones, Laptops, Power, Accessories, and the rest here." />
-          ) : (
-            <ul className="divide-y divide-border rounded-lg border border-border">
-              {categories.map((category) => (
-                <li key={category.id} className="space-y-2 p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-medium">{category.name}</p>
-                      {category.description ? (
-                        <p className="text-xs text-muted-foreground">{category.description}</p>
-                      ) : null}
-                      <p className="text-xs text-muted-foreground">
-                        {Number(category.resellerMarkup) > 0
-                          ? `Resellers pay cost + ${Number(category.resellerMarkup)}%`
-                          : "No reseller price set"}
-                      </p>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {category._count.products} item{category._count.products === 1 ? "" : "s"}
-                    </p>
-                  </div>
-                  <details className="rounded-md border border-border px-3 py-2">
-                    <summary className="cursor-pointer text-xs font-medium">{canRemove ? "Edit or remove" : "Edit category"}</summary>
-                    <div className="mt-2 space-y-2">
-                      <ActionForm
-                        action={updateCategory}
-                        submit="Save category"
-                        successMessage="Category saved"
-                        resetOnSuccess={false}
-                        className="space-y-2"
-                        buttonClassName="mt-1"
-                        size="sm"
-                      >
-                        <input type="hidden" name="id" value={category.id} />
-                        <Input name="name" defaultValue={category.name} required />
-                        <Textarea
-                          name="description"
-                          defaultValue={category.description ?? ""}
-                          rows={2}
-                          placeholder="Short note"
-                        />
-                        <label className="block text-xs text-muted-foreground">
-                          Reseller markup over cost (%)
-                          <Input
-                            name="resellerMarkup"
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            defaultValue={Number(category.resellerMarkup) || ""}
-                            placeholder="e.g. 12"
-                            className="mt-1"
-                          />
-                        </label>
-                      </ActionForm>
-                      {canRemove ? (
-                      <ActionForm
-                        action={deleteCategory}
-                        submit="Remove category"
-                        successMessage="Category removed"
-                        variant="outline"
-                        size="sm"
-                        buttonClassName="mt-0"
-                        resetOnSuccess={false}
-                      >
-                        <input type="hidden" name="id" value={category.id} />
-                      </ActionForm>
-                      ) : null}
-                    </div>
-                  </details>
-                </li>
-              ))}
-            </ul>
-          )}
-        </SectionCard>
       </div>
     </div>
   )
