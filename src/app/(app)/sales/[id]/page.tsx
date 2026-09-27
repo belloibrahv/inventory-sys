@@ -19,6 +19,7 @@ import { requireUser } from "@/lib/session"
 import { formatCurrency, formatDateTime, money } from "@/lib/utils"
 import { formatCondition, statusLabel } from "@/lib/status"
 import { warrantyState } from "@/lib/warranty"
+import { dueAfterReturns, returnedValueBySale } from "@/lib/returned-value"
 import { prisma } from "@/lib/prisma"
 
 export default async function SaleDetailPage({
@@ -34,7 +35,9 @@ export default async function SaleDetailPage({
   const { receipt } = await searchParams
   const [me, sale, settings, customers] = await Promise.all([requireUser(), getSale(id), getAppSettings(), getCustomers()])
   if (!sale) notFound()
-  const due = money(sale.totalAmount) - money(sale.paidAmount)
+  // A finished refund or credit note has already cleared part of this sale.
+  const returned = (await returnedValueBySale(prisma, [sale.id])).get(sale.id) ?? 0
+  const due = dueAfterReturns(sale, returned)
   const brand = letterheadFromSettings(settings)
   const branchCustomers = customers.filter(
     (row) => row.branchId === sale.branchId && !row.name.toLowerCase().includes("walk-in")

@@ -7,6 +7,21 @@ import { money } from "@/lib/utils"
  * opening cash + cash sales − approved shop expenses − other cash pay-outs
  * (refunds, neighbor pay, swap pay-outs) that are not already an approved expense.
  */
+/** How an undone collection is written in the money ledger. */
+export const UNDO_COLLECTION_NOTE = "Undid money collected on "
+
+/**
+ * True for the ledger line an undone collection leaves behind.
+ *
+ * Undo deletes the payment itself, and cash figures are built from payments,
+ * so that money has already left the total. Counting this line as a cash
+ * pay-out as well took it off twice: Iwo Road's till read ₦740,000 when it
+ * held ₦810,000 after a ₦70,000 cash payment was undone and re-entered by bank.
+ */
+export function isUndoneCollection(entry: { description?: string | null }) {
+  return Boolean(entry.description?.startsWith(UNDO_COLLECTION_NOTE))
+}
+
 export async function shopCashOnHand(branchId: string) {
   const [branch, sales, approvedExpenses, expenseNumbers, cashPayOuts] = await Promise.all([
     prisma.branch.findUnique({
@@ -32,7 +47,7 @@ export async function shopCashOnHand(branchId: string) {
     }),
     prisma.financeEntry.findMany({
       where: { branchId, account: "CASH", type: "EXPENSE" },
-      select: { amount: true, reference: true },
+      select: { amount: true, reference: true, description: true },
     }),
   ])
 
@@ -41,6 +56,7 @@ export async function shopCashOnHand(branchId: string) {
   const expenseRefs = new Set(expenseNumbers.map((row) => row.expenseNumber))
   const otherOut = cashPayOuts.reduce((sum, row) => {
     if (row.reference && expenseRefs.has(row.reference)) return sum
+    if (isUndoneCollection(row)) return sum
     return sum + money(row.amount)
   }, 0)
 

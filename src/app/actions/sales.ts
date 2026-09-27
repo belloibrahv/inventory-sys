@@ -18,6 +18,7 @@ import { shopPayChannel } from "@/lib/sale-money"
 import { belowCost, blindTillPrices, discountOff, needsReason, sellFloor, type PriceBasis } from "@/lib/pricing"
 import { readPriceApproval, signPriceApproval, type ApprovedDeal } from "@/lib/price-approval"
 import { writeAudit } from "@/lib/audit"
+import { dueAfterReturns, returnedValueBySale } from "@/lib/returned-value"
 import * as bcrypt from "bcryptjs"
 
 export async function getSales() {
@@ -1356,7 +1357,12 @@ export async function collectInvoicePayment(formData: FormData) {
   })
   if (!sale) return { error: "We could not find that sale." }
   if (sale.status !== "COMPLETED") return { error: "You can only collect money on a sale that is finished." }
-  if (money(sale.totalAmount) - money(sale.paidAmount) <= 0) return { error: "This sale is already fully paid." }
+  const returned = (await returnedValueBySale(prisma, [sale.id])).get(sale.id) ?? 0
+  if (dueAfterReturns(sale, returned) <= 0) {
+    return {
+      error: returned > 0 ? "Nothing is owed on this sale: a return has already cleared it." : "This sale is already fully paid.",
+    }
+  }
 
   const wantsBank = tenders.some((row) => row.method === "TRANSFER")
   let bankAccountId: string | null = null
@@ -1380,7 +1386,7 @@ export async function collectInvoicePayment(formData: FormData) {
         select: { totalAmount: true, paidAmount: true },
       })
       if (!fresh) throw new ConflictError("We could not find that sale.")
-      const due = money(fresh.totalAmount) - money(fresh.paidAmount)
+      const due = dueAfterReturns(fresh, returned)
       if (due <= 0) {
         throw new ConflictError(`${sale.invoiceNumber} was settled while you were typing. Nothing is owed on it now.`)
       }

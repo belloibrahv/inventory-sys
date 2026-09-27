@@ -21,7 +21,8 @@ import {
   displayBankName,
   listedBankClash,
 } from "@/lib/opening-money"
-import { assertCashAvailable } from "@/lib/shop-cash"
+import { assertCashAvailable, isUndoneCollection } from "@/lib/shop-cash"
+import { returnedSaleLineIds } from "@/lib/returned-value"
 
 function emptyFinance() {
   return {
@@ -289,6 +290,8 @@ export async function getFinance({ withLedger = false }: { withLedger?: boolean 
   })
   let otherCashOut = 0
   for (const entry of otherCashOuts) {
+    // The payment an undo removed is already out of the cash sales above.
+    if (isUndoneCollection(entry)) continue
     const amount = money(entry.amount)
     otherCashOut += amount
     cashEntries.push({
@@ -1492,21 +1495,47 @@ export async function getProfitData() {
     return { shopLines: [], expenses: 0, byShop: [] as Array<{ name: string; shopProfit: number; expenses: number; net: number }> }
   }
   const branchId = await viewBranchFilter(user)
-  const [sales, expenseRows] = await Promise.all([
+  // Every sale, not the latest 200: the page adds these up into "profit from
+  // our own stock", and a cap silently dropped older sales from that total.
+  // Only the fields the sums and the list use are read.
+  const [sales, expenseRows, returned] = await Promise.all([
     prisma.sale.findMany({
       where: { status: "COMPLETED", ...(branchId ? { branchId } : {}) },
-      include: { branch: true, items: { include: { product: true } } },
+      select: {
+        id: true,
+        invoiceNumber: true,
+        saleDate: true,
+        branch: { select: { name: true } },
+        items: {
+          select: {
+            id: true,
+            imeiId: true,
+            quantity: true,
+            totalPrice: true,
+            costPrice: true,
+            listPrice: true,
+            discount: true,
+            priceReason: true,
+            product: { select: { name: true, storage: true, condition: true, color: true, costPrice: true } },
+          },
+        },
+      },
       orderBy: { saleDate: "desc" },
-      take: 200,
     }),
     prisma.expense.findMany({
       where: { ...(branchId ? { branchId } : {}), approvedAt: { not: null } },
       include: { branch: true },
     }),
+    returnedSaleLineIds(prisma),
   ])
 
+  // A line that came back for a refund or a credit note made no sale in the
+  // end: the phone is back on the shelf. It stays on the invoice, not here.
+  const wasReturned = (saleId: string, item: { id: string; imeiId: string | null }) =>
+    returned.saleItemIds.has(item.id) || (item.imeiId ? returned.imeiOnSale.has(`${saleId}:${item.imeiId}`) : false)
+
   const shopLines = sales.flatMap((sale) =>
-    sale.items.map((item) => {
+    sale.items.filter((item) => !wasReturned(sale.id, item)).map((item) => {
       // The cost copied onto the line on the day it sold. Sales written before
       // that field existed carry 0, so those fall back to the item's cost today
       // — the old behaviour, and the reason their profit could move on its own.

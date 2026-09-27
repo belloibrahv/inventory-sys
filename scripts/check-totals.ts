@@ -284,6 +284,83 @@ async function main() {
     )
   }
 
+  // ---- 7b. Work that moved goods or money but is not finished -----------
+  section("7b. Unfinished work and money slips")
+  // An approved Swap Deal has already handed the phone over; its invoice and
+  // the money only exist once someone finishes it.
+  const openSwaps = await prisma.swap.findMany({
+    where: { branchId: { in: ids }, status: "APPROVED" },
+    select: { swapNumber: true, balanceAmount: true, approvedAt: true, branchId: true },
+  })
+  verdict(
+    "no Swap Deal has handed a phone over without its invoice",
+    openSwaps.map(
+      (row) =>
+        `${shopName.get(row.branchId)} · ${row.swapNumber} approved ${row.approvedAt?.toISOString().slice(0, 10) ?? ""}, balance ${naira(n(row.balanceAmount))} not recorded`
+    ),
+    { warnOnly: true }
+  )
+
+  // A refund pays back money, never more than the customer paid on that sale.
+  const refunds = await prisma.stockReturn.findMany({
+    where: { branchId: { in: ids }, status: "COMPLETED", outcome: "REFUND", saleId: { not: null } },
+    select: { returnNumber: true, saleId: true },
+  })
+  const refundBad: string[] = []
+  for (const row of refunds) {
+    const [sale, out] = await Promise.all([
+      prisma.sale.findUnique({ where: { id: row.saleId! }, select: { invoiceNumber: true, paidAmount: true } }),
+      prisma.financeEntry.aggregate({ where: { reference: row.returnNumber, type: "EXPENSE" }, _sum: { amount: true } }),
+    ])
+    const paidOut = n(out._sum.amount)
+    if (sale && paidOut - n(sale.paidAmount) > EPSILON) {
+      refundBad.push(`${row.returnNumber}: paid out ${naira(paidOut)} on ${sale.invoiceNumber}, which only took ${naira(n(sale.paidAmount))}`)
+    }
+  }
+  verdict("no refund paid out more than the customer paid", refundBad)
+
+  // Opening stock is what the shop already owned, not a debt. Loading it on
+  // Stock Upload under a supplier named "Opening Stock" books it as owed.
+  const openingAsBills = await prisma.purchase.findMany({
+    where: {
+      branchId: { in: ids },
+      status: { not: "CANCELLED" },
+      openingStock: { is: null },
+    },
+    select: { invoiceNumber: true, totalAmount: true, paidAmount: true, returnedAmount: true, supplier: { select: { name: true } } },
+  })
+  // Matched here rather than in the query, so the check runs on SQLite too.
+  const openingOwed = openingAsBills.filter(
+    (row) =>
+      /opening stock/i.test(row.supplier.name) &&
+      n(row.totalAmount) - n(row.paidAmount) - n(row.returnedAmount) > EPSILON
+  )
+  verdict(
+    "no opening stock is booked as money owed to a supplier",
+    openingOwed.length
+      ? [
+          `${openingOwed.length} bill(s) under an "Opening Stock" supplier, ${naira(
+            openingOwed.reduce((sum, row) => sum + n(row.totalAmount) - n(row.paidAmount) - n(row.returnedAmount), 0)
+          )} counted as owed`,
+          ...openingOwed.map((row) => row.invoiceNumber),
+        ]
+      : [],
+    { warnOnly: true }
+  )
+
+  // The shops deal in whole naira. A kobo amount is almost always a typing slip.
+  const koboPayments = await prisma.payment.findMany({
+    where: { sale: { branchId: { in: ids } } },
+    select: { amount: true, sale: { select: { invoiceNumber: true } } },
+  })
+  verdict(
+    "no payment carries stray kobo",
+    koboPayments
+      .filter((row) => Math.abs(n(row.amount) - Math.round(n(row.amount))) > EPSILON)
+      .map((row) => `${row.sale.invoiceNumber}: ${naira(n(row.amount))}`),
+    { warnOnly: true }
+  )
+
   // ---- 8. Totals per shop, for the eye ----------------------------------
   section("8. What each shop holds")
   const costByProduct = new Map(

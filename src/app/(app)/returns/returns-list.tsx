@@ -49,7 +49,30 @@ type ReturnRow = {
   imei: DeviceRef | null
   replacementImei: DeviceRef | null
   saleItem: SaleItemRef | null
-  invoice: { id: string; invoiceNumber: string } | null
+  /** The original sale, with what it cost and what was paid, so a refund can be shown before it happens. */
+  invoice: { id: string; invoiceNumber: string; total: number; paid: number } | null
+}
+
+/**
+ * How a refund splits, the same rule the server applies: the value first clears
+ * what is still owed on the sale, and only the rest goes back as money, never
+ * more than was paid.
+ */
+function refundSplit(value: number, invoice: { total: number; paid: number } | null) {
+  if (!invoice) return { clearsDebt: 0, paysBack: value }
+  const due = Math.max(0, invoice.total - invoice.paid)
+  const clearsDebt = Math.min(due, value)
+  return { clearsDebt, paysBack: Math.min(value - clearsDebt, invoice.paid) }
+}
+
+function refundWords(value: number | null, invoice: { total: number; paid: number } | null) {
+  if (value == null) return "refund the return value"
+  const { clearsDebt, paysBack } = refundSplit(value, invoice)
+  const parts = [
+    clearsDebt > 0 ? `clear ${formatCurrency(clearsDebt)} the customer still owes on this sale` : "",
+    paysBack > 0 ? `pay ${formatCurrency(paysBack)} back to the customer` : "",
+  ].filter(Boolean)
+  return parts.length ? parts.join(" and ") : "change nothing in money (nothing was paid or owed)"
 }
 
 type StockUnit = {
@@ -221,7 +244,7 @@ function ApplyForm({ row, stock, onDone }: { row: ReturnRow; stock: StockUnit[];
           <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
             This will{" "}
             {row.outcome === "REFUND"
-              ? `refund ${returnValue != null ? formatCurrency(returnValue) : "the return value"} from what was already paid`
+              ? refundWords(returnValue, row.invoice)
               : row.outcome === "REPAIR"
                 ? "open a repair job for this phone"
                 : row.outcome === "SEND_TO_SUPPLIER"

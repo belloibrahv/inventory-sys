@@ -269,6 +269,16 @@ export async function getDashboardData() {
   ])
   const unclosedCount = unclosedLists.reduce((sum, days) => sum + days.length, 0)
 
+  // Approved but not finished. An approved Swap Deal has already handed the
+  // phone over, yet its invoice and the balance the customer owes are only
+  // written when someone presses Finish. Left alone, that sale never reaches
+  // Sales, the till or what the customer owes. A return waits the same way
+  // for its refund or replacement.
+  const [unfinishedSwaps, unfinishedReturns] = await Promise.all([
+    prisma.swap.count({ where: { ...(branchId ? { branchId } : {}), status: "APPROVED" } }),
+    prisma.stockReturn.count({ where: { ...(branchId ? { branchId } : {}), status: "APPROVED" } }),
+  ])
+
   // Indexed once. Matching these two lists with .find() inside a loop was
   // catalogue-size squared work on every load.
   const vaultByKey = new Map(
@@ -393,6 +403,8 @@ export async function getDashboardData() {
     })(),
     tasks: [
       { href: "/finance/close", label: "Days not closed yet", count: unclosedCount },
+      { href: "/swaps", label: "Swap Deals approved but not finished (phone gone, money not recorded)", count: unfinishedSwaps },
+      { href: "/returns", label: "Returns approved but not finished", count: unfinishedReturns },
       { href: "/pos", label: "Parked sales sitting too long", count: parked.sitting },
       { href: "/audit?risk=HIGH", label: "Parked sales that vanished from a device", count: parked.vanished },
       { href: "/incoming", label: "Goods on the way that are late", count: overdueIncoming },

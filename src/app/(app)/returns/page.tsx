@@ -38,7 +38,14 @@ export default async function ReturnsPage() {
             approvedAt: row.approvedAt,
             completedAt: row.completedAt,
             customer: { id: row.customer.id, name: row.customer.name },
-            invoice: row.invoice,
+            invoice: row.invoice
+              ? {
+                  id: row.invoice.id,
+                  invoiceNumber: row.invoice.invoiceNumber,
+                  total: money(row.invoice.totalAmount),
+                  paid: money(row.invoice.paidAmount),
+                }
+              : null,
             returnValue: row.returnValue != null ? money(row.returnValue) : row.refundAmount != null ? money(row.refundAmount) : null,
             replacementValue: row.replacementValue != null ? money(row.replacementValue) : null,
             balanceAmount: row.balanceAmount != null ? money(row.balanceAmount) : null,

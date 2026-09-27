@@ -633,7 +633,7 @@ export async function getReturns() {
   })
   const invoices = await prisma.sale.findMany({
     where: { id: { in: rows.map((row) => row.saleId).filter((id): id is string => Boolean(id)) } },
-    select: { id: true, invoiceNumber: true },
+    select: { id: true, invoiceNumber: true, totalAmount: true, paidAmount: true },
   })
   return rows.map((row) => ({
     ...row,
@@ -1089,8 +1089,15 @@ export async function completeReturn(formData: FormData) {
       const asked = money(record.returnValue) || money(record.refundAmount) || (record.imei ? money(record.imei.product.sellingPrice) : 0)
       const salePaid = sale ? money(sale.paidAmount) : asked
       const saleDue = sale ? Math.max(0, money(sale.totalAmount) - salePaid) : 0
-      const cashOut = record.outcome === "REFUND" ? Math.min(asked, salePaid || asked) : 0
+      // What is returned first cancels what the customer still owes on that
+      // sale; only the rest comes back as money, and never more than they paid.
+      // This used to read `Math.min(asked, salePaid || asked)`: with nothing
+      // paid, `0 || asked` refunded the full value in cash on top of wiping the
+      // debt (a ₦520,000 credit sale at Iwo Road would have paid out ₦520,000
+      // the shop never received), and on a part-paid sale it both cut the debt
+      // and paid the same value out again.
       const debtRelief = Math.min(saleDue, asked)
+      const cashOut = record.outcome === "REFUND" ? Math.min(asked - debtRelief, salePaid) : 0
       const after = await shiftCustomerBalance(tx, record.customerId, -debtRelief)
       const next = Math.max(0, money(after.currentBalance))
       await tx.ledgerEntry.create({
@@ -1701,9 +1708,17 @@ export async function completeSwap(formData: FormData) {
   if (swap.status !== "APPROVED") {
     return { error: "Wait for approval on Needs approval before settling the money." }
   }
-  const opening = await prisma.openingStock.findUnique({ where: { branchId: swap.branchId }, select: { status: true } })
-  if (opening?.status === "OPEN") {
-    return { error: "This shop's opening stock is still being counted. Finish the swap once it is closed." }
+  // Approval already moved both phones. Finishing then only writes the invoice
+  // and the money, which has nothing to do with the opening count, so it must
+  // not wait for it: Iwo Road's first swap sat approved for days, phone gone,
+  // money unrecorded, because this check refused it while opening stock was
+  // open. Only the old path that still moves stock here waits for the count.
+  const movesStockHere = swap.oldImei.status === "RECEIVED" || swap.newImei?.status === "IN_STOCK"
+  if (movesStockHere) {
+    const opening = await prisma.openingStock.findUnique({ where: { branchId: swap.branchId }, select: { status: true } })
+    if (opening?.status === "OPEN") {
+      return { error: "This shop's opening stock is still being counted. Finish the swap once it is closed." }
+    }
   }
 
   const invoiceNumber = generateDocNumber("INV")
@@ -1780,7 +1795,9 @@ export async function completeSwap(formData: FormData) {
         saleType: "RETAIL",
         status: "COMPLETED",
         subtotal: receivable.toFixed(2),
-        discount: money(swap.tradeValue).toFixed(2),
+        // The trade-in is already taken off on the line below. Taking it off
+        // the invoice again made subtotal less discount disagree with the total.
+        discount: "0.00",
         totalAmount: receivable.toFixed(2),
         paidAmount: receivable > 0 ? collected.toFixed(2) : "0.00",
         paymentMethod: receivable > 0 && collected < receivable ? "CREDIT" : method,
@@ -1793,6 +1810,13 @@ export async function completeSwap(formData: FormData) {
             unitPrice: money(swap.newProductPrice).toFixed(2),
             discount: money(swap.tradeValue).toFixed(2),
             totalPrice: receivable.toFixed(2),
+            // Profit everywhere is line amount less line cost. The line only
+            // carries what the customer pays in money; the rest of the price
+            // was paid with the phone they traded in, which goes onto the shelf
+            // as stock. So the cost here is the new phone's cost less that
+            // part, and the profit comes out as price less cost, as for any
+            // sale. Left at 0, the whole balance read as profit.
+            costPrice: (money(swap.newProduct.costPrice) - (money(swap.newProductPrice) - receivable)).toFixed(2),
           },
         },
         payments:

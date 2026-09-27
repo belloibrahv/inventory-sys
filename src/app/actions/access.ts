@@ -8,6 +8,7 @@ import { requireUser } from "@/lib/session"
 import { canHardDelete, isCEO, isShopOwner } from "@/lib/rbac"
 import { ALL_PERM_KEYS, CEO_ONLY_KEYS, ensureRolePermissions } from "@/lib/permissions"
 import { isOpeningStockPurchase } from "@/lib/purchase-money"
+import { UNDO_COLLECTION_NOTE } from "@/lib/shop-cash"
 
 export async function getRoleMatrix() {
   const user = await requireUser()
@@ -138,7 +139,7 @@ export async function reverseInvoicePayment(formData: FormData) {
         type: "EXPENSE",
         amount: amount.toFixed(2),
         reference: sale.invoiceNumber,
-        description: `Undid money collected on ${sale.invoiceNumber}`,
+        description: `${UNDO_COLLECTION_NOTE}${sale.invoiceNumber}`,
       },
     })
     await tx.auditLog.create({
