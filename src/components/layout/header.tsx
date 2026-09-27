@@ -19,6 +19,7 @@ import { useUI } from "@/store/ui"
 import { ROLE_LABELS } from "@/lib/roles"
 import { ShopSwitch } from "@/components/shop-switch"
 import { BrandBusyOverlay } from "@/components/brand-busy-overlay"
+import { InstallAppGuide, InstallAppMenuItem } from "@/components/install-app"
 
 /**
  * The top bar carries the page name on the left and the few controls that are
@@ -51,6 +52,7 @@ export function Header({
   const pathname = usePathname()
   const isHome = pathname === "/" || pathname === "/dashboard"
   const [leaving, setLeaving] = useState(false)
+  const [installGuide, setInstallGuide] = useState(false)
 
   return (
     <header className="app-header sticky top-0 z-30 flex min-h-14 items-center justify-between gap-2 border-b border-border bg-background/85 px-3 py-2 backdrop-blur-xl sm:px-4 md:px-6">
@@ -169,6 +171,7 @@ export function Header({
               <Moon className="mr-2 hidden h-4 w-4 dark:block" />
               {resolvedTheme === "dark" ? "Bright screen" : "Dark screen"}
             </DropdownMenuItem>
+            <InstallAppMenuItem onShowGuide={() => setInstallGuide(true)} />
             <DropdownMenuItem asChild>
               <a href="/help">
                 <BookOpen className="mr-2 h-4 w-4" /> How to use this
@@ -193,6 +196,7 @@ export function Header({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <InstallAppGuide open={installGuide} onOpenChange={setInstallGuide} />
       </div>
       {leaving ? (
         <BrandBusyOverlay

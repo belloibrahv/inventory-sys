@@ -29,6 +29,7 @@ import { Badge } from "@/components/ui/badge"
 import { formatShopWhen, formatWatLong, watDayKey } from "@/lib/lagos-day"
 import { getAllowedKeys, hrefsForKeys } from "@/lib/permissions"
 import { getAppSettings, lowStockLimit } from "@/lib/settings"
+import { InstallAppBanner } from "@/components/install-app"
 import { formatCurrency, money } from "@/lib/utils"
 
 /** The jobs people open the app to do, in the order a shop reaches for them. */
@@ -74,6 +75,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <InstallAppBanner />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-sm text-muted-foreground">{formatWatLong(watDayKey())}</p>

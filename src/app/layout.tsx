@@ -14,20 +14,28 @@ export const metadata: Metadata = {
   title: "Abu Twins Softskills",
   description: "Shop system for Abu Twins Softskills Investment: phones, laptops, and power.",
   applicationName: "Abu Twins Softskills",
-  manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "Abu Twins",
   },
+  formatDetection: { telephone: false },
   icons: {
-    icon: "/icon.svg",
-    apple: "/brand/ab-mark.jpg",
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
   },
 }
 
 export const viewport: Viewport = {
-  themeColor: "#001BCE",
+  // Lets the bottom tab bar and till bar sit clear of the iPhone home bar.
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#001BCE" },
+    { media: "(prefers-color-scheme: dark)", color: "#0F121A" },
+  ],
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

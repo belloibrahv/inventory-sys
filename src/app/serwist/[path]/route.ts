@@ -28,11 +28,13 @@ function getRevision(): string {
 const revision = getRevision()
 
 export const { dynamic, dynamicParams, revalidate, generateStaticParams, GET } = createSerwistRoute({
+  // Only pages and routes go here. Files in public/ (icons, brand mark) are
+  // already precached by Serwist with a content hash; listing one again with a
+  // different revision makes the worker throw add-to-cache-list-conflicting-entries
+  // and never install, which silently turns off offline mode.
   additionalPrecacheEntries: [
     { url: "/offline", revision },
-    { url: "/brand/ab-mark.jpg", revision },
-    { url: "/icon.svg", revision },
-    { url: "/manifest.json", revision },
+    { url: "/manifest.webmanifest", revision },
   ],
   swSrc: "src/app/sw.ts",
   useNativeEsbuild: true,
