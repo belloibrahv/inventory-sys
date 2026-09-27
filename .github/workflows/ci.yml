@@ -1,0 +1,52 @@
+# Runs on every push and pull request. Railway deploys main as soon as it is
+# pushed, so this is the only thing standing between a broken change and the
+# shops: a red check here means stop and fix before the next push.
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # A throwaway SQLite database with demo data. Never a real shop's.
+      DATABASE_URL: file:./ci.db
+      NEXTAUTH_SECRET: ci-throwaway-signing-key-used-only-by-github-checks
+      NEXTAUTH_URL: http://localhost:3000
+      SEED_DEMO_USERS: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Prisma client
+        run: npx prisma generate
+
+      - name: Types
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npx next build
+
+      - name: Demo database
+        run: |
+          npx prisma db push --skip-generate
+          npx tsx prisma/seed.ts
+
+      - name: Money, stock and shop checks
+        run: npm run check:all

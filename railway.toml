@@ -4,7 +4,7 @@ buildCommand = "node scripts/use-postgres-schema.mjs && npx prisma generate && n
 
 [deploy]
 startCommand = "node scripts/use-postgres-schema.mjs && npx prisma generate && npx tsx scripts/heal-day-closes.ts && npx prisma db push --accept-data-loss && npx tsx prisma/seed-users.ts && npm start"
-healthcheckPath = "/login"
+healthcheckPath = "/api/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
