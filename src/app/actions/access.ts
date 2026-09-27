@@ -5,8 +5,8 @@ import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { shiftCustomerBalance } from "@/lib/concurrency"
 import { requireUser } from "@/lib/session"
-import { canHardDelete, isShopOwner } from "@/lib/rbac"
-import { ALL_PERM_KEYS, ensureRolePermissions } from "@/lib/permissions"
+import { canHardDelete, isCEO, isShopOwner } from "@/lib/rbac"
+import { ALL_PERM_KEYS, CEO_ONLY_KEYS, ensureRolePermissions } from "@/lib/permissions"
 import { isOpeningStockPurchase } from "@/lib/purchase-money"
 
 export async function getRoleMatrix() {
@@ -21,15 +21,19 @@ export async function saveRoleAccess(formData: FormData) {
   const user = await requireUser()
   if (!isShopOwner(user.role)) return { error: "Only the main admin or the CEO can change what others see." }
   const role = String(formData.get("role") || "") as UserRole
-  if (!role || role === "SUPER_ADMIN" || role === "CEO") {
-    return { error: "Nobody can take pages away from the main admin or the CEO." }
+  if (!role || role === "CEO") return { error: "Nobody can change what the CEO sees." }
+  // The CEO sets how far the main admin reaches into the business; the main
+  // admin cannot widen their own job.
+  if (role === "SUPER_ADMIN" && !isCEO(user.role)) {
+    return { error: "Only the CEO can change what the main admin sees." }
   }
 
   await ensureRolePermissions()
 
   // Each job keeps its own ticks. Auditor and accountant are no longer written together.
   for (const key of ALL_PERM_KEYS) {
-    if (key === "view.access") {
+    // Who can see what stays with the owners; profit and cost stay with the CEO.
+    if (key === "view.access" || CEO_ONLY_KEYS.includes(key)) {
       await prisma.rolePermission.upsert({
         where: { role_permKey: { role, permKey: key } },
         update: { allowed: false },
@@ -91,7 +95,7 @@ export async function setStaffActive(formData: FormData) {
 
 export async function reverseInvoicePayment(formData: FormData) {
   const user = await requireUser()
-  if (!isShopOwner(user.role)) return { error: "Only the main admin or the CEO can undo a collection." }
+  if (!isCEO(user.role)) return { error: "Only the CEO can undo a collection." }
   const saleId = String(formData.get("saleId") || "")
   const sale = await prisma.sale.findUnique({
     where: { id: saleId },
@@ -123,7 +127,7 @@ export async function reverseInvoicePayment(formData: FormData) {
           amount: amount.toFixed(2),
           balance: Number(after.currentBalance).toFixed(2),
           reference: sale.invoiceNumber,
-          description: `The main admin or the CEO undid money collected on ${sale.invoiceNumber}`,
+          description: `The CEO undid money collected on ${sale.invoiceNumber}`,
         },
       })
     }
@@ -158,7 +162,7 @@ export async function reverseInvoicePayment(formData: FormData) {
 
 export async function reverseSupplierPayment(formData: FormData) {
   const user = await requireUser()
-  if (!isShopOwner(user.role)) return { error: "Only the main admin or the CEO can undo a supplier payment." }
+  if (!isCEO(user.role)) return { error: "Only the CEO can undo a supplier payment." }
   const id = String(formData.get("id") || "")
   const purchase = await prisma.purchase.findUnique({
     where: { id },

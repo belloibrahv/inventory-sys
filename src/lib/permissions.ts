@@ -1,9 +1,9 @@
 import { cache } from "react"
 import { UserRole } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
-import { isShopOwner, isSuperAdmin } from "@/lib/roles"
+import { isCEO, isShopOwner } from "@/lib/roles"
 
-export { isSuperAdmin, isShopOwner, isBooksDesk, BOOKS_DESK_ROLES } from "@/lib/roles"
+export { isSuperAdmin, isShopOwner, isCEO, isBooksDesk, BOOKS_DESK_ROLES } from "@/lib/roles"
 
 export const VIEW_PERMS = [
   { key: "view.dashboard", label: "Home", href: "/dashboard" },
@@ -38,7 +38,7 @@ export const VIEW_PERMS = [
 
 export const ACTION_PERMS = [
   { key: "action.sell", label: "Sell and take payment" },
-  { key: "action.catalog", label: "Add items and change prices" },
+  { key: "action.catalog", label: "Add items, brands and categories" },
   { key: "action.upload", label: "Upload stock from a sheet or supplier bill" },
   { key: "action.intake", label: "Put one phone on the shelf" },
   { key: "action.incoming", label: "Book goods on the way" },
@@ -58,6 +58,31 @@ export const ACTION_PERMS = [
 
 export const ALL_PERM_KEYS = [...VIEW_PERMS, ...ACTION_PERMS].map((row) => row.key)
 
+/**
+ * The CEO's alone, fixed in code: profit, and what items cost us. They are not
+ * boxes on Who can see what, and no role (the main admin included) gets them
+ * from a database row. See canSeeProfit and canSeeCost in lib/roles.
+ */
+export const CEO_ONLY_KEYS: readonly string[] = ["view.profits", "action.see_cost"]
+
+/**
+ * What the main admin (System Administrator) starts with: keeping the system
+ * running, not running the business. Staff logins, shops, settings and backups,
+ * Who did what, alerts. The CEO can tick more for them on Who can see what.
+ */
+export const SYSTEM_ADMIN_KEYS = [
+  "view.dashboard",
+  "view.branches",
+  "view.staff",
+  "view.access",
+  "view.audit",
+  "view.notifications",
+  "view.settings",
+  "action.staff",
+  "action.settings",
+  "action.all_branches",
+]
+
 const ALL = ALL_PERM_KEYS
 
 const V = (...keys: string[]) => keys
@@ -68,10 +93,9 @@ const V = (...keys: string[]) => keys
  * floor work, or open Who can see what.
  */
 export const AUDITOR_KEYS = V(
-  ...VIEW_PERMS.filter((row) => row.key !== "view.access").map((row) => row.key),
+  ...VIEW_PERMS.filter((row) => row.key !== "view.access" && !CEO_ONLY_KEYS.includes(row.key)).map((row) => row.key),
   "action.finance",
-  "action.all_branches",
-  "action.see_cost"
+  "action.all_branches"
 )
 
 /**
@@ -90,35 +114,32 @@ export const ACCOUNTANT_KEYS = V(
   "view.inventory",
   "view.finance",
   "view.expenses",
-  "view.profits",
   "view.reports",
   "view.audit",
   "view.notifications",
   "view.branches",
   "action.finance",
-  "action.all_branches",
-  "action.see_cost"
+  "action.all_branches"
 )
 
 /** @deprecated Prefer AUDITOR_KEYS or ACCOUNTANT_KEYS. Kept for older call sites. */
 export const BOOKS_DESK_KEYS = AUDITOR_KEYS
 
 const DEFAULTS: Record<UserRole, string[]> = {
-  SUPER_ADMIN: ALL,
-  // The CEO is an owner of the shop, with the main admin. They can correct
-  // money, staff, shops, settings, and Who can see what. They cannot take the
-  // main admin job away, and nobody can secretly rewrite an old invoice.
+  // The main admin keeps the system running; the business is the CEO's.
+  SUPER_ADMIN: SYSTEM_ADMIN_KEYS,
+  // The CEO owns the business: every screen and job, and alone sees profit,
+  // cost prices, and changes prices. Nobody can secretly rewrite an old invoice.
   CEO: ALL,
   AUDITOR: AUDITOR_KEYS,
   ACCOUNTANT: ACCOUNTANT_KEYS,
   BRANCH_MANAGER: V(
     "view.dashboard", "view.owner", "view.products", "view.uploads", "view.imei", "view.inventory", "view.incoming", "view.sales", "view.pos",
     "view.purchases", "view.customers", "view.suppliers", "view.transfers", "view.returns",
-    "view.swaps", "view.repairs", "view.reconciliation", "view.finance", "view.expenses", "view.profits",
+    "view.swaps", "view.repairs", "view.reconciliation", "view.finance", "view.expenses",
     "view.approvals", "view.staff", "view.reports", "view.notifications",
     "action.sell", "action.upload", "action.intake", "action.incoming", "action.transfer",
-    "action.return", "action.swap", "action.repair", "action.recon", "action.approve", "action.finance", "action.staff",
-    "action.see_cost"
+    "action.return", "action.swap", "action.repair", "action.recon", "action.approve", "action.finance", "action.staff"
   ),
   VAULT_MANAGER: V(
     "view.dashboard", "view.products", "view.uploads", "view.imei", "view.inventory", "view.incoming", "view.purchases",
@@ -131,11 +152,11 @@ const DEFAULTS: Record<UserRole, string[]> = {
   ),
   CASHIER: V(
     "view.dashboard", "view.pos", "view.sales", "view.customers", "view.expenses", "view.finance", "view.returns", "view.notifications",
-    "action.sell", "action.return", "action.finance", "action.see_cost"
+    "action.sell", "action.return", "action.finance"
   ),
   SALES_EXECUTIVE: V(
     "view.dashboard", "view.pos", "view.sales", "view.customers", "view.products", "view.expenses", "view.finance", "view.returns", "view.notifications",
-    "action.sell", "action.return", "action.finance", "action.see_cost"
+    "action.sell", "action.return", "action.finance"
   ),
   ENGINEER: V(
     "view.dashboard", "view.imei", "view.repairs", "view.returns", "view.customers", "view.notifications",
@@ -145,6 +166,36 @@ const DEFAULTS: Record<UserRole, string[]> = {
 
 const ROLE_LIST = Object.keys(DEFAULTS) as UserRole[]
 const EXPECTED_ROWS = ROLE_LIST.length * ALL_PERM_KEYS.length
+
+const MAIN_ADMIN_MOVE = "access:main-admin-system-upkeep-v1"
+
+/**
+ * Once per database: the main admin used to hold every box. Set their rows to
+ * system upkeep, then remember it was done, so boxes the CEO ticks for them
+ * afterwards on Who can see what are never reset.
+ */
+async function moveMainAdminToSystemUpkeep() {
+  if (await prisma.setting.findUnique({ where: { key: MAIN_ADMIN_MOVE }, select: { id: true } })) return
+  await prisma.$transaction([
+    prisma.rolePermission.updateMany({
+      where: { role: "SUPER_ADMIN", permKey: { in: SYSTEM_ADMIN_KEYS } },
+      data: { allowed: true },
+    }),
+    prisma.rolePermission.updateMany({
+      where: { role: "SUPER_ADMIN", permKey: { notIn: SYSTEM_ADMIN_KEYS } },
+      data: { allowed: false },
+    }),
+    prisma.setting.upsert({
+      where: { key: MAIN_ADMIN_MOVE },
+      create: {
+        key: MAIN_ADMIN_MOVE,
+        value: new Date().toISOString(),
+        description: "Main admin moved to system upkeep; the business side is the CEO's.",
+      },
+      update: {},
+    }),
+  ])
+}
 
 /**
  * Fill in any permission row a new release added. The common case is that
@@ -160,7 +211,7 @@ export const ensureRolePermissions = cache(async () => {
       ALL_PERM_KEYS.filter((permKey) => !have.has(`${role}:${permKey}`)).map((permKey) => ({
         role,
         permKey,
-        allowed: role === "SUPER_ADMIN" || DEFAULTS[role].includes(permKey),
+        allowed: DEFAULTS[role].includes(permKey),
       }))
     )
     if (missing.length) await prisma.rolePermission.createMany({ data: missing })
@@ -203,9 +254,20 @@ export const ensureRolePermissions = cache(async () => {
     data: { allowed: true },
   })
 
+  // Profit and cost prices are the CEO's alone. can() already refuses them to
+  // everyone else; closing the rows keeps menus and Who can see what honest.
+  await prisma.rolePermission.updateMany({
+    where: { role: { not: "CEO" }, permKey: { in: [...CEO_ONLY_KEYS] }, allowed: true },
+    data: { allowed: false },
+  })
+
+  await moveMainAdminToSystemUpkeep()
+
   // Internal Auditor: full shop oversight on the left menu (every page except
   // Who can see what). Floor actions stay closed.
-  const auditorViews = VIEW_PERMS.filter((row) => row.key !== "view.access").map((row) => row.key)
+  const auditorViews = VIEW_PERMS.filter((row) => row.key !== "view.access" && !CEO_ONLY_KEYS.includes(row.key)).map(
+    (row) => row.key
+  )
   await prisma.rolePermission.updateMany({
     where: {
       role: "AUDITOR",
@@ -287,27 +349,30 @@ const loadPermissionMap = cache(async () => {
 })
 
 export async function getAllowedKeys(role: UserRole) {
-  if (role === "SUPER_ADMIN") return new Set(ALL_PERM_KEYS)
+  if (isCEO(role)) return new Set(ALL_PERM_KEYS)
   const map = await loadPermissionMap()
-  const allowed = map.get(role)
   // No rows at all means Who can see what has never been set up for this role,
   // so fall back to what it ships with rather than locking the person out.
-  if (!allowed) return new Set(DEFAULTS[role] ?? [])
   // Handed back as a copy: the map is held for the whole request, and a caller
   // that added to it would change what everyone else on the page is allowed.
-  return new Set(allowed)
+  const allowed = new Set(map.get(role) ?? DEFAULTS[role] ?? [])
+  for (const key of CEO_ONLY_KEYS) allowed.delete(key)
+  if (isShopOwner(role)) allowed.add("view.access")
+  return allowed
 }
 
 export async function can(role: UserRole, key: string) {
-  if (role === "SUPER_ADMIN") return true
-  if (isShopOwner(role) && (key === "action.undo" || key === "view.access")) return true
+  if (isCEO(role)) return true
+  if (CEO_ONLY_KEYS.includes(key)) return false
+  // Undoing a collection or a supplier payment is a business correction.
   if (key === "action.undo") return false
+  if (key === "view.access") return isShopOwner(role)
   const allowed = await getAllowedKeys(role)
   return allowed.has(key)
 }
 
 export async function canUndo(role: UserRole) {
-  return isShopOwner(role)
+  return isCEO(role)
 }
 
 export function viewKeyForPath(pathname: string) {
@@ -326,7 +391,12 @@ export function hrefsForKeys(keys: Set<string>) {
   }
   // Check the books is an audit paper. Do not unlock it just because someone
   // can open Money in & out (cashiers must not see that left-menu item).
-  if (keys.has("view.audit") && !hrefs.includes("/audit/books")) {
+  // It is a money paper too, so it also needs a door to the money.
+  if (
+    keys.has("view.audit") &&
+    (keys.has("view.finance") || keys.has("view.reports")) &&
+    !hrefs.includes("/audit/books")
+  ) {
     hrefs.push("/audit/books")
   }
   // Opening stock correction belongs to stock load / CEO-admin work, not every

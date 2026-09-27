@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { recordMovement } from "@/lib/concurrency"
 import { canReachBranch, viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
-import { canManageCatalog, scopedBranchId } from "@/lib/rbac"
+import { canChangePrices, canManageCatalog, scopedBranchId } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { recentWatDays, watBounds } from "@/lib/lagos-day"
 import { IMEI_LIFE } from "@/lib/imei-life"
@@ -162,19 +162,23 @@ export async function intakeImei(formData: FormData) {
     }
   }
 
-  const costPrice = Number(formData.get("costPrice") || 0)
-  const minimumPrice = Number(formData.get("minimumPrice") || 0)
-  const sellingPrice = Number(formData.get("sellingPrice") || 0)
+  // Only the CEO types prices here. Anyone else receives at the price list's
+  // own prices, whatever the form sends.
+  const typesPrices = canChangePrices(user.role)
+  const costPrice = typesPrices ? Number(formData.get("costPrice") || 0) : money(product.costPrice)
+  const minimumPrice = typesPrices ? Number(formData.get("minimumPrice") || 0) : money(product.minimumPrice)
+  const sellingPrice = typesPrices ? Number(formData.get("sellingPrice") || 0) : money(product.sellingPrice)
   if (![costPrice, minimumPrice, sellingPrice].every((value) => Number.isFinite(value) && value >= 0)) {
     return { error: "Enter cost, lowest sell, and selling price as numbers." }
   }
   // A price that has fallen since we bought is a real thing (a phone ordered
   // last week can be worth less by the time it lands). The CEO or Super Admin
   // may mark the lowest sell under cost; everyone else is stopped here.
-  if (minimumPrice < costPrice && !(await can(user.role, "action.override_floor"))) {
-    return { error: "Lowest sell cannot sit below cost. Only the CEO or Super Admin can mark an item down under what it cost." }
+  // These guard prices someone types. The list's own prices are the CEO's to fix.
+  if (typesPrices && minimumPrice < costPrice && !(await can(user.role, "action.override_floor"))) {
+    return { error: "Lowest sell cannot sit below cost." }
   }
-  if (sellingPrice < minimumPrice) {
+  if (typesPrices && sellingPrice < minimumPrice) {
     return { error: "Selling price cannot sit below the lowest sell." }
   }
 
@@ -205,10 +209,12 @@ export async function intakeImei(formData: FormData) {
   const cosmeticGrade = String(formData.get("cosmeticGrade") || "") || null
   const isFaulty = cosmeticGrade === "FAULTY"
   const status = isFaulty ? "FAULTY" : "IN_STOCK"
+  // Receiving a phone never moves the list price unless the CEO is receiving it.
   const priceChanged =
-    money(product.costPrice) !== costPrice ||
-    money(product.minimumPrice) !== minimumPrice ||
-    money(product.sellingPrice) !== sellingPrice
+    typesPrices &&
+    (money(product.costPrice) !== costPrice ||
+      money(product.minimumPrice) !== minimumPrice ||
+      money(product.sellingPrice) !== sellingPrice)
 
   await prisma.$transaction(async (tx) => {
     if (priceChanged) {

@@ -159,7 +159,13 @@ export function ReportsClientView({
     if (change === 0) return "Same as last period"
     return `${change > 0 ? "Up" : "Down"} ${formatCurrency(Math.abs(change))} (${Math.abs(percent)} percent)`
   }
-  const openingValue = opening.shops.reduce((sum, row) => sum + row.value, 0)
+  // Cost is the CEO's alone. Everyone else sees stock valued at sell price, and
+  // their data arrives with every cost set to 0.
+  const showCost = pack.stockBasis === "cost"
+  const valueWord = showCost ? "Value at cost" : "Value at sell price"
+  const openingValue = showCost
+    ? opening.shops.reduce((sum, row) => sum + row.value, 0)
+    : opening.lines.reduce((sum, line) => sum + line.openingQty * line.sellingPrice, 0)
   const boughtValue = opening.boughtSince.reduce((sum, row) => sum + row.total, 0)
   const stillOpen = opening.shops.filter((row) => row.status === "OPEN")
   const fileScope = `${pack.statementRef}`
@@ -226,17 +232,17 @@ export function ReportsClientView({
       ["Total", "", "", "", "", pack.totals.expenses],
     ],
     STOCK: () => [
-      ["Item", "Shop", "Quantity", "Cost price", "Selling price", "Value at cost"],
+      ["Item", "Shop", "Quantity", ...(showCost ? ["Cost price"] : []), "Selling price", valueWord],
       ...inventory.map((row) => [
         row.product.name,
         row.branch.code,
         row.quantity,
-        money(row.product.costPrice),
+        ...(showCost ? [money(row.product.costPrice)] : []),
         money(row.product.sellingPrice),
-        row.quantity * money(row.product.costPrice),
+        row.quantity * money(showCost ? row.product.costPrice : row.product.sellingPrice),
       ]),
       [],
-      ["Total", "", "", "", "", pack.totals.stock],
+      ["Total", "", "", ...(showCost ? [""] : []), "", pack.totals.stock],
     ],
     OPENING: () => [
       [
@@ -248,10 +254,10 @@ export function ReportsClientView({
         "Category",
         "Tracking",
         "Quantity",
-        "Unit cost",
+        ...(showCost ? ["Unit cost"] : []),
         "Lowest selling price",
         "Standard selling price",
-        "Value at cost",
+        valueWord,
         "IMEIs / serials",
       ],
       ...opening.lines.map((line) => [
@@ -263,14 +269,14 @@ export function ReportsClientView({
         line.category,
         line.tracking === "NONE" ? "Pieces" : line.tracking,
         line.openingQty,
-        line.costPrice,
+        ...(showCost ? [line.costPrice] : []),
         line.minimumPrice,
         line.sellingPrice,
-        line.openingQty * line.costPrice,
+        line.openingQty * (showCost ? line.costPrice : line.sellingPrice),
         line.identities.join(", "),
       ]),
       [],
-      ["Total", "", "", "", "", "", "", "", "", "", "", openingValue],
+      ["Total", "", "", "", "", "", "", "", ...(showCost ? [""] : []), "", "", openingValue],
     ],
     BOUGHT: () => [
       ["Bill", "Supplier", "Shop", "Date", "Bill value", "Paid", "Still owed"],
@@ -450,7 +456,7 @@ export function ReportsClientView({
             onClick={() => setDrilldown("EXPENSES")}
           />
           <StatCard
-            label="Stock at cost"
+            label={showCost ? "Stock at cost" : "Stock at sell price"}
             value={formatCurrency(pack.totals.stock)}
             hint={`${inventory.length} unit${inventory.length === 1 ? "" : "s"}`}
             icon={<Package className="h-4 w-4" />}
@@ -466,7 +472,7 @@ export function ReportsClientView({
         */}
         <StatGrid>
           <StatCard
-            label="Opening stock"
+            label={showCost ? "Opening stock" : "Opening stock at sell price"}
             value={formatCurrency(openingValue)}
             hint={
               opening.shops.length === 0
@@ -1013,9 +1019,9 @@ export function ReportsClientView({
                   <th>Item</th>
                   <th>Shop</th>
                   <th className="text-right">Quantity</th>
-                  <th className="text-right">Cost price</th>
+                  {showCost ? <th className="text-right">Cost price</th> : null}
                   <th className="text-right">Selling price</th>
-                  <th className="text-right">Value at cost</th>
+                  <th className="text-right">{valueWord}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1026,14 +1032,14 @@ export function ReportsClientView({
                       <ShopTag>{row.branch.code}</ShopTag>
                     </td>
                     <td className="text-right num">{row.quantity}</td>
-                    <td className="text-right num">{formatCurrency(money(row.product.costPrice))}</td>
+                    {showCost ? <td className="text-right num">{formatCurrency(money(row.product.costPrice))}</td> : null}
                     <td className="text-right num">{formatCurrency(money(row.product.sellingPrice))}</td>
                     <td className="text-right num font-semibold">
-                      {formatCurrency(row.quantity * money(row.product.costPrice))}
+                      {formatCurrency(row.quantity * money(showCost ? row.product.costPrice : row.product.sellingPrice))}
                     </td>
                   </tr>
                 ))}
-                {inventory.length === 0 ? <TableEmpty colSpan={6}>Nothing is on the shelf here.</TableEmpty> : null}
+                {inventory.length === 0 ? <TableEmpty colSpan={showCost ? 6 : 5}>Nothing is on the shelf here.</TableEmpty> : null}
               </tbody>
             </table>
             <TablePager
@@ -1058,10 +1064,10 @@ export function ReportsClientView({
                   <th>Item</th>
                   <th>Shop</th>
                   <th className="text-right">Quantity</th>
-                  <th className="text-right">Unit cost</th>
+                  {showCost ? <th className="text-right">Unit cost</th> : null}
                   <th className="text-right">Lowest</th>
                   <th className="text-right">Standard</th>
-                  <th className="text-right">Value at cost</th>
+                  <th className="text-right">{valueWord}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1078,13 +1084,15 @@ export function ReportsClientView({
                       </TonePill>
                     </td>
                     <td className="text-right num">{line.openingQty}</td>
-                    <td className="text-right num">{formatCurrency(line.costPrice)}</td>
+                    {showCost ? <td className="text-right num">{formatCurrency(line.costPrice)}</td> : null}
                     <td className="text-right num">{formatCurrency(line.minimumPrice)}</td>
                     <td className="text-right num">{formatCurrency(line.sellingPrice)}</td>
-                    <td className="text-right num font-semibold">{formatCurrency(line.openingQty * line.costPrice)}</td>
+                    <td className="text-right num font-semibold">
+                      {formatCurrency(line.openingQty * (showCost ? line.costPrice : line.sellingPrice))}
+                    </td>
                   </tr>
                 ))}
-                {opening.lines.length === 0 ? <TableEmpty colSpan={7}>No opening stock here yet.</TableEmpty> : null}
+                {opening.lines.length === 0 ? <TableEmpty colSpan={showCost ? 7 : 6}>No opening stock here yet.</TableEmpty> : null}
               </tbody>
             </table>
             <TablePager

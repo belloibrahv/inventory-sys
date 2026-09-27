@@ -26,11 +26,11 @@ export type RoleManual = {
 
 const ROLE_JOB: Record<UserRole, { job: string; shops: string }> = {
   SUPER_ADMIN: {
-    job: "You can open every page. You can undo a true money mistake. You can tick Who can see what, change Settings, and open or close a shop. The CEO can do the same corrections. Nobody can secretly rewrite an old invoice.",
+    job: "You keep the system running: staff logins, shops, Settings, backups, Who did what, and Who can see what for the other jobs. The business side (selling, stock, money, prices and profit) is the CEO's; the CEO can tick more pages for you if you need them.",
     shops: "You see every shop.",
   },
   CEO: {
-    job: "You own the shops with the main admin. You can correct money, staff, shops, settings, and Who can see what. You cannot take the main admin job away, and you cannot secretly rewrite an old invoice.",
+    job: "You own the business. You open every page, and only you see profit, margins and what items cost us, and only you change prices (on Business today or the price list). You can undo a true money mistake and set what every other job sees, the main admin included. Nobody can secretly rewrite an old invoice.",
     shops: "You see every shop.",
   },
   AUDITOR: {
@@ -38,7 +38,7 @@ const ROLE_JOB: Record<UserRole, { job: string; shops: string }> = {
     shops: "You see every shop.",
   },
   ACCOUNTANT: {
-    job: "You work the money and books pages: sales lists, customers, suppliers, Money in and out, Check the books, Reports, and Profit. You can post money and pay suppliers. You do not see Sell now, Upload stock, repairs, or other floor jobs on the left menu.",
+    job: "You work the money and books pages: sales lists, customers, suppliers, Money in and out, Check the books, and Reports. Profit and what items cost us are the CEO's alone. You can post money and pay suppliers. You do not see Sell now, Upload stock, repairs, or other floor jobs on the left menu.",
     shops: "You see every shop.",
   },
   BRANCH_MANAGER: {
@@ -102,8 +102,8 @@ const PAGES: Array<
       "OPENING STOCK SHEET, for a full shop count: fill the opening stock Excel one shop at a time, pick or add the supplier, and upload. There is no paid or unpaid on that sheet.",
       "PHONES: one row per phone with the IMEI. LAPTOPS: one row per laptop with the serial. ACCESSORIES and SCREEN: how many pieces.",
       "Open Correct and close opening stock to count the shelf, then close it. After that, new cartons use Supplier bill.",
-      "Found a wrong price or count after closing? The CEO or Super Admin opens Correct and close opening stock, types why, and taps Reopen opening stock. Fix the lines, then close it again. The shop keeps selling the whole time, and anything already sold stays sold.",
-      "Loaded onto the wrong shop? On Correct and close opening stock, tick the items, or tick a whole category, and click Remove ticked. The CEO or main admin can remove the whole shop's opening stock at the bottom. Then load the file onto the right shop.",
+      "Found a wrong price or count after closing? The CEO opens Correct and close opening stock, types why, and taps Reopen opening stock. Fix the lines, then close it again. The shop keeps selling the whole time, and anything already sold stays sold.",
+      "Loaded onto the wrong shop? On Correct and close opening stock, tick the items, or tick a whole category, and click Remove ticked. The CEO can remove the whole shop's opening stock at the bottom. Then load the file onto the right shop.",
       "OLD EXCEL & CSV: use this only when the item list is already on the system and you are topping up from a plain sheet.",
     ],
     watch: [
@@ -136,7 +136,7 @@ const PAGES: Array<
     ],
     watch: [
       "One list keeps names and prices the same in every shop.",
-      "Only the main admin and the person who loads stock add items or change prices. A shop manager reads the list but cannot change it. Ask whoever holds the uploader login for a new item.",
+      "The person who loads stock adds new items. Only the CEO changes prices or sees what items cost. A shop manager reads the list but cannot change it.",
       "This is not a carton sale. You still sell by the unit. Bulk here means many prices in one save.",
       "A phone marked Damaged is not for Sell now. On All phones, use Set Good (sellable) or Set Damaged when it must change.",
     ],
@@ -194,7 +194,7 @@ const PAGES: Array<
       "Add phone lines with one IMEI per line, at least 14 digits. Add no-number items with a piece count.",
       "Save. Shop stock Coming goes up. Sell now still cannot find those IMEIs.",
       "When the rider arrives, mark They have arrived. In shop goes up. Then cashiers can sell.",
-      "The main admin can show a hidden list to staff who have this page.",
+      "The CEO can show a hidden list to staff who have this page.",
     ],
     watch: [
       "If you mix Coming with In shop, cashiers will sell phones that are still on the road.",
@@ -468,7 +468,7 @@ const PAGES: Array<
       "Open Profit by shop if you can see more than one shop.",
     ],
     watch: ["Figures come from real invoices and approved expenses. The pack does not invent profit."],
-    cannot: ["This page does not change an invoice."],
+    cannot: ["Only the CEO opens this page. It is not a box on Who can see what.", "This page does not change an invoice."],
     lookup: ["profit", "margin", "net", "cost price", "extract"],
   },
   {

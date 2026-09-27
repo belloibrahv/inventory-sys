@@ -1,10 +1,14 @@
 import { prisma } from "@/lib/prisma"
 import { getPosLookups } from "@/app/actions/sales"
 import { FormScreen } from "@/components/shared"
+import { canSeeCost } from "@/lib/rbac"
+import { requireUser } from "@/lib/session"
 import { money } from "@/lib/utils"
 import { TransferForm } from "../transfer-form"
 
 export default async function StartTransferPage() {
+  // Transfers are valued at cost for the CEO and at sell price for everyone else.
+  const atCost = canSeeCost((await requireUser()).role)
   const [lookups, catalog] = await Promise.all([
     getPosLookups(),
     prisma.product.findMany({
@@ -36,7 +40,7 @@ export default async function StartTransferPage() {
     name: product.name,
     sku: product.sku,
     serialized: product.tracking !== "NONE",
-    costPrice: money(product.costPrice),
+    costPrice: money(atCost ? product.costPrice : product.sellingPrice),
     brand: { name: product.brand.name },
     category: { name: product.category.name },
     stock: product.inventory.map((row) => ({
@@ -50,11 +54,11 @@ export default async function StartTransferPage() {
   return (
     <FormScreen
       title="Start a transfer"
-      description="From branch, to branch, find items, type how many to send, check the cost value, then submit. Stock leaves only when the other shop accepts."
+      description={`From branch, to branch, find items, type how many to send, check the ${atCost ? "cost value" : "value"}, then submit. Stock leaves only when the other shop accepts.`}
       backHref="/transfers"
       wide
     >
-      <TransferForm branches={lookups.branches} products={products} defaultFromId={lookups.branchId} successHref="/transfers" />
+      <TransferForm branches={lookups.branches} products={products} defaultFromId={lookups.branchId} successHref="/transfers" atCost={atCost} />
     </FormScreen>
   )
 }

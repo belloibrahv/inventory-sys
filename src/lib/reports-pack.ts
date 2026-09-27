@@ -8,6 +8,11 @@ export type ReportsPack = {
   statementRef: string
   periodLabel: string
   range: "day" | "week" | "month"
+  /**
+   * What the stock figure is worth at. Cost for the CEO; at sell price for
+   * everyone else, who may not see what items cost us.
+   */
+  stockBasis: "cost" | "sell"
   from: string
   to: string
   compare: {
@@ -39,7 +44,7 @@ export function reportsKpis(data: ReportsPack) {
     { label: "Total sales", value: data.totals.revenue, money: true },
     { label: "Total payments received", value: data.totals.collected, money: true },
     { label: "Approved expenses", value: data.totals.expenses, money: true },
-    { label: "Stock at cost", value: data.totals.stock, money: true },
+    { label: data.stockBasis === "cost" ? "Stock at cost" : "Stock at sell price", value: data.totals.stock, money: true },
     { label: "Sales volume", value: data.totals.invoices, money: false },
     { label: "Customers still owe", value: data.totals.owing, money: true },
     { label: "Swap Deal value", value: data.totals.swaps, money: true },

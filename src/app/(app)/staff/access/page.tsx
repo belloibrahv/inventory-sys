@@ -3,15 +3,14 @@ import { redirect } from "next/navigation"
 import { getRoleMatrix, saveRoleAccess } from "@/app/actions/access"
 import { ActionForm } from "@/components/action-form"
 import { PageHeader } from "@/components/shared"
-import { ACTION_PERMS, VIEW_PERMS } from "@/lib/permissions"
-import { ROLE_LABELS, isShopOwner } from "@/lib/rbac"
+import { ACTION_PERMS, CEO_ONLY_KEYS, VIEW_PERMS } from "@/lib/permissions"
+import { ROLE_LABELS, isCEO, isShopOwner } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { cn } from "@/lib/utils"
 import { UserRole } from "@prisma/client"
 
-const editableRoles = (Object.keys(ROLE_LABELS) as UserRole[]).filter(
-  (role) => role !== "SUPER_ADMIN" && role !== "CEO"
-)
+/** Everyone but the CEO. The main admin's own row is the CEO's to set. */
+const editableRoles = (Object.keys(ROLE_LABELS) as UserRole[]).filter((role) => role !== "CEO")
 
 function RoleAccessCard({
   role,
@@ -34,7 +33,7 @@ function RoleAccessCard({
             Pages they can open
           </p>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {VIEW_PERMS.filter((row) => row.key !== "view.access").map((row) => (
+            {VIEW_PERMS.filter((row) => row.key !== "view.access" && !CEO_ONLY_KEYS.includes(row.key)).map((row) => (
               <label key={row.key} className="flex items-center gap-2 text-sm">
                 <input type="checkbox" name={row.key} defaultChecked={allowed.get(`${role}:${row.key}`) === true} />
                 {row.label}
@@ -47,7 +46,7 @@ function RoleAccessCard({
             What they can do
           </p>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {ACTION_PERMS.map((row) => (
+            {ACTION_PERMS.filter((row) => !CEO_ONLY_KEYS.includes(row.key)).map((row) => (
               <label key={row.key} className="flex items-center gap-2 text-sm">
                 <input type="checkbox" name={row.key} defaultChecked={allowed.get(`${role}:${row.key}`) === true} />
                 {row.label}
@@ -61,16 +60,16 @@ function RoleAccessCard({
 }
 
 const ROLE_NOTES: Partial<Record<UserRole, string>> = {
+  SUPER_ADMIN:
+    "System Administrator: keeps the system running (staff logins, shops, settings, backups, Who did what). Tick business pages only if the main admin truly needs them.",
   AUDITOR: "Internal Auditor: full shop oversight on the left menu. Post money. Cannot sell, load stock, or change this list.",
   ACCOUNTANT:
     "Financial Accountant: money and books pages only. Keep Sell now, Upload stock, repairs, and other floor jobs off unless you mean to give them.",
 }
 
 /** Auditor and Accountant first: they are the jobs owners adjust most. */
-const roleOrder = [
-  ...editableRoles.filter((role) => role === "AUDITOR" || role === "ACCOUNTANT"),
-  ...editableRoles.filter((role) => role !== "AUDITOR" && role !== "ACCOUNTANT"),
-]
+const FIRST: UserRole[] = ["SUPER_ADMIN", "AUDITOR", "ACCOUNTANT"]
+const roleOrder = [...FIRST, ...editableRoles.filter((role) => !FIRST.includes(role))]
 
 export default async function AccessPage({ searchParams }: { searchParams: Promise<{ role?: string }> }) {
   const user = await requireUser()
@@ -79,17 +78,19 @@ export default async function AccessPage({ searchParams }: { searchParams: Promi
   if ("error" in matrix) redirect("/staff")
   const allowed = new Map(matrix.rows.map((row) => [`${row.role}:${row.permKey}`, row.allowed]))
   const { role: asked } = await searchParams
-  const role = roleOrder.find((row) => row === asked) ?? roleOrder[0]
+  // Only the CEO sets the main admin's job.
+  const roles = isCEO(user.role) ? roleOrder : roleOrder.filter((row) => row !== "SUPER_ADMIN")
+  const role = roles.find((row) => row === asked) ?? roles[0]
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Who can see what"
-        description="Pick a job, then tick the pages it may open. The left menu only shows what is ticked for that job. Super Admin and the CEO always keep every page."
+        description="Pick a job, then tick the pages it may open. The left menu only shows what is ticked for that job. The CEO keeps every page, and alone sees profit and cost prices and changes prices."
       />
 
       <nav aria-label="Pick a job" className="flex flex-wrap gap-2">
-        {roleOrder.map((row) => (
+        {roles.map((row) => (
           <Link
             key={row}
             href={`/staff/access?role=${row}`}

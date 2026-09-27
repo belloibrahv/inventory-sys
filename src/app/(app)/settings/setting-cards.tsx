@@ -43,7 +43,7 @@ export function SettingCards({ settings, canEdit }: { settings: SettingRow[]; ca
                 <Select name="value" defaultValue={setting.value}>
                   {setting.key === "sales.allow_below_minimum" ? (
                     <>
-                      <option value="false">No. Only the CEO or Super Admin may go under it</option>
+                      <option value="false">No. Only the CEO may go under it</option>
                       <option value="true">Yes. Any seller may go under it, and must say why</option>
                     </>
                   ) : setting.key === "sales.block_until_day_closed" ? (
@@ -75,7 +75,7 @@ export function SettingCards({ settings, canEdit }: { settings: SettingRow[]; ca
                   anywhere from that figure up, so a reseller price or a bulk discount needs nobody&apos;s
                   permission. There is no percentage limit. Going under the floor, or under what an item
                   cost us, always needs a reason and shows up on Price changes. With this set to No, the
-                  CEO or Super Admin approves those prices on the seller&apos;s till with their own password.
+                  The CEO approves those prices on the seller&apos;s till with their own password.
                   With Yes, any seller may do it alone. The sale always records the price that was charged.
                 </p>
               ) : null}

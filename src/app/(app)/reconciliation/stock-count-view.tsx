@@ -39,10 +39,16 @@ export function StockCountView({
   inventory,
   defaultBranchId,
   brand,
+  atCost = false,
 }: {
   branches: Branch[]
   inventory: StockItem[]
   defaultBranchId?: string | null
+  /**
+   * The CEO values the count at cost. Everyone else values it at sell price:
+   * their "costPrice" fields already hold the selling price from the server.
+   */
+  atCost?: boolean
   brand: LetterheadBrand
 }) {
   const router = useRouter()
@@ -142,7 +148,7 @@ export function StockCountView({
         "Item code",
         "Category",
         "Shop",
-        "Cost",
+        atCost ? "Cost" : "Price",
         "System count",
         "Hand count",
         "Difference",
@@ -310,7 +316,7 @@ export function StockCountView({
           columns={[
             { label: "Item" },
             { label: "Category" },
-            { label: "Cost", align: "right" },
+            { label: atCost ? "Cost" : "Price", align: "right" },
             { label: "System count", align: "center" },
             { label: "Hand count", align: "center" },
             { label: "Difference", align: "center" },

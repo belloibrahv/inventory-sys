@@ -3,10 +3,14 @@ import { Plus } from "lucide-react"
 import { getTransfers } from "@/app/actions/ops"
 import { PageHeader } from "@/components/shared"
 import { Button } from "@/components/ui/button"
+import { canSeeCost } from "@/lib/rbac"
+import { requireUser } from "@/lib/session"
 import { money } from "@/lib/utils"
 import { TransfersList } from "./transfers-list"
 
 export default async function TransfersPage() {
+  // Valued at cost for the CEO, at sell price for everyone else.
+  const atCost = canSeeCost((await requireUser()).role)
   const transfers = await getTransfers()
 
   const listRows = transfers.map((transfer) => ({
@@ -23,7 +27,7 @@ export default async function TransfersPage() {
       product: {
         name: item.product.name,
         sku: item.product.sku,
-        costPrice: money(item.product.costPrice),
+        costPrice: money(atCost ? item.product.costPrice : item.product.sellingPrice),
       },
       quantity: item.quantity,
     })),
@@ -32,7 +36,7 @@ export default async function TransfersPage() {
       imei1: imei.imei1,
       productId: imei.productId,
       name: imei.product.name,
-      costPrice: money(imei.product.costPrice),
+      costPrice: money(atCost ? imei.product.costPrice : imei.product.sellingPrice),
     })),
   }))
 
@@ -49,7 +53,7 @@ export default async function TransfersPage() {
           </Button>
         }
       />
-      <TransfersList transfers={listRows} />
+      <TransfersList transfers={listRows} atCost={atCost} />
     </div>
   )
 }

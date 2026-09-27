@@ -899,7 +899,7 @@ export async function createReturn(formData: FormData) {
     })
 
     const managers = await prisma.user.findMany({
-      where: { role: { in: ["CEO", "BRANCH_MANAGER", "AUDITOR", "ACCOUNTANT", "SUPER_ADMIN"] }, isActive: true },
+      where: { role: { in: ["CEO", "BRANCH_MANAGER", "AUDITOR", "ACCOUNTANT"] }, isActive: true },
     })
     const invoiceNum = (await prisma.sale.findUnique({ where: { id: saleItem.saleId }, select: { invoiceNumber: true } }))?.invoiceNumber ?? ""
     for (const manager of managers) {
@@ -1000,7 +1000,7 @@ export async function createReturn(formData: FormData) {
     },
   })
   const managers = await prisma.user.findMany({
-    where: { role: { in: ["CEO", "BRANCH_MANAGER", "AUDITOR", "ACCOUNTANT", "SUPER_ADMIN"] }, isActive: true },
+    where: { role: { in: ["CEO", "BRANCH_MANAGER", "AUDITOR", "ACCOUNTANT"] }, isActive: true },
   })
   for (const manager of managers) {
     await notify(manager.id, "A return is waiting for you to say yes", `${record.returnNumber} for IMEI ${imei1}`, "/approvals", "APPROVAL_REQUEST")
@@ -1573,7 +1573,7 @@ export async function createSwap(formData: FormData) {
     },
   })
   const managers = await prisma.user.findMany({
-    where: { role: { in: ["CEO", "BRANCH_MANAGER", "SUPER_ADMIN"] }, isActive: true },
+    where: { role: { in: ["CEO", "BRANCH_MANAGER"] }, isActive: true },
   })
   for (const manager of managers) {
     await notify(manager.id, "A Swap Deal is waiting for approval", swap.swapNumber, "/approvals", "APPROVAL_REQUEST")

@@ -37,7 +37,8 @@ export function pathIsAllowed(pathname: string, allowedHrefs: string[]) {
     return allowedHrefs.includes("/finance") || allowedHrefs.includes("/pos") || allowedHrefs.includes("/finance/close")
   }
   if (pathname === "/audit/books" || pathname.startsWith("/audit/books/")) {
-    return allowedHrefs.includes("/audit") || allowedHrefs.includes("/audit/books")
+    // hrefsForKeys adds this only for people who can see both the audit and the money.
+    return allowedHrefs.includes("/audit/books")
   }
   // Opening stock correction: Upload stock staff and owners who already have that door.
   if (pathname === "/opening-stock" || pathname.startsWith("/opening-stock/")) {

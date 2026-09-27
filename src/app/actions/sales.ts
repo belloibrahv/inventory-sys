@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 import { PaymentMethod } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { requireUser } from "@/lib/session"
-import { canManageFinance, canSeeAllBranches, canSell, scopedBranchId } from "@/lib/rbac"
+import { canManageFinance, canSeeAllBranches, canSeeCost, canSell, scopedBranchId } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { getAppSettings, lowStockLimit } from "@/lib/settings"
 import { letterheadFromSettings } from "@/lib/letterhead"
@@ -15,7 +15,7 @@ import { markParkedPosted } from "@/app/actions/parked"
 import { isBlockedFromSell } from "@/lib/phone-look"
 import { reservedTransferImeiSet, reservedSwapImeiSet } from "@/app/actions/ops"
 import { shopPayChannel } from "@/lib/sale-money"
-import { belowCost, discountOff, needsReason, sellFloor } from "@/lib/pricing"
+import { belowCost, blindTillPrices, discountOff, needsReason, sellFloor, type PriceBasis } from "@/lib/pricing"
 import { readPriceApproval, signPriceApproval, type ApprovedDeal } from "@/lib/price-approval"
 import { writeAudit } from "@/lib/audit"
 import * as bcrypt from "bcryptjs"
@@ -56,6 +56,8 @@ export async function getPosLookups() {
   const viewShop = await viewBranchFilter(user)
   // Shop staff always sell in their own shop. Head office follows the shop picker.
   const branchId = canAll ? viewShop || user.branchId || undefined : user.branchId || undefined
+  // Only the CEO's till carries cost. Everyone else's has none to leak.
+  const showCost = canSeeCost(user.role)
   const [products, customers, imeis, branches, bankAccounts] = await Promise.all([
     prisma.product.findMany({
       where: { isActive: true, condition: { not: "FAULTY" } },
@@ -107,10 +109,15 @@ export async function getPosLookups() {
       id: product.id,
       name: product.name,
       sku: product.sku,
-      costPrice: money(product.costPrice),
-      sellingPrice: money(product.sellingPrice),
-      minimumPrice: money(product.minimumPrice),
-      resellerMarkup: money(product.category.resellerMarkup),
+      ...tillPrices(
+        {
+          costPrice: money(product.costPrice),
+          sellingPrice: money(product.sellingPrice),
+          minimumPrice: money(product.minimumPrice),
+          resellerMarkup: money(product.category.resellerMarkup),
+        },
+        showCost
+      ),
       serialized: product.tracking !== "NONE",
       brand: { name: product.brand.name },
       category: { name: product.category.name },
@@ -127,7 +134,7 @@ export async function getPosLookups() {
       creditLimit: money(customer.creditLimit),
       currentBalance: money(customer.currentBalance),
     })),
-    imeis: imeis.map(mapTillImei),
+    imeis: imeis.map((item) => mapTillImei(item, showCost)),
     branches: branches.map((branch) => ({
       id: branch.id,
       name: branch.name,
@@ -146,10 +153,17 @@ export async function getPosLookups() {
     // already works for neighbour fills. It was being read here and then dropped.
     canOverrideFloor:
       settings.allowBelowMinimum || (await can(user.role, "action.override_floor")),
-    canSeeCost: await can(user.role, "action.see_cost"),
+    canSeeCost: showCost,
     lowStockThreshold: settings.lowStockThreshold,
 
   }
+}
+
+/** Real prices for the CEO; for everyone else, a till with no cost in it. */
+type TillPriceFields = Required<Omit<PriceBasis, "resellerQuote">> & { resellerQuote?: number }
+
+function tillPrices(basis: Required<Omit<PriceBasis, "resellerQuote">>, showCost: boolean): TillPriceFields {
+  return showCost ? basis : blindTillPrices(basis)
 }
 
 function mapTillImei(item: {
@@ -170,7 +184,7 @@ function mapTillImei(item: {
     category?: { name: string; resellerMarkup?: unknown } | null
     brand?: { name: string } | null
   }
-}) {
+}, showCost: boolean) {
   return {
     id: item.id,
     imei1: item.imei1,
@@ -180,10 +194,15 @@ function mapTillImei(item: {
     cosmeticGrade: item.cosmeticGrade,
     product: {
       name: item.product.name,
-      sellingPrice: money(item.product.sellingPrice),
-      minimumPrice: money(item.product.minimumPrice),
-      costPrice: money(item.product.costPrice),
-      resellerMarkup: money(item.product.category?.resellerMarkup),
+      ...tillPrices(
+        {
+          sellingPrice: money(item.product.sellingPrice),
+          minimumPrice: money(item.product.minimumPrice),
+          costPrice: money(item.product.costPrice),
+          resellerMarkup: money(item.product.category?.resellerMarkup),
+        },
+        showCost
+      ),
       storage: item.product.storage,
       condition: item.product.condition,
       color: item.product.color,
@@ -226,7 +245,7 @@ export async function findInStockImei(code: string, branchId?: string) {
       error: "That device is on a Swap Deal waiting for approval. It cannot be sold yet.",
     }
   }
-  return { imei: mapTillImei(item) }
+  return { imei: mapTillImei(item, canSeeCost(user.role)) }
 }
 
 /**
@@ -326,7 +345,7 @@ export async function searchTillStock(query: string, branchId?: string) {
       return hay.includes(q) || row.imei1.includes(imeiDigits)
     })
     .slice(0, 20)
-    .map(mapTillImei)
+    .map((row) => mapTillImei(row, canSeeCost(user.role)))
 
   const accessories = productRows
     .filter((product) => {
@@ -382,23 +401,25 @@ export async function getShopImeiSheet(branchId: string) {
   if (!branchId) return { rows: [] as string[][], truncated: false }
   const scoped = await scopedBranchId(user.role, user.branchId, branchId)
   const shop = scoped || branchId
+  // Only the CEO's sheet carries cost; everyone else's values each phone at its sell price.
+  const showCost = canSeeCost(user.role)
   const rows = await prisma.imeiRecord.findMany({
     where: { status: "IN_STOCK", branchId: shop },
-    include: { product: { select: { sku: true, name: true, costPrice: true } } },
+    include: { product: { select: { sku: true, name: true, costPrice: true, sellingPrice: true } } },
     orderBy: { createdAt: "desc" },
     take: 50_000,
   })
   return {
     truncated: rows.length === 50_000,
     rows: [
-      ["imei", "serial", "item_code", "name", "quantity", "unit_cost", "color", "notes"],
+      ["imei", "serial", "item_code", "name", "quantity", showCost ? "unit_cost" : "unit_price", "color", "notes"],
       ...rows.map((item) => [
         item.imei1,
         item.serialNumber ?? "",
         item.product.sku,
         item.product.name,
         "1",
-        money(item.product.costPrice).toFixed(2),
+        money(showCost ? item.product.costPrice : item.product.sellingPrice).toFixed(2),
         "",
         "",
       ]),
@@ -435,7 +456,7 @@ export async function approveTillPrice(input: {
 
   const email = String(input.email || "").toLowerCase().trim()
   const password = String(input.password || "")
-  if (!email || !password) return { error: "The CEO or Super Admin types their own email and password." }
+  if (!email || !password) return { error: "The CEO types their own email and password." }
 
   const approver = await prisma.user.findUnique({
     where: { email },
@@ -456,7 +477,7 @@ export async function approveTillPrice(input: {
     })
     return {
       error: valid
-        ? `${approver?.name || email} is not allowed to approve prices. Only the CEO or Super Admin can.`
+        ? `${approver?.name || email} is not allowed to approve prices. Only the CEO can, or someone the CEO has allowed.`
         : "That email and password do not match.",
     }
   }
@@ -1123,7 +1144,7 @@ async function fanOutSaleAlerts(input: {
           where: {
             isActive: true,
             OR: [
-              { role: { in: ["ACCOUNTANT", "CEO", "SUPER_ADMIN"] } },
+              { role: { in: ["ACCOUNTANT", "CEO"] } },
               { role: "BRANCH_MANAGER", branchId: input.branchId },
             ],
           },

@@ -28,10 +28,13 @@ export function ImeiIntakeForm({
   products,
   branches,
   suppliers,
+  canPrice = false,
 }: {
   products: IntakeProduct[]
   branches: Branch[]
   suppliers: Supplier[]
+  /** Type cost, lowest and selling price as the phone comes in. The CEO's only. */
+  canPrice?: boolean
 }) {
   const [imei1, setImei1] = useState("")
   const [supplierChoice, setSupplierChoice] = useState("")
@@ -159,7 +162,10 @@ export function ImeiIntakeForm({
         ))}
       </Select>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className={`grid grid-cols-2 gap-3 ${canPrice ? "sm:grid-cols-4" : ""}`}>
+        {/* Prices are the CEO's. Anyone else receives at the price list's own prices. */}
+        {canPrice ? (
+          <>
         <div>
           <label className="text-xs font-medium text-muted-foreground">Cost</label>
           <Input
@@ -199,6 +205,8 @@ export function ImeiIntakeForm({
             className="mt-1"
           />
         </div>
+          </>
+        ) : null}
         <div>
           <label className="text-xs font-medium text-muted-foreground">
             {tracked ? "Quantity" : "Pieces to add"}

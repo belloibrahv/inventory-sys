@@ -80,8 +80,11 @@ function TooltipCard({
  */
 export function SalesTrend({
   data,
+  showProfit = false,
 }: {
   data: Array<{ day: string; value: number; units: number; profit: number }>
+  /** "We kept" in the hover card. The CEO's only. */
+  showProfit?: boolean
 }) {
   return (
     <div className="h-[260px]">
@@ -114,7 +117,7 @@ export function SalesTrend({
                   rows={[
                     { label: "Sold", value: formatCurrency(row.value), color: MONEY },
                     { label: "Pieces", value: String(row.units) },
-                    { label: "We kept", value: formatCurrency(row.profit) },
+                    ...(showProfit ? [{ label: "We kept", value: formatCurrency(row.profit) }] : []),
                   ]}
                 />
               )

@@ -42,10 +42,8 @@ function sumSales(
 
 export async function getBooksCheck(branchId?: string, businessDate?: string, range: BooksRange = "day", compareDate?: string) {
   const user = await requireUser()
-  const allowed =
-    (await can(user.role, "view.audit")) ||
-    (await can(user.role, "view.finance")) ||
-    (await can(user.role, "view.reports"))
+  // A money paper: Money in & out or Reports opens it. Who did what alone does not.
+  const allowed = (await can(user.role, "view.finance")) || (await can(user.role, "view.reports"))
   if (!allowed) return null
   await healOpeningStockBills()
   await healDuplicateDayCloses()

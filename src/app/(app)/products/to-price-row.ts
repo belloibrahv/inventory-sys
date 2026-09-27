@@ -2,8 +2,11 @@ import type { getProducts } from "@/app/actions/catalog"
 import type { PriceRow } from "@/app/(app)/products/price-list"
 import { money } from "@/lib/utils"
 
-/** Prisma Decimals turned into plain numbers before they cross to the browser. */
-export function toPriceRow(product: Awaited<ReturnType<typeof getProducts>>[number]): PriceRow {
+/**
+ * Prisma Decimals turned into plain numbers before they cross to the browser.
+ * Cost only goes out when `showCost` (the CEO); everyone else gets 0.
+ */
+export function toPriceRow(product: Awaited<ReturnType<typeof getProducts>>[number], showCost = false): PriceRow {
   return {
     id: product.id,
     sku: product.sku,
@@ -18,7 +21,7 @@ export function toPriceRow(product: Awaited<ReturnType<typeof getProducts>>[numb
     description: product.description,
     tracking: product.tracking,
     condition: product.condition,
-    costPrice: money(product.costPrice),
+    costPrice: showCost ? money(product.costPrice) : 0,
     minimumPrice: money(product.minimumPrice),
     sellingPrice: money(product.sellingPrice),
     warrantyDays: product.warrantyDays,

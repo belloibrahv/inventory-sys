@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/prisma"
 import { viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
-import { scopedBranchId } from "@/lib/rbac"
+import { canSeeCost, scopedBranchId } from "@/lib/rbac"
 import { money } from "@/lib/utils"
 import { healOpeningStockBills } from "@/lib/opening-stock-money"
 import { payablePurchaseWhere, groupSupplierLedgers } from "@/lib/purchase-money"
@@ -108,6 +108,7 @@ export async function getDashboardData() {
         name: true,
         tracking: true,
         costPrice: true,
+        sellingPrice: true,
         brand: { select: { name: true } },
       },
     }),
@@ -202,10 +203,12 @@ export async function getDashboardData() {
   const productById = new Map(brandGroups.map((row) => [row.id, row]))
   const branchById = new Map(branches.map((row) => [row.id, row]))
 
-  const stockValue = stock.reduce(
-    (sum, row) => sum + row.quantity * money(productById.get(row.productId)?.costPrice),
-    0
-  )
+  // Stock at cost is the CEO's figure. Everyone else sees it at sell price.
+  const stockAtCost = canSeeCost(user.role)
+  const stockValue = stock.reduce((sum, row) => {
+    const product = productById.get(row.productId)
+    return sum + row.quantity * money(stockAtCost ? product?.costPrice : product?.sellingPrice)
+  }, 0)
 
   const months = Array.from({ length: 6 }, (_, index) => {
     const date = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1)
@@ -343,6 +346,7 @@ export async function getDashboardData() {
       paymentSentTrend: trend(sent, lastSent),
       paymentReceivedTrend: trend(received, money(lastPaymentsIn._sum.amount)),
       stockValue,
+      stockAtCost,
       outstanding: money(debts._sum.currentBalance),
       returns,
       swaps,

@@ -20,9 +20,45 @@ export function isSuperAdmin(role: UserRole) {
   return role === "SUPER_ADMIN"
 }
 
-/** Main admin and CEO may correct the shop. Every change is written in Who did what. */
+/**
+ * Main admin and CEO share the system upkeep jobs: staff logins, Who can see
+ * what, shops, backups. Business corrections (undoing money, opening stock,
+ * prices) belong to the CEO alone; use isCEO for those.
+ */
 export function isShopOwner(role: UserRole) {
   return role === "SUPER_ADMIN" || role === "CEO"
+}
+
+/**
+ * The CEO owns the business. Profit, margins, what items cost us, and changing
+ * prices are theirs alone. These are fixed here in code rather than left as
+ * boxes on Who can see what, so no screen can hand them to anyone else, the
+ * main admin included.
+ */
+export function isCEO(role: UserRole) {
+  return role === "CEO"
+}
+
+/** Profit figures, margins, and "we kept" anywhere in the app. */
+export function canSeeProfit(role: UserRole) {
+  return isCEO(role)
+}
+
+/**
+ * What an item cost us, on the price list, the till, stock value and reports.
+ * People loading stock still type the cost from the supplier bill as they
+ * enter it; that entry is the only place anyone else meets a cost price.
+ */
+export function canSeeCost(role: UserRole) {
+  return isCEO(role)
+}
+
+/**
+ * Changing the selling, lowest or cost price of an item already on the list.
+ * A new item still gets its starting prices from whoever adds or loads it.
+ */
+export function canChangePrices(role: UserRole) {
+  return isCEO(role)
 }
 
 /**

@@ -43,6 +43,8 @@ type PriceSource = {
   minimumPrice: number
   costPrice: number
   resellerMarkup: number
+  /** Worked out on the server when this till may not see cost. */
+  resellerQuote?: number
 }
 
 function priceBasis(source: PriceSource) {
@@ -51,6 +53,7 @@ function priceBasis(source: PriceSource) {
     minimumPrice: money(source.minimumPrice),
     sellingPrice: money(source.sellingPrice),
     resellerMarkup: money(source.resellerMarkup),
+    ...(source.resellerQuote !== undefined ? { resellerQuote: money(source.resellerQuote) } : {}),
   }
 }
 
@@ -138,6 +141,7 @@ export function PosClient({
       /** What this unit cost us, so margin can be shown as the price is typed. */
       costPrice: number
       resellerMarkup: number
+      resellerQuote?: number
       sellingPrice: number
       minimumPrice: number
       /** Why this line left the standard price. Only asked for under the floor. */
@@ -652,6 +656,7 @@ export function PosClient({
           minPrice: sellFloor(basis, { reseller: wholesale }),
           costPrice: basis.costPrice,
           resellerMarkup: basis.resellerMarkup,
+          resellerQuote: basis.resellerQuote,
           sellingPrice: basis.sellingPrice,
           minimumPrice: basis.minimumPrice,
           quantity: 1,
@@ -726,6 +731,7 @@ export function PosClient({
             minPrice: sellFloor(basis, { reseller: wholesale }),
             costPrice: basis.costPrice,
             resellerMarkup: basis.resellerMarkup,
+            resellerQuote: basis.resellerQuote,
             sellingPrice: basis.sellingPrice,
             minimumPrice: basis.minimumPrice,
             quantity: addQty,
@@ -1618,7 +1624,7 @@ export function PosClient({
                       <>
                         <p className="text-xs text-danger">
                           This takes the sale under the {formatCurrency(discountGuard)} this stock may go for.
-                          {mayGoUnder ? " Say why." : " Say why. The CEO or Super Admin approves it when you complete the sale."}
+                          {mayGoUnder ? " Say why." : " Say why. The CEO approves it when you complete the sale."}
                         </p>
                         <Input
                           className="h-9 text-sm"
@@ -1749,7 +1755,7 @@ export function PosClient({
             <Input
               type="email"
               autoComplete="off"
-              placeholder="CEO or Super Admin email"
+              placeholder="CEO email"
               value={approverEmail}
               onChange={(event) => setApproverEmail(event.target.value)}
               aria-label="Approver email"

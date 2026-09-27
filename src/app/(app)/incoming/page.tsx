@@ -4,13 +4,13 @@ import { getIncomingLots } from "@/app/actions/incoming"
 import { IncomingList } from "./incoming-list"
 import { PageHeader } from "@/components/shared"
 import { Button } from "@/components/ui/button"
-import { can, isShopOwner } from "@/lib/permissions"
+import { can, isCEO } from "@/lib/permissions"
 import { requireUser } from "@/lib/session"
 
 export default async function IncomingPage() {
   const me = await requireUser()
   const lots = await getIncomingLots()
-  const canBook = isShopOwner(me.role) || (await can(me.role, "action.incoming"))
+  const canBook = isCEO(me.role) || (await can(me.role, "action.incoming"))
 
   return (
     <div className="space-y-5">
@@ -27,7 +27,7 @@ export default async function IncomingPage() {
           ) : null
         }
       />
-      <IncomingList lots={lots} canBook={canBook} isAdmin={isShopOwner(me.role)} />
+      <IncomingList lots={lots} canBook={canBook} isAdmin={isCEO(me.role)} />
     </div>
   )
 }

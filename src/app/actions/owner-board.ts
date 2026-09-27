@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma"
 import { viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
 import { can } from "@/lib/permissions"
+import { canSeeProfit } from "@/lib/roles"
 import { money } from "@/lib/utils"
 import { recentWatDays, shiftWatDay, watBounds, watDayKey } from "@/lib/lagos-day"
 
@@ -384,8 +385,21 @@ export async function getOwnerBoard(dayKey?: string) {
     .sort((a, b) => b.units - a.units)
     .slice(0, 8)
 
+  // Managers and the books desk share this board, but what things cost and
+  // what we kept are the CEO's alone. Zeroed here so they never reach the phone.
+  const showMoney = canSeeProfit(user.role)
+  if (!showMoney) {
+    for (const shop of shops) shop.soldCost = 0
+    totals.soldCost = 0
+    for (const line of soldLines) line.profit = 0
+    for (const bucket of trend) bucket.profit = 0
+    for (const row of reorder) row.costPrice = 0
+    for (const row of stockValue) row.value = 0
+  }
+
   return {
     day,
+    canSeeProfit: showMoney,
     rateDays: RATE_DAYS,
     trendDays: TREND_DAYS,
     allShops: !branchId,

@@ -19,10 +19,17 @@ export type PriceBasis = {
   sellingPrice: number
   /** Reseller markup over cost for this item's category, as a percentage. */
   resellerMarkup?: number
+  /**
+   * The reseller quote already worked out on the server. Set when the person at
+   * the till may not see cost (everyone but the CEO): their till gets no cost,
+   * so it cannot work the quote out itself.
+   */
+  resellerQuote?: number
 }
 
 /** What a reseller is quoted: cost plus the category markup. 0 when no markup is set. */
 export function resellerPrice(basis: PriceBasis) {
+  if (basis.resellerQuote !== undefined) return money(basis.resellerQuote)
   const cost = money(basis.costPrice)
   const markup = Number(basis.resellerMarkup ?? 0)
   if (!(cost > 0) || !Number.isFinite(markup) || markup <= 0) return 0
@@ -87,4 +94,24 @@ export function discountOff(listPrice: number, unitPrice: number, quantity = 1) 
 /** A reason is only demanded where the money is genuinely at risk. */
 export function needsReason(args: { unitPrice: number; floor: number; costPrice: number }) {
   return money(args.unitPrice) < money(args.floor) || belowCost(args.unitPrice, args.costPrice)
+}
+
+/**
+ * The prices a till may hold for someone who must not see cost.
+ *
+ * Cost goes out as 0. The reseller quote is worked out here instead, and the
+ * lowest price is raised to at least cost, so the till still stops a sale
+ * that would lose money: it asks for a reason as "under the lowest price"
+ * rather than "under cost". The sale itself is checked against the real
+ * prices on the server, as always.
+ */
+export function blindTillPrices(basis: PriceBasis): Required<PriceBasis> {
+  const cost = money(basis.costPrice)
+  return {
+    costPrice: 0,
+    minimumPrice: Math.max(money(basis.minimumPrice), cost),
+    sellingPrice: money(basis.sellingPrice),
+    resellerMarkup: 0,
+    resellerQuote: resellerPrice(basis),
+  }
 }

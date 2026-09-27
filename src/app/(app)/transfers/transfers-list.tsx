@@ -50,7 +50,13 @@ function transferTotals(transfer: TransferRow) {
   }
 }
 
-export function TransfersList({ transfers }: { transfers: TransferRow[] }) {
+/**
+ * `atCost` for the CEO. Everyone else sees transfers valued at sell price; their
+ * rows' "costPrice" fields already hold the selling price from the server.
+ */
+export function TransfersList({ transfers, atCost = false }: { transfers: TransferRow[]; atCost?: boolean }) {
+  const unitWord = atCost ? "Unit cost" : "Unit price"
+  const valueWord = atCost ? "Cost value" : "Value at sell price"
   const [status, setStatus] = useState("all")
 
   const filtered = useMemo(
@@ -77,8 +83,8 @@ export function TransfersList({ transfers }: { transfers: TransferRow[] }) {
         "Item",
         "IMEI or item code",
         "Qty",
-        "Unit cost",
-        "Cost value",
+        unitWord,
+        valueWord,
         "When",
       ],
     ]
@@ -170,7 +176,7 @@ export function TransfersList({ transfers }: { transfers: TransferRow[] }) {
     { id: "qty", header: "Qty", align: "right", sortValue: (row) => transferTotals(row).qty, cell: (row) => transferTotals(row).qty },
     {
       id: "value",
-      header: "Cost value",
+      header: valueWord,
       align: "right",
       hideBelow: "lg",
       sortValue: (row) => transferTotals(row).costValue,
@@ -249,7 +255,7 @@ export function TransfersList({ transfers }: { transfers: TransferRow[] }) {
             description={`${open.fromBranch.name} → ${open.toBranch.name} · ${formatShopWhen(whenOf(open))}`}
             className="sm:w-[520px]"
           >
-            <TransferDetail transfer={open} onDone={() => setOpen(null)} />
+            <TransferDetail transfer={open} valueWord={valueWord} onDone={() => setOpen(null)} />
           </SheetContent>
         ) : null}
       </Sheet>
@@ -257,7 +263,15 @@ export function TransfersList({ transfers }: { transfers: TransferRow[] }) {
   )
 }
 
-function TransferDetail({ transfer, onDone }: { transfer: TransferRow; onDone: () => void }) {
+function TransferDetail({
+  transfer,
+  valueWord,
+  onDone,
+}: {
+  transfer: TransferRow
+  valueWord: string
+  onDone: () => void
+}) {
   const totals = transferTotals(transfer)
   const open = transfer.status === "PENDING" || transfer.status === "IN_TRANSIT"
   return (
@@ -268,7 +282,7 @@ function TransferDetail({ transfer, onDone }: { transfer: TransferRow; onDone: (
           <p className="font-semibold tabular-nums">{totals.qty}</p>
         </div>
         <div>
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Cost value</p>
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{valueWord}</p>
           <p className="font-semibold tabular-nums">{formatCurrency(totals.costValue)}</p>
         </div>
         <div>

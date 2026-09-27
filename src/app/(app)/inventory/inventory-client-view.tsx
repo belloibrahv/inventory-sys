@@ -50,12 +50,15 @@ export function InventoryClientView({
   vault,
   serializedIds,
   lowStockThreshold,
+  showCost = false,
 }: {
   rows: InventoryRow[]
   branches: Branch[]
   vault: VaultCount[]
   serializedIds: string[]
   lowStockThreshold: number
+  /** Cost, profit and value at cost. The CEO's only; for anyone else the rows arrive with cost 0. */
+  showCost?: boolean
 }) {
   const [selectedBranch, setSelectedBranch] = useState(branches.length === 1 ? branches[0].id : "ALL")
   const [conditionFilter, setConditionFilter] = useState("ALL")
@@ -147,14 +150,13 @@ export function InventoryClientView({
         "Category",
         "How it looks",
         "Shop",
-        "Cost",
+        ...(showCost ? ["Cost"] : []),
         "Sell price",
-        "Profit per unit",
-        "Profit %",
+        ...(showCost ? ["Profit per unit", "Profit %"] : []),
         "On shelf",
         "On the way",
         "IMEI count",
-        "Value at cost",
+        ...(showCost ? ["Value at cost"] : []),
         "Value at sell price",
       ],
       ...filtered.map((row) => {
@@ -168,21 +170,21 @@ export function InventoryClientView({
           row.product.category.name,
           row.product.condition.replace(/_/g, " "),
           `${row.branch.name} (${row.branch.code})`,
-          cost.toFixed(2),
+          ...(showCost ? [cost.toFixed(2)] : []),
           selling.toFixed(2),
-          (selling - cost).toFixed(2),
-          `${marginPct(cost, selling).toFixed(1)}%`,
+          ...(showCost ? [(selling - cost).toFixed(2), `${marginPct(cost, selling).toFixed(1)}%`] : []),
           String(row.quantity),
           String(row.incomingQty),
           serialized.has(row.productId) ? String(imeis) : "No IMEI",
-          (row.quantity * cost).toFixed(2),
+          ...(showCost ? [(row.quantity * cost).toFixed(2)] : []),
           (row.quantity * selling).toFixed(2),
         ]
       }),
     ]
   }
 
-  const columns: DataColumn<InventoryRow>[] = [
+  const COST_COLUMNS = new Set(["cost", "profit"])
+  const allColumns: DataColumn<InventoryRow>[] = [
     {
       id: "item",
       header: "Item",
@@ -258,14 +260,23 @@ export function InventoryClientView({
         )
       },
     },
-    {
-      id: "value",
-      header: "Value at cost",
-      align: "right",
-      sortValue: (row) => row.quantity * money(row.product.costPrice),
-      cell: (row) => <span className="font-semibold">{formatCurrency(row.quantity * money(row.product.costPrice))}</span>,
-    },
+    showCost
+      ? {
+          id: "value",
+          header: "Value at cost",
+          align: "right",
+          sortValue: (row) => row.quantity * money(row.product.costPrice),
+          cell: (row) => <span className="font-semibold">{formatCurrency(row.quantity * money(row.product.costPrice))}</span>,
+        }
+      : {
+          id: "value",
+          header: "Value at sell price",
+          align: "right",
+          sortValue: (row) => row.quantity * money(row.product.sellingPrice),
+          cell: (row) => <span className="font-semibold">{formatCurrency(row.quantity * money(row.product.sellingPrice))}</span>,
+        },
   ]
+  const columns = showCost ? allColumns : allColumns.filter((column) => !COST_COLUMNS.has(column.id))
 
   const stamp = new Date().toISOString().slice(0, 10)
   const categorySlug =
@@ -283,23 +294,25 @@ export function InventoryClientView({
           hint={`${filtered.length} item${filtered.length === 1 ? "" : "s"} in ${scopeLabel}`}
           icon={<Layers className="h-4 w-4" />}
         />
-        <StatCard
-          label="Value at cost"
-          value={formatCurrency(totals.cost)}
-          hint="What the phones and items on the shelf cost you."
-          icon={<Coins className="h-4 w-4" />}
-          tone="primary"
-        />
+        {showCost ? (
+          <StatCard
+            label="Value at cost"
+            value={formatCurrency(totals.cost)}
+            hint="What the phones and items on the shelf cost you."
+            icon={<Coins className="h-4 w-4" />}
+            tone="primary"
+          />
+        ) : null}
         <StatCard
           label="Value at sell price"
           value={formatCurrency(totals.sales)}
-          hint={`If every unit sold at list price: ${formatCurrency(totals.profit)} profit`}
+          hint={showCost ? `If every unit sold at list price: ${formatCurrency(totals.profit)} profit` : "If every unit sold at list price"}
           icon={<TrendingUp className="h-4 w-4" />}
           tone="success"
         />
         <StatCard
-          label="Profit %"
-          value={`${totals.margin.toFixed(1)}%`}
+          label={showCost ? "Profit %" : "Low stock"}
+          value={showCost ? `${totals.margin.toFixed(1)}%` : totals.lowLines.toLocaleString("en-NG")}
           hint={
             totals.lowLines > 0
               ? `${totals.lowLines} item${totals.lowLines === 1 ? "" : "s"} below the low-stock warning`
@@ -417,7 +430,12 @@ export function InventoryClientView({
             title: row.product.name,
             subtitle: `${row.product.brand.name} · ${formatCondition(row.product.condition)} · ${row.branch.name}`,
             value: formatCurrency(selling),
-            valueHint: <span className={margin >= 20 ? "text-success" : margin > 0 ? "text-warning" : "text-danger"}>{margin > 0 ? "+" : ""}{margin.toFixed(1)}%</span>,
+            valueHint: showCost ? (
+              <span className={margin >= 20 ? "text-success" : margin > 0 ? "text-warning" : "text-danger"}>
+                {margin > 0 ? "+" : ""}
+                {margin.toFixed(1)}%
+              </span>
+            ) : undefined,
             meta: (
               <>
                 <span className={isLow(row) ? "font-semibold text-danger" : "font-medium text-foreground"}>
@@ -425,7 +443,7 @@ export function InventoryClientView({
                 </span>
                 {row.incomingQty > 0 ? <span>· +{row.incomingQty} on the way</span> : null}
                 {hasGap(row) ? <span className="text-warning">· IMEI count {imeiFor.get(`${row.productId}:${row.branchId}`) ?? 0}</span> : null}
-                <span>· cost {formatCurrency(cost)}</span>
+                {showCost ? <span>· cost {formatCurrency(cost)}</span> : null}
               </>
             ),
           }
@@ -433,14 +451,19 @@ export function InventoryClientView({
         footer={(rows) => (
           <tr>
             <td colSpan={2} className="text-sm">Totals for {rows.length} item{rows.length === 1 ? "" : "s"}</td>
-            <td className="hidden lg:table-cell" />
+            {showCost ? <td className="hidden lg:table-cell" /> : null}
             <td />
-            <td className="hidden xl:table-cell" />
+            {showCost ? <td className="hidden xl:table-cell" /> : null}
             <td className="text-center tabular-nums">{rows.reduce((sum, row) => sum + row.quantity, 0).toLocaleString("en-NG")}</td>
             <td className="hidden xl:table-cell" />
             <td className="hidden lg:table-cell" />
             <td className="whitespace-nowrap text-right tabular-nums">
-              {formatCurrency(rows.reduce((sum, row) => sum + row.quantity * money(row.product.costPrice), 0))}
+              {formatCurrency(
+                rows.reduce(
+                  (sum, row) => sum + row.quantity * money(showCost ? row.product.costPrice : row.product.sellingPrice),
+                  0
+                )
+              )}
             </td>
           </tr>
         )}
@@ -453,10 +476,10 @@ export function InventoryClientView({
           <tr>
             <th>Item</th>
             <th>Shop</th>
-            <th className="text-right">Cost</th>
+            {showCost ? <th className="text-right">Cost</th> : null}
             <th className="text-right">Sell</th>
             <th className="text-center">On shelf</th>
-            <th className="text-right">Value at cost</th>
+            <th className="text-right">{showCost ? "Value at cost" : "Value at sell price"}</th>
           </tr>
         </thead>
         <tbody>
@@ -464,10 +487,12 @@ export function InventoryClientView({
             <tr key={row.id}>
               <td>{row.product.name} · {row.product.sku}</td>
               <td>{row.branch.code}</td>
-              <td className="text-right">{formatCurrency(money(row.product.costPrice))}</td>
+              {showCost ? <td className="text-right">{formatCurrency(money(row.product.costPrice))}</td> : null}
               <td className="text-right">{formatCurrency(money(row.product.sellingPrice))}</td>
               <td className="text-center">{row.quantity}</td>
-              <td className="text-right">{formatCurrency(row.quantity * money(row.product.costPrice))}</td>
+              <td className="text-right">
+                {formatCurrency(row.quantity * money(showCost ? row.product.costPrice : row.product.sellingPrice))}
+              </td>
             </tr>
           ))}
         </tbody>

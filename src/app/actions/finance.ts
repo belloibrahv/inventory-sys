@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma"
 import { setStock } from "@/lib/concurrency"
 import { branchFilter, canReachBranch, OTHER_SHOP, resolveWritableShopId, viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
-import { canApprove, canHardDelete, canManageFinance, canManageStaff, canEditLetterhead, canSetOpeningMoney, isSuperAdmin, scopedBranchId } from "@/lib/rbac"
+import { canApprove, canHardDelete, canManageFinance, canManageStaff, canEditLetterhead, canSetOpeningMoney, canSeeProfit, isSuperAdmin, scopedBranchId } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { isLetterheadKey } from "@/lib/letterhead"
 import { generateDocNumber, money } from "@/lib/utils"
@@ -1397,7 +1397,8 @@ export async function getReportData(
  */
 export async function getPriceChanges(limit = 200) {
   const user = await requireUser()
-  if (!(await can(user.role, "view.profits")) && !(await can(user.role, "view.reports"))) {
+  // Sits on the Profit screen and carries cost and "below cost" lines: the CEO's alone.
+  if (!canSeeProfit(user.role)) {
     return { lines: [] as PriceChangeLine[] }
   }
   const branchId = await viewBranchFilter(user)
@@ -1487,7 +1488,7 @@ export type PriceChangeLine = {
 
 export async function getProfitData() {
   const user = await requireUser()
-  if (!(await can(user.role, "view.profits")) && !(await can(user.role, "view.reports"))) {
+  if (!canSeeProfit(user.role)) {
     return { shopLines: [], expenses: 0, byShop: [] as Array<{ name: string; shopProfit: number; expenses: number; net: number }> }
   }
   const branchId = await viewBranchFilter(user)

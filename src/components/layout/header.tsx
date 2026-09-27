@@ -100,13 +100,15 @@ export function Header({
 
         <button
           onClick={() => setCommandOpen(true)}
-          className="hidden h-9 items-center gap-2 rounded-lg border border-input bg-muted/50 pl-3 pr-2 text-[13px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground xl:flex"
+          // The long search box only where there is room for it beside the shop
+          // picker and the name; below that it would push over the Back button.
+          className="hidden h-9 items-center gap-2 rounded-lg border border-input bg-muted/50 pl-3 pr-2 text-[13px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground 2xl:flex"
         >
           <Search className="h-4 w-4" />
           <span>Find an IMEI, an invoice, a supplier, or a customer</span>
           <kbd className="ml-2 rounded border border-border bg-card px-1.5 py-0.5 text-[11px] font-medium">⌘K</kbd>
         </button>
-        <Button variant="ghost" size="icon" onClick={() => setCommandOpen(true)} className="xl:hidden" aria-label="Search">
+        <Button variant="ghost" size="icon" onClick={() => setCommandOpen(true)} className="2xl:hidden" aria-label="Search">
           <Search className="h-5 w-5" />
         </Button>
 

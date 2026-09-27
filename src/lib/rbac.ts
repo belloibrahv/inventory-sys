@@ -1,8 +1,21 @@
 import type { UserRole } from "@prisma/client"
 import { can } from "@/lib/permissions"
-import { isBooksDesk, isShopOwner } from "@/lib/roles"
+import { isBooksDesk, isCEO } from "@/lib/roles"
 
-export { isSuperAdmin, isShopOwner, canHardDelete, isBooksDesk, booksDeskPartner, BOOKS_DESK_ROLES, ROLE_LABELS, canEditLetterhead } from "@/lib/roles"
+export {
+  isSuperAdmin,
+  isShopOwner,
+  isCEO,
+  canSeeProfit,
+  canSeeCost,
+  canChangePrices,
+  canHardDelete,
+  isBooksDesk,
+  booksDeskPartner,
+  BOOKS_DESK_ROLES,
+  ROLE_LABELS,
+  canEditLetterhead,
+} from "@/lib/roles"
 
 export async function canSeeAllBranches(role: UserRole) {
   return can(role, "action.all_branches")
@@ -24,9 +37,9 @@ export async function canManageFinance(role: UserRole) {
   return can(role, "action.finance")
 }
 
-/** Opening cash and named banks. Main admin, CEO, accountant, records checker. */
+/** Opening cash and named banks: the CEO and the books desk. Business money, not system upkeep. */
 export function canSetOpeningMoney(role: UserRole) {
-  return isShopOwner(role) || isBooksDesk(role)
+  return isCEO(role) || isBooksDesk(role)
 }
 
 export async function canManageStaff(role: UserRole) {

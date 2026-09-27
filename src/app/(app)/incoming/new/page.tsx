@@ -3,13 +3,13 @@ import { getOpenPurchases } from "@/app/actions/incoming"
 import { getProducts } from "@/app/actions/catalog"
 import { getBranches, getSuppliers } from "@/app/actions/parties"
 import { FormScreen } from "@/components/shared"
-import { can, isShopOwner } from "@/lib/permissions"
+import { can, isCEO } from "@/lib/permissions"
 import { requireUser } from "@/lib/session"
 import { IncomingForm } from "../incoming-form"
 
 export default async function BookGoodsComingPage() {
   const me = await requireUser()
-  if (!(isShopOwner(me.role) || (await can(me.role, "action.incoming")))) redirect("/incoming")
+  if (!(isCEO(me.role) || (await can(me.role, "action.incoming")))) redirect("/incoming")
   const [products, branches, suppliers, purchases] = await Promise.all([getProducts(), getBranches(), getSuppliers(), getOpenPurchases()])
   return (
     <FormScreen

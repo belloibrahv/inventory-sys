@@ -4,7 +4,9 @@ import { DaysOfCover, SalesTrend, StockValueByCategory, TopSellers } from "@/com
 import { ExportCsv } from "@/components/export-csv"
 import { PageHeader } from "@/components/shared"
 import { formatWatLong } from "@/lib/lagos-day"
-import { formatCurrency } from "@/lib/utils"
+import { getProducts } from "@/app/actions/catalog"
+import { PricesPanel } from "./prices-panel"
+import { formatCurrency, money } from "@/lib/utils"
 
 export const dynamic = "force-dynamic"
 
@@ -64,8 +66,25 @@ function Figure({
 export default async function OwnerBoardPage() {
   const board = await getOwnerBoard()
   if (!board) redirect("/dashboard")
+  // The price desk and every cost in it go to the CEO only.
+  const priceItems = board.canSeeProfit
+    ? (await getProducts()).map((product) => ({
+        id: product.id,
+        name: [product.name, product.storage, product.color].filter(Boolean).join(" · "),
+        sku: product.sku,
+        brand: product.brand.name,
+        category: product.category.name,
+        units: product.inventory.reduce((sum, row) => sum + row.quantity, 0),
+        costPrice: money(product.costPrice),
+        minimumPrice: money(product.minimumPrice),
+        sellingPrice: money(product.sellingPrice),
+      }))
+    : null
 
   const { totals } = board
+  // What we kept and what things cost are the CEO's alone. The server has
+  // already zeroed them for anyone else; this hides where they would show.
+  const showProfit = board.canSeeProfit
   const profitToday = totals.soldValue - totals.soldCost
   const orderSoon = board.reorder.filter(
     (row) => row.daysLeft !== null && row.daysLeft <= ORDER_SOON_DAYS
@@ -98,7 +117,7 @@ export default async function OwnerBoardPage() {
   }))
 
   const soldCsv = [
-    ["Invoice", "Shop", "Item", "IMEI", "Customer", "Pieces", "Sold for", "We kept"],
+    ["Invoice", "Shop", "Item", "IMEI", "Customer", "Pieces", "Sold for", ...(showProfit ? ["We kept"] : [])],
     ...board.soldLines.map((row) => [
       row.invoice,
       row.shop,
@@ -107,11 +126,11 @@ export default async function OwnerBoardPage() {
       row.customer,
       String(row.quantity),
       String(row.value),
-      String(row.profit),
+      ...(showProfit ? [String(row.profit)] : []),
     ]),
   ]
   const orderCsv = [
-    ["Item", "Kind", "In shop", "Sells per day", "Days left", `Sold in ${board.rateDays} days`, "Cost each"],
+    ["Item", "Kind", "In shop", "Sells per day", "Days left", `Sold in ${board.rateDays} days`, ...(showProfit ? ["Cost each"] : [])],
     ...board.reorder.map((row) => [
       row.item,
       row.category,
@@ -119,7 +138,7 @@ export default async function OwnerBoardPage() {
       String(row.soldPerDay),
       row.daysLeft === null ? "" : String(row.daysLeft),
       String(row.soldInPeriod),
-      String(row.costPrice),
+      ...(showProfit ? [String(row.costPrice)] : []),
     ]),
     ...board.soldOut.map((row) => [
       row.item,
@@ -128,7 +147,7 @@ export default async function OwnerBoardPage() {
       "",
       "0",
       String(row.soldInPeriod),
-      "",
+      ...(showProfit ? [""] : []),
     ]),
   ]
 
@@ -144,23 +163,27 @@ export default async function OwnerBoardPage() {
         <Figure
           label="Goods in the shop now"
           value={totals.inShopNow.toLocaleString("en-NG")}
-          hint={`Worth ${formatCurrency(board.stockValueTotal)} at cost`}
+          hint={showProfit ? `Worth ${formatCurrency(board.stockValueTotal)} at cost` : undefined}
         />
         <Figure
           label="Sold today"
           value={totals.sold.toLocaleString("en-NG")}
           hint={`${formatCurrency(totals.soldValue)} taken`}
         />
-        <Figure
-          label="We kept today"
-          value={formatCurrency(profitToday)}
-          tone={profitToday < 0 ? "warning" : "good"}
-          hint={
-            totals.soldValue > 0
-              ? `${Math.round((profitToday / totals.soldValue) * 1000) / 10}% of what we sold`
-              : "Nothing sold yet today"
-          }
-        />
+        {showProfit ? (
+          <Figure
+            label="We kept today"
+            value={formatCurrency(profitToday)}
+            tone={profitToday < 0 ? "warning" : "good"}
+            hint={
+              totals.soldValue > 0
+                ? `${Math.round((profitToday / totals.soldValue) * 1000) / 10}% of what we sold`
+                : "Nothing sold yet today"
+            }
+          />
+        ) : (
+          <Figure label="Came in today" value={totals.cameIn.toLocaleString("en-NG")} hint="Pieces booked onto the shelf" />
+        )}
         <Figure
           label="Running out"
           value={String(orderSoon.length)}
@@ -257,20 +280,22 @@ export default async function OwnerBoardPage() {
         ) : null}
       </div>
 
+      {priceItems ? <PricesPanel items={priceItems} /> : null}
+
       {/* Money taken per day. One measure, one line. */}
       <div className="surface-card p-5">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
           <div>
             <h3 className="font-semibold">Money taken, last {board.trendDays} days</h3>
             <p className="text-sm text-muted-foreground">
-              Hover any day to see the pieces sold and what the shop kept.
+              {showProfit ? "Hover any day to see the pieces sold and what the shop kept." : "Hover any day to see the pieces sold."}
             </p>
           </div>
           <p className="text-sm tabular-nums text-muted-foreground">
             {formatCurrency(board.trend.reduce((sum, row) => sum + row.value, 0))} over the period
           </p>
         </div>
-        <SalesTrend data={board.trend} />
+        <SalesTrend data={board.trend} showProfit={showProfit} />
       </div>
 
       {/* The reorder list — the whole point of the board. */}
@@ -321,7 +346,7 @@ export default async function OwnerBoardPage() {
         ) : null}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className={`grid gap-4 ${showProfit ? "xl:grid-cols-2" : ""}`}>
         <div className="surface-card p-5">
           <h3 className="font-semibold">Best sellers, last {board.rateDays} days</h3>
           <p className="mb-3 text-sm text-muted-foreground">Pieces sold. These are what to keep deep.</p>
@@ -331,6 +356,7 @@ export default async function OwnerBoardPage() {
             <TopSellers data={topChart} />
           )}
         </div>
+        {showProfit ? (
         <div className="surface-card p-5">
           <h3 className="font-semibold">Where the money is sitting</h3>
           <p className="mb-3 text-sm text-muted-foreground">
@@ -342,6 +368,7 @@ export default async function OwnerBoardPage() {
             <StockValueByCategory data={board.stockValue.slice(0, 8)} />
           )}
         </div>
+        ) : null}
       </div>
 
       {/* The goods that actually left today, by name. */}
@@ -369,7 +396,7 @@ export default async function OwnerBoardPage() {
                   <th className="px-3 py-3 font-medium">Buyer</th>
                   <th className="px-3 py-3 text-right font-medium">Pieces</th>
                   <th className="px-3 py-3 text-right font-medium">Sold for</th>
-                  <th className="px-5 py-3 text-right font-medium">We kept</th>
+                  {showProfit ? <th className="px-5 py-3 text-right font-medium">We kept</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -385,13 +412,15 @@ export default async function OwnerBoardPage() {
                     <td className="px-3 py-3 text-muted-foreground">{row.customer}</td>
                     <td className="px-3 py-3 text-right tabular-nums">{row.quantity}</td>
                     <td className="px-3 py-3 text-right tabular-nums">{formatCurrency(row.value)}</td>
-                    <td
-                      className={`px-5 py-3 text-right tabular-nums ${
-                        row.profit < 0 ? "font-medium text-danger" : ""
-                      }`}
-                    >
-                      {formatCurrency(row.profit)}
-                    </td>
+                    {showProfit ? (
+                      <td
+                        className={`px-5 py-3 text-right tabular-nums ${
+                          row.profit < 0 ? "font-medium text-danger" : ""
+                        }`}
+                      >
+                        {formatCurrency(row.profit)}
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>

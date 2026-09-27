@@ -5,10 +5,14 @@ import { getPosLookups } from "@/app/actions/sales"
 import { EmptyState, PageHeader, StatusBadge } from "@/components/shared"
 import { letterheadFromSettings } from "@/lib/letterhead"
 import { getAppSettings } from "@/lib/settings"
+import { canSeeCost } from "@/lib/rbac"
+import { requireUser } from "@/lib/session"
 import { formatCurrency, formatDate, money } from "@/lib/utils"
 import { StockCountView } from "./stock-count-view"
 
 export default async function ReconciliationPage() {
+  // Counts are valued at cost for the CEO and at sell price for everyone else.
+  const atCost = canSeeCost((await requireUser()).role)
   const [rows, inventory, branches, lookups, settings] = await Promise.all([
     getReconciliations(),
     getInventory(),
@@ -28,7 +32,7 @@ export default async function ReconciliationPage() {
       id: row.product.id,
       name: row.product.name,
       sku: row.product.sku,
-      costPrice: money(row.product.costPrice),
+      costPrice: money(atCost ? row.product.costPrice : row.product.sellingPrice),
       brand: { name: row.product.brand.name },
       category: row.product.category ? { name: row.product.category.name } : null,
     },
@@ -52,6 +56,7 @@ export default async function ReconciliationPage() {
         inventory={formattedInventory}
         defaultBranchId={lookups.branchId}
         brand={letterheadFromSettings(settings)}
+        atCost={atCost}
       />
 
       {/* Past Stock Count Reports */}
@@ -59,9 +64,11 @@ export default async function ReconciliationPage() {
         <h2 className="text-sm font-semibold tracking-tight">Past stock counts</h2>
         <div className="grid gap-4 md:grid-cols-2">
           {rows.map((row) => {
-            const expected = money(row.totalExpected)
-            const counted = money(row.totalCounted)
-            const variance = money(row.variance)
+            // Saved counts carry their totals at cost; everyone but the CEO sees pieces.
+            const expected = atCost ? money(row.totalExpected) : row.items.reduce((sum, item) => sum + item.expectedQty, 0)
+            const counted = atCost ? money(row.totalCounted) : row.items.reduce((sum, item) => sum + item.countedQty, 0)
+            const variance = atCost ? money(row.variance) : counted - expected
+            const show = (value: number) => (atCost ? formatCurrency(value) : `${value.toLocaleString("en-NG")} pcs`)
             const offLines = row.items.filter((item) => item.variance !== 0)
 
             return (
@@ -79,16 +86,16 @@ export default async function ReconciliationPage() {
                 <div className="grid grid-cols-3 gap-2 text-sm">
                   <div>
                     <p className="eyebrow">On the system</p>
-                    <p className="num font-medium">{formatCurrency(expected)}</p>
+                    <p className="num font-medium">{show(expected)}</p>
                   </div>
                   <div>
                     <p className="eyebrow">Counted</p>
-                    <p className="num font-medium">{formatCurrency(counted)}</p>
+                    <p className="num font-medium">{show(counted)}</p>
                   </div>
                   <div>
                     <p className="eyebrow">Difference</p>
                     <p className={`num font-semibold ${variance > 0 ? "text-success" : variance < 0 ? "text-danger" : ""}`}>
-                      {variance > 0 ? `+${formatCurrency(variance)}` : formatCurrency(variance)}
+                      {variance > 0 ? `+${show(variance)}` : show(variance)}
                     </p>
                   </div>
                 </div>

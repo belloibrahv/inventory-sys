@@ -36,14 +36,22 @@ export function TransferForm({
   products = [],
   defaultFromId,
   successHref,
+  atCost = false,
 }: {
   branches: Branch[]
   products?: Product[]
   imeis?: unknown
   defaultFromId?: string | null
   successHref?: string
+  /**
+   * The CEO values a transfer at cost. Everyone else values it at sell price:
+   * their "costPrice" fields already hold the selling price from the server.
+   */
+  atCost?: boolean
 }) {
   const router = useRouter()
+  const unitWord = atCost ? "Unit cost" : "Unit price"
+  const valueWord = atCost ? "Cost value" : "Value at sell price"
   const [fromId, setFromId] = useState(defaultFromId || branches[0]?.id || "")
   const [toId, setToId] = useState(() => branches.find((row) => row.id !== (defaultFromId || branches[0]?.id))?.id || "")
   const [busy, setBusy] = useState(false)
@@ -155,7 +163,7 @@ export function TransferForm({
       const imeiIdx = header.findIndex((col) => /imei/i.test(col))
       const nameIdx = header.findIndex((col) => /name/i.test(col))
       const skuIdx = header.findIndex((col) => /item_code|sku/i.test(col))
-      const costIdx = header.findIndex((col) => /unit_cost|cost/i.test(col))
+      const costIdx = header.findIndex((col) => /unit_cost|unit_price|cost/i.test(col))
       const next: PhonePick[] = []
       for (const row of result.rows.slice(1)) {
         const imei = String(row[imeiIdx >= 0 ? imeiIdx : 0] || "").trim()
@@ -193,8 +201,8 @@ export function TransferForm({
         "Item",
         "IMEI or item code",
         "Qty to send",
-        "Unit cost",
-        "Cost value",
+        unitWord,
+        valueWord,
       ],
       ...selectedPhones.map((row) => [
         fromShop?.name ?? "",
@@ -216,7 +224,7 @@ export function TransferForm({
       ]),
       [],
       ["Total qty to send", totalQty],
-      ["Total cost value", totalCost.toFixed(2)],
+      [`Total ${valueWord.toLowerCase()}`, totalCost.toFixed(2)],
     ]
     const stamp = new Date().toISOString().slice(0, 10)
     const base = `shop-to-shop-selection-${fromShop?.code ?? "from"}-to-${toShop?.code ?? "to"}-${stamp}`
@@ -233,8 +241,8 @@ export function TransferForm({
         "IMEI or item code",
         "On hand",
         "Qty to send",
-        "Unit cost",
-        "Cost value if sent",
+        unitWord,
+        `${valueWord} if sent`,
       ],
       ...phones.map((row) => {
         const sending = pickedImeis[row.imei] ? 1 : 0
@@ -264,7 +272,7 @@ export function TransferForm({
       }),
       [],
       ["Selected qty to send", totalQty],
-      ["Selected cost value", totalCost.toFixed(2)],
+      [`Selected ${valueWord.toLowerCase()}`, totalCost.toFixed(2)],
     ]
     const stamp = new Date().toISOString().slice(0, 10)
     const base = `shop-to-shop-stock-${fromShop?.code ?? "shop"}-${stamp}`
@@ -337,7 +345,7 @@ export function TransferForm({
           <div>
             <p className="text-sm font-semibold">Select the items</p>
             <p className="text-xs text-muted-foreground">
-              Find by IMEI, name, item code, or category. Type how many pieces to send. Cost value uses unit cost × qty to send.
+              Find by IMEI, name, item code, or category. Type how many pieces to send. {valueWord} is {unitWord.toLowerCase()} × qty to send.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -387,8 +395,8 @@ export function TransferForm({
                 <th className="hidden px-3 py-2 font-semibold sm:table-cell">IMEI or item code</th>
                 <th className="px-3 py-2 text-center font-semibold">On hand</th>
                 <th className="px-3 py-2 text-center font-semibold">Qty to send</th>
-                <th className="hidden px-3 py-2 text-right font-semibold sm:table-cell">Unit cost</th>
-                <th className="px-3 py-2 text-right font-semibold">Cost value</th>
+                <th className="hidden px-3 py-2 text-right font-semibold sm:table-cell">{unitWord}</th>
+                <th className="px-3 py-2 text-right font-semibold">{valueWord}</th>
               </tr>
             </thead>
             <tbody>
@@ -505,7 +513,7 @@ export function TransferForm({
               </span>
             </p>
             <p className="mt-1">
-              <span className="text-muted-foreground">Cost value at unit cost: </span>
+              <span className="text-muted-foreground">{valueWord}: </span>
               <strong className="tabular-nums">{formatCurrency(totalCost)}</strong>
             </p>
           </div>

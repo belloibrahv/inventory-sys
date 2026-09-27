@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { watDayKey } from "@/lib/lagos-day"
 import { setStock } from "@/lib/concurrency"
 import { requireUser } from "@/lib/session"
-import { canHardDelete, canManageCatalog } from "@/lib/rbac"
+import { canChangePrices, canHardDelete, canManageCatalog } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { shopError } from "@/lib/shop-speak"
 import { UNSAFE_KEYS } from "@/lib/table-file"
@@ -206,9 +206,95 @@ export async function createProduct(formData: FormData) {
   return { success: true }
 }
 
+/**
+ * One item's prices from the CEO's Prices panel on Business today: cost,
+ * lowest and selling, saved together. Every move lands in the price history
+ * and Who did what, the same trail the price list leaves.
+ */
+export async function setProductPrices(input: {
+  id: string
+  costPrice: number
+  minimumPrice: number
+  sellingPrice: number
+  reason?: string
+}) {
+  const user = await requireUser()
+  if (!canChangePrices(user.role)) return { error: "Only the CEO can change prices." }
+
+  const next = {
+    costPrice: Number(input.costPrice),
+    minimumPrice: Number(input.minimumPrice),
+    sellingPrice: Number(input.sellingPrice),
+  }
+  if (!Object.values(next).every((value) => Number.isFinite(value) && value >= 0)) {
+    return { error: "Cost, lowest and selling price must be numbers of 0 or more." }
+  }
+  if (next.sellingPrice <= 0) return { error: "The selling price must be above 0." }
+  if (next.minimumPrice > next.sellingPrice) return { error: "The lowest price cannot be above the selling price." }
+
+  const product = await prisma.product.findUnique({ where: { id: input.id } })
+  if (!product) return { error: "That item was not found. Refresh and try again." }
+
+  const before = {
+    costPrice: money(product.costPrice),
+    minimumPrice: money(product.minimumPrice),
+    sellingPrice: money(product.sellingPrice),
+  }
+  const moved = (Object.keys(next) as Array<keyof typeof next>).filter((key) => before[key] !== money(next[key]))
+  if (moved.length === 0) return { success: true, message: "Those are already the prices." }
+
+  const reason = String(input.reason || "").trim() || "Changed on Business today"
+  const TYPE = { costPrice: "COST_PRICE", minimumPrice: "MINIMUM_PRICE", sellingPrice: "SELLING_PRICE" } as const
+
+  await prisma.$transaction([
+    prisma.product.update({
+      where: { id: product.id },
+      data: {
+        costPrice: next.costPrice.toFixed(2),
+        minimumPrice: next.minimumPrice.toFixed(2),
+        sellingPrice: next.sellingPrice.toFixed(2),
+      },
+    }),
+    ...moved.map((key) =>
+      prisma.priceHistory.create({
+        data: {
+          productId: product.id,
+          oldPrice: before[key].toFixed(2),
+          newPrice: next[key].toFixed(2),
+          priceType: TYPE[key],
+          reason,
+          changedBy: user.id,
+        },
+      })
+    ),
+    prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "UPDATE",
+        entityType: "Product",
+        entityId: product.id,
+        oldValue: JSON.stringify(Object.fromEntries(moved.map((key) => [key, before[key]]))),
+        newValue: JSON.stringify({
+          ...Object.fromEntries(moved.map((key) => [key, next[key]])),
+          reason,
+          note: `Prices changed on Business today: ${product.name} (${product.sku}).`,
+        }),
+        branchId: user.branchId,
+        risk: moved.includes("costPrice") ? "MEDIUM" : "LOW",
+      },
+    }),
+  ])
+
+  revalidatePath("/owner")
+  revalidatePath("/products")
+  revalidatePath("/inventory")
+  revalidatePath("/pos")
+  return { success: true, message: `${product.name}: prices saved.` }
+}
+
 export async function updateSelectedPrices(formData: FormData) {
   const user = await requireUser()
-  if (!(await canManageCatalog(user.role))) return { error: "You are not allowed to change prices. Ask the main admin." }
+  if (!canChangePrices(user.role)) return { error: "Only the CEO can change prices." }
 
   const reason = String(formData.get("reason") || "Several prices updated together").trim() || "Several prices updated together"
   let parsed: unknown
@@ -856,9 +942,13 @@ export async function updateProduct(formData: FormData) {
   if (!(trackingRaw in ProductTracking)) return { error: "Pick how we count this item: IMEI, Serial number, or No number." }
   const tracking = trackingRaw as ProductTracking
 
-  const costPrice = Number(formData.get("costPrice") || 0)
-  const sellingPrice = Number(formData.get("sellingPrice") || 0)
-  const minimumPrice = Number(formData.get("minimumPrice") || sellingPrice)
+  // Prices on an item already on the list are the CEO's to change. Anyone else
+  // edits the details and the prices stay exactly as they were, whatever the
+  // form sends.
+  const pricesAllowed = canChangePrices(user.role)
+  const costPrice = pricesAllowed ? Number(formData.get("costPrice") || 0) : money(existing.costPrice)
+  const sellingPrice = pricesAllowed ? Number(formData.get("sellingPrice") || 0) : money(existing.sellingPrice)
+  const minimumPrice = pricesAllowed ? Number(formData.get("minimumPrice") || sellingPrice) : money(existing.minimumPrice)
   if (![costPrice, sellingPrice, minimumPrice].every((value) => Number.isFinite(value) && value >= 0)) {
     return { error: "Cost, lowest price and selling price must be numbers. Use 0 if you will set them later." }
   }

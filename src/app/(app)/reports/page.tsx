@@ -9,6 +9,7 @@ import { requireUser } from "@/lib/session"
 import { money } from "@/lib/utils"
 import { saleTenders } from "@/lib/sale-money"
 import { plainMoney } from "@/lib/plain"
+import { canSeeCost } from "@/lib/rbac"
 import { ReportsClientView } from "./reports-client-view"
 
 function shopOf(branch: { name: string; code: string }) {
@@ -45,7 +46,12 @@ export default async function ReportsPage({
   const revenue = data.sales.reduce((sum, sale) => sum + money(sale.totalAmount), 0)
   const collected = data.sales.reduce((sum, sale) => sum + saleTenders(sale).received, 0)
   const expense = data.expenses.reduce((sum, row) => sum + money(row.amount), 0)
-  const stock = data.inventory.reduce((sum, row) => sum + row.quantity * money(row.product.costPrice), 0)
+  // Stock is valued at cost for the CEO and at sell price for everyone else.
+  const showCost = canSeeCost(user.role)
+  const stock = data.inventory.reduce(
+    (sum, row) => sum + row.quantity * money(showCost ? row.product.costPrice : row.product.sellingPrice),
+    0
+  )
   const swapValue = data.swaps.reduce((sum, row) => sum + money(row.balanceAmount), 0)
   const owing = data.debtors.reduce((sum, row) => sum + money(row.currentBalance), 0)
   const lowStock = data.inventory.filter((row) => row.quantity <= lowStockLimit(row.minStock, settings.lowStockThreshold))
@@ -81,6 +87,7 @@ export default async function ReportsPage({
     statementRef: `RP-${selectedBranch ? selectedBranch.code : "ALL"}-${range.toUpperCase()}-${data.period.from.replaceAll("-", "")}`,
     periodLabel: label,
     range,
+    stockBasis: showCost ? "cost" : "sell",
     from: data.period.from,
     to: data.period.to,
     compare: data.prior,
@@ -156,7 +163,11 @@ export default async function ReportsPage({
         inventory={data.inventory.map((row) => ({
           id: row.id,
           quantity: row.quantity,
-          product: { name: row.product.name, costPrice: money(row.product.costPrice), sellingPrice: money(row.product.sellingPrice) },
+          product: {
+            name: row.product.name,
+            costPrice: showCost ? money(row.product.costPrice) : 0,
+            sellingPrice: money(row.product.sellingPrice),
+          },
           branch: shopOf(row.branch),
         }))}
         swaps={data.swaps.map((row) => ({

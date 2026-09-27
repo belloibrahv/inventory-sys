@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
-import { can, isShopOwner } from "@/lib/permissions"
+import { can, isCEO } from "@/lib/permissions"
 import { scopedBranchId } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { recentWatDays, shiftWatDay, watBounds, watDayKey } from "@/lib/lagos-day"
@@ -297,10 +297,10 @@ export async function closeDay(formData: FormData) {
     // day the first time is the cashier's own job; going back over one someone
     // has already signed is a correction, and a correction needs a superior.
     const recount = preview.alreadyClosed
-    if (recount && !isShopOwner(user.role) && !(await can(user.role, "action.approve"))) {
+    if (recount && !isCEO(user.role) && !(await can(user.role, "action.approve"))) {
       return {
         error:
-          "This day has already been balanced. Only a manager, the CEO or the main admin can count it again.",
+          "This day has already been balanced. Only a manager or the CEO can count it again.",
       }
     }
     // Cash remittance is only required when cash came into the till. Transfer

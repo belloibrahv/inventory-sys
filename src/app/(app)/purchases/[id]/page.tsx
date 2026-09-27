@@ -5,7 +5,7 @@ import { bookPurchaseAsComing } from "@/app/actions/incoming"
 import { getPurchase, payPurchase, receivePurchaseImeis } from "@/app/actions/ops"
 import { ExportCsv } from "@/components/export-csv"
 import { prisma } from "@/lib/prisma"
-import { isShopOwner } from "@/lib/rbac"
+import { isCEO } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { ActionForm } from "@/components/action-form"
 import { PageHeader, StatusBadge } from "@/components/shared"
@@ -282,7 +282,7 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
       ) : (
         <p className="text-sm text-muted-foreground">This supplier bill is fully paid.</p>
       )}
-      {!isOpening && isShopOwner(me.role) && money(purchase.paidAmount) > 0 ? (
+      {!isOpening && isCEO(me.role) && money(purchase.paidAmount) > 0 ? (
         <div className="surface-card p-5">
           <h3 className="mb-2 font-semibold">Undo last supplier payment</h3>
           <p className="mb-3 text-sm text-muted-foreground">Stock and IMEIs stay. Who did what keeps this.</p>

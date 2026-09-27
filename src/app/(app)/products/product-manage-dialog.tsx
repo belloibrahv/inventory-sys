@@ -16,6 +16,7 @@ import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { SHOP_CONDITION_OPTIONS } from "@/lib/conditions"
 import { TRACKING_OPTIONS, trackingLabel } from "@/lib/unit-identity"
+import { formatCurrency } from "@/lib/utils"
 import type { PriceRow } from "./price-list"
 import { AlertTriangle, Edit3, MinusCircle, Trash2 } from "lucide-react"
 
@@ -24,6 +25,8 @@ export function ProductManageDialog({
   open,
   onOpenChange,
   canRemove = false,
+  canPrice = false,
+  showCost = false,
   brandNames = [],
   categoryNames = [],
 }: {
@@ -31,6 +34,9 @@ export function ProductManageDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
   canRemove?: boolean
+  /** Edit cost, lowest and selling price. The CEO's only; the server keeps prices as they were for anyone else. */
+  canPrice?: boolean
+  showCost?: boolean
   brandNames?: string[]
   categoryNames?: string[]
 }) {
@@ -203,20 +209,27 @@ export function ProductManageDialog({
                 <Input name="color" defaultValue={product.color ?? ""} placeholder="Blue" className="mt-1" />
               </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Cost</label>
-                <Input name="costPrice" type="number" min={0} step="0.01" defaultValue={product.costPrice} required className="mt-1" />
+            {canPrice ? (
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Cost</label>
+                  <Input name="costPrice" type="number" min={0} step="0.01" defaultValue={product.costPrice} required className="mt-1" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Lowest price</label>
+                  <Input name="minimumPrice" type="number" min={0} step="0.01" defaultValue={product.minimumPrice} required className="mt-1" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Selling price</label>
+                  <Input name="sellingPrice" type="number" min={0} step="0.01" defaultValue={product.sellingPrice} required className="mt-1" />
+                </div>
               </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Lowest price</label>
-                <Input name="minimumPrice" type="number" min={0} step="0.01" defaultValue={product.minimumPrice} required className="mt-1" />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Selling price</label>
-                <Input name="sellingPrice" type="number" min={0} step="0.01" defaultValue={product.sellingPrice} required className="mt-1" />
-              </div>
-            </div>
+            ) : (
+              <p className="rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+                Lowest {formatCurrency(product.minimumPrice)} · selling {formatCurrency(product.sellingPrice)}
+                {showCost ? ` · cost ${formatCurrency(product.costPrice)}` : ""}. Only the CEO changes prices.
+              </p>
+            )}
             <div>
               <label className="text-xs font-medium text-muted-foreground">Warranty days (0 = no warranty)</label>
               <Input name="warrantyDays" type="number" min={0} step={1} defaultValue={product.warrantyDays} className="mt-1" />

@@ -190,7 +190,7 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
           value={closed ? "Closed" : "Open"}
           hint={
             closed
-              ? `Closed ${record.closedAt ? formatDate(record.closedAt) : ""} by ${record.closedByName ?? "—"}. Only the CEO or Super Admin can reopen it.`
+              ? `Closed ${record.closedAt ? formatDate(record.closedAt) : ""} by ${record.closedByName ?? "—"}. Only the CEO can reopen it.`
               : record.reopenedAt
                 ? "Reopened to fix. Close it again when it is right."
                 : "Being counted and corrected."
@@ -206,7 +206,7 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
             <li><span className="font-semibold text-foreground">1. Download the count sheet.</span> Every item, category, count, cost, both selling prices, and every IMEI.</li>
             <li><span className="font-semibold text-foreground">2. Count the shelf.</span> Tap Phones, Accessories, Screen, or Laptop above the list to give each person their own group. Write what you really find in COUNTED QTY. Mark a missing phone NO.</li>
             <li><span className="font-semibold text-foreground">3. Correct.</span> Upload the filled sheet and check the preview, or change a line on screen below. Add a missing IMEI, serial, or piece count here. Super Admin, CEO, accountant, records checker, and stock uploader can change the list until it is closed.</li>
-            <li><span className="font-semibold text-foreground">4. Close.</span> The CEO or main admin closes it when the count and every price are right. If something is found later, the CEO or Super Admin can reopen it.</li>
+            <li><span className="font-semibold text-foreground">4. Close.</span> The CEO closes it when the count and every price are right. If something is found later, the CEO can reopen it.</li>
           </ol>
         </SectionCard>
       ) : null}
@@ -940,7 +940,7 @@ function CloseCard({ branchId, value, shop }: { branchId: string; value: number;
       <p className="text-sm">
         Closing fixes <span className="font-semibold">{shop}</span>&apos;s opening stock at{" "}
         <span className="num font-semibold">{formatCurrency(value)}</span> at cost, with today&apos;s counts, IMEIs and prices.
-        Nobody can edit it after that. If a price or count turns out wrong, the CEO or Super Admin can reopen it.
+        Nobody can edit it after that. If a price or count turns out wrong, the CEO can reopen it.
       </p>
       <label className="mt-3 flex items-start gap-2 text-sm">
         <input type="checkbox" checked={confirm} onChange={(event) => setConfirm(event.target.checked)} className="mt-1" />
@@ -992,7 +992,7 @@ function ReopenCard({ branchId, shop }: { branchId: string; shop: string }) {
   return (
     <SectionCard
       title="Reopen opening stock"
-      description="CEO or Super Admin. Use this when a count or a price was wrong after closing."
+      description="The CEO only. Use this when a count or a price was wrong after closing."
     >
       <p className="text-sm">
         Reopening lets staff correct <span className="font-semibold">{shop}</span>&apos;s opening stock again: counts,

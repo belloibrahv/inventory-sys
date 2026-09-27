@@ -11,13 +11,17 @@ import {
   Clock,
   CreditCard,
   Gauge,
+  GitBranch,
   PackageX,
   Receipt,
+  ScrollText,
+  Settings,
   Store,
   Tags,
   Truck,
   Undo2,
   Upload,
+  UserRoundCog,
   UserX,
   Wallet,
   type LucideIcon,
@@ -43,6 +47,11 @@ const QUICK_ACTIONS: Array<{ href: string; label: string; icon: LucideIcon; prim
   { href: "/expenses", label: "Shop expense", icon: Receipt },
   { href: "/approvals", label: "Needs approval", icon: BadgeCheck },
   { href: "/owner", label: "Business today", icon: Gauge },
+  // The main admin's jobs, for a Home that is about keeping the system running.
+  { href: "/staff", label: "Staff", icon: UserRoundCog },
+  { href: "/branches", label: "Shops", icon: GitBranch },
+  { href: "/audit", label: "Who did what", icon: ScrollText },
+  { href: "/settings", label: "Settings", icon: Settings },
 ]
 
 const TASK_ICON: Record<string, LucideIcon> = {
@@ -72,6 +81,10 @@ export default async function DashboardPage() {
   const firstName = (data.user.name ?? "").split(/\s+/)[0]
   const gaps = data.imeiCheck.filter((row) => row.delta !== 0)
   const sellsHere = allowed.has("/pos")
+  // Sales, money and stock figures are for people who work the business. A
+  // system-only main admin gets their jobs and what needs them, nothing more.
+  const seesBusiness = ["/sales", "/finance", "/reports", "/owner", "/inventory", "/pos"].some((href) => allowed.has(href))
+  const tasks = data.tasks.filter((task) => allowed.has(task.href.split("?")[0]))
 
   return (
     <div className="space-y-6">
@@ -105,6 +118,7 @@ export default async function DashboardPage() {
         </div>
       ) : null}
 
+      {seesBusiness ? (
       <section>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Today</h3>
         <StatGrid className={sellsHere ? "xl:grid-cols-3" : "xl:grid-cols-2"}>
@@ -126,12 +140,13 @@ export default async function DashboardPage() {
           ) : null}
         </StatGrid>
       </section>
+      ) : null}
 
       <section>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Needs you</h3>
-        {data.tasks.length ? (
+        {tasks.length ? (
           <ul className="surface-card divide-y divide-border overflow-hidden">
-            {data.tasks.map((task) => {
+            {tasks.map((task) => {
               const Icon = TASK_ICON[task.href] ?? AlertTriangle
               return (
                 <li key={task.href + task.label}>
@@ -155,6 +170,8 @@ export default async function DashboardPage() {
         )}
       </section>
 
+      {seesBusiness ? (
+        <>
       <section>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">This month</h3>
         <StatGrid>
@@ -168,7 +185,11 @@ export default async function DashboardPage() {
       <section>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Money and stock</h3>
         <StatGrid>
-          <StatCard label="Stock at cost" value={formatCurrency(data.kpis.stockValue)} href="/inventory" />
+          <StatCard
+            label={data.kpis.stockAtCost ? "Stock at cost" : "Stock at sell price"}
+            value={formatCurrency(data.kpis.stockValue)}
+            href="/inventory"
+          />
           <StatCard
             label="Customers owe us"
             value={formatCurrency(data.kpis.outstanding)}
@@ -312,6 +333,8 @@ export default async function DashboardPage() {
           </ul>
         ) : null}
       </div>
+        </>
+      ) : null}
     </div>
   )
 }

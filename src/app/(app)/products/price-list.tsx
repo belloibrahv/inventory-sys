@@ -41,13 +41,20 @@ export type PriceRow = {
 export function ProductPriceList({
   products,
   canEdit,
+  canPrice = false,
+  showCost = false,
   canRemove = false,
   initialQuery = "",
   brandNames = [],
   categoryNames = [],
 }: {
   products: PriceRow[]
+  /** Change item details (name, brand, how we count it) and reduce stock. */
   canEdit: boolean
+  /** Tick items and change their prices. The CEO's only. */
+  canPrice?: boolean
+  /** Show what each item cost us. The CEO's only; others get cost 0 from the server. */
+  showCost?: boolean
   canRemove?: boolean
   initialQuery?: string
   brandNames?: string[]
@@ -164,7 +171,7 @@ export function ProductPriceList({
 
 
   async function onSave() {
-    if (!canEdit) return
+    if (!canPrice) return
     if (selected.length === 0) {
       toast.error("Tick the items whose selling price you want to change.")
       return
@@ -244,7 +251,7 @@ export function ProductPriceList({
             ))}
           </Select>
         ) : null}
-        {canEdit ? (
+        {canPrice ? (
           <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
@@ -272,7 +279,7 @@ export function ProductPriceList({
           const chosen = Boolean(ticked[product.id])
           return (
             <li key={product.id} className={`flex gap-3 px-4 py-3 ${chosen ? "bg-primary-soft/60" : ""}`}>
-              {canEdit ? (
+              {canPrice ? (
                 <input
                   type="checkbox"
                   className="mt-1 h-5 w-5 shrink-0"
@@ -291,10 +298,11 @@ export function ProductPriceList({
                   {product.brand} · {product.sku}
                 </p>
                 <p className="mt-1 text-xs tabular-nums text-muted-foreground">
-                  Cost {formatCurrency(product.costPrice)} · lowest {formatCurrency(product.minimumPrice)} · {product.units} units
+                  {showCost ? `Cost ${formatCurrency(product.costPrice)} · lowest` : "Lowest"} {formatCurrency(product.minimumPrice)} ·{" "}
+                  {product.units} units
                 </p>
                 <div className="mt-2 flex items-center gap-2">
-                  {canEdit && chosen ? (
+                  {canPrice && chosen ? (
                     <Input
                       type="number"
                       min={1}
@@ -324,11 +332,11 @@ export function ProductPriceList({
         <table className="w-full text-sm">
           <thead className="text-left text-muted-foreground">
             <tr className="border-b border-border">
-              {canEdit ? <th className="px-4 py-3">Select</th> : null}
+              {canPrice ? <th className="px-4 py-3">Select</th> : null}
               <th className="px-4 py-3">Item / item code</th>
               <th className="px-4 py-3">How it looks</th>
-              <th className="px-4 py-3">Cost / lowest / sell</th>
-              {canEdit ? <th className="px-4 py-3">New sell price</th> : null}
+              <th className="px-4 py-3">{showCost ? "Cost / lowest / sell" : "Lowest / sell"}</th>
+              {canPrice ? <th className="px-4 py-3">New sell price</th> : null}
               <th className="px-4 py-3">Warranty</th>
               <th className="px-4 py-3">Units</th>
               {canEdit ? <th className="px-4 py-3 text-right">Actions</th> : null}
@@ -339,7 +347,7 @@ export function ProductPriceList({
               const chosen = Boolean(ticked[product.id])
               return (
                 <tr key={product.id} className="border-b border-border/70">
-                  {canEdit ? (
+                  {canPrice ? (
                     <td className="px-4 py-3 align-top">
                       <input
                         type="checkbox"
@@ -364,10 +372,10 @@ export function ProductPriceList({
                     <StatusBadge value={product.condition} />
                   </td>
                   <td className="px-4 py-3">
-                    {formatCurrency(product.costPrice)} / {formatCurrency(product.minimumPrice)} /{" "}
-                    {formatCurrency(product.sellingPrice)}
+                    {showCost ? `${formatCurrency(product.costPrice)} / ` : ""}
+                    {formatCurrency(product.minimumPrice)} / {formatCurrency(product.sellingPrice)}
                   </td>
-                  {canEdit ? (
+                  {canPrice ? (
                     <td className="px-4 py-3">
                       <Input
                         type="number"
@@ -402,7 +410,7 @@ export function ProductPriceList({
             })}
             {visible.length === 0 ? (
               <tr>
-                <td className="px-4 py-8 text-sm text-muted-foreground" colSpan={canEdit ? 8 : 5}>
+                <td className="px-4 py-8 text-sm text-muted-foreground" colSpan={5 + (canPrice ? 2 : 0) + (canEdit ? 1 : 0)}>
                   No items match the specified search parameters.
                 </td>
               </tr>
@@ -421,7 +429,7 @@ export function ProductPriceList({
         onPageSizeChange={pager.setPageSize}
         noun="items"
       />
-      {canEdit ? (
+      {canPrice ? (
         <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 space-y-3 lg:bottom-0 border-t border-border bg-card/95 p-4 backdrop-blur">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm font-semibold">
@@ -479,6 +487,8 @@ export function ProductPriceList({
         open={Boolean(managingProduct)}
         onOpenChange={(open) => !open && setManagingProduct(null)}
         canRemove={canRemove}
+        canPrice={canPrice}
+        showCost={showCost}
         brandNames={brandNames}
         categoryNames={categoryNames}
       />
