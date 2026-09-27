@@ -27,7 +27,7 @@ import {
 } from "@/components/shared"
 import { TablePager, usePagedRows } from "@/components/table-pager"
 import { OpeningMoneyPanel } from "./opening-money-panel"
-import type { NamedBankRow, OpeningCashShop } from "@/app/actions/finance"
+import { getFinanceLedger, type NamedBankRow, type OpeningCashShop } from "@/app/actions/finance"
 
 type LedgerEntry = {
   id: string
@@ -87,11 +87,30 @@ function groupByDay(entries: LedgerEntry[]): DayGroup[] {
 }
 
 export function FinanceClientView({ data }: { data: FinanceData }) {
-  const [ledger, setLedger] = useState<"CASH" | "BANK" | null>(null)
+  const [ledger, setLedgerOpen] = useState<"CASH" | "BANK" | null>(null)
+  // The lines behind each balance run to one per payment, so they are fetched
+  // when a ledger first opens instead of riding along with the page.
+  const [lines, setLines] = useState<{ CASH?: LedgerEntry[]; BANK?: LedgerEntry[] }>({})
+  const [linesError, setLinesError] = useState(false)
 
-  const account = ledger === "CASH" ? data.cashAccount : ledger === "BANK" ? data.bankAccount : null
-  const cashDays = useMemo(() => groupByDay(data.cashAccount.entries), [data.cashAccount.entries])
-  const bankDays = useMemo(() => groupByDay(data.bankAccount.entries), [data.bankAccount.entries])
+  function setLedger(next: "CASH" | "BANK" | null) {
+    setLedgerOpen(next)
+    if (!next || lines[next]) return
+    setLinesError(false)
+    getFinanceLedger(next)
+      .then((entries) => setLines((current) => ({ ...current, [next]: entries })))
+      .catch(() => setLinesError(true))
+  }
+
+  const loaded = ledger ? lines[ledger] : undefined
+  const account =
+    ledger === "CASH"
+      ? { balance: data.cashAccount.balance, entries: lines.CASH ?? [] }
+      : ledger === "BANK"
+        ? { balance: data.bankAccount.balance, entries: lines.BANK ?? [] }
+        : null
+  const cashDays = useMemo(() => groupByDay(lines.CASH ?? []), [lines.CASH])
+  const bankDays = useMemo(() => groupByDay(lines.BANK ?? []), [lines.BANK])
   const days = ledger === "CASH" ? cashDays : ledger === "BANK" ? bankDays : []
   const debtorsPager = usePagedRows(data.debtors, "debtors")
   const creditorsPager = usePagedRows(data.creditors, "creditors")
@@ -350,7 +369,7 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
         eyebrow="Money movement"
         title={ledger === "CASH" ? "Cash in the till" : "Bank"}
         download={
-          account
+          account && loaded
             ? {
                 filename: `${ledger === "CASH" ? "cash" : "bank"}-ledger-${new Date().toISOString().slice(0, 10)}`,
                 rows: () => [
@@ -373,8 +392,11 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
           account ? (
             <>
               <span>
-                {account.entries.length} move{account.entries.length === 1 ? "" : "s"} across {days.length} day
-                {days.length === 1 ? "" : "s"}
+                {loaded
+                  ? `${account.entries.length} move${account.entries.length === 1 ? "" : "s"} across ${days.length} day${days.length === 1 ? "" : "s"}`
+                  : linesError
+                    ? "Could not load the moves. Close and open again."
+                    : "Loading the moves…"}
               </span>
               <span className="font-semibold text-foreground">Balance now {formatCurrency(account.balance)}</span>
             </>

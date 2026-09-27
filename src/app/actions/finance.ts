@@ -83,7 +83,16 @@ function revalidateMoneyViews() {
   revalidatePath("/audit")
 }
 
-export async function getFinance() {
+/**
+ * Everything on Money in & out and Shop expenses.
+ *
+ * The balances need every sale ever, so the sales are read in full, but only
+ * the handful of fields the sums use. The day-by-day ledger lines are only
+ * built when `withLedger` is set: they run to one line per payment, so the
+ * page leaves them out and the ledger pop-up asks for them through
+ * getFinanceLedger when it opens.
+ */
+export async function getFinance({ withLedger = false }: { withLedger?: boolean } = {}) {
   const user = await requireUser()
   if (!(await can(user.role, "view.finance")) && !(await can(user.role, "view.expenses"))) {
     return emptyFinance()
@@ -95,7 +104,17 @@ export async function getFinance() {
   const [sales, expenses, purchases, entries, debtors, shops, bankAccounts, creditHouses] = await Promise.all([
     prisma.sale.findMany({
       where: { ...where, status: "COMPLETED" },
-      include: { branch: true, customer: true, payments: true },
+      select: {
+        id: true,
+        invoiceNumber: true,
+        saleDate: true,
+        totalAmount: true,
+        paidAmount: true,
+        paymentMethod: true,
+        branch: { select: { name: true } },
+        customer: { select: { name: true } },
+        payments: { select: { id: true, method: true, amount: true, bankAccountId: true } },
+      },
       orderBy: { saleDate: "desc" },
     }),
     prisma.expense.findMany({
@@ -387,8 +406,8 @@ export async function getFinance() {
     bankRevenue,
     openingCash,
     openingBank,
-    cashAccount: { balance: cashBalance, entries: cashEntries },
-    bankAccount: { balance: bankBalance, entries: bankEntries },
+    cashAccount: { balance: cashBalance, entries: withLedger ? cashEntries : [] },
+    bankAccount: { balance: bankBalance, entries: withLedger ? bankEntries : [] },
     entries,
     expenses,
     debtors: debtors.map((row) => ({
@@ -404,6 +423,12 @@ export async function getFinance() {
     shops: openingCashShops,
     bankAccounts: namedBanks,
   }
+}
+
+/** The day-by-day lines behind one balance, fetched when its ledger opens. */
+export async function getFinanceLedger(account: "CASH" | "BANK") {
+  const data = await getFinance({ withLedger: true })
+  return account === "CASH" ? data.cashAccount.entries : data.bankAccount.entries
 }
 
 async function assertOpeningMoneyAccess(user: { id: string; role: UserRole; branchId: string | null }, branchId: string) {
