@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
-import { createExpense, getFinance } from "@/app/actions/finance"
+import { createExpense, getExpenses, getFinance } from "@/app/actions/finance"
 import { getBranches } from "@/app/actions/parties"
 import { ActionForm } from "@/components/action-form"
 import { FormField } from "@/components/form-field"
@@ -25,13 +25,15 @@ const CATEGORIES = [
 export default async function AskForShopBillPage() {
   const me = await requireUser()
   if (!(await canManageFinance(me.role))) redirect("/expenses")
-  const [finance, branches] = await Promise.all([getFinance(), getBranches()])
+  const [expenses, branches] = await Promise.all([getExpenses(), getBranches()])
   const shopId = me.branchId || branches[0]?.id
   const till = shopId ? await shopCashOnHand(shopId) : null
-  const pendingWaiting = finance.expenses
+  // Only with no shop at all does it fall back to the all-shops cash balance.
+  const cashBalance = till ? till.available : (await getFinance()).cashAccount.balance
+  const pendingWaiting = expenses
     .filter((row) => !row.approvedAt && (!shopId || row.branchId === shopId))
     .reduce((sum, row) => sum + money(row.amount), 0)
-  const cashReady = Math.max(0, (till ? till.available : finance.cashAccount.balance) - pendingWaiting)
+  const cashReady = Math.max(0, cashBalance - pendingWaiting)
 
   return (
     <FormScreen

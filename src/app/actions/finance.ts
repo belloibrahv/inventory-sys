@@ -425,6 +425,22 @@ export async function getFinance({ withLedger = false }: { withLedger?: boolean 
   }
 }
 
+/**
+ * The bills list on Shop expenses, with the same door and shop rules as
+ * getFinance, without reading every sale ever to work out balances the list
+ * never shows.
+ */
+export async function getExpenses() {
+  const user = await requireUser()
+  if (!(await can(user.role, "view.finance")) && !(await can(user.role, "view.expenses"))) return []
+  const branchId = await viewBranchFilter(user)
+  return prisma.expense.findMany({
+    where: branchId ? { branchId } : {},
+    include: { branch: { select: { name: true, code: true } } },
+    orderBy: { date: "desc" },
+  })
+}
+
 /** The day-by-day lines behind one balance, fetched when its ledger opens. */
 export async function getFinanceLedger(account: "CASH" | "BANK") {
   const data = await getFinance({ withLedger: true })

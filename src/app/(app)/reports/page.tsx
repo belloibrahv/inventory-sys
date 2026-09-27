@@ -11,6 +11,10 @@ import { saleTenders } from "@/lib/sale-money"
 import { plainMoney } from "@/lib/plain"
 import { ReportsClientView } from "./reports-client-view"
 
+function shopOf(branch: { name: string; code: string }) {
+  return { name: branch.name, code: branch.code }
+}
+
 function asRange(value?: string): ShopRange {
   return value === "week" || value === "day" ? value : "month"
 }
@@ -128,11 +132,57 @@ export default async function ReportsPage({
       />
       <ReportsClientView
         pack={pack}
-        sales={plainMoney(data.sales)}
-        expenses={plainMoney(data.expenses)}
-        inventory={plainMoney(data.inventory)}
-        swaps={plainMoney(data.swaps)}
-        returns={plainMoney(data.returns)}
+        // Only the fields the report reads. The rows arrive with their line
+        // items, payments and full shop and customer records attached, which
+        // made a month's report several megabytes on a phone.
+        sales={data.sales.map((row) => ({
+          id: row.id,
+          invoiceNumber: row.invoiceNumber,
+          totalAmount: money(row.totalAmount),
+          paidAmount: money(row.paidAmount),
+          saleDate: row.saleDate,
+          customer: row.customer ? { name: row.customer.name } : null,
+          branch: shopOf(row.branch),
+        }))}
+        expenses={data.expenses.map((row) => ({
+          id: row.id,
+          expenseNumber: row.expenseNumber,
+          category: row.category,
+          amount: money(row.amount),
+          description: row.description,
+          date: row.date,
+          branch: shopOf(row.branch),
+        }))}
+        inventory={data.inventory.map((row) => ({
+          id: row.id,
+          quantity: row.quantity,
+          product: { name: row.product.name, costPrice: money(row.product.costPrice), sellingPrice: money(row.product.sellingPrice) },
+          branch: shopOf(row.branch),
+        }))}
+        swaps={data.swaps.map((row) => ({
+          id: row.id,
+          swapNumber: row.swapNumber,
+          tradeValue: money(row.tradeValue),
+          balanceAmount: money(row.balanceAmount),
+          newProductPrice: money(row.newProductPrice),
+          createdAt: row.createdAt,
+          customer: row.customer ? { name: row.customer.name } : null,
+          newProduct: row.newProduct ? { name: row.newProduct.name } : null,
+          branch: shopOf(row.branch),
+        }))}
+        returns={data.returns.map((row) => ({
+          id: row.id,
+          returnNumber: row.returnNumber,
+          reason: row.reason,
+          outcome: row.outcome,
+          faultClass: row.faultClass,
+          status: row.status,
+          refundAmount: money(row.refundAmount),
+          createdAt: row.createdAt,
+          customer: row.customer ? { name: row.customer.name } : null,
+          branch: shopOf(row.branch),
+          imei: row.imei ? { imei1: row.imei.imei1, product: { name: row.imei.product.name } } : null,
+        }))}
         opening={plainMoney(opening)}
         branches={branches.map(({ id, name, code }) => ({ id, name, code }))}
         selectedBranchId={selectedBranchId}

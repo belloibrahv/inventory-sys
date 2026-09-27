@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { Plus } from "lucide-react"
-import { getFinance } from "@/app/actions/finance"
+import { getExpenses } from "@/app/actions/finance"
 import { PageHeader } from "@/components/shared"
 import { Button } from "@/components/ui/button"
 import { canManageFinance } from "@/lib/rbac"
@@ -10,7 +10,7 @@ import { ExpensesList } from "./expenses-list"
 
 export default async function ExpensesPage() {
   const me = await requireUser()
-  const [finance, canPost] = await Promise.all([getFinance(), canManageFinance(me.role)])
+  const [expenses, canPost] = await Promise.all([getExpenses(), canManageFinance(me.role)])
 
   return (
     <div className="space-y-5">
@@ -28,7 +28,7 @@ export default async function ExpensesPage() {
         }
       />
       <ExpensesList
-        expenses={finance.expenses.map((row) => ({
+        expenses={expenses.map((row) => ({
           id: row.id,
           description: row.description,
           expenseNumber: row.expenseNumber,

@@ -19,10 +19,8 @@ export default async function CustomersPage() {
     currentBalance: money(c.currentBalance),
     creditLimit: money(c.creditLimit),
     branch: { id: c.branch.id, name: c.branch.name, code: c.branch.code },
-    sales: c.sales.map((s) => ({
-      totalAmount: money(s.totalAmount),
-      paidAmount: money(s.paidAmount),
-    })),
+    purchased: c.purchased,
+    paid: c.paid,
     _count: c._count,
   }))
 

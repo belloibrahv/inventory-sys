@@ -9,13 +9,13 @@ import { displayPartyName } from "@/lib/party-key"
 import { findDuplicateSupplier } from "@/lib/supplier-identity"
 import { healOpeningStockBills } from "@/lib/opening-stock-money"
 import { payablePurchaseWhere } from "@/lib/purchase-money"
-import { generateDocNumber } from "@/lib/utils"
+import { generateDocNumber, money } from "@/lib/utils"
 import type { SupplierKind } from "@prisma/client"
 
 export async function getCustomers(search?: string) {
   const user = await requireUser()
   const branchId = await viewBranchFilter(user)
-  return prisma.customer.findMany({
+  const customers = await prisma.customer.findMany({
     where: {
       ...(branchId ? { branchId } : {}),
       ...(search
@@ -23,12 +23,26 @@ export async function getCustomers(search?: string) {
         : {}),
     },
     include: {
-      branch: true,
-      sales: { select: { totalAmount: true, paidAmount: true } },
+      branch: { select: { id: true, name: true, code: true } },
       _count: { select: { sales: true, returns: true } },
     },
     orderBy: { updatedAt: "desc" },
   })
+  // What each customer bought and paid, added up by the database rather than
+  // by loading every sale they ever made.
+  const totals = customers.length
+    ? await prisma.sale.groupBy({
+        by: ["customerId"],
+        where: { customerId: { in: customers.map((row) => row.id) } },
+        _sum: { totalAmount: true, paidAmount: true },
+      })
+    : []
+  const byCustomer = new Map(totals.map((row) => [row.customerId, row._sum]))
+  return customers.map((row) => ({
+    ...row,
+    purchased: money(byCustomer.get(row.id)?.totalAmount),
+    paid: money(byCustomer.get(row.id)?.paidAmount),
+  }))
 }
 
 export async function getCustomer(id: string) {

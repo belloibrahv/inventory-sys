@@ -19,7 +19,9 @@ type CustomerItem = {
   currentBalance: number
   creditLimit: number
   branch: { id: string; name: string; code: string }
-  sales: Array<{ totalAmount: number; paidAmount: number }>
+  /** Everything they have bought and paid, summed on the server. */
+  purchased: number
+  paid: number
   _count: { sales: number; returns: number }
 }
 
@@ -44,10 +46,8 @@ export function CustomersClientView({
   const accounts = useMemo(
     () =>
       customers.map((customer) => {
-        const purchased = customer.sales.reduce((sum, sale) => sum + money(sale.totalAmount), 0)
-        const paid = customer.sales.reduce((sum, sale) => sum + money(sale.paidAmount), 0)
         const owed = money(customer.currentBalance)
-        return { ...customer, purchased, paid, owed, isOwing: owed > 0 }
+        return { ...customer, owed, isOwing: owed > 0 }
       }),
     [customers]
   )
