@@ -1,8 +1,8 @@
-import { createCustomer, getBranches, getCustomers } from "@/app/actions/parties"
-import { ActionForm } from "@/components/action-form"
+import Link from "next/link"
+import { Plus } from "lucide-react"
+import { getBranches, getCustomers } from "@/app/actions/parties"
 import { PageHeader } from "@/components/shared"
-import { Input } from "@/components/ui/input"
-import { Select } from "@/components/ui/select"
+import { Button } from "@/components/ui/button"
 import { money } from "@/lib/utils"
 import { CustomersClientView } from "./customers-client-view"
 import { CachePageData } from "@/components/cache-page-data"
@@ -34,54 +34,16 @@ export default async function CustomersPage() {
       <PageHeader
         title="Customers & money owed"
         description="Who bought, what they paid, and what they still owe."
+        actions={
+          <Button asChild>
+            <Link href="/customers/new">
+              <Plus className="mr-1.5 h-4 w-4" /> Add a customer
+            </Link>
+          </Button>
+        }
       />
 
-      <div className="page-split">
-        <div className="min-w-0">
-          <CustomersClientView customers={customers} branches={branchList} />
-        </div>
-        <div className="surface-card p-5">
-          <h3 className="mb-4 font-semibold">New customer</h3>
-          <ActionForm action={createCustomer} className="space-y-4">
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted-foreground">Full name</span>
-              <Input name="name" required />
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted-foreground">Phone</span>
-              <Input name="phone" required />
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted-foreground">Email</span>
-              <Input name="email" />
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted-foreground">Address</span>
-              <Input name="address" />
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted-foreground">Shop</span>
-              <Select name="branchId" required>
-                {branches.map((branch) => (
-                  <option key={branch.id} value={branch.id}>{branch.name}</option>
-                ))}
-              </Select>
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted-foreground">Opening balance they owe us</span>
-              <Input name="openingBalance" type="number" min={0} step="0.01" placeholder="0" />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Money this buyer already owed before this software. Leave at zero if they start clean.
-              </p>
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted-foreground">Credit limit</span>
-              <Input name="creditLimit" type="number" min={0} step="0.01" placeholder="0" />
-            </label>
-          </ActionForm>
-        </div>
-      </div>
+      <CustomersClientView customers={customers} branches={branchList} />
     </div>
   )
 }
-

@@ -32,14 +32,18 @@ export function Sidebar({ allowedHrefs }: { allowedHrefs: string[] }) {
     .map((group) => ({
       ...group,
       items: group.items
-        .filter((item) => pathIsAllowed(item.href, allowedHrefs))
-        .map((item) => ({
-          ...item,
+        .map((item) => {
           // A section is only offered when the role may actually open it. The
           // same check the router uses, so the menu can never show a door that
           // shuts in your face.
-          children: item.children?.filter((child) => pathIsAllowed(child.href, allowedHrefs)),
-        })),
+          const children = item.children?.filter((child) => pathIsAllowed(child.href, allowedHrefs))
+          const parentAllowed = pathIsAllowed(item.href, allowedHrefs)
+          // Who can see what lives under Staff; a role may open it without the
+          // staff list, so the item stays and leads to the first open section.
+          if (!parentAllowed && !children?.length) return null
+          return { ...item, href: parentAllowed ? item.href : children![0].href, children }
+        })
+        .filter((item): item is NonNullable<typeof item> => item !== null),
     }))
     .filter((group) => group.items.length > 0)
 

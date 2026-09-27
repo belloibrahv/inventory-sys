@@ -35,11 +35,13 @@ export function TransferForm({
   branches,
   products = [],
   defaultFromId,
+  successHref,
 }: {
   branches: Branch[]
   products?: Product[]
   imeis?: unknown
   defaultFromId?: string | null
+  successHref?: string
 }) {
   const router = useRouter()
   const [fromId, setFromId] = useState(defaultFromId || branches[0]?.id || "")
@@ -295,6 +297,7 @@ export function TransferForm({
     setPickedImeis({})
     setAccessoryQty({})
     form.reset()
+    if (successHref) router.push(successHref)
     router.refresh()
   }
 

@@ -90,26 +90,28 @@ export default async function ProfitsPage() {
       {data.byShop.length ? (
         <div className="surface-card overflow-hidden">
           <h3 className="border-b border-border px-5 py-4 font-semibold">Profit by shop</h3>
-          <table className="w-full text-sm">
-            <thead className="text-left text-foreground/80">
-              <tr className="border-b border-border bg-muted/40">
-                <th className="px-5 py-3 font-semibold">Shop</th>
-                <th className="px-3 py-3 font-semibold">Our stock</th>
-                <th className="px-3 py-3 font-semibold">Shop bills</th>
-                <th className="px-5 py-3 font-semibold">Left for this shop</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.byShop.map((row) => (
-                <tr key={row.name} className="border-b border-border/70">
-                  <td className="px-5 py-3">{row.name}</td>
-                  <td className="px-3 py-3">{formatCurrency(row.shopProfit)}</td>
-                  <td className="px-3 py-3">{formatCurrency(row.expenses)}</td>
-                  <td className="px-5 py-3 font-semibold">{formatCurrency(row.net)}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
+              <thead className="text-left text-foreground/80">
+                <tr className="border-b border-border bg-muted/40">
+                  <th className="px-5 py-3 font-semibold">Shop</th>
+                  <th className="px-3 py-3 font-semibold">Our stock</th>
+                  <th className="px-3 py-3 font-semibold">Shop bills</th>
+                  <th className="px-5 py-3 font-semibold">Left for this shop</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {data.byShop.map((row) => (
+                  <tr key={row.name} className="border-b border-border/70">
+                    <td className="px-5 py-3">{row.name}</td>
+                    <td className="px-3 py-3">{formatCurrency(row.shopProfit)}</td>
+                    <td className="px-3 py-3">{formatCurrency(row.expenses)}</td>
+                    <td className="px-5 py-3 font-semibold">{formatCurrency(row.net)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : null}
 
@@ -125,33 +127,35 @@ export default async function ProfitsPage() {
         {data.shopLines.length === 0 ? (
           <p className="px-5 py-4 text-sm text-muted-foreground">No sales from our own stock in this period yet.</p>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="text-left text-foreground/80">
-              <tr className="border-b border-border bg-muted/40">
-                <th className="px-5 py-3 font-semibold">Invoice</th>
-                <th className="px-3 py-3 font-semibold">Phone / item</th>
-                <th className="px-3 py-3 font-semibold">Cost price</th>
-                <th className="px-3 py-3 font-semibold">Sold for</th>
-                <th className="px-5 py-3 font-semibold">Profit</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.shopLines.slice(0, 40).map((row) => (
-                <tr key={row.id} className="border-b border-border/70">
-                  <td className="px-5 py-3">
-                    {row.invoice}
-                    <p className="text-muted-foreground">{row.shop} · {formatDate(row.date)}</p>
-                  </td>
-                  <td className="px-3 py-3">
-                    <p className="font-semibold text-foreground">{productLine(row)}</p>
-                  </td>
-                  <td className="px-3 py-3 tabular-nums font-medium">{formatCurrency(row.cost)}</td>
-                  <td className="px-3 py-3 tabular-nums">{formatCurrency(row.sell)}</td>
-                  <td className="px-5 py-3 tabular-nums font-semibold text-success">{formatCurrency(row.profit)}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
+              <thead className="text-left text-foreground/80">
+                <tr className="border-b border-border bg-muted/40">
+                  <th className="px-5 py-3 font-semibold">Invoice</th>
+                  <th className="px-3 py-3 font-semibold">Phone / item</th>
+                  <th className="px-3 py-3 font-semibold">Cost price</th>
+                  <th className="px-3 py-3 font-semibold">Sold for</th>
+                  <th className="px-5 py-3 font-semibold">Profit</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {data.shopLines.slice(0, 40).map((row) => (
+                  <tr key={row.id} className="border-b border-border/70">
+                    <td className="px-5 py-3">
+                      {row.invoice}
+                      <p className="text-muted-foreground">{row.shop} · {formatDate(row.date)}</p>
+                    </td>
+                    <td className="px-3 py-3">
+                      <p className="font-semibold text-foreground">{productLine(row)}</p>
+                    </td>
+                    <td className="px-3 py-3 tabular-nums font-medium">{formatCurrency(row.cost)}</td>
+                    <td className="px-3 py-3 tabular-nums">{formatCurrency(row.sell)}</td>
+                    <td className="px-5 py-3 tabular-nums font-semibold text-success">{formatCurrency(row.profit)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -177,61 +181,63 @@ export default async function ProfitsPage() {
             Nothing has been sold below its standard price yet.
           </p>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="text-left text-foreground/80">
-              <tr className="border-b border-border bg-muted/40">
-                <th className="px-5 py-3 font-semibold">Invoice</th>
-                <th className="px-3 py-3 font-semibold">Item</th>
-                <th className="px-3 py-3 font-semibold">Standard</th>
-                <th className="px-3 py-3 font-semibold">Charged</th>
-                <th className="px-3 py-3 font-semibold">Off</th>
-                <th className="px-5 py-3 font-semibold">Why</th>
-              </tr>
-            </thead>
-            <tbody>
-              {priceChanges.lines.slice(0, 60).map((row) => (
-                <tr key={row.id} className="border-b border-border/70">
-                  <td className="px-5 py-3">
-                    {row.invoice}
-                    <p className="text-muted-foreground">
-                      {row.shop} · {formatDate(row.date)} · {row.soldBy}
-                    </p>
-                  </td>
-                  <td className="px-3 py-3">
-                    <p className="font-semibold text-foreground">{row.item}</p>
-                    <p className="text-muted-foreground">
-                      {row.customer}
-                      {row.reseller ? " · reseller" : ""}
-                    </p>
-                  </td>
-                  <td className="px-3 py-3 tabular-nums text-muted-foreground">{formatCurrency(row.list)}</td>
-                  <td className="px-3 py-3 tabular-nums font-medium">{formatCurrency(row.charged)}</td>
-                  <td className="px-3 py-3 tabular-nums">
-                    {formatCurrency(row.off)}
-                    {row.offPercent > 0 ? (
-                      <p className="text-muted-foreground">{row.offPercent}%</p>
-                    ) : null}
-                  </td>
-                  <td className="px-5 py-3">
-                    {row.belowCost ? (
-                      <p className="font-medium text-danger">Below cost {formatCurrency(row.cost)}</p>
-                    ) : null}
-                    <p className={row.reason ? "" : "text-muted-foreground"}>
-                      {row.reason || row.orderDiscountReason || "No reason recorded"}
-                    </p>
-                    {row.orderDiscount > 0 ? (
-                      <p className="text-muted-foreground">
-                        Whole order also had {formatCurrency(row.orderDiscount)} off
-                      </p>
-                    ) : null}
-                    {row.approvedBy ? (
-                      <p className="text-muted-foreground">Approved by {row.approvedBy}</p>
-                    ) : null}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
+              <thead className="text-left text-foreground/80">
+                <tr className="border-b border-border bg-muted/40">
+                  <th className="px-5 py-3 font-semibold">Invoice</th>
+                  <th className="px-3 py-3 font-semibold">Item</th>
+                  <th className="px-3 py-3 font-semibold">Standard</th>
+                  <th className="px-3 py-3 font-semibold">Charged</th>
+                  <th className="px-3 py-3 font-semibold">Off</th>
+                  <th className="px-5 py-3 font-semibold">Why</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {priceChanges.lines.slice(0, 60).map((row) => (
+                  <tr key={row.id} className="border-b border-border/70">
+                    <td className="px-5 py-3">
+                      {row.invoice}
+                      <p className="text-muted-foreground">
+                        {row.shop} · {formatDate(row.date)} · {row.soldBy}
+                      </p>
+                    </td>
+                    <td className="px-3 py-3">
+                      <p className="font-semibold text-foreground">{row.item}</p>
+                      <p className="text-muted-foreground">
+                        {row.customer}
+                        {row.reseller ? " · reseller" : ""}
+                      </p>
+                    </td>
+                    <td className="px-3 py-3 tabular-nums text-muted-foreground">{formatCurrency(row.list)}</td>
+                    <td className="px-3 py-3 tabular-nums font-medium">{formatCurrency(row.charged)}</td>
+                    <td className="px-3 py-3 tabular-nums">
+                      {formatCurrency(row.off)}
+                      {row.offPercent > 0 ? (
+                        <p className="text-muted-foreground">{row.offPercent}%</p>
+                      ) : null}
+                    </td>
+                    <td className="px-5 py-3">
+                      {row.belowCost ? (
+                        <p className="font-medium text-danger">Below cost {formatCurrency(row.cost)}</p>
+                      ) : null}
+                      <p className={row.reason ? "" : "text-muted-foreground"}>
+                        {row.reason || row.orderDiscountReason || "No reason recorded"}
+                      </p>
+                      {row.orderDiscount > 0 ? (
+                        <p className="text-muted-foreground">
+                          Whole order also had {formatCurrency(row.orderDiscount)} off
+                        </p>
+                      ) : null}
+                      {row.approvedBy ? (
+                        <p className="text-muted-foreground">Approved by {row.approvedBy}</p>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

@@ -226,32 +226,34 @@ export default async function OwnerBoardPage() {
         ) : null}
 
         {board.shops.length > 1 ? (
-          <table className="mt-5 w-full text-sm">
-            <thead className="text-left text-muted-foreground">
-              <tr className="border-b border-border">
-                <th className="py-2 font-medium">Shop</th>
-                <th className="py-2 text-right font-medium">Opened with</th>
-                <th className="py-2 text-right font-medium">Came in</th>
-                <th className="py-2 text-right font-medium">Sold</th>
-                <th className="py-2 text-right font-medium">In shop now</th>
-                <th className="py-2 text-right font-medium">Money taken</th>
-              </tr>
-            </thead>
-            <tbody>
-              {board.shops.map((row) => (
-                <tr key={row.branchId} className="border-b border-border/60">
-                  <td className="py-2">{row.shop}</td>
-                  <td className="py-2 text-right tabular-nums">
-                    {row.openedWith ?? <span className="text-muted-foreground">—</span>}
-                  </td>
-                  <td className="py-2 text-right tabular-nums">{row.cameIn}</td>
-                  <td className="py-2 text-right tabular-nums">{row.sold}</td>
-                  <td className="py-2 text-right font-semibold tabular-nums">{row.inShopNow}</td>
-                  <td className="py-2 text-right tabular-nums">{formatCurrency(row.soldValue)}</td>
+          <div className="mt-5 overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
+              <thead className="text-left text-muted-foreground">
+                <tr className="border-b border-border">
+                  <th className="py-2 font-medium">Shop</th>
+                  <th className="py-2 text-right font-medium">Opened with</th>
+                  <th className="py-2 text-right font-medium">Came in</th>
+                  <th className="py-2 text-right font-medium">Sold</th>
+                  <th className="py-2 text-right font-medium">In shop now</th>
+                  <th className="py-2 text-right font-medium">Money taken</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {board.shops.map((row) => (
+                  <tr key={row.branchId} className="border-b border-border/60">
+                    <td className="py-2">{row.shop}</td>
+                    <td className="py-2 text-right tabular-nums">
+                      {row.openedWith ?? <span className="text-muted-foreground">—</span>}
+                    </td>
+                    <td className="py-2 text-right tabular-nums">{row.cameIn}</td>
+                    <td className="py-2 text-right tabular-nums">{row.sold}</td>
+                    <td className="py-2 text-right font-semibold tabular-nums">{row.inShopNow}</td>
+                    <td className="py-2 text-right tabular-nums">{formatCurrency(row.soldValue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : null}
       </div>
 
@@ -359,40 +361,42 @@ export default async function OwnerBoardPage() {
         {board.soldLines.length === 0 ? (
           <p className="px-5 py-6 text-sm text-muted-foreground">Nothing has been sold today yet.</p>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="text-left text-muted-foreground">
-              <tr className="border-b border-border bg-muted/40">
-                <th className="px-5 py-3 font-medium">Item</th>
-                <th className="px-3 py-3 font-medium">Buyer</th>
-                <th className="px-3 py-3 text-right font-medium">Pieces</th>
-                <th className="px-3 py-3 text-right font-medium">Sold for</th>
-                <th className="px-5 py-3 text-right font-medium">We kept</th>
-              </tr>
-            </thead>
-            <tbody>
-              {board.soldLines.map((row) => (
-                <tr key={row.id} className="border-b border-border/60">
-                  <td className="px-5 py-3">
-                    <p className="font-medium">{row.item}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {row.invoice} · {row.shop}
-                      {row.imei ? ` · ${row.imei}` : ""}
-                    </p>
-                  </td>
-                  <td className="px-3 py-3 text-muted-foreground">{row.customer}</td>
-                  <td className="px-3 py-3 text-right tabular-nums">{row.quantity}</td>
-                  <td className="px-3 py-3 text-right tabular-nums">{formatCurrency(row.value)}</td>
-                  <td
-                    className={`px-5 py-3 text-right tabular-nums ${
-                      row.profit < 0 ? "font-medium text-danger" : ""
-                    }`}
-                  >
-                    {formatCurrency(row.profit)}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
+              <thead className="text-left text-muted-foreground">
+                <tr className="border-b border-border bg-muted/40">
+                  <th className="px-5 py-3 font-medium">Item</th>
+                  <th className="px-3 py-3 font-medium">Buyer</th>
+                  <th className="px-3 py-3 text-right font-medium">Pieces</th>
+                  <th className="px-3 py-3 text-right font-medium">Sold for</th>
+                  <th className="px-5 py-3 text-right font-medium">We kept</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {board.soldLines.map((row) => (
+                  <tr key={row.id} className="border-b border-border/60">
+                    <td className="px-5 py-3">
+                      <p className="font-medium">{row.item}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {row.invoice} · {row.shop}
+                        {row.imei ? ` · ${row.imei}` : ""}
+                      </p>
+                    </td>
+                    <td className="px-3 py-3 text-muted-foreground">{row.customer}</td>
+                    <td className="px-3 py-3 text-right tabular-nums">{row.quantity}</td>
+                    <td className="px-3 py-3 text-right tabular-nums">{formatCurrency(row.value)}</td>
+                    <td
+                      className={`px-5 py-3 text-right tabular-nums ${
+                        row.profit < 0 ? "font-medium text-danger" : ""
+                      }`}
+                    >
+                      {formatCurrency(row.profit)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

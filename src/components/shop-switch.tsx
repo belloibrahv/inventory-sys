@@ -13,15 +13,18 @@ import { setViewShop } from "@/app/actions/view-shop"
 export function ShopSwitch({
   branches,
   active,
+  className = "hidden sm:inline-flex",
 }: {
   branches: Array<{ id: string; name: string; code: string }>
   active: string
+  /** Where it shows. The top bar hides it on phones; the avatar menu shows it there. */
+  className?: string
 }) {
   const [pending, startTransition] = useTransition()
 
   return (
     <label
-      className="hidden items-center gap-1.5 rounded-lg border border-input bg-card pl-2.5 sm:inline-flex"
+      className={`items-center gap-1.5 rounded-lg border border-input bg-card pl-2.5 ${className}`}
       title="Which shop are you looking at?"
     >
       <span className="sr-only">Which shop are you looking at?</span>

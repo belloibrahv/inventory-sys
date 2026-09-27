@@ -1,54 +1,13 @@
-import { prisma } from "@/lib/prisma"
+import Link from "next/link"
+import { Plus } from "lucide-react"
 import { getTransfers } from "@/app/actions/ops"
-import { getPosLookups } from "@/app/actions/sales"
 import { PageHeader } from "@/components/shared"
+import { Button } from "@/components/ui/button"
 import { money } from "@/lib/utils"
-import { TransferForm } from "./transfer-form"
 import { TransfersList } from "./transfers-list"
 
 export default async function TransfersPage() {
-  const [transfers, lookups, catalog] = await Promise.all([
-    getTransfers(),
-    getPosLookups(),
-    prisma.product.findMany({
-      where: { isActive: true },
-      include: {
-        brand: { select: { name: true } },
-        category: { select: { name: true } },
-        inventory: { select: { branchId: true, quantity: true } },
-      },
-      orderBy: { name: "asc" },
-    }),
-  ])
-
-  // How many phone records each shop really holds per item. A phone can only be
-  // sent by its own number, so when the shelf count is higher than this the
-  // extra units cannot be picked — and the packing table looks empty for no
-  // visible reason. The form says so instead of leaving staff guessing.
-  const unitRows = await prisma.imeiRecord.groupBy({
-    by: ["productId", "branchId"],
-    where: { status: "IN_STOCK" },
-    _count: { _all: true },
-  })
-  const unitsByKey = new Map(
-    unitRows.map((row) => [`${row.productId}:${row.branchId}`, row._count._all])
-  )
-
-  const products = catalog.map((product) => ({
-    id: product.id,
-    name: product.name,
-    sku: product.sku,
-    serialized: product.tracking !== "NONE",
-    costPrice: money(product.costPrice),
-    brand: { name: product.brand.name },
-    category: { name: product.category.name },
-    stock: product.inventory.map((row) => ({
-      branchId: row.branchId,
-      quantity: row.quantity,
-      // Phone records In shop for this item at this shop.
-      units: unitsByKey.get(`${product.id}:${row.branchId}`) ?? 0,
-    })),
-  }))
+  const transfers = await getTransfers()
 
   const listRows = transfers.map((transfer) => ({
     id: transfer.id,
@@ -78,28 +37,19 @@ export default async function TransfersPage() {
   }))
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <PageHeader
         title="Shop to shop (Stock Transfer)"
-        description="From one Abu Twins branch to another. Search items, set qty to send, see cost value, extract a sheet if you need it, then submit. Stock stays In shop at the sending branch until the receiving branch accepts."
+        description="Stock stays in shop at the sending branch until the receiving branch accepts."
+        actions={
+          <Button asChild>
+            <Link href="/transfers/new">
+              <Plus className="mr-1.5 h-4 w-4" /> Start a transfer
+            </Link>
+          </Button>
+        }
       />
-
-      <div className="surface-card p-5">
-        <h3 className="mb-1 font-semibold">Start a stock transfer</h3>
-        <p className="mb-4 text-sm text-muted-foreground">
-          From branch, To branch, find items, type qty to send, check the cost value, extract if you need a packing sheet, then submit. Accept and Reject stay the same.
-        </p>
-        <TransferForm
-          branches={lookups.branches}
-          products={products}
-          defaultFromId={lookups.branchId}
-        />
-      </div>
-
-      <div className="space-y-3">
-        <h3 className="text-sm font-semibold tracking-tight">Transfers for this shop</h3>
-        <TransfersList transfers={listRows} />
-      </div>
+      <TransfersList transfers={listRows} />
     </div>
   )
 }

@@ -189,7 +189,7 @@ export function ProductManageDialog({
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid gap-3 sm:grid-cols-3">
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Storage</label>
                 <Input name="storage" defaultValue={product.storage ?? ""} placeholder="128GB" className="mt-1" />
@@ -203,7 +203,7 @@ export function ProductManageDialog({
                 <Input name="color" defaultValue={product.color ?? ""} placeholder="Blue" className="mt-1" />
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid gap-3 sm:grid-cols-3">
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Cost</label>
                 <Input name="costPrice" type="number" min={0} step="0.01" defaultValue={product.costPrice} required className="mt-1" />

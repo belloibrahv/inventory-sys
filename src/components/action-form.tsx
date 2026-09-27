@@ -78,6 +78,7 @@ export function ActionForm({
   confirmModal,
   enterDoesNotSubmit = false,
   onSuccess,
+  successHref,
   onCancel,
   cancelLabel = "Cancel",
 }: {
@@ -101,6 +102,8 @@ export function ActionForm({
    */
   enterDoesNotSubmit?: boolean
   onSuccess?: () => void
+  /** Where to go after a save, e.g. back to the list from its "new" screen. */
+  successHref?: string
   /** Shows a Cancel button beside save, for forms that sit in a modal. */
   onCancel?: () => void
   cancelLabel?: string
@@ -135,6 +138,11 @@ export function ActionForm({
     onSuccess?.()
     if (result && "redirectTo" in result && result.redirectTo) {
       router.push(result.redirectTo)
+      return
+    }
+    if (successHref) {
+      router.push(successHref)
+      router.refresh()
       return
     }
     if (resetOnSuccess) ref.current?.reset()

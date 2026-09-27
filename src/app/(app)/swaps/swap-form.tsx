@@ -43,7 +43,9 @@ export function SwapForm({
   categories,
   branches,
   defaultBranchId,
+  successHref,
 }: {
+  successHref?: string
   customers: Customer[]
   models: ModelName[]
   brands: string[]
@@ -92,6 +94,7 @@ export function SwapForm({
   return (
     <ActionForm
       action={createSwap}
+      successHref={successHref}
       submit="Save for approval"
       successMessage="Swap Deal saved. Waiting for approval."
       enterDoesNotSubmit

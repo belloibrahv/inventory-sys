@@ -75,6 +75,38 @@ export function PageHeader({
   )
 }
 
+/**
+ * A screen that is one form: the heading, a link back up to its list, and the
+ * form in a card at a width a person can read and fill. Forms used to sit in
+ * a narrow column beside their list, which squeezed both.
+ */
+export function FormScreen({
+  title,
+  description,
+  backHref,
+  children,
+  aside,
+  wide = false,
+}: {
+  title: string
+  description?: string
+  backHref: string
+  children: ReactNode
+  /** Short help or a list of what is waiting, shown beside the form on wide screens. */
+  aside?: ReactNode
+  wide?: boolean
+}) {
+  return (
+    <div className={cn("mx-auto w-full space-y-5", aside ? "max-w-6xl" : wide ? "max-w-5xl" : "max-w-3xl")}>
+      <PageHeader title={title} description={description} backHref={backHref} />
+      <div className={cn("grid items-start gap-5", aside && "lg:grid-cols-[minmax(0,1fr)_minmax(16rem,20rem)]")}>
+        <div className="surface-card min-w-0 p-4 sm:p-6">{children}</div>
+        {aside ? <div className="min-w-0 space-y-4">{aside}</div> : null}
+      </div>
+    </div>
+  )
+}
+
 /** A titled panel. Use instead of a bare `surface-card` whenever it has a heading. */
 export function SectionCard({
   title,

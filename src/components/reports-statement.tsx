@@ -34,7 +34,7 @@ export function ReportsStatement({ data }: { data: ReportsPack }) {
         </div>
       </DocumentLetterhead>
 
-      <div className="grid grid-cols-4 divide-x divide-slate-200 border-b border-slate-200">
+      <div className="grid grid-cols-2 sm:grid-cols-4 print:grid-cols-4 sm:divide-x print:divide-x divide-slate-200 border-b border-slate-200">
         {kpis.map((row) => (
           <div key={row.label} className="px-3 py-2.5">
             <p className="text-[9px] uppercase tracking-[0.14em] text-slate-500">{row.label}</p>

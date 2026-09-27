@@ -1,17 +1,26 @@
-import { getInStockForReplace, getReturns, getSoldImeis } from "@/app/actions/ops"
+import Link from "next/link"
+import { Plus } from "lucide-react"
+import { getInStockForReplace, getReturns } from "@/app/actions/ops"
 import { PageHeader } from "@/components/shared"
+import { Button } from "@/components/ui/button"
 import { money } from "@/lib/utils"
-import { ReturnForm } from "./return-form"
 import { ReturnsList } from "./returns-list"
 
 export default async function ReturnsPage() {
-  const [rows, sold, stock] = await Promise.all([getReturns(), getSoldImeis(), getInStockForReplace()])
+  const [rows, stock] = await Promise.all([getReturns(), getInStockForReplace()])
   return (
-    <div className="page-split">
-      <div>
+    <div className="space-y-6">
+      <div className="space-y-5">
         <PageHeader
           title="Returns"
           description="Return value, replacement value, and the balance. Stock and money move after approval."
+          actions={
+            <Button asChild>
+              <Link href="/returns/new">
+                <Plus className="mr-1.5 h-4 w-4" /> Log a return
+              </Link>
+            </Button>
+          }
         />
         <ReturnsList
           // Only what the list shows. Spreading the whole row sent the staff
@@ -56,44 +65,6 @@ export default async function ReturnsPage() {
                   quantity: row.saleItem.quantity,
                 }
               : null,
-          }))}
-          stock={stock.map((row) => ({
-            id: row.id,
-            imei1: row.imei1,
-            serialNumber: row.serialNumber,
-            branchId: row.branchId,
-            product: { name: row.product.name, sellingPrice: money(row.product.sellingPrice) },
-          }))}
-        />
-      </div>
-      <div className="surface-card p-5">
-        <h3 className="mb-1 font-semibold">Log a return</h3>
-        <p className="mb-4 text-sm text-muted-foreground">
-          Phones and laptops: pick by IMEI. Accessories, cords, and other items: look up the invoice number.
-        </p>
-        <ReturnForm
-          sold={sold.map((row) => ({
-            id: row.id,
-            imei1: row.imei1,
-            serialNumber: row.serialNumber,
-            branchId: row.branchId,
-            product: {
-              name: row.product.name,
-              sellingPrice: money(row.product.sellingPrice),
-              warrantyDays: row.product.warrantyDays,
-            },
-            customer: row.customer ? { name: row.customer.name } : null,
-            sale: row.sale
-              ? {
-                  invoiceNumber: row.sale.invoiceNumber,
-                  saleDate: row.sale.saleDate,
-                  items: row.sale.items.map((item) => ({
-                    imeiId: item.imeiId,
-                    totalPrice: money(item.totalPrice),
-                  })),
-                }
-              : null,
-            branch: { code: row.branch.code },
           }))}
           stock={stock.map((row) => ({
             id: row.id,

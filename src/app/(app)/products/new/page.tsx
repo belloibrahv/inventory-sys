@@ -92,13 +92,13 @@ export default async function NewProductPage() {
               </Select>
             </label>
             <ShopScopeFields shops={lookups.branches} />
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid gap-2 sm:grid-cols-3">
               <Input name="color" placeholder="Color" />
               <Input name="storage" placeholder="Storage size (GB)" />
               <Input name="ram" placeholder="Memory (RAM)" />
             </div>
             <Input name="sku" placeholder="Item code (leave empty and the system will make one)" />
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid gap-2 sm:grid-cols-3">
               <Input name="costPrice" type="number" placeholder="Cost price" />
               <Input name="minimumPrice" type="number" placeholder="Lowest price" />
               <Input name="sellingPrice" type="number" placeholder="Sell price" />

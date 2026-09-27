@@ -1,4 +1,6 @@
-import { createBranch, getBranches, toggleBranch, updateBranch } from "@/app/actions/parties"
+import Link from "next/link"
+import { Plus } from "lucide-react"
+import { getBranches, toggleBranch, updateBranch } from "@/app/actions/parties"
 import { ActionForm } from "@/components/action-form"
 import { PageHeader } from "@/components/shared"
 import { Badge } from "@/components/ui/badge"
@@ -96,13 +98,21 @@ export default async function BranchesPage() {
   const closed = branches.filter((branch) => !branch.isActive)
   const admin = isShopOwner(me.role)
   return (
-    <div className="page-split">
-      <div>
+    <div className="space-y-5">
         <PageHeader
           title="Shops"
           description="Open or close a shop. Each shop keeps its own records."
+          actions={
+            admin ? (
+              <Button asChild>
+                <Link href="/branches/new">
+                  <Plus className="mr-1.5 h-4 w-4" /> Open a shop
+                </Link>
+              </Button>
+            ) : null
+          }
         />
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
           {open.map((branch) => (
             <ShopCard key={branch.id} branch={branch} canEdit={admin} />
           ))}
@@ -113,28 +123,13 @@ export default async function BranchesPage() {
             <p className="mb-3 text-sm text-muted-foreground">
               Old sales stay. Closed shops do not show on Sell now.
             </p>
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
               {closed.map((branch) => (
                 <ShopCard key={branch.id} branch={branch} canEdit />
               ))}
             </div>
           </div>
         ) : null}
-      </div>
-      {isShopOwner(me.role) ? (
-        <div className="surface-card p-5">
-          <h3 className="mb-4 font-semibold">Open a shop</h3>
-          <ActionForm action={createBranch} submit="Save this shop" className="space-y-3">
-            <Input name="name" placeholder="Shop name, such as Bodija" required />
-            <Input name="code" placeholder="Short shop code, such as BDJ" required />
-            <Input name="address" placeholder="Address" required />
-            <Input name="phone" placeholder="Phone" />
-            <Input name="email" placeholder="Email" />
-          </ActionForm>
-        </div>
-      ) : (
-        <div className="surface-card p-5 text-sm text-muted-foreground">Only the main admin or the CEO can open or close a shop.</div>
-      )}
     </div>
   )
 }

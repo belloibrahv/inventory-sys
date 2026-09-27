@@ -1,29 +1,16 @@
 import Link from "next/link"
-import { requireUser } from "@/lib/session"
-import { getProducts } from "@/app/actions/catalog"
+import { Plus, Undo2 } from "lucide-react"
 import { getPurchases, getSupplierReturnCandidates } from "@/app/actions/ops"
-import { getBranches, getSuppliers } from "@/app/actions/parties"
-import { PurchaseForm } from "@/app/(app)/purchases/purchase-form"
-import { PageHeader, SectionCard, StatCard, StatGrid } from "@/components/shared"
+import { PageHeader, StatCard, StatGrid } from "@/components/shared"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { formatCurrency, money } from "@/lib/utils"
 import { isOpeningStockPurchase, purchaseBalance } from "@/lib/purchase-money"
 import { PurchasesList, type PurchaseRow } from "./purchases-list"
-import { SupplierReturnForm } from "./supplier-return-form"
 
 export default async function PurchasesPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
-  const me = await requireUser()
   const { q } = await searchParams
-  const [purchases, suppliers, products, branches, returnUnits] = await Promise.all([
-    getPurchases(q),
-    getSuppliers(),
-    getProducts(),
-    getBranches(),
-    getSupplierReturnCandidates(),
-  ])
-
-  const houses = suppliers.filter((row) => row.kind !== "NEIGHBOR" && row.name !== "Opening stock")
+  const [purchases, returnUnits] = await Promise.all([getPurchases(q), getSupplierReturnCandidates()])
   const regularPurchases = purchases.filter((p) => !isOpeningStockPurchase(p))
   const openingPurchases = purchases.filter((p) => isOpeningStockPurchase(p))
 
@@ -45,6 +32,23 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
       <PageHeader
         title="Goods from supplier"
         description="Supplier bills, what we paid, and what is still owed."
+        actions={
+          <>
+            <Button asChild variant="outline">
+              <Link href="/purchases/send-back">
+                <Undo2 className="mr-1.5 h-4 w-4" /> Send back
+                {returnUnits.length ? (
+                  <span className="ml-1.5 rounded-full bg-warning-soft px-1.5 text-xs font-semibold text-warning">{returnUnits.length}</span>
+                ) : null}
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link href="/purchases/new">
+                <Plus className="mr-1.5 h-4 w-4" /> Book expected goods
+              </Link>
+            </Button>
+          </>
+        }
       />
 
       <form className="grid grid-cols-[1fr_auto] gap-2">
@@ -112,7 +116,6 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
         />
       </StatGrid>
 
-      <div className="page-split">
         <PurchasesList
           search={q}
           purchases={purchases.map(
@@ -141,37 +144,6 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
             }
           )}
         />
-        <div className="space-y-4">
-          <SectionCard title="Book expected goods" description="A supplier carton. After save, open the bill to scan IMEIs.">
-            <PurchaseForm
-              suppliers={houses.map((row) => ({
-                id: row.id,
-                name: row.name,
-                country: row.country,
-                city: row.city,
-              }))}
-              branches={branches.filter((row) => row.isActive).map((row) => ({ id: row.id, name: row.name }))}
-              products={products.map((row) => ({ id: row.id, name: row.name }))}
-              defaultBranchId={me.branchId}
-            />
-          </SectionCard>
-          <SectionCard title="Send back to supplier" description="Scan IMEI. The house and cost fill in. Scan every phone for this one send-back.">
-            {returnUnits.length ? (
-              <ul className="mb-4 space-y-1 text-sm">
-                {returnUnits.slice(0, 8).map((row) => (
-                  <li key={row.id}>
-                    {row.imei1} · {row.productName} · {row.shop}
-                    {row.supplierName ? ` · ${row.supplierName}` : ""}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mb-4 text-sm text-muted-foreground">No phone is waiting. You can still scan an In shop IMEI.</p>
-            )}
-            <SupplierReturnForm />
-          </SectionCard>
-        </div>
-      </div>
     </div>
   )
 }

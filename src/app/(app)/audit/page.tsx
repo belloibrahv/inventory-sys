@@ -48,7 +48,7 @@ export default async function AuditPage({
         </a>
       ) : null}
 
-      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 xl:grid-cols-6">
         <WatchCard href="/audit?result=failed&action=LOGIN" label="Failed sign-ins (24 hours)" value={data.watch.failedLogins} hot={data.watch.failedLogins > 0} />
         <WatchCard href="/audit?risk=HIGH" label="High-risk work (24 hours)" value={data.watch.highRisk} hot={data.watch.highRisk > 0} />
         <WatchCard href="/audit?action=DENIED" label="Not allowed (24 hours)" value={data.watch.denied} hot={data.watch.denied > 0} />
@@ -57,8 +57,8 @@ export default async function AuditPage({
         <WatchCard href="/audit?action=VIEW&views=1" label="Screens opened (24 hours)" value={data.watch.screens} />
       </div>
 
-      <form className="surface-card grid gap-2 p-4 md:grid-cols-[1fr_160px_140px_180px_140px_auto] md:items-end">
-        <label className="text-sm">
+      <form className="surface-card grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
+        <label className="text-sm sm:col-span-2">
           <span className="mb-1 block text-muted-foreground">Search</span>
           <Input name="q" defaultValue={filters.q} placeholder="Actor name, email, IMEI, or invoice #" />
         </label>
@@ -97,9 +97,6 @@ export default async function AuditPage({
             <option value="failed">Failed / Rejected</option>
           </Select>
         </label>
-        <button type="submit" className="min-h-11 rounded-xl bg-primary px-4 text-sm text-primary-foreground">
-          Apply Filter
-        </button>
         <label className="text-sm">
           <span className="mb-1 block text-muted-foreground">Start Date</span>
           <Input name="from" type="date" defaultValue={filters.from} />
@@ -108,10 +105,13 @@ export default async function AuditPage({
           <span className="mb-1 block text-muted-foreground">End Date</span>
           <Input name="to" type="date" defaultValue={filters.to} />
         </label>
-        <label className="flex items-center gap-2 text-sm md:col-span-2">
+        <label className="flex items-center gap-2 text-sm sm:col-span-2 lg:col-span-3">
           <input type="checkbox" name="views" value="1" defaultChecked={filters.views === "1"} />
-          Include Screen Navigation & Read Events
+          Include screens opened and records read
         </label>
+        <button type="submit" className="min-h-11 rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground sm:col-span-2 lg:col-span-1">
+          Apply filter
+        </button>
       </form>
 
       <div className="grid gap-4 xl:grid-cols-[1.4fr_0.6fr]">

@@ -12,7 +12,6 @@ import {
   FileSpreadsheet,
   Gauge,
   GitBranch,
-  Handshake,
   LayoutDashboard,
   ListOrdered,
   Lock,
@@ -131,7 +130,15 @@ export const navGroups: NavGroup[] = [
         ],
       },
       { name: "Shop stock", href: "/inventory", icon: Boxes },
-      { name: "Goods on the way", href: "/incoming", icon: Package },
+      {
+        name: "Goods on the way",
+        href: "/incoming",
+        icon: Package,
+        children: [
+          { name: "On the way", href: "/incoming", icon: Package, hint: "Left the supplier, not in the shop yet" },
+          { name: "Book goods coming", href: "/incoming/new", icon: PlusCircle, hint: "Scan IMEIs or type pieces still coming" },
+        ],
+      },
     ],
   },
   {
@@ -140,19 +147,75 @@ export const navGroups: NavGroup[] = [
       { name: "Sales", href: "/sales", icon: ShoppingCart },
       { name: "Sell now", href: "/pos", icon: Store },
       { name: "Balance the till", href: "/finance/close", icon: ClipboardCheck },
-      { name: "Goods from supplier", href: "/purchases", icon: Truck },
-      { name: "Customers & money owed", href: "/customers", icon: Users },
-      { name: "Suppliers", href: "/suppliers", icon: Factory },
+      {
+        name: "Goods from supplier",
+        href: "/purchases",
+        icon: Truck,
+        children: [
+          { name: "Supplier bills", href: "/purchases", icon: Truck, hint: "Every supplier bill, paid and owed" },
+          { name: "Book expected goods", href: "/purchases/new", icon: PlusCircle, hint: "A supplier carton on its way" },
+          { name: "Send back to supplier", href: "/purchases/send-back", icon: Undo2, hint: "Phones going back to the supplier" },
+        ],
+      },
+      {
+        name: "Customers & money owed",
+        href: "/customers",
+        icon: Users,
+        children: [
+          { name: "All customers", href: "/customers", icon: Users, hint: "Who bought, paid and still owes" },
+          { name: "Add a customer", href: "/customers/new", icon: PlusCircle, hint: "One name and one phone for one buyer" },
+        ],
+      },
+      {
+        name: "Suppliers",
+        href: "/suppliers",
+        icon: Factory,
+        children: [
+          { name: "All suppliers", href: "/suppliers", icon: Factory, hint: "Bought, paid and still owed" },
+          { name: "Add a supplier", href: "/suppliers/new", icon: PlusCircle, hint: "One name and one phone for one house" },
+        ],
+      },
     ],
   },
   {
     label: "Daily work",
     items: [
-      { name: "Shop to shop (Stock Transfer)", href: "/transfers", icon: ArrowLeftRight },
-      { name: "Stock Outsourcing (Neighbour shop fill)", href: "/neighbor-fills", icon: Handshake },
-      { name: "Returns", href: "/returns", icon: Undo2 },
-      { name: "Swap Deal", href: "/swaps", icon: Repeat2 },
-      { name: "Repairs", href: "/repairs", icon: Wrench },
+      {
+        name: "Shop to shop (Stock Transfer)",
+        href: "/transfers",
+        icon: ArrowLeftRight,
+        children: [
+          { name: "All transfers", href: "/transfers", icon: ArrowLeftRight, hint: "Waiting, on the way, accepted and rejected" },
+          { name: "Start a transfer", href: "/transfers/new", icon: PlusCircle, hint: "Send stock to another Abu Twins shop" },
+        ],
+      },
+      {
+        name: "Returns",
+        href: "/returns",
+        icon: Undo2,
+        children: [
+          { name: "All returns", href: "/returns", icon: Undo2, hint: "Waiting, approved and done" },
+          { name: "Log a return", href: "/returns/new", icon: PlusCircle, hint: "By IMEI, or by invoice for pieces" },
+        ],
+      },
+      {
+        name: "Swap Deal",
+        href: "/swaps",
+        icon: Repeat2,
+        children: [
+          { name: "All swap deals", href: "/swaps", icon: Repeat2, hint: "Waiting, approved and done" },
+          { name: "Start a swap", href: "/swaps/new", icon: PlusCircle, hint: "Customer's phone in, shop phone out" },
+        ],
+      },
+      {
+        name: "Repairs",
+        href: "/repairs",
+        icon: Wrench,
+        children: [
+          { name: "All repairs", href: "/repairs", icon: Wrench, hint: "Every job on the bench" },
+          { name: "Open a repair", href: "/repairs/new", icon: PlusCircle, hint: "Scan the phone, say what is wrong" },
+        ],
+      },
       { name: "Stock count", href: "/reconciliation", icon: ClipboardCheck },
     ],
   },
@@ -162,16 +225,40 @@ export const navGroups: NavGroup[] = [
       { name: "Money in & out", href: "/finance", icon: Wallet },
       { name: "Check the books", href: "/audit/books", icon: Scale },
       { name: "Profit", href: "/profits", icon: TrendingUp },
-      { name: "Shop expenses", href: "/expenses", icon: Receipt },
+      {
+        name: "Shop expenses",
+        href: "/expenses",
+        icon: Receipt,
+        children: [
+          { name: "All shop bills", href: "/expenses", icon: Receipt, hint: "Waiting and approved" },
+          { name: "Ask for a shop bill", href: "/expenses/new", icon: PlusCircle, hint: "A manager says yes before money leaves" },
+        ],
+      },
       { name: "Needs approval", href: "/approvals", icon: BadgeCheck },
     ],
   },
   {
     label: "Shop & people",
     items: [
-      { name: "Shops", href: "/branches", icon: GitBranch },
-      { name: "Staff", href: "/staff", icon: UserRoundCog },
-      { name: "Who can see what", href: "/staff/access", icon: Shield },
+      {
+        name: "Shops",
+        href: "/branches",
+        icon: GitBranch,
+        children: [
+          { name: "All shops", href: "/branches", icon: GitBranch, hint: "Open and closed shops" },
+          { name: "Open a shop", href: "/branches/new", icon: PlusCircle, hint: "A new shop with its own stock and money" },
+        ],
+      },
+      {
+        name: "Staff",
+        href: "/staff",
+        icon: UserRoundCog,
+        children: [
+          { name: "All staff", href: "/staff", icon: UserRoundCog, hint: "People, their shop and their job" },
+          { name: "Add a staff member", href: "/staff/new", icon: PlusCircle, hint: "A new login for one person" },
+          { name: "Who can see what", href: "/staff/access", icon: Shield, hint: "Which screens each job opens" },
+        ],
+      },
       { name: "Reports", href: "/reports", icon: BarChart3 },
       { name: "Who did what", href: "/audit", icon: ScrollText },
       { name: "Alerts", href: "/notifications", icon: Bell },

@@ -1,9 +1,9 @@
 import { money } from "@/lib/utils"
-import { createRepair, getRepairs } from "@/app/actions/ops"
-import { ActionForm } from "@/components/action-form"
+import Link from "next/link"
+import { Plus } from "lucide-react"
+import { getRepairs } from "@/app/actions/ops"
 import { PageHeader } from "@/components/shared"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
+import { Button } from "@/components/ui/button"
 import { can } from "@/lib/permissions"
 import { requireUser } from "@/lib/session"
 import { RepairsList } from "./repairs-list"
@@ -13,11 +13,19 @@ export default async function RepairsPage() {
   const canOpen = await can(user.role, "action.repair")
   const rows = await getRepairs()
   return (
-    <div className="page-split">
-      <div>
+    <div className="space-y-5">
         <PageHeader
           title="Repairs"
           description="Take the phone, find the fault, fix it, give it back."
+          actions={
+            canOpen ? (
+              <Button asChild>
+                <Link href="/repairs/new">
+                  <Plus className="mr-1.5 h-4 w-4" /> Open a repair
+                </Link>
+              </Button>
+            ) : null
+          }
         />
         <RepairsList
           // Only what the list shows. Passing the whole row sent the staff
@@ -35,22 +43,6 @@ export default async function RepairsPage() {
             customer: row.customer ? { name: row.customer.name } : null,
           }))}
         />
-      </div>
-      {canOpen ? (
-        <div className="surface-card p-5">
-          <h3 className="mb-4 font-semibold">Open repair</h3>
-          <ActionForm action={createRepair} className="space-y-3">
-            <Input name="imei1" placeholder="IMEI" required />
-            <Input name="issue" placeholder="Issue" required />
-            <Textarea name="notes" placeholder="Intake notes" />
-          </ActionForm>
-        </div>
-      ) : (
-        <div className="surface-card p-5 text-sm text-muted-foreground">
-          <h3 className="mb-2 font-semibold text-foreground">Looking only</h3>
-          <p>You can read every repair on this page. Opening a new repair is for the workshop. Ask the main admin if that must change.</p>
-        </div>
-      )}
     </div>
   )
 }

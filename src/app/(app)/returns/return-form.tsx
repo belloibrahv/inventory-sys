@@ -422,9 +422,11 @@ function OutcomeFields({
 function ImeiReturnForm({
   sold,
   stock,
+  successHref,
 }: {
   sold: Sold[]
   stock: StockUnit[]
+  successHref?: string
 }) {
   const [extraSold, setExtraSold] = useState<Sold[]>([])
   const [findCode, setFindCode] = useState("")
@@ -470,6 +472,7 @@ function ImeiReturnForm({
   return (
     <ActionForm
       action={createReturn}
+      successHref={successHref}
       submit="Save return for approval"
       successMessage="Return saved. Waiting for approval."
       confirmModal={{
@@ -568,7 +571,7 @@ function ImeiReturnForm({
 
 // ─── Invoice path sub-form ────────────────────────────────────────────────────
 
-function InvoiceReturnForm({ stock }: { stock: StockUnit[] }) {
+function InvoiceReturnForm({ stock, successHref }: { stock: StockUnit[]; successHref?: string }) {
   const [invoiceInput, setInvoiceInput] = useState("")
   const [finding, setFinding] = useState(false)
   const [foundSale, setFoundSale] = useState<FoundSale | null>(null)
@@ -628,6 +631,7 @@ function InvoiceReturnForm({ stock }: { stock: StockUnit[] }) {
   return (
     <ActionForm
       action={createReturn}
+      successHref={successHref}
       submit="Save return for approval"
       successMessage="Return saved. Waiting for approval."
       confirmModal={{
@@ -756,16 +760,16 @@ function InvoiceReturnForm({ stock }: { stock: StockUnit[] }) {
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
-export function ReturnForm({ sold, stock }: { sold: Sold[]; stock: StockUnit[] }) {
+export function ReturnForm({ sold, stock, successHref }: { sold: Sold[]; stock: StockUnit[]; successHref?: string }) {
   const [tab, setTab] = useState<"imei" | "invoice">("imei")
 
   return (
     <div className="space-y-4">
       <TabBar active={tab} onChange={setTab} />
       {tab === "imei" ? (
-        <ImeiReturnForm sold={sold} stock={stock} />
+        <ImeiReturnForm sold={sold} stock={stock} successHref={successHref} />
       ) : (
-        <InvoiceReturnForm stock={stock} />
+        <InvoiceReturnForm stock={stock} successHref={successHref} />
       )}
     </div>
   )

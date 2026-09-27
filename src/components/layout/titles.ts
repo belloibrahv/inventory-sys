@@ -41,6 +41,18 @@ export const pageTitles: Record<string, string> = {
   "/settings": "Settings",
   "/settings/rules": "Selling rules",
   "/settings/backup": "Shop backup",
+  "/swaps/new": "Start a swap",
+  "/returns/new": "Log a return",
+  "/repairs/new": "Open a repair",
+  "/customers/new": "Add a customer",
+  "/suppliers/new": "Add a supplier",
+  "/purchases/new": "Book expected goods",
+  "/purchases/send-back": "Send back to supplier",
+  "/incoming/new": "Book goods coming",
+  "/expenses/new": "Ask for a shop bill",
+  "/branches/new": "Open a shop",
+  "/transfers/new": "Start a transfer",
+  "/staff/new": "Add a staff member",
 }
 
 export function titleFor(pathname: string) {

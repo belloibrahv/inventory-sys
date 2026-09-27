@@ -24,13 +24,14 @@ function RoleAccessCard({
     <div className="surface-card p-5">
       <h3 className="mb-1 font-semibold">{ROLE_LABELS[role]}</h3>
       {note ? <p className="mb-4 max-w-2xl text-sm text-muted-foreground">{note}</p> : <div className="mb-4" />}
-      <ActionForm action={saveRoleAccess} submit={`Save ${ROLE_LABELS[role]} pages`} className="space-y-4">
+      <ActionForm action={saveRoleAccess} submit="Save these pages"
+        successMessage={`${ROLE_LABELS[role]} pages saved.`} className="space-y-4">
         <input type="hidden" name="role" value={role} />
         <div>
           <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Pages they can open
           </p>
-          <div className="grid gap-2 md:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {VIEW_PERMS.filter((row) => row.key !== "view.access").map((row) => (
               <label key={row.key} className="flex items-center gap-2 text-sm">
                 <input type="checkbox" name={row.key} defaultChecked={allowed.get(`${role}:${row.key}`) === true} />
@@ -43,7 +44,7 @@ function RoleAccessCard({
           <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             What they can do
           </p>
-          <div className="grid gap-2 md:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {ACTION_PERMS.map((row) => (
               <label key={row.key} className="flex items-center gap-2 text-sm">
                 <input type="checkbox" name={row.key} defaultChecked={allowed.get(`${role}:${row.key}`) === true} />

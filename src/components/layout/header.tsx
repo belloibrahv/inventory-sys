@@ -90,7 +90,7 @@ export function Header({
       <div className="flex shrink-0 items-center gap-0.5 sm:gap-1.5">
         {shops ? (
           <div className="hidden md:block">
-            <ShopSwitch branches={shops.branches} active={shops.active} />
+            <ShopSwitch branches={shops.branches} active={shops.active} className="inline-flex" />
           </div>
         ) : null}
         {/* The network dot lands here; see NetworkStatusIndicator. */}
@@ -98,13 +98,13 @@ export function Header({
 
         <button
           onClick={() => setCommandOpen(true)}
-          className="hidden h-9 items-center gap-2 rounded-lg border border-input bg-muted/50 pl-3 pr-2 text-[13px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground lg:flex"
+          className="hidden h-9 items-center gap-2 rounded-lg border border-input bg-muted/50 pl-3 pr-2 text-[13px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground xl:flex"
         >
           <Search className="h-4 w-4" />
           <span>Find an IMEI, an invoice, a supplier, or a customer</span>
           <kbd className="ml-2 rounded border border-border bg-card px-1.5 py-0.5 text-[11px] font-medium">⌘K</kbd>
         </button>
-        <Button variant="ghost" size="icon" onClick={() => setCommandOpen(true)} className="lg:hidden" aria-label="Search">
+        <Button variant="ghost" size="icon" onClick={() => setCommandOpen(true)} className="xl:hidden" aria-label="Search">
           <Search className="h-5 w-5" />
         </Button>
 
@@ -139,9 +139,9 @@ export function Header({
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
                 {initials}
               </span>
-              <span className="hidden min-w-0 leading-tight sm:block">
-                <span className="block text-[13px] font-semibold whitespace-normal break-words">{user?.name}</span>
-                <span className="block text-[11px] text-muted-foreground whitespace-normal break-words">
+              <span className="hidden min-w-0 max-w-[10rem] leading-tight xl:block">
+                <span className="block truncate text-[13px] font-semibold">{user?.name}</span>
+                <span className="block truncate text-[11px] text-muted-foreground">
                   {user?.role ? ROLE_LABELS[user.role] : ""}
                 </span>
               </span>
@@ -158,7 +158,7 @@ export function Header({
             <DropdownMenuSeparator />
             {shops ? (
               <div className="px-2 py-1.5 md:hidden">
-                <ShopSwitch branches={shops.branches} active={shops.active} />
+                <ShopSwitch branches={shops.branches} active={shops.active} className="flex w-full" />
               </div>
             ) : null}
             <DropdownMenuItem

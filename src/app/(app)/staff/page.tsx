@@ -1,11 +1,13 @@
+import Link from "next/link"
+import { Plus } from "lucide-react"
 import { setStaffActive } from "@/app/actions/access"
-import { createStaff, getStaff, updateStaff } from "@/app/actions/finance"
+import { getStaff, updateStaff } from "@/app/actions/finance"
 import { getBranches } from "@/app/actions/parties"
 import { ActionForm } from "@/components/action-form"
 import { PageHeader } from "@/components/shared"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { PasswordInput } from "@/components/ui/password-input"
 import { Select } from "@/components/ui/select"
 import { canManageStaff, canHardDelete, isShopOwner, isSuperAdmin, ROLE_LABELS } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
@@ -22,13 +24,21 @@ export default async function StaffPage() {
   const activeShops = branches.filter((branch) => branch.isActive)
 
   return (
-    <div className="page-split">
-      <div className="min-w-0">
+    <div className="space-y-5">
         <PageHeader
           title="Staff"
           description="People, their shop, and their job."
+          actions={
+            canAdd ? (
+              <Button asChild>
+                <Link href="/staff/new">
+                  <Plus className="mr-1.5 h-4 w-4" /> Add a staff member
+                </Link>
+              </Button>
+            ) : null
+          }
         />
-        <div className="space-y-3">
+        <div className="grid items-start gap-3 lg:grid-cols-2">
           {staff.map((user) => {
             const canEditThis =
               canAdd &&
@@ -110,56 +120,11 @@ export default async function StaffPage() {
             )
           })}
           {staff.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
+            <p className="rounded-lg lg:col-span-2 border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
               No staff to show.
             </p>
           ) : null}
         </div>
-      </div>
-      <div className="surface-card p-5 sm:p-6">
-        <h3 className="mb-4 font-semibold">Add staff</h3>
-        {canAdd ? (
-          <ActionForm action={createStaff} submit="Create staff login" className="space-y-4">
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted-foreground">Full name</span>
-              <Input name="name" placeholder="e.g. Blessing Adeyemi" required />
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted-foreground">Work email</span>
-              <Input name="email" type="email" placeholder="name@abutwins.com" required />
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted-foreground">First password</span>
-              <PasswordInput name="password" placeholder="They must change this after they sign in" required />
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted-foreground">Job</span>
-              <Select name="role" defaultValue="SALES_EXECUTIVE">
-                {roles.map((role) => (
-                  <option key={role} value={role}>
-                    {ROLE_LABELS[role]}
-                  </option>
-                ))}
-              </Select>
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted-foreground">Shop</span>
-              <Select name="branchId">
-                {owner ? <option value="">Head office / all shops</option> : null}
-                {(owner ? activeShops : activeShops.filter((branch) => branch.id === me.branchId)).map((branch) => (
-                  <option key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </option>
-                ))}
-              </Select>
-            </label>
-          </ActionForm>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            You can see staff, but the main admin must allow you before you can add a new login.
-          </p>
-        )}
-      </div>
     </div>
   )
 }

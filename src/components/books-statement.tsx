@@ -76,7 +76,7 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
         ) : null}
       </DocumentLetterhead>
 
-      <div className="grid grid-cols-4 divide-x divide-slate-200 border-b border-slate-200">
+      <div className="grid grid-cols-2 sm:grid-cols-4 print:grid-cols-4 sm:divide-x print:divide-x divide-slate-200 border-b border-slate-200">
         {[
           ["Sales volume", String(data.salesCount)],
           ["Payment received", formatCurrency(data.methodSum)],
