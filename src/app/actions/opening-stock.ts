@@ -212,10 +212,11 @@ async function correctionGate(branchId: string): Promise<Gate> {
   if (record.status === "CLOSED") {
     return { error: "This shop's opening stock is closed, so it can no longer be changed. Use Stock count or a supplier bill." }
   }
+  const canCorrect = canCorrectRole(user.role) || canUpload || isShopOwner(user.role)
   return {
     userId: user.id,
-    pricesAllowed: canChangePrices(user.role),
-    costAllowed: canSeeCost(user.role),
+    pricesAllowed: canCorrect || canChangePrices(user.role),
+    costAllowed: canCorrect || canSeeCost(user.role),
     record: {
       id: record.id,
       branchId: record.branchId,
@@ -386,6 +387,18 @@ async function applyPlan(
               ...(change.sellingPrice !== undefined ? { sellingPrice: change.sellingPrice.toFixed(2) } : {}),
             },
           })
+          if (change.costPrice !== undefined) {
+            await tx.saleItem.updateMany({
+              where: {
+                productId: line.productId,
+                sale: { branchId: record.branchId },
+                costPrice: { in: [line.costPrice.toFixed(2), "0.00", "0", "2000.00", "2000"] },
+              },
+              data: {
+                costPrice: change.costPrice.toFixed(2),
+              },
+            })
+          }
           await priceTrail(tx, line.productId, userId, "COST_PRICE", line.costPrice, change.costPrice, reason)
           await priceTrail(tx, line.productId, userId, "MINIMUM_PRICE", line.minimumPrice, change.minimumPrice, reason)
           await priceTrail(tx, line.productId, userId, "SELLING_PRICE", line.sellingPrice, change.sellingPrice, reason)
@@ -1019,6 +1032,27 @@ export async function closeOpeningStock(formData: FormData): Promise<{ error?: s
   const closedAt = new Date()
   // Only what was really there goes into the closed copy.
   const snapshot: Snapshot = { lines: lines.filter((line) => line.openingQty > 0).map((line) => ({ ...line, shelfQty: line.openingQty })) }
+
+  for (const line of lines.filter((l) => l.openingQty > 0)) {
+    await prisma.product.update({
+      where: { id: line.productId },
+      data: {
+        costPrice: line.costPrice.toFixed(2),
+        minimumPrice: line.minimumPrice.toFixed(2),
+        sellingPrice: line.sellingPrice.toFixed(2),
+      },
+    })
+    await prisma.saleItem.updateMany({
+      where: {
+        productId: line.productId,
+        sale: { branchId },
+        costPrice: { in: ["0.00", "0", "2000.00", "2000"] },
+      },
+      data: {
+        costPrice: line.costPrice.toFixed(2),
+      },
+    })
+  }
 
   const done = await prisma.openingStock.updateMany({
     where: { id: record.id, status: "OPEN" },

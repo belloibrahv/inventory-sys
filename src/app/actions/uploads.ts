@@ -615,6 +615,16 @@ export async function importOpeningStock(formData: FormData): Promise<UploadResu
     if (existing) {
       productIdByKey.set(key, existing.id)
       costByProductId.set(existing.id, draft.costPrice)
+      if (draft.costPrice > 0 || draft.minimumPrice > 0 || draft.sellingPrice > 0) {
+        await prisma.product.update({
+          where: { id: existing.id },
+          data: {
+            ...(draft.costPrice > 0 ? { costPrice: draft.costPrice.toFixed(2) } : {}),
+            ...(draft.minimumPrice > 0 ? { minimumPrice: draft.minimumPrice.toFixed(2) } : {}),
+            ...(draft.sellingPrice > 0 ? { sellingPrice: draft.sellingPrice.toFixed(2) } : {}),
+          },
+        })
+      }
       for (const shop of targetShops) {
         await prisma.inventory.upsert({
           where: { productId_branchId: { productId: existing.id, branchId: shop.id } },
