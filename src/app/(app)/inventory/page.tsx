@@ -6,18 +6,21 @@ import { canSeeCost } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { money } from "@/lib/utils"
 import { InventoryClientView } from "./inventory-client-view"
+import { shelfKey } from "@/lib/stock-limits"
+import { stockedPairs } from "@/lib/stocked-pairs"
 import { CachePageData } from "@/components/cache-page-data"
 
 export default async function InventoryPage() {
   // Cost never leaves the server for anyone but the CEO, not even into the
   // offline copy this page keeps on the phone.
   const showCost = canSeeCost((await requireUser()).role)
-  const [rows, settings, vault, serializedIds, branches] = await Promise.all([
+  const [rows, settings, vault, serializedIds, branches, stocked] = await Promise.all([
     getInventory(),
     getAppSettings(),
     getInStockImeiCounts(),
     getSerializedProductIds(),
     getBranches(),
+    stockedPairs(),
   ])
 
   const activeBranches = branches.filter((b) => b.isActive).map((b) => ({ id: b.id, name: b.name, code: b.code }))
@@ -29,6 +32,8 @@ export default async function InventoryPage() {
     quantity: row.quantity,
     incomingQty: row.incomingQty,
     minStock: row.minStock,
+    // Held here now or ever: low stock only means something for these.
+    everStocked: row.quantity > 0 || stocked.has(shelfKey(row.productId, row.branchId)),
     product: {
       id: row.product.id,
       name: row.product.name,

@@ -9,6 +9,9 @@ import { healOpeningStockBills } from "@/lib/opening-stock-money"
 import { payablePurchaseWhere, groupSupplierLedgers } from "@/lib/purchase-money"
 import { getUnclosedBusinessDays } from "@/app/actions/day-close"
 import { getParkedWatch } from "@/app/actions/parked"
+import { getAppSettings } from "@/lib/settings"
+import { isLowStock, shelfKey } from "@/lib/stock-limits"
+import { stockedPairs } from "@/lib/stocked-pairs"
 import { watBounds, watDayKey } from "@/lib/lagos-day"
 
 export async function getDashboardData() {
@@ -269,6 +272,13 @@ export async function getDashboardData() {
   ])
   const unclosedCount = unclosedLists.reduce((sum, days) => sum + days.length, 0)
 
+  // Only lines a shop actually carries: an item registered for every shop but
+  // never stocked at one is not "low" there, just not sold there.
+  const [stocked, settings] = await Promise.all([stockedPairs(branchId), getAppSettings()])
+  const carried = stock
+    .map((row) => ({ ...row, everStocked: row.quantity > 0 || stocked.has(shelfKey(row.productId, row.branchId)) }))
+    .filter((row) => row.everStocked)
+
   // Approved but not finished. An approved Swap Deal has already handed the
   // phone over, yet its invoice and the balance the customer owes are only
   // written when someone presses Finish. Left alone, that sale never reaches
@@ -369,7 +379,7 @@ export async function getDashboardData() {
     recentSales,
     // Only the six thinnest lines reach the screen, so only those six are
     // dressed with a product and shop name.
-    stock: stock
+    stock: carried
       .slice()
       .sort((a, b) => a.quantity - b.quantity)
       .slice(0, 6)
@@ -421,7 +431,7 @@ export async function getDashboardData() {
       {
         href: "/inventory",
         label: "Items below the low-stock warning",
-        count: stock.filter((row) => row.quantity <= (row.minStock > 0 ? row.minStock : 3)).length,
+        count: carried.filter((row) => isLowStock(row, settings.lowStockThreshold)).length,
       },
       { href: "/approvals", label: "Needs approval", count: pendingApprovals },
     ].filter((task) => task.count > 0),

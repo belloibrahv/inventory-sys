@@ -4,12 +4,14 @@ import { getBranches } from "@/app/actions/parties"
 import { PageHeader } from "@/components/shared"
 import { formatWatLong, watDayKey, type ShopRange } from "@/lib/lagos-day"
 import type { ReportsPack } from "@/lib/reports-pack"
-import { getAppSettings, lowStockLimit } from "@/lib/settings"
+import { getAppSettings } from "@/lib/settings"
 import { requireUser } from "@/lib/session"
 import { money } from "@/lib/utils"
 import { saleTenders } from "@/lib/sale-money"
 import { plainMoney } from "@/lib/plain"
 import { canSeeCost } from "@/lib/rbac"
+import { isLowStock, shelfKey } from "@/lib/stock-limits"
+import { stockedPairs } from "@/lib/stocked-pairs"
 import { ReportsClientView } from "./reports-client-view"
 
 function shopOf(branch: { name: string; code: string }) {
@@ -54,7 +56,14 @@ export default async function ReportsPage({
   )
   const swapValue = data.swaps.reduce((sum, row) => sum + money(row.balanceAmount), 0)
   const owing = data.debtors.reduce((sum, row) => sum + money(row.currentBalance), 0)
-  const lowStock = data.inventory.filter((row) => row.quantity <= lowStockLimit(row.minStock, settings.lowStockThreshold))
+  // Only lines this shop carries; an item it never stocked is not "low" there.
+  const stocked = await stockedPairs(selectedBranchId)
+  const lowStock = data.inventory.filter((row) =>
+    isLowStock(
+      { ...row, everStocked: row.quantity > 0 || stocked.has(shelfKey(row.productId, row.branchId)) },
+      settings.lowStockThreshold
+    )
+  )
 
   const byShop = Object.values(
     data.sales.reduce<Record<string, { name: string; revenue: number; collected: number; tickets: number }>>((acc, sale) => {
@@ -93,6 +102,7 @@ export default async function ReportsPage({
     compare: data.prior,
     totals: {
       revenue,
+      salesReturns: data.salesReturns,
       collected,
       expenses: expense,
       stock,

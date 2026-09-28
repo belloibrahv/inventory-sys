@@ -1238,6 +1238,7 @@ export async function getReportData(
       expenses: [],
       swaps: [],
       returns: [],
+      salesReturns: 0,
       inventory: [],
       debtors: [],
       creditors: [],
@@ -1372,8 +1373,26 @@ export async function getReportData(
   ]
   const priorMix = sumSaleTenders(priorSales)
   const priorExpense = priorExpenses.reduce((sum, row) => sum + money(row.amount), 0)
+  // Sales returns: value taken back on refunds and credit notes finished in
+  // this period. The invoices themselves are never edited, so this is the
+  // line that turns gross sales into net sales.
+  const finishedReturns = await prisma.stockReturn.findMany({
+    where: {
+      ...shopWhere,
+      status: "COMPLETED",
+      outcome: { in: ["REFUND", "CREDIT_NOTE"] },
+      completedAt: { gte: period.start, lt: period.end },
+    },
+    select: { returnValue: true, refundAmount: true },
+  })
+  const salesReturns = finishedReturns.reduce(
+    (sum, row) => sum + (money(row.returnValue) || money(row.refundAmount)),
+    0
+  )
+
   return {
     sales,
+    salesReturns,
     expenses,
     swaps,
     returns,

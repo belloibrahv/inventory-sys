@@ -435,7 +435,11 @@ export function ReportsClientView({
           <StatCard
             label="Total sales"
             value={formatCurrency(pack.totals.revenue)}
-            hint={`${sales.length} sale${sales.length === 1 ? "" : "s"}`}
+            hint={
+              pack.totals.salesReturns > 0
+                ? `${sales.length} sale${sales.length === 1 ? "" : "s"} · ${formatCurrency(pack.totals.revenue - pack.totals.salesReturns)} after returns`
+                : `${sales.length} sale${sales.length === 1 ? "" : "s"}`
+            }
             icon={<TrendingUp className="h-4 w-4" />}
             tone="neutral"
             onClick={() => setDrilldown("REVENUE")}
@@ -518,8 +522,9 @@ export function ReportsClientView({
             onClick={() => setDrilldown("SWAPS")}
           />
           <StatCard
-            label="Returned products"
-            value={String(pack.totals.returns)}
+            label="Sales returns"
+            value={formatCurrency(pack.totals.salesReturns)}
+            hint={`${pack.totals.returns} return${pack.totals.returns === 1 ? "" : "s"} logged · refunds and credit notes finished in this period`}
             onClick={() => setDrilldown("RETURNS")}
           />
         </StatGrid>

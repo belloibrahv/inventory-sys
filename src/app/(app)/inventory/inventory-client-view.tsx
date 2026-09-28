@@ -10,7 +10,7 @@ import { FilterChips } from "@/components/filter-chips"
 import { ShopTag, StatCard, StatGrid, TonePill } from "@/components/shared"
 import { downloadTable } from "@/lib/download-table"
 import { formatCurrency, money } from "@/lib/utils"
-import { lowStockLimit } from "@/lib/stock-limits"
+import { isLowStock } from "@/lib/stock-limits"
 import { formatCondition } from "@/lib/status"
 import { SHOP_CONDITION_OPTIONS } from "@/lib/conditions"
 import { countByStockCategory, matchesStockCategory, STOCK_CATEGORY_FILTERS } from "@/lib/stock-categories"
@@ -23,6 +23,8 @@ type InventoryRow = {
   quantity: number
   incomingQty: number
   minStock: number
+  /** The shop holds this item or has any stock history for it. */
+  everStocked: boolean
   product: {
     id: string
     name: string
@@ -105,7 +107,7 @@ export function InventoryClientView({
     return map
   }, [vault])
 
-  const isLow = (row: InventoryRow) => row.quantity <= lowStockLimit(row.minStock, lowStockThreshold)
+  const isLow = (row: InventoryRow) => isLowStock(row, lowStockThreshold)
   const hasGap = (row: InventoryRow) =>
     serialized.has(row.productId) && (imeiFor.get(`${row.productId}:${row.branchId}`) ?? 0) !== row.quantity
 
@@ -131,7 +133,7 @@ export function InventoryClientView({
     const units = filtered.reduce((sum, row) => sum + row.quantity, 0)
     const cost = filtered.reduce((sum, row) => sum + row.quantity * money(row.product.costPrice), 0)
     const sales = filtered.reduce((sum, row) => sum + row.quantity * money(row.product.sellingPrice), 0)
-    const lowLines = filtered.filter((row) => row.quantity <= lowStockLimit(row.minStock, lowStockThreshold)).length
+    const lowLines = filtered.filter(isLow).length
     return { units, cost, sales, profit: sales - cost, margin: cost > 0 ? ((sales - cost) / cost) * 100 : 0, lowLines }
   }, [filtered, lowStockThreshold])
 

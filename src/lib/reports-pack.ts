@@ -23,7 +23,10 @@ export type ReportsPack = {
     expenses: number
   }
   totals: {
+    /** Gross: every invoice in the period, as written. */
     revenue: number
+    /** Value taken back on refunds and credit notes finished in the period. */
+    salesReturns: number
     collected: number
     expenses: number
     stock: number
@@ -42,12 +45,12 @@ export type ReportsPack = {
 export function reportsKpis(data: ReportsPack) {
   return [
     { label: "Total sales", value: data.totals.revenue, money: true },
+    { label: "Sales returns", value: data.totals.salesReturns, money: true },
+    { label: "Net sales", value: data.totals.revenue - data.totals.salesReturns, money: true },
     { label: "Total payments received", value: data.totals.collected, money: true },
     { label: "Approved expenses", value: data.totals.expenses, money: true },
     { label: data.stockBasis === "cost" ? "Stock at cost" : "Stock at sell price", value: data.totals.stock, money: true },
-    { label: "Sales volume", value: data.totals.invoices, money: false },
     { label: "Customers still owe", value: data.totals.owing, money: true },
     { label: "Swap Deal value", value: data.totals.swaps, money: true },
-    { label: "Returned products", value: data.totals.returns, money: false },
   ]
 }
