@@ -212,7 +212,7 @@ export function BooksStatement({ data }: { data: BooksCheck }) {
           <h3 className="text-sm font-semibold">Who still owes, and cash in the till</h3>
           <div className="mt-3 space-y-1.5 text-[12px]">
             <p className="flex justify-between gap-3">
-              <span className="text-slate-500">Customers still owe</span>
+              <span className="text-slate-500">Customers still owe, in total</span>
               <Link href="/customers" className="tabular-nums font-semibold text-primary hover:underline">
                 {formatCurrency(data.customersOwe)}
               </Link>

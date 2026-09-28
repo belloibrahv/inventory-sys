@@ -8,6 +8,7 @@ export {
   isCEO,
   canSeeProfit,
   canSeeCost,
+  canChangeCost,
   canChangePrices,
   canHardDelete,
   isBooksDesk,

@@ -23,6 +23,7 @@ import {
 } from "@/lib/opening-money"
 import { assertCashAvailable, isUndoneCollection } from "@/lib/shop-cash"
 import { returnedSaleLineIds } from "@/lib/returned-value"
+import { receiptsInWindow } from "@/lib/receipts"
 
 function emptyFinance() {
   return {
@@ -1292,6 +1293,8 @@ export async function getReportData(
       swaps: [],
       returns: [],
       salesReturns: 0,
+      receipts: { total: 0, onPeriodSales: 0, debtsCollected: 0, cash: 0, transfer: 0, pos: 0, bank: 0 },
+      waiting: { swaps: 0, swapBalance: 0, returns: 0, returnValue: 0, periodDue: 0 },
       inventory: [],
       debtors: [],
       creditors: [],
@@ -1317,8 +1320,11 @@ export async function getReportData(
       where: { ...shopWhere, approvedAt: { not: null }, date: { gte: period.start, lt: period.end } },
       include: { branch: true },
     }),
+    // Finished swaps, dated by when they were finished: that is when their
+    // invoice and money are written, so they land on the same day as Sales and
+    // count once. Unfinished ones are shown beside the total (see waiting).
     prisma.swap.findMany({
-      where: { status: "COMPLETED", ...shopWhere, createdAt: { gte: period.start, lt: period.end } },
+      where: { status: "COMPLETED", ...shopWhere, completedAt: { gte: period.start, lt: period.end } },
       include: { branch: true, customer: true, newProduct: true },
       orderBy: { createdAt: "desc" },
     }),
@@ -1425,6 +1431,12 @@ export async function getReportData(
       })),
   ]
   const priorMix = sumSaleTenders(priorSales)
+  // Money in by the day it arrived, like Balance the till: debts collected in
+  // the period count, and a later payment on a period sale does not.
+  const [receipts, priorReceipts] = await Promise.all([
+    receiptsInWindow({ branchId, start: period.start, end: period.end }),
+    receiptsInWindow({ branchId, start: prior.start, end: prior.end }),
+  ])
   const priorExpense = priorExpenses.reduce((sum, row) => sum + money(row.amount), 0)
   // Sales returns: value taken back on refunds and credit notes finished in
   // this period. The invoices themselves are never edited, so this is the
@@ -1443,9 +1455,34 @@ export async function getReportData(
     0
   )
 
+  // Already on the Swap Deal and Returns screens but not finished, so their
+  // money is in no total yet. Shown beside the totals so Reports and those
+  // screens tell the same story, without counting anything twice.
+  const [openSwaps, openReturns, periodDue] = await Promise.all([
+    prisma.swap.findMany({
+      where: { ...shopWhere, status: { in: ["PENDING", "APPROVED"] } },
+      select: { balanceAmount: true, status: true },
+    }),
+    prisma.stockReturn.findMany({
+      where: { ...shopWhere, status: { in: ["PENDING", "APPROVED"] }, outcome: { in: ["REFUND", "CREDIT_NOTE"] } },
+      select: { returnValue: true, refundAmount: true },
+    }),
+    Promise.resolve(sales.reduce((sum, sale) => sum + Math.max(0, money(sale.totalAmount) - money(sale.paidAmount)), 0)),
+  ])
+  const waiting = {
+    swaps: openSwaps.length,
+    swapBalance: openSwaps.reduce((sum, row) => sum + money(row.balanceAmount), 0),
+    returns: openReturns.length,
+    returnValue: openReturns.reduce((sum, row) => sum + (money(row.returnValue) || money(row.refundAmount)), 0),
+    /** Still unpaid on the sales made in this period (part of the all-time total). */
+    periodDue,
+  }
+
   return {
     sales,
+    receipts,
     salesReturns,
+    waiting,
     expenses,
     swaps,
     returns,
@@ -1458,7 +1495,7 @@ export async function getReportData(
       from: prior.from,
       to: prior.to,
       revenue: priorMix.revenue,
-      collected: priorMix.received,
+      collected: priorReceipts.total,
       expenses: priorExpense,
     },
   }

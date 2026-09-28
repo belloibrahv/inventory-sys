@@ -13,6 +13,7 @@ import { money } from "@/lib/utils"
 import { sumSaleTenders } from "@/lib/sale-money"
 import { healOpeningStockBills } from "@/lib/opening-stock-money"
 import { payablePurchaseWhere, groupSupplierLedgers } from "@/lib/purchase-money"
+import { receiptsInWindow } from "@/lib/receipts"
 import { healDuplicateDayCloses } from "@/lib/day-close-heal"
 
 export type BooksRange = ShopRange
@@ -158,8 +159,14 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
       getAppSettings(),
     ])
 
-  const now = sumSales(sales)
-  const then = sumSales(priorSales)
+  // "Total payments received" is money by the day it arrived, like the till:
+  // debts collected in the period count; the per-sale mix stays for the rest.
+  const [receiptsNow, receiptsThen] = await Promise.all([
+    receiptsInWindow({ branchId: shopId || null, start: window.start, end: window.end }),
+    receiptsInWindow({ branchId: shopId || null, start: prior.start, end: prior.end }),
+  ])
+  const now = { ...sumSales(sales), methodSum: receiptsNow.total, cash: receiptsNow.cash, transfer: receiptsNow.transfer, pos: receiptsNow.pos }
+  const then = { ...sumSales(priorSales), methodSum: receiptsThen.total, cash: receiptsThen.cash, transfer: receiptsThen.transfer, pos: receiptsThen.pos }
   const expenseNow = money(expenses._sum.amount)
   const expenseThen = money(priorExpenses._sum.amount)
   const paidNow = money(purchases._sum.paidAmount)
@@ -354,6 +361,7 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
     revenue: now.revenue,
     due: now.due,
     methodSum: now.methodSum,
+    debtsCollected: receiptsNow.debtsCollected,
     expenses: expenseNow,
     purchasesPaid: paidNow,
     moneyOut: expenseNow + paidNow,

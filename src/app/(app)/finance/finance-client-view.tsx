@@ -145,7 +145,8 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
 
       <StatGrid>
         <StatCard
-          label="Sales"
+          // Money actually received, not invoiced: Reports' "Total sales" is invoiced.
+          label="Money in from sales"
           value={formatCurrency(data.revenue)}
           hint={`Cash: ${formatCurrency(data.cashRevenue)} · Bank: ${formatCurrency(data.bankRevenue)}`}
           icon={<TrendingUp className="h-4 w-4" />}

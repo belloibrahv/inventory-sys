@@ -447,6 +447,11 @@ export function ReportsClientView({
           <StatCard
             label="Total payments received"
             value={formatCurrency(pack.totals.collected)}
+            hint={
+              pack.receipts.debtsCollected > 0
+                ? `${formatCurrency(pack.receipts.onPeriodSales)} on this period's sales + ${formatCurrency(pack.receipts.debtsCollected)} debts collected on earlier sales`
+                : "Money that came in during this period"
+            }
             icon={<Banknote className="h-4 w-4" />}
             tone="success"
             onClick={() => setDrilldown("RECEIVED")}
@@ -497,9 +502,9 @@ export function ReportsClientView({
             onClick={() => setDrilldown("BOUGHT")}
           />
           <StatCard
-            label="Customers still owe"
+            label="Customers still owe, in total"
             value={formatCurrency(pack.totals.owing)}
-            hint={`${pack.debtors.length} customer${pack.debtors.length === 1 ? "" : "s"}`}
+            hint={`${pack.debtors.length} customer${pack.debtors.length === 1 ? "" : "s"} · everything owed today, whatever the period. ${formatCurrency(pack.waiting.periodDue)} of it is still unpaid on this period's sales.`}
             onClick={() => setDrilldown("DEBTORS")}
           />
           <StatCard
@@ -519,12 +524,23 @@ export function ReportsClientView({
           <StatCard
             label="Swap Deal value"
             value={formatCurrency(pack.totals.swaps)}
+            hint={
+              pack.waiting.swaps > 0
+                ? `Finished in this period. Plus ${formatCurrency(pack.waiting.swapBalance)} on ${pack.waiting.swaps} swap${pack.waiting.swaps === 1 ? "" : "s"} not finished yet (phone handed over, money not recorded). Finish them on Swap Deal.`
+                : "Balances on swaps finished in this period."
+            }
+            tone={pack.waiting.swaps > 0 ? "warning" : undefined}
             onClick={() => setDrilldown("SWAPS")}
           />
           <StatCard
             label="Sales returns"
             value={formatCurrency(pack.totals.salesReturns)}
-            hint={`${pack.totals.returns} return${pack.totals.returns === 1 ? "" : "s"} logged · refunds and credit notes finished in this period`}
+            hint={
+              pack.waiting.returns > 0
+                ? `Refunds and credit notes finished in this period. Plus ${formatCurrency(pack.waiting.returnValue)} on ${pack.waiting.returns} not finished yet. ${pack.totals.returns} logged in this period.`
+                : `Refunds and credit notes finished in this period · ${pack.totals.returns} logged`
+            }
+            tone={pack.waiting.returns > 0 ? "warning" : undefined}
             onClick={() => setDrilldown("RETURNS")}
           />
         </StatGrid>

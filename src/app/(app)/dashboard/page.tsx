@@ -129,7 +129,16 @@ export default async function DashboardPage() {
             tone="primary"
             href="/sales"
           />
-          <StatCard label="Taken today" value={formatCurrency(data.today.paid)} hint="Money in on today's sales" tone="success" />
+          <StatCard
+            label="Taken today"
+            value={formatCurrency(data.today.paid)}
+            hint={
+              data.today.debtsCollected > 0
+                ? `Includes ${formatCurrency(data.today.debtsCollected)} debts collected on earlier sales`
+                : "Money that came in today"
+            }
+            tone="success"
+          />
           {sellsHere ? (
             <StatCard
               label="Your sales today"

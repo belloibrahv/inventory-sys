@@ -2,12 +2,12 @@ import { getReportData } from "@/app/actions/finance"
 import { getOpeningReport } from "@/app/actions/opening-stock"
 import { getBranches } from "@/app/actions/parties"
 import { PageHeader } from "@/components/shared"
-import { formatWatLong, watDayKey, type ShopRange } from "@/lib/lagos-day"
+import { formatWatLong, shopPeriodWindow, watDayKey, type ShopRange } from "@/lib/lagos-day"
 import type { ReportsPack } from "@/lib/reports-pack"
 import { getAppSettings } from "@/lib/settings"
 import { requireUser } from "@/lib/session"
 import { money } from "@/lib/utils"
-import { saleTenders } from "@/lib/sale-money"
+import { receiptsInWindow } from "@/lib/receipts"
 import { plainMoney } from "@/lib/plain"
 import { canSeeCost } from "@/lib/rbac"
 import { isLowStock, shelfKey } from "@/lib/stock-limits"
@@ -46,7 +46,8 @@ export default async function ReportsPage({
   ])
 
   const revenue = data.sales.reduce((sum, sale) => sum + money(sale.totalAmount), 0)
-  const collected = data.sales.reduce((sum, sale) => sum + saleTenders(sale).received, 0)
+  // Money in by the day it arrived (see receiptsInWindow), matching the till.
+  const collected = data.receipts.total
   const expense = data.expenses.reduce((sum, row) => sum + money(row.amount), 0)
   // Stock is valued at cost for the CEO and at sell price for everyone else.
   const showCost = canSeeCost(user.role)
@@ -65,16 +66,24 @@ export default async function ReportsPage({
     )
   )
 
-  const byShop = Object.values(
-    data.sales.reduce<Record<string, { name: string; revenue: number; collected: number; tickets: number }>>((acc, sale) => {
+  const shopRows = data.sales.reduce<Record<string, { name: string; revenue: number; collected: number; tickets: number }>>(
+    (acc, sale) => {
       const key = sale.branch.id
       acc[key] = acc[key] ?? { name: sale.branch.name, revenue: 0, collected: 0, tickets: 0 }
       acc[key].revenue += money(sale.totalAmount)
-      acc[key].collected += saleTenders(sale).received
       acc[key].tickets += 1
       return acc
-    }, {})
-  ).sort((a, b) => b.revenue - a.revenue)
+    },
+    {}
+  )
+  // Money in per shop on the same footing as the total: by the day it arrived.
+  const shopWindow = shopPeriodWindow(data.period.from, range)
+  await Promise.all(
+    Object.entries(shopRows).map(async ([shopId, row]) => {
+      row.collected = (await receiptsInWindow({ branchId: shopId, start: shopWindow.start, end: shopWindow.end })).total
+    })
+  )
+  const byShop = Object.values(shopRows).sort((a, b) => b.revenue - a.revenue)
 
   const selectedBranch = branches.find((b) => b.id === selectedBranchId)
   const scope = selectedBranch ? `${selectedBranch.name} (${selectedBranch.code})` : "All shops together"
@@ -100,6 +109,8 @@ export default async function ReportsPage({
     from: data.period.from,
     to: data.period.to,
     compare: data.prior,
+    waiting: data.waiting,
+    receipts: { onPeriodSales: data.receipts.onPeriodSales, debtsCollected: data.receipts.debtsCollected },
     totals: {
       revenue,
       salesReturns: data.salesReturns,

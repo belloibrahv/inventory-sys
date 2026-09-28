@@ -1,7 +1,7 @@
 import { cache } from "react"
 import { UserRole } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
-import { isCEO, isShopOwner } from "@/lib/roles"
+import { canSeeProfit, isCEO, isShopOwner, PROFIT_ROLES } from "@/lib/roles"
 
 export { isSuperAdmin, isShopOwner, isCEO, isBooksDesk, BOOKS_DESK_ROLES } from "@/lib/roles"
 
@@ -64,6 +64,8 @@ export const ALL_PERM_KEYS = [...VIEW_PERMS, ...ACTION_PERMS].map((row) => row.k
  * from a database row. See canSeeProfit and canSeeCost in lib/roles.
  */
 export const CEO_ONLY_KEYS: readonly string[] = ["view.profits", "action.see_cost"]
+// Named for history: these are the profit keys, held by PROFIT_ROLES (the CEO
+// and the books desk), decided in code by canSeeProfit, never by a box.
 
 const ALL = ALL_PERM_KEYS
 
@@ -209,8 +211,12 @@ export const ensureRolePermissions = cache(async () => {
   // Profit and cost prices are the CEO's alone. can() already refuses them to
   // everyone else; closing the rows keeps menus and Who can see what honest.
   await prisma.rolePermission.updateMany({
-    where: { role: { not: "CEO" }, permKey: { in: [...CEO_ONLY_KEYS] }, allowed: true },
+    where: { role: { notIn: [...PROFIT_ROLES] }, permKey: { in: [...CEO_ONLY_KEYS] }, allowed: true },
     data: { allowed: false },
+  })
+  await prisma.rolePermission.updateMany({
+    where: { role: { in: [...PROFIT_ROLES] }, permKey: { in: [...CEO_ONLY_KEYS] }, allowed: false },
+    data: { allowed: true },
   })
 
 
@@ -264,7 +270,8 @@ export const ensureRolePermissions = cache(async () => {
     },
     data: { allowed: true },
   })
-  const accountantDenied = ALL_PERM_KEYS.filter((key) => !ACCOUNTANT_KEYS.includes(key))
+  // Profit and cost are decided in code (canSeeProfit), so they are left out here.
+  const accountantDenied = ALL_PERM_KEYS.filter((key) => !ACCOUNTANT_KEYS.includes(key) && !CEO_ONLY_KEYS.includes(key))
   await prisma.rolePermission.updateMany({
     where: {
       role: "ACCOUNTANT",
@@ -309,14 +316,17 @@ export async function getAllowedKeys(role: UserRole) {
   // Handed back as a copy: the map is held for the whole request, and a caller
   // that added to it would change what everyone else on the page is allowed.
   const allowed = new Set(map.get(role) ?? DEFAULTS[role] ?? [])
-  for (const key of CEO_ONLY_KEYS) allowed.delete(key)
+  for (const key of CEO_ONLY_KEYS) {
+    if (canSeeProfit(role)) allowed.add(key)
+    else allowed.delete(key)
+  }
   if (isShopOwner(role)) allowed.add("view.access")
   return allowed
 }
 
 export async function can(role: UserRole, key: string) {
   if (isCEO(role)) return true
-  if (CEO_ONLY_KEYS.includes(key)) return false
+  if (CEO_ONLY_KEYS.includes(key)) return canSeeProfit(role)
   if (role === "SUPER_ADMIN") return true
   // Undoing a collection or a supplier payment: the CEO and the main admin.
   if (key === "action.undo") return false

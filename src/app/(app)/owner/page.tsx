@@ -6,6 +6,8 @@ import { PageHeader } from "@/components/shared"
 import { formatWatLong } from "@/lib/lagos-day"
 import { getProducts } from "@/app/actions/catalog"
 import { PricesPanel } from "./prices-panel"
+import { canChangeCost } from "@/lib/rbac"
+import { requireUser } from "@/lib/session"
 import { formatCurrency, money } from "@/lib/utils"
 
 export const dynamic = "force-dynamic"
@@ -67,7 +69,9 @@ export default async function OwnerBoardPage() {
   const board = await getOwnerBoard()
   if (!board) redirect("/dashboard")
   // The price desk and every cost in it go to the CEO only.
-  const priceItems = board.canSeeProfit
+  // The price desk changes cost as well as prices: the CEO's alone, even
+  // though the books desk also sees profit on this board.
+  const priceItems = canChangeCost((await requireUser()).role)
     ? (await getProducts()).map((product) => ({
         id: product.id,
         name: [product.name, product.storage, product.color].filter(Boolean).join(" · "),

@@ -22,6 +22,10 @@ export type ReportsPack = {
     collected: number
     expenses: number
   }
+  /** Work on the Swap Deal and Returns screens not finished yet, and credit from this period's sales. */
+  waiting: { swaps: number; swapBalance: number; returns: number; returnValue: number; periodDue: number }
+  /** Money in this period split: on this period's sales, and debts collected on earlier ones. */
+  receipts: { onPeriodSales: number; debtsCollected: number }
   totals: {
     /** Gross: every invoice in the period, as written. */
     revenue: number
@@ -31,6 +35,7 @@ export type ReportsPack = {
     expenses: number
     stock: number
     invoices: number
+    /** Everything customers owe now, whatever the period. */
     owing: number
     swaps: number
     returns: number
@@ -50,7 +55,7 @@ export function reportsKpis(data: ReportsPack) {
     { label: "Total payments received", value: data.totals.collected, money: true },
     { label: "Approved expenses", value: data.totals.expenses, money: true },
     { label: data.stockBasis === "cost" ? "Stock at cost" : "Stock at sell price", value: data.totals.stock, money: true },
-    { label: "Customers still owe", value: data.totals.owing, money: true },
+    { label: "Customers still owe, in total", value: data.totals.owing, money: true },
     { label: "Swap Deal value", value: data.totals.swaps, money: true },
   ]
 }

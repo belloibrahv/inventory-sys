@@ -30,25 +30,34 @@ export function isShopOwner(role: UserRole) {
 }
 
 /**
- * The CEO owns the business. Profit, margins and what items cost us are theirs
- * alone. These are fixed here in code rather than left as boxes on Who can see
- * what, so no screen can hand them to anyone else, the main admin included.
+ * The CEO owns the business. Profit, margins and what items cost us are shown
+ * to the CEO and to the books: the Financial Accountant keeps the accounts and
+ * the Internal Auditor checks prices, below-cost sales and stock value, and
+ * neither can do that without cost. These are fixed here in code rather than
+ * boxes on Who can see what. Seeing is not changing: only the CEO changes a
+ * cost price (canChangeCost).
  */
 export function isCEO(role: UserRole) {
   return role === "CEO"
 }
 
+export const PROFIT_ROLES: readonly UserRole[] = ["CEO", "ACCOUNTANT", "AUDITOR"]
+
 /** Profit figures, margins, and "we kept" anywhere in the app. */
 export function canSeeProfit(role: UserRole) {
-  return isCEO(role)
+  return PROFIT_ROLES.includes(role)
 }
 
 /**
- * What an item cost us, on the price list, the till, stock value and reports.
- * People loading stock still type the cost from the supplier bill as they
- * enter it; that entry is the only place anyone else meets a cost price.
+ * What an item cost us, on the price list, stock value and reports. People
+ * loading stock still type the cost from the supplier bill as they enter it.
  */
 export function canSeeCost(role: UserRole) {
+  return PROFIT_ROLES.includes(role)
+}
+
+/** Changing what an item cost us, and the Prices panel on Business today: the CEO only. */
+export function canChangeCost(role: UserRole) {
   return isCEO(role)
 }
 

@@ -26,19 +26,19 @@ export type RoleManual = {
 
 const ROLE_JOB: Record<UserRole, { job: string; shops: string }> = {
   SUPER_ADMIN: {
-    job: "You can open every page except Profit, and change prices, undo a true money mistake, tick Who can see what, change Settings, and open or close a shop. Profit and what items cost us are the CEO's alone. Nobody can secretly rewrite an old invoice.",
+    job: "You can open every page except Profit, and change prices, undo a true money mistake, tick Who can see what, change Settings, and open or close a shop. Profit and what items cost us are for the CEO and the books desk (Accountant and Auditor). Nobody can secretly rewrite an old invoice.",
     shops: "You see every shop.",
   },
   CEO: {
-    job: "You own the business with the main admin. You open every page, and only you see profit, margins and what items cost us (Profit, and the Prices panel on Business today). You can correct money, staff, shops, settings, prices and Who can see what. Nobody can secretly rewrite an old invoice.",
+    job: "You own the business with the main admin. You open every page and see profit, margins and what items cost us; the Accountant and Auditor see them too. Only you change a cost price, on the Prices panel on Business today. You can correct money, staff, shops, settings, prices and Who can see what. Nobody can secretly rewrite an old invoice.",
     shops: "You see every shop.",
   },
   AUDITOR: {
-    job: "You oversee every shop page with admin-style oversight. You read sales, stock, repairs, and money. You can post money and pay suppliers. You cannot sell, open repairs, load stock, approve shop work, or change Who can see what.",
+    job: "You oversee every shop page with admin-style oversight. You read sales, stock, repairs, money, Profit and what items cost us, so you can check prices, below-cost sales and stock value. You can post money and pay suppliers. You cannot sell, open repairs, load stock, approve shop work, or change Who can see what.",
     shops: "You see every shop.",
   },
   ACCOUNTANT: {
-    job: "You work the money and books pages: sales lists, customers, suppliers, Money in and out, Check the books, and Reports. Profit and what items cost us are the CEO's alone. You can post money and pay suppliers. You do not see Sell now, Upload stock, repairs, or other floor jobs on the left menu.",
+    job: "You work the money and books pages: sales lists, customers, suppliers, Money in and out, Check the books, Reports, and Profit, with what items cost us. You see profit and cost but do not change prices. You can post money and pay suppliers. You do not see Sell now, Upload stock, repairs, or other floor jobs on the left menu.",
     shops: "You see every shop.",
   },
   BRANCH_MANAGER: {

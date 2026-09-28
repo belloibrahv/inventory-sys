@@ -13,6 +13,7 @@ import { getAppSettings } from "@/lib/settings"
 import { isLowStock, shelfKey } from "@/lib/stock-limits"
 import { stockedPairs } from "@/lib/stocked-pairs"
 import { watBounds, watDayKey } from "@/lib/lagos-day"
+import { receiptsInWindow } from "@/lib/receipts"
 
 export async function getDashboardData() {
   const user = await requireUser()
@@ -335,6 +336,9 @@ export async function getDashboardData() {
 
   // Today, in Lagos time: the whole view, and this person's own sales.
   const day = watBounds(watDayKey())
+  // Money in today by the day it arrived, like Balance the till: includes
+  // debts collected today on earlier sales.
+  const takenToday = await receiptsInWindow({ branchId, start: day.start, end: day.end })
   const [todayAll, todayMine] = await Promise.all([
     prisma.sale.aggregate({
       where: { ...saleWhere, saleDate: { gte: day.start, lt: day.end } },
@@ -353,7 +357,8 @@ export async function getDashboardData() {
     unread,
     today: {
       sales: money(todayAll._sum.totalAmount),
-      paid: money(todayAll._sum.paidAmount),
+      paid: takenToday.total,
+      debtsCollected: takenToday.debtsCollected,
       count: todayAll._count,
       mine: money(todayMine._sum.totalAmount),
       mineCount: todayMine._count,

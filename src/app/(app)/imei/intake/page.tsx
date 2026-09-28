@@ -4,7 +4,7 @@ import { getBranches, getSuppliers } from "@/app/actions/parties"
 import { ImeiIntakeForm } from "@/app/(app)/imei/intake-form"
 import { PageHeader, SectionCard, StatCard, StatGrid } from "@/components/shared"
 import { formatCondition } from "@/lib/status"
-import { canSeeCost } from "@/lib/rbac"
+import { canChangeCost } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { money } from "@/lib/utils"
 
@@ -17,7 +17,7 @@ import { money } from "@/lib/utils"
  */
 export default async function ImeiIntakePage() {
   // The form carries cost, so only the CEO types prices on it.
-  const canPrice = canSeeCost((await requireUser()).role)
+  const canPrice = canChangeCost((await requireUser()).role)
   const [counts, branches, suppliers, products] = await Promise.all([
     getImeiStatusCounts(),
     getBranches(),

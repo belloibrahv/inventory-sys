@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { watDayKey } from "@/lib/lagos-day"
 import { setStock } from "@/lib/concurrency"
 import { requireUser } from "@/lib/session"
-import { canChangePrices, canHardDelete, canManageCatalog, canSeeCost } from "@/lib/rbac"
+import { canChangeCost, canChangePrices, canHardDelete, canManageCatalog } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { shopError } from "@/lib/shop-speak"
 import { UNSAFE_KEYS } from "@/lib/table-file"
@@ -220,7 +220,7 @@ export async function setProductPrices(input: {
 }) {
   const user = await requireUser()
   // The Prices panel shows and sets cost, so it is the CEO's alone.
-  if (!canSeeCost(user.role)) return { error: "Only the CEO can change prices here." }
+  if (!canChangeCost(user.role)) return { error: "Only the CEO can change prices here." }
 
   const next = {
     costPrice: Number(input.costPrice),
@@ -949,7 +949,7 @@ export async function updateProduct(formData: FormData) {
   const pricesAllowed = canChangePrices(user.role)
   // Cost only from someone who may see it (the CEO); the main admin changes
   // the selling and lowest prices and the cost stays as it was.
-  const costPrice = canSeeCost(user.role) ? Number(formData.get("costPrice") || 0) : money(existing.costPrice)
+  const costPrice = canChangeCost(user.role) ? Number(formData.get("costPrice") || 0) : money(existing.costPrice)
   const sellingPrice = pricesAllowed ? Number(formData.get("sellingPrice") || 0) : money(existing.sellingPrice)
   const minimumPrice = pricesAllowed ? Number(formData.get("minimumPrice") || sellingPrice) : money(existing.minimumPrice)
   if (![costPrice, sellingPrice, minimumPrice].every((value) => Number.isFinite(value) && value >= 0)) {
