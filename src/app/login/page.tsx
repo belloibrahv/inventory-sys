@@ -26,7 +26,10 @@ export default function LoginPage() {
     const result = await signIn("credentials", { email, password, redirect: false })
     if (result?.error) {
       setLoading(false)
-      setError("That email or password is not correct, or this login is locked.")
+      // Never says which part was wrong, so it cannot be used to find real emails.
+      setError(
+        "That email or password is not correct. Use exactly the email you were given (a @gmail.com and an @abutwins.com address are different logins), and mind capital letters in the password. Forgotten it? The main admin or the CEO can reset it on Staff."
+      )
       return
     }
     setEntering(true)

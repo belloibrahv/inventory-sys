@@ -987,6 +987,59 @@ export async function createStaff(formData: FormData) {
 
 const HEAD_OFFICE_ROLES: UserRole[] = ["SUPER_ADMIN", "CEO", "AUDITOR", "ACCOUNTANT"]
 
+/**
+ * Give a staff member a new temporary password when they cannot sign in: a
+ * forgotten password, or a login handed over wrongly. They must choose their
+ * own at the next sign-in. Same rules as editing staff: the main admin and the
+ * CEO reset anyone below the main admin, a shop manager only their own shop,
+ * and only the main admin resets another main admin. Always in Who did what.
+ */
+export async function resetStaffPassword(formData: FormData) {
+  const user = await requireUser()
+  if (!(await canManageStaff(user.role))) return { error: "You are not allowed to reset staff passwords. Ask the main admin." }
+  const id = String(formData.get("id") || "")
+  const password = String(formData.get("newPassword") || "").trim()
+  if (password.length < 8) return { error: "The temporary password must be at least 8 letters or numbers." }
+
+  const target = await prisma.user.findUnique({ where: { id } })
+  if (!target) return { error: "We could not find that staff." }
+  if (target.id === user.id) return { error: "Change your own password on Your login." }
+  if (target.role === "SUPER_ADMIN" && !isSuperAdmin(user.role)) {
+    return { error: "Only the main admin can reset another main admin's password." }
+  }
+  const managerScope = await branchFilter(user)
+  if (managerScope && target.branchId !== managerScope) {
+    return { error: "You can only reset passwords for staff in your own shop." }
+  }
+
+  await prisma.user.update({
+    where: { id: target.id },
+    data: { password: await bcrypt.hash(password, 10), mustChangePassword: true },
+  })
+  await prisma.auditLog.create({
+    data: {
+      userId: user.id,
+      action: "UPDATE",
+      entityType: "User",
+      entityId: target.email,
+      newValue: JSON.stringify({ note: `Password reset for ${target.name ?? target.email}. They must choose a new one at sign-in.` }),
+      branchId: target.branchId,
+      risk: "HIGH",
+    },
+  })
+  await prisma.notification.create({
+    data: {
+      userId: target.id,
+      type: "SYSTEM",
+      title: "Your password was reset",
+      message: `${user.name ?? "The main admin"} set a temporary password for you. Choose your own now on Your login.`,
+      actionUrl: "/account",
+    },
+  })
+  revalidatePath("/staff")
+  return { success: true, message: `Temporary password set for ${target.name ?? target.email}. Tell them it in person.` }
+}
+
 export async function updateStaff(formData: FormData) {
   const user = await requireUser()
   if (!(await canManageStaff(user.role))) return { error: "You are not allowed to edit staff. Ask the main admin." }

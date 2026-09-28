@@ -44,7 +44,12 @@ export const authOptions: NextAuthOptions = {
         }
 
         const user = await prisma.user.findUnique({ where: { email } })
-        const valid = user?.isActive ? await bcrypt.compare(password, user.password) : false
+        // A password pasted from a message often carries a space at either end.
+        // Try it as typed first, then without those spaces.
+        const valid = user?.isActive
+          ? (await bcrypt.compare(password, user.password)) ||
+            (password.trim() !== password && password.trim().length > 0 && (await bcrypt.compare(password.trim(), user.password)))
+          : false
         if (!user || !user.isActive || !valid) {
           await writeAudit({
             userId: user?.id ?? null,

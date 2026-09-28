@@ -1,13 +1,14 @@
 import Link from "next/link"
 import { Plus } from "lucide-react"
 import { setStaffActive } from "@/app/actions/access"
-import { getStaff, updateStaff } from "@/app/actions/finance"
+import { getStaff, resetStaffPassword, updateStaff } from "@/app/actions/finance"
 import { getBranches } from "@/app/actions/parties"
 import { ActionForm } from "@/components/action-form"
 import { PageHeader } from "@/components/shared"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { PasswordInput } from "@/components/ui/password-input"
 import { Select } from "@/components/ui/select"
 import { canManageStaff, canHardDelete, isShopOwner, isSuperAdmin, ROLE_LABELS } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
@@ -113,6 +114,27 @@ export default async function StaffPage() {
                           )}
                         </Select>
                       </label>
+                    </ActionForm>
+                  </details>
+                ) : null}
+                {canEditThis ? (
+                  <details className="mt-2 rounded-lg border border-border px-3 py-2">
+                    <summary className="cursor-pointer text-sm font-medium">Reset password</summary>
+                    <ActionForm
+                      action={resetStaffPassword}
+                      className="mt-3 space-y-2"
+                      submit="Set temporary password"
+                      successMessage="Temporary password set"
+                      buttonClassName="mt-1"
+                    >
+                      <input type="hidden" name="id" value={user.id} />
+                      <label className="block text-xs text-muted-foreground">
+                        Temporary password (at least 8 letters or numbers)
+                        <PasswordInput name="newPassword" required minLength={8} autoComplete="new-password" className="mt-1" />
+                      </label>
+                      <p className="text-xs text-muted-foreground">
+                        Tell them in person. They sign in with {user.email} and this password, then must choose their own.
+                      </p>
                     </ActionForm>
                   </details>
                 ) : null}
