@@ -37,7 +37,10 @@ export type ReportsPack = {
     invoices: number
     /** Everything customers owe now, whatever the period. */
     owing: number
+    /** Trade-in value of swaps finished in the period. */
     swaps: number
+    /** Money customers paid on top on those swaps. */
+    swapBalance: number
     returns: number
   }
   byShop: Array<{ name: string; tickets: number; revenue: number; collected: number }>

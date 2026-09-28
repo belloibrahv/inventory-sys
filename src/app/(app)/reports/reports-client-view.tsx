@@ -58,6 +58,8 @@ type RawInventory = {
 type RawSwap = {
   id: string
   swapNumber: string
+  /** COMPLETED counts in the totals; PENDING or APPROVED are listed as not finished. */
+  status?: string
   tradeValue: unknown
   balanceAmount: unknown
   newProductPrice: unknown
@@ -297,7 +299,7 @@ export function ReportsClientView({
       ["Total still owed to suppliers", "", "", supplierOwed],
     ],
     SWAPS: () => [
-      ["Swap Number", "Customer", "Shop", "Item Swapped For", "Swap Deal Value", "Balance Paid", "Date"],
+      ["Swap Number", "Customer", "Shop", "Item Swapped For", "Swap Deal Value", "Balance Paid", "Date", "Status"],
       ...swaps.map((row) => [
         row.swapNumber,
         row.customer?.name ?? "Customer",
@@ -306,9 +308,10 @@ export function ReportsClientView({
         money(row.tradeValue),
         money(row.balanceAmount),
         day(row.createdAt),
+        row.status === "COMPLETED" ? "Finished" : "Not finished",
       ]),
       [],
-      ["Total Swap Balance", "", "", "", "", pack.totals.swaps],
+      ["Total, finished swaps", "", "", "", pack.totals.swaps, pack.totals.swapBalance, "", ""],
     ],
     RETURNS: () => [
       ["Return Number", "Customer", "Shop", "Item / IMEI", "Reason", "Outcome", "Status", "Refund Amount", "Date"],
@@ -324,7 +327,8 @@ export function ReportsClientView({
         day(row.createdAt),
       ]),
       [],
-      ["Total Returns Count", "", "", "", "", "", "", returns.length],
+      ["Sales returns (refunds and credit notes finished in this period)", "", "", "", "", "", "", pack.totals.salesReturns, ""],
+      ["Returns logged in this period", "", "", "", "", "", "", pack.totals.returns, ""],
     ],
   }
 
@@ -526,8 +530,8 @@ export function ReportsClientView({
             value={formatCurrency(pack.totals.swaps)}
             hint={
               pack.waiting.swaps > 0
-                ? `Finished in this period. Plus ${formatCurrency(pack.waiting.swapBalance)} on ${pack.waiting.swaps} swap${pack.waiting.swaps === 1 ? "" : "s"} not finished yet (phone handed over, money not recorded). Finish them on Swap Deal.`
-                : "Balances on swaps finished in this period."
+                ? `Trade-in value of swaps finished in this period (${formatCurrency(pack.totals.swapBalance)} paid on top). Plus ${pack.waiting.swaps} swap${pack.waiting.swaps === 1 ? "" : "s"} not finished yet, ${formatCurrency(pack.waiting.swapBalance)} balance not recorded. Finish them on Swap Deal.`
+                : `Trade-in value of swaps finished in this period · ${formatCurrency(pack.totals.swapBalance)} paid on top.`
             }
             tone={pack.waiting.swaps > 0 ? "warning" : undefined}
             onClick={() => setDrilldown("SWAPS")}
@@ -1287,7 +1291,12 @@ export function ReportsClientView({
                     </td>
                     <td>{swap.newProduct?.name ?? "Phone"}</td>
                     <td className="text-muted-foreground">{formatDate(swap.createdAt)}</td>
-                    <td className="text-right num">{formatCurrency(money(swap.tradeValue))}</td>
+                    <td className="text-right num">
+                      {formatCurrency(money(swap.tradeValue))}
+                      {swap.status && swap.status !== "COMPLETED" ? (
+                        <span className="ml-1.5 rounded-full bg-warning-soft px-1.5 py-0.5 text-[10px] font-medium text-warning">Not finished</span>
+                      ) : null}
+                    </td>
                     <td className="text-right num font-semibold text-success">{formatCurrency(money(swap.balanceAmount))}</td>
                   </tr>
                 ))}

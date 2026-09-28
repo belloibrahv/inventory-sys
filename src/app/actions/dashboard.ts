@@ -14,6 +14,7 @@ import { isLowStock, shelfKey } from "@/lib/stock-limits"
 import { stockedPairs } from "@/lib/stocked-pairs"
 import { watBounds, watDayKey } from "@/lib/lagos-day"
 import { receiptsInWindow } from "@/lib/receipts"
+import { customersOwing } from "@/lib/owed"
 
 export async function getDashboardData() {
   const user = await requireUser()
@@ -372,7 +373,8 @@ export async function getDashboardData() {
       paymentReceivedTrend: trend(received, money(lastPaymentsIn._sum.amount)),
       stockValue,
       stockAtCost,
-      outstanding: money(debts._sum.currentBalance),
+      // Same rule as Reports and Check the books (customersOwing).
+      outstanding: (await customersOwing(branchId)).reduce((sum, row) => sum + row.owed, 0),
       returns,
       swaps,
       salesCount: sales._count,

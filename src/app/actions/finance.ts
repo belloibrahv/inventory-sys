@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { ExpenseCategory, UserRole } from "@prisma/client"
+import { ExpenseCategory, Prisma, UserRole } from "@prisma/client"
 import * as bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
 import { setStock } from "@/lib/concurrency"
@@ -24,6 +24,7 @@ import {
 import { assertCashAvailable, isUndoneCollection } from "@/lib/shop-cash"
 import { returnedSaleLineIds } from "@/lib/returned-value"
 import { receiptsInWindow } from "@/lib/receipts"
+import { customersOwing } from "@/lib/owed"
 
 function emptyFinance() {
   return {
@@ -1292,6 +1293,7 @@ export async function getReportData(
       expenses: [],
       swaps: [],
       returns: [],
+      loggedReturns: 0,
       salesReturns: 0,
       receipts: { total: 0, onPeriodSales: 0, debtsCollected: 0, cash: 0, transfer: 0, pos: 0, bank: 0 },
       waiting: { swaps: 0, swapBalance: 0, returns: 0, returnValue: 0, periodDue: 0 },
@@ -1320,16 +1322,31 @@ export async function getReportData(
       where: { ...shopWhere, approvedAt: { not: null }, date: { gte: period.start, lt: period.end } },
       include: { branch: true },
     }),
-    // Finished swaps, dated by when they were finished: that is when their
-    // invoice and money are written, so they land on the same day as Sales and
-    // count once. Unfinished ones are shown beside the total (see waiting).
+    // The list: swaps finished in the period (dated by when they finished, when
+    // their invoice and money are written, so each lands in one period), plus
+    // every swap still waiting, marked as such. Totals use the finished ones.
     prisma.swap.findMany({
-      where: { status: "COMPLETED", ...shopWhere, completedAt: { gte: period.start, lt: period.end } },
+      where: {
+        ...shopWhere,
+        OR: [
+          { status: "COMPLETED", completedAt: { gte: period.start, lt: period.end } },
+          { status: { in: ["PENDING", "APPROVED"] } },
+        ],
+      },
       include: { branch: true, customer: true, newProduct: true },
       orderBy: { createdAt: "desc" },
     }),
+    // The list: returns logged or finished in the period, so the items behind
+    // Sales returns appear even when they were logged earlier. Declined ones out.
     prisma.stockReturn.findMany({
-      where: { ...shopWhere, createdAt: { gte: period.start, lt: period.end } },
+      where: {
+        ...shopWhere,
+        status: { not: "REJECTED" },
+        OR: [
+          { createdAt: { gte: period.start, lt: period.end } },
+          { completedAt: { gte: period.start, lt: period.end } },
+        ],
+      },
       include: { branch: true, customer: true, imei: { include: { product: true } } },
       orderBy: { createdAt: "desc" },
     }),
@@ -1469,6 +1486,16 @@ export async function getReportData(
     }),
     Promise.resolve(sales.reduce((sum, sale) => sum + Math.max(0, money(sale.totalAmount) - money(sale.paidAmount)), 0)),
   ])
+  // Customers owe: the shared rule (see customersOwing), so Home, Reports and
+  // Check the books agree for every shop.
+  const shopDebtors = (await customersOwing(branchId)).map((row) => ({
+    ...row,
+    currentBalance: new Prisma.Decimal(row.owed),
+  }))
+  const loggedReturns = await prisma.stockReturn.count({
+    where: { ...shopWhere, createdAt: { gte: period.start, lt: period.end } },
+  })
+
   const waiting = {
     swaps: openSwaps.length,
     swapBalance: openSwaps.reduce((sum, row) => sum + money(row.balanceAmount), 0),
@@ -1480,6 +1507,7 @@ export async function getReportData(
 
   return {
     sales,
+    loggedReturns,
     receipts,
     salesReturns,
     waiting,
@@ -1487,7 +1515,7 @@ export async function getReportData(
     swaps,
     returns,
     inventory,
-    debtors,
+    debtors: shopDebtors,
     creditors,
     supplierCredits,
     period,

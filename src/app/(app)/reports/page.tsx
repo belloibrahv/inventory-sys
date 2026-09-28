@@ -55,7 +55,12 @@ export default async function ReportsPage({
     (sum, row) => sum + row.quantity * money(showCost ? row.product.costPrice : row.product.sellingPrice),
     0
   )
-  const swapValue = data.swaps.reduce((sum, row) => sum + money(row.balanceAmount), 0)
+  // Swap Deal value is the trade-in value of the swaps finished in the period,
+  // the same figure as the list's "Swap Deal Value" column. The money the
+  // customers paid on top (the balance) is shown beside it.
+  const finishedSwaps = data.swaps.filter((row) => row.status === "COMPLETED")
+  const swapValue = finishedSwaps.reduce((sum, row) => sum + money(row.tradeValue), 0)
+  const swapBalance = finishedSwaps.reduce((sum, row) => sum + money(row.balanceAmount), 0)
   const owing = data.debtors.reduce((sum, row) => sum + money(row.currentBalance), 0)
   // Only lines this shop carries; an item it never stocked is not "low" there.
   const stocked = await stockedPairs(selectedBranchId)
@@ -120,7 +125,8 @@ export default async function ReportsPage({
       invoices: data.sales.length,
       owing,
       swaps: swapValue,
-      returns: data.returns.length,
+      swapBalance,
+      returns: data.loggedReturns,
     },
     byShop,
     debtors: data.debtors.map((row) => ({
@@ -197,7 +203,8 @@ export default async function ReportsPage({
           tradeValue: money(row.tradeValue),
           balanceAmount: money(row.balanceAmount),
           newProductPrice: money(row.newProductPrice),
-          createdAt: row.createdAt,
+          status: row.status,
+          createdAt: row.completedAt ?? row.createdAt,
           customer: row.customer ? { name: row.customer.name } : null,
           newProduct: row.newProduct ? { name: row.newProduct.name } : null,
           branch: shopOf(row.branch),
@@ -209,7 +216,8 @@ export default async function ReportsPage({
           outcome: row.outcome,
           faultClass: row.faultClass,
           status: row.status,
-          refundAmount: money(row.refundAmount),
+          // The value that came back, as Sales returns counts it.
+          refundAmount: money(row.returnValue) || money(row.refundAmount),
           createdAt: row.createdAt,
           customer: row.customer ? { name: row.customer.name } : null,
           branch: shopOf(row.branch),

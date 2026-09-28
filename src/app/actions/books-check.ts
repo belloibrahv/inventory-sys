@@ -14,6 +14,7 @@ import { sumSaleTenders } from "@/lib/sale-money"
 import { healOpeningStockBills } from "@/lib/opening-stock-money"
 import { payablePurchaseWhere, groupSupplierLedgers } from "@/lib/purchase-money"
 import { receiptsInWindow } from "@/lib/receipts"
+import { customersOwing } from "@/lib/owed"
 import { healDuplicateDayCloses } from "@/lib/day-close-heal"
 
 export type BooksRange = ShopRange
@@ -365,7 +366,8 @@ export async function getBooksCheck(branchId?: string, businessDate?: string, ra
     expenses: expenseNow,
     purchasesPaid: paidNow,
     moneyOut: expenseNow + paidNow,
-    customersOwe: money(debtors._sum.currentBalance),
+    // Same rule as Home and Reports (customersOwing).
+    customersOwe: (await customersOwing(shopId || null)).reduce((sum, row) => sum + row.owed, 0),
     supplierOwed,
     supplierCredit,
     expectedCash,
