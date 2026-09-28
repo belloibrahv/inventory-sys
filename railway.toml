@@ -3,7 +3,10 @@ builder = "NIXPACKS"
 buildCommand = "node scripts/use-postgres-schema.mjs && npx prisma generate && npm run build"
 
 [deploy]
-startCommand = "node scripts/use-postgres-schema.mjs && npx prisma generate && npx tsx scripts/heal-day-closes.ts && npx prisma db push --accept-data-loss && npx tsx prisma/seed-users.ts && npm start"
+# The day-close heal runs before the schema push (it clears duplicates so the
+# unique shop+day rule can go on). On a brand-new empty database there is no
+# table to heal yet, so its failure there must not stop the start.
+startCommand = "node scripts/use-postgres-schema.mjs && npx prisma generate && (npx tsx scripts/heal-day-closes.ts || echo 'Nothing to heal yet (new database?), carrying on') && npx prisma db push --accept-data-loss && npx tsx prisma/seed-users.ts && npm start"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
