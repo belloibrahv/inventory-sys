@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { createCustomer } from "@/app/actions/parties"
 import { createBankAccount } from "@/app/actions/finance"
-import { approveTillPrice, checkoutSale, findInStockImei, searchTillStock } from "@/app/actions/sales"
+import { checkoutSale, findInStockImei, searchTillStock } from "@/app/actions/sales"
+import { cancelPriceRequest, getMyPriceRequest, requestPriceApproval } from "@/app/actions/price-requests"
 import { TillLookup } from "@/components/till-lookup"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { PasswordInput } from "@/components/ui/password-input"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select } from "@/components/ui/select"
 import { pushSaleQueue } from "@/lib/offline-sales"
@@ -19,7 +19,7 @@ import { formatCurrency, money } from "@/lib/utils"
 import { belowCost, lineMargin, needsReason, openingPrice, resellerPrice, sellFloor } from "@/lib/pricing"
 import { formatCondition } from "@/lib/status"
 import { phoneLookLabel, isBlockedFromSell } from "@/lib/phone-look"
-import { ChevronDown, PlusCircle, RotateCcw, ScanLine, Trash2 } from "lucide-react"
+import { BellRing, ChevronDown, Loader2, PlusCircle, RotateCcw, ScanLine, Trash2 } from "lucide-react"
 import { useDecision } from "@/hooks/use-decision"
 
 function Kbd({ children }: { children: React.ReactNode }) {
@@ -161,11 +161,21 @@ export function PosClient({
   // The CEO or Super Admin's sign-off for a price this seller may not give
   // alone. It belongs to the deal it was given for: change a price, a quantity
   // or the discount and it no longer applies.
-  const [approval, setApproval] = useState<{ token: string; name: string; key: string } | null>(null)
+  const [approval, setApproval] = useState<{ token: string; name: string; key: string; requestId: string } | null>(null)
   const [approvalOpen, setApprovalOpen] = useState(false)
-  const [approverEmail, setApproverEmail] = useState("")
-  const [approverPassword, setApproverPassword] = useState("")
+  // The ask sent to the CEO and main admin for this deal, while it is open.
+  const [priceAsk, setPriceAsk] = useState<{
+    id: string
+    number: string
+    key: string
+    sentTo: string[]
+    sentAt: number
+    status: "PENDING" | "DECLINED" | "EXPIRED" | "CANCELLED"
+    note?: string | null
+    decidedBy?: string | null
+  } | null>(null)
   const [approving, setApproving] = useState(false)
+  const [waitSeconds, setWaitSeconds] = useState(0)
   const [remoteImeis, setRemoteImeis] = useState<TillImei[]>([])
   const [remoteAccessories, setRemoteAccessories] = useState<TillProduct[]>([])
   const [searchingRemote, setSearchingRemote] = useState(false)
@@ -183,6 +193,7 @@ export function PosClient({
     setDiscountReason("")
     setQuery("")
     setApproval(null)
+    setPriceAsk(null)
   }
 
   const handleClearCart = async () => {
@@ -422,6 +433,102 @@ export function PosClient({
   )
   const dealKey = useMemo(() => JSON.stringify(deal), [deal])
   const activeApproval = approval && approval.key === dealKey ? approval : null
+  const askForThisDeal = priceAsk && priceAsk.key === dealKey ? priceAsk : null
+  const waitingForApproval = askForThisDeal?.status === "PENDING"
+
+  // While an ask is open, look for the answer every few seconds. The approver
+  // answers from their own screen; the till picks it up here by itself.
+  useEffect(() => {
+    if (!priceAsk || priceAsk.status !== "PENDING") return
+    let stopped = false
+    const look = async () => {
+      try {
+        const result = await getMyPriceRequest(priceAsk.id)
+        if (stopped || "error" in result) return
+        if (result.status === "APPROVED" && result.approval) {
+          setApproval({ token: result.approval, name: result.decidedBy ?? "the CEO", key: priceAsk.key, requestId: priceAsk.id })
+          setPriceAsk(null)
+          setApprovalOpen(false)
+          toast.success(`Approved by ${result.decidedBy ?? "the CEO"}. Tap Complete sale to finish.`, { duration: 8000 })
+        } else if (result.status === "DECLINED" || result.status === "EXPIRED" || result.status === "CANCELLED") {
+          setPriceAsk((current) =>
+            current && current.id === priceAsk.id
+              ? { ...current, status: result.status as "DECLINED" | "EXPIRED" | "CANCELLED", note: result.note, decidedBy: result.decidedBy }
+              : current
+          )
+          if (result.status === "DECLINED") {
+            setApprovalOpen(true)
+            toast.error(`${result.decidedBy ?? "The approver"} declined this price${result.note ? `: ${result.note}` : "."}`)
+          }
+        }
+      } catch {
+        // The line dropped; the next look tries again.
+      }
+    }
+    const timer = window.setInterval(look, 3000)
+    void look()
+    return () => {
+      stopped = true
+      window.clearInterval(timer)
+    }
+  }, [priceAsk])
+
+  // A changed sale no longer matches what was asked. Withdraw the ask so the
+  // approver is not asked about a deal the till is no longer making.
+  useEffect(() => {
+    if (priceAsk && priceAsk.status === "PENDING" && priceAsk.key !== dealKey) {
+      void cancelPriceRequest(priceAsk.id)
+      setPriceAsk(null)
+      toast.message("The sale changed, so the approval request was withdrawn. Ask again when the prices are set.")
+    }
+  }, [dealKey, priceAsk])
+
+  useEffect(() => {
+    if (!waitingForApproval || !askForThisDeal) return
+    const tick = () => setWaitSeconds(Math.floor((Date.now() - askForThisDeal.sentAt) / 1000))
+    tick()
+    const timer = window.setInterval(tick, 1000)
+    return () => window.clearInterval(timer)
+  }, [waitingForApproval, askForThisDeal])
+
+  async function sendPriceAsk() {
+    setApproving(true)
+    try {
+      const result = await requestPriceApproval({
+        branchId,
+        deal,
+        reasons: cart.map((line) => String(line.priceReason || "").trim()),
+        discountReason: discountReason.trim() || undefined,
+        customerName: customers.find((row) => row.id === customerId)?.name,
+      })
+      if ("error" in result && result.error) {
+        toast.error(result.error)
+        return
+      }
+      if ("request" in result && result.request) {
+        setPriceAsk({
+          id: result.request.id,
+          number: result.request.requestNumber,
+          key: dealKey,
+          sentTo: result.request.sentTo,
+          sentAt: Date.now(),
+          status: "PENDING",
+        })
+        toast.success(`Sent to ${result.request.sentTo.join(" and ")}. You will see the answer here.`)
+      }
+    } catch {
+      toast.error("The shop system did not answer. Check the network and try again.")
+    } finally {
+      setApproving(false)
+    }
+  }
+
+  async function withdrawPriceAsk() {
+    if (!priceAsk) return
+    await cancelPriceRequest(priceAsk.id).catch(() => undefined)
+    setPriceAsk(null)
+    setApprovalOpen(false)
+  }
   /** May this sale go under the floor or under cost, with a reason? */
   const mayGoUnder = canOverrideFloor || Boolean(activeApproval)
   const marginTotal = total - costTotal
@@ -816,10 +923,9 @@ export function PosClient({
     // this deal on this till with their own password.
     if ((underFloor.length > 0 || underCost.length > 0 || discountBreaksFloor) && !mayGoUnder) {
       if (typeof navigator !== "undefined" && !navigator.onLine) {
-        toast.error("The CEO's approval needs the network. Wait for it to come back, or raise the price.")
+        toast.error("Asking for approval needs the network. Wait for it to come back, or raise the price.")
         return
       }
-      setApproverPassword("")
       setApprovalOpen(true)
       return
     }
@@ -898,6 +1004,7 @@ export function PosClient({
       orderDiscount: appliedDiscount,
       discountReason: discountReason.trim() || undefined,
       priceApproval: activeApproval?.token,
+      priceRequestId: activeApproval?.requestId,
       items: cart.map((line) => ({
         productId: line.productId,
         imeiId: line.imeiId,
@@ -1290,7 +1397,9 @@ export function PosClient({
                                 ? ""
                                 : activeApproval
                                   ? ` · approved by ${activeApproval.name}`
-                                  : " · needs CEO approval"}
+                                  : waitingForApproval
+                                    ? " · waiting for approval"
+                                    : " · needs approval"}
                             </span>
                           ) : null}
                           {isUnderCost ? (
@@ -1624,7 +1733,7 @@ export function PosClient({
                       <>
                         <p className="text-xs text-danger">
                           This takes the sale under the {formatCurrency(discountGuard)} this stock may go for.
-                          {mayGoUnder ? " Say why." : " Say why. The CEO approves it when you complete the sale."}
+                          {mayGoUnder ? " Say why." : " Say why. The CEO or Super Admin approves it when you complete the sale."}
                         </p>
                         <Input
                           className="h-9 text-sm"
@@ -1664,6 +1773,17 @@ export function PosClient({
               <p className="rounded-lg bg-success-soft px-3 py-2 text-xs text-success">
                 Price approved by {activeApproval.name}. Change a price and it will need approving again.
               </p>
+            ) : waitingForApproval ? (
+              <button
+                type="button"
+                onClick={() => setApprovalOpen(true)}
+                className="flex w-full items-center gap-2 rounded-lg bg-primary-soft px-3 py-2 text-left text-xs text-primary"
+              >
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                <span>
+                  Waiting for {askForThisDeal?.sentTo.join(" or ")} to approve this price… {formatWait(waitSeconds)}
+                </span>
+              </button>
             ) : null}
 
             <div className="space-y-2">
@@ -1702,11 +1822,21 @@ export function PosClient({
       <Dialog open={approvalOpen} onOpenChange={(open) => !approving && setApprovalOpen(open)}>
         <DialogContent className="max-w-md">
           <DialogHeader className="pr-8">
-            <DialogTitle>CEO approval for this price</DialogTitle>
+            <DialogTitle>
+              {waitingForApproval
+                ? "Waiting for approval"
+                : askForThisDeal?.status === "DECLINED"
+                  ? "Price declined"
+                  : "Ask for approval on this price"}
+            </DialogTitle>
             <DialogDescription>
-              This sale goes under the lowest allowed price or under what we paid. The CEO or Super
-              Admin types their own email and password to approve it. Their name is kept on the
-              invoice and on Price changes.
+              {waitingForApproval
+                ? `Sent to ${askForThisDeal?.sentTo.join(" and ")} (${askForThisDeal?.number}). The first to answer decides. You can close this and keep working; the till tells you when they answer.`
+                : askForThisDeal?.status === "DECLINED"
+                  ? `${askForThisDeal.decidedBy ?? "The approver"} declined${askForThisDeal.note ? `: "${askForThisDeal.note}"` : "."} Raise the price, or change the deal and ask again.`
+                  : askForThisDeal?.status === "EXPIRED"
+                    ? "Nobody answered in 30 minutes, so the request lapsed. Send it again."
+                    : "This sale goes under the lowest allowed price or under what we paid. The CEO and the main admin get it on their screens straight away, with the prices and your reasons. Their name is kept on the invoice and on Price changes."}
             </DialogDescription>
           </DialogHeader>
           <ul className="space-y-1 rounded-lg bg-muted p-3 text-xs">
@@ -1717,69 +1847,52 @@ export function PosClient({
                   {line.name}: {formatCurrency(line.unitPrice)}
                   {line.listPrice > 0 ? ` (standard ${formatCurrency(line.listPrice)})` : ""}
                   {belowCost(line.unitPrice, line.costPrice) ? " · under cost" : ""}
+                  {line.priceReason ? ` · “${line.priceReason}”` : ""}
                 </li>
               ))}
             {discountBreaksFloor ? (
               <li>Order discount {formatCurrency(appliedDiscount)}, sale total {formatCurrency(total)}</li>
             ) : null}
           </ul>
-          <form
-            className="space-y-3"
-            onSubmit={async (event) => {
-              event.preventDefault()
-              setApproving(true)
-              try {
-                const result = await approveTillPrice({
-                  email: approverEmail,
-                  password: approverPassword,
-                  branchId,
-                  deal,
-                })
-                if ("error" in result && result.error) {
-                  toast.error(result.error)
-                  return
-                }
-                if ("approval" in result && result.approval) {
-                  setApproval({ token: result.approval, name: result.approverName, key: dealKey })
-                  setApprovalOpen(false)
-                  toast.success(`Approved by ${result.approverName}. Tap Complete sale to finish.`)
-                }
-              } catch {
-                toast.error("The shop system did not answer. Check the network and try again.")
-              } finally {
-                setApproverPassword("")
-                setApproving(false)
-              }
-            }}
-          >
-            <Input
-              type="email"
-              autoComplete="off"
-              placeholder="CEO email"
-              value={approverEmail}
-              onChange={(event) => setApproverEmail(event.target.value)}
-              aria-label="Approver email"
-              required
-            />
-            <PasswordInput
-              autoComplete="off"
-              placeholder="Their password"
-              value={approverPassword}
-              onChange={(event) => setApproverPassword(event.target.value)}
-              aria-label="Approver password"
-              required
-            />
-            <DialogFooter className="gap-2">
-              <Button type="button" variant="outline" disabled={approving} onClick={() => setApprovalOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={approving}>
-                {approving ? "Checking" : "Approve this price"}
-              </Button>
-            </DialogFooter>
-          </form>
+          {waitingForApproval ? (
+            <div className="flex items-center gap-3 rounded-lg border border-border px-3 py-3 text-sm">
+              <Loader2 className="h-5 w-5 shrink-0 animate-spin text-primary" />
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">Waiting for an answer</p>
+                <p className="text-xs text-muted-foreground tabular-nums">Sent {formatWait(waitSeconds)} ago · lapses after 30 minutes</p>
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter className="gap-2">
+            {waitingForApproval ? (
+              <>
+                <Button type="button" variant="outline" onClick={() => void withdrawPriceAsk()}>
+                  Withdraw request
+                </Button>
+                <Button type="button" onClick={() => setApprovalOpen(false)}>
+                  Keep working
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button type="button" variant="outline" disabled={approving} onClick={() => setApprovalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="button" disabled={approving} onClick={() => void sendPriceAsk()}>
+                  <BellRing className="mr-1.5 h-4 w-4" />
+                  {approving ? "Sending" : askForThisDeal ? "Ask again" : "Send for approval"}
+                </Button>
+              </>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
   )
+}
+
+/** "45s", "3m 10s": how long a price ask has been waiting. */
+function formatWait(seconds: number) {
+  if (seconds < 60) return `${seconds}s`
+  return `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s`
 }

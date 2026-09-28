@@ -5,7 +5,7 @@ import type { Prisma, UserRole } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { recordMovement } from "@/lib/concurrency"
 import { can } from "@/lib/permissions"
-import { canChangePrices, canSeeCost, isCEO, scopedBranchId } from "@/lib/rbac"
+import { canChangePrices, canSeeCost, isShopOwner, scopedBranchId } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { readWorkbookGrids } from "@/lib/table-file"
 import { makeOpeningSku, mapOpeningCondition } from "@/lib/opening-stock"
@@ -39,12 +39,13 @@ const MAX_BYTES = 25_000_000
 type Snapshot = { lines: BookLine[] }
 
 function canCloseRole(role: UserRole) {
-  return role === "CEO" || role === "AUDITOR" || role === "ACCOUNTANT"
+  return role === "CEO" || role === "SUPER_ADMIN" || role === "AUDITOR" || role === "ACCOUNTANT"
 }
 
 function canCorrectRole(role: UserRole) {
   return (
     role === "CEO" ||
+    role === "SUPER_ADMIN" ||
     role === "AUDITOR" ||
     role === "ACCOUNTANT" ||
     role === "STOCK_UPLOADER"
@@ -180,8 +181,8 @@ export async function getOpeningBook(branchId: string) {
     lines,
     canCorrect: !closed && canCorrect,
     canClose: !closed && canCloseRole(user.role),
-    canRemove: !closed && isCEO(user.role),
-    canReopen: closed && isCEO(user.role),
+    canRemove: !closed && isShopOwner(user.role),
+    canReopen: closed && isShopOwner(user.role),
   }
 }
 
@@ -189,8 +190,10 @@ type Gate =
   | { error: string }
   | {
       userId: string
-      /** Only the CEO may move the cost, lowest or selling price of an item already on the list. */
+      /** Main admin or CEO: may move the lowest or selling price of an item already on the list. */
       pricesAllowed: boolean
+      /** The CEO only: may move its cost. */
+      costAllowed: boolean
       record: { id: string; branchId: string; purchaseId: string; invoiceNumber: string; supplierId: string }
       lines: BookLine[]
     }
@@ -212,6 +215,7 @@ async function correctionGate(branchId: string): Promise<Gate> {
   return {
     userId: user.id,
     pricesAllowed: canChangePrices(user.role),
+    costAllowed: canSeeCost(user.role),
     record: {
       id: record.id,
       branchId: record.branchId,
@@ -353,12 +357,15 @@ async function applyPlan(
   source: "sheet" | "screen"
 ) {
   const { record, lines, userId } = gate
-  if (!gate.pricesAllowed) {
-    // Counts and numbers still correct; the item's prices stay the CEO's.
-    plan = {
-      ...plan,
-      changes: plan.changes.map(({ costPrice: _cost, minimumPrice: _minimum, sellingPrice: _selling, ...change }) => change),
-    }
+  // Counts and numbers always correct. The cost only moves for the CEO; the
+  // lowest and selling prices for the main admin and the CEO.
+  plan = {
+    ...plan,
+    changes: plan.changes.map(({ costPrice, minimumPrice, sellingPrice, ...change }) => ({
+      ...change,
+      ...(gate.costAllowed ? { costPrice } : {}),
+      ...(gate.pricesAllowed ? { minimumPrice, sellingPrice } : {}),
+    })),
   }
   const bySku = new Map(lines.map((line) => [line.sku, line]))
   const reason = `Opening stock correction (${source === "sheet" ? "count sheet" : "on screen"}) on ${record.invoiceNumber}`
@@ -901,7 +908,7 @@ export async function removeOpeningLines(formData: FormData): Promise<RemoveResu
  */
 export async function removeOpeningStock(formData: FormData): Promise<RemoveResult> {
   const user = await requireUser()
-  if (!isCEO(user.role)) return { error: "Only the CEO can remove a shop's opening stock." }
+  if (!isShopOwner(user.role)) return { error: "Only the CEO or the main admin can remove a shop's opening stock." }
 
   const branchId = String(formData.get("branchId") || "")
   const record = await prisma.openingStock.findUnique({
@@ -984,7 +991,7 @@ export async function removeOpeningStock(formData: FormData): Promise<RemoveResu
  */
 export async function closeOpeningStock(formData: FormData): Promise<{ error?: string; problems?: string[]; success?: boolean }> {
   const user = await requireUser()
-  if (!canCloseRole(user.role)) return { error: "Only the CEO, Auditor or Accountant can close opening stock." }
+  if (!canCloseRole(user.role)) return { error: "Only the CEO, Auditor, Accountant, or Super Admin can close opening stock." }
   if (String(formData.get("confirm") || "") !== "yes") {
     return { error: "Tick the box to confirm the count is final." }
   }
@@ -1062,7 +1069,7 @@ export async function closeOpeningStock(formData: FormData): Promise<{ error?: s
  */
 export async function reopenOpeningStock(formData: FormData): Promise<{ error?: string; success?: boolean }> {
   const user = await requireUser()
-  if (!isCEO(user.role)) return { error: "Only the CEO can reopen opening stock." }
+  if (!isShopOwner(user.role)) return { error: "Only the CEO or Super Admin can reopen opening stock." }
   const branchId = String(formData.get("branchId") || "")
   const reason = String(formData.get("reason") || "").trim()
   if (reason.length < 5) return { error: "Say why it is being reopened, for example: prices on the sheet were guesses." }

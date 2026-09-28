@@ -65,24 +65,6 @@ export const ALL_PERM_KEYS = [...VIEW_PERMS, ...ACTION_PERMS].map((row) => row.k
  */
 export const CEO_ONLY_KEYS: readonly string[] = ["view.profits", "action.see_cost"]
 
-/**
- * What the main admin (System Administrator) starts with: keeping the system
- * running, not running the business. Staff logins, shops, settings and backups,
- * Who did what, alerts. The CEO can tick more for them on Who can see what.
- */
-export const SYSTEM_ADMIN_KEYS = [
-  "view.dashboard",
-  "view.branches",
-  "view.staff",
-  "view.access",
-  "view.audit",
-  "view.notifications",
-  "view.settings",
-  "action.staff",
-  "action.settings",
-  "action.all_branches",
-]
-
 const ALL = ALL_PERM_KEYS
 
 const V = (...keys: string[]) => keys
@@ -126,10 +108,10 @@ export const ACCOUNTANT_KEYS = V(
 export const BOOKS_DESK_KEYS = AUDITOR_KEYS
 
 const DEFAULTS: Record<UserRole, string[]> = {
-  // The main admin keeps the system running; the business is the CEO's.
-  SUPER_ADMIN: SYSTEM_ADMIN_KEYS,
-  // The CEO owns the business: every screen and job, and alone sees profit,
-  // cost prices, and changes prices. Nobody can secretly rewrite an old invoice.
+  // The main admin and the CEO run the shop together: every screen and job.
+  // Only profit and cost prices stay the CEO's (CEO_ONLY_KEYS, enforced in
+  // can()). Nobody can secretly rewrite an old invoice.
+  SUPER_ADMIN: ALL,
   CEO: ALL,
   AUDITOR: AUDITOR_KEYS,
   ACCOUNTANT: ACCOUNTANT_KEYS,
@@ -166,36 +148,6 @@ const DEFAULTS: Record<UserRole, string[]> = {
 
 const ROLE_LIST = Object.keys(DEFAULTS) as UserRole[]
 const EXPECTED_ROWS = ROLE_LIST.length * ALL_PERM_KEYS.length
-
-const MAIN_ADMIN_MOVE = "access:main-admin-system-upkeep-v1"
-
-/**
- * Once per database: the main admin used to hold every box. Set their rows to
- * system upkeep, then remember it was done, so boxes the CEO ticks for them
- * afterwards on Who can see what are never reset.
- */
-async function moveMainAdminToSystemUpkeep() {
-  if (await prisma.setting.findUnique({ where: { key: MAIN_ADMIN_MOVE }, select: { id: true } })) return
-  await prisma.$transaction([
-    prisma.rolePermission.updateMany({
-      where: { role: "SUPER_ADMIN", permKey: { in: SYSTEM_ADMIN_KEYS } },
-      data: { allowed: true },
-    }),
-    prisma.rolePermission.updateMany({
-      where: { role: "SUPER_ADMIN", permKey: { notIn: SYSTEM_ADMIN_KEYS } },
-      data: { allowed: false },
-    }),
-    prisma.setting.upsert({
-      where: { key: MAIN_ADMIN_MOVE },
-      create: {
-        key: MAIN_ADMIN_MOVE,
-        value: new Date().toISOString(),
-        description: "Main admin moved to system upkeep; the business side is the CEO's.",
-      },
-      update: {},
-    }),
-  ])
-}
 
 /**
  * Fill in any permission row a new release added. The common case is that
@@ -261,7 +213,6 @@ export const ensureRolePermissions = cache(async () => {
     data: { allowed: false },
   })
 
-  await moveMainAdminToSystemUpkeep()
 
   // Internal Auditor: full shop oversight on the left menu (every page except
   // Who can see what). Floor actions stay closed.
@@ -350,6 +301,8 @@ const loadPermissionMap = cache(async () => {
 
 export async function getAllowedKeys(role: UserRole) {
   if (isCEO(role)) return new Set(ALL_PERM_KEYS)
+  // The main admin holds every box, as before, except the CEO's own.
+  if (role === "SUPER_ADMIN") return new Set(ALL_PERM_KEYS.filter((key) => !CEO_ONLY_KEYS.includes(key)))
   const map = await loadPermissionMap()
   // No rows at all means Who can see what has never been set up for this role,
   // so fall back to what it ships with rather than locking the person out.
@@ -364,7 +317,8 @@ export async function getAllowedKeys(role: UserRole) {
 export async function can(role: UserRole, key: string) {
   if (isCEO(role)) return true
   if (CEO_ONLY_KEYS.includes(key)) return false
-  // Undoing a collection or a supplier payment is a business correction.
+  if (role === "SUPER_ADMIN") return true
+  // Undoing a collection or a supplier payment: the CEO and the main admin.
   if (key === "action.undo") return false
   if (key === "view.access") return isShopOwner(role)
   const allowed = await getAllowedKeys(role)
@@ -372,7 +326,7 @@ export async function can(role: UserRole, key: string) {
 }
 
 export async function canUndo(role: UserRole) {
-  return isCEO(role)
+  return isShopOwner(role)
 }
 
 export function viewKeyForPath(pathname: string) {

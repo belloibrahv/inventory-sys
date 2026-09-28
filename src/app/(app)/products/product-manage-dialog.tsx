@@ -34,7 +34,7 @@ export function ProductManageDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
   canRemove?: boolean
-  /** Edit cost, lowest and selling price. The CEO's only; the server keeps prices as they were for anyone else. */
+  /** Edit lowest and selling price (main admin and CEO). The cost box also needs showCost (the CEO). */
   canPrice?: boolean
   showCost?: boolean
   brandNames?: string[]
@@ -210,11 +210,13 @@ export function ProductManageDialog({
               </div>
             </div>
             {canPrice ? (
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Cost</label>
-                  <Input name="costPrice" type="number" min={0} step="0.01" defaultValue={product.costPrice} required className="mt-1" />
-                </div>
+              <div className={`grid gap-3 ${showCost ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+                {showCost ? (
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Cost</label>
+                    <Input name="costPrice" type="number" min={0} step="0.01" defaultValue={product.costPrice} required className="mt-1" />
+                  </div>
+                ) : null}
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Lowest price</label>
                   <Input name="minimumPrice" type="number" min={0} step="0.01" defaultValue={product.minimumPrice} required className="mt-1" />
@@ -227,7 +229,7 @@ export function ProductManageDialog({
             ) : (
               <p className="rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
                 Lowest {formatCurrency(product.minimumPrice)} · selling {formatCurrency(product.sellingPrice)}
-                {showCost ? ` · cost ${formatCurrency(product.costPrice)}` : ""}. Only the CEO changes prices.
+                {showCost ? ` · cost ${formatCurrency(product.costPrice)}` : ""}. Only the main admin or the CEO changes prices.
               </p>
             )}
             <div>

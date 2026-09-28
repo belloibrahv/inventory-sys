@@ -33,14 +33,16 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
         description={
           canRemove
             ? "Names, cost, lowest price, and selling price. Tick lines to change prices, or use Change or remove on a line to edit any detail, reduce stock, or take an item off the active list."
-            : canEdit
-              ? "Names, lowest price, and selling price. Use Change on a line to edit its details or reduce stock. Only the CEO changes prices or removes an item."
-              : "Names, lowest price, and selling price. Only the CEO changes prices."
+            : canPrice
+              ? "Names, lowest price, and selling price. Tick lines to change prices, or use Change on a line to edit its details or reduce stock. Only the Managing Director can remove an item."
+              : canEdit
+                ? "Names, lowest price, and selling price. Use Change on a line to edit its details or reduce stock. Only the main admin or the CEO changes prices."
+                : "Names, lowest price, and selling price. Only the main admin or the CEO changes prices."
         }
       />
       {!canEdit && !canPrice ? (
         <div className="surface-card p-5 text-sm text-muted-foreground">
-          This list is read-only for your job. The stock uploader adds names; only the CEO changes prices.
+          This list is read-only for your job. The stock uploader adds names; the main admin or the CEO changes prices.
         </div>
       ) : null}
       <ProductPriceList

@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { recordMovement } from "@/lib/concurrency"
 import { canReachBranch, viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
-import { canChangePrices, canManageCatalog, scopedBranchId } from "@/lib/rbac"
+import { canManageCatalog, canSeeCost, scopedBranchId } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { recentWatDays, watBounds } from "@/lib/lagos-day"
 import { IMEI_LIFE } from "@/lib/imei-life"
@@ -164,7 +164,7 @@ export async function intakeImei(formData: FormData) {
 
   // Only the CEO types prices here. Anyone else receives at the price list's
   // own prices, whatever the form sends.
-  const typesPrices = canChangePrices(user.role)
+  const typesPrices = canSeeCost(user.role)
   const costPrice = typesPrices ? Number(formData.get("costPrice") || 0) : money(product.costPrice)
   const minimumPrice = typesPrices ? Number(formData.get("minimumPrice") || 0) : money(product.minimumPrice)
   const sellingPrice = typesPrices ? Number(formData.get("sellingPrice") || 0) : money(product.sellingPrice)

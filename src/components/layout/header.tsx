@@ -5,7 +5,7 @@ import type { UserRole } from "@prisma/client"
 import { leaveTheShop } from "@/lib/leave-shop"
 import { useTheme } from "@/components/theme-provider"
 import { useRouter, usePathname } from "next/navigation"
-import { ArrowLeft, Bell, BookOpen, ChevronDown, LogOut, Menu, Moon, Search, Sun, UserRound } from "lucide-react"
+import { ArrowLeft, BookOpen, ChevronDown, LogOut, Menu, Moon, Search, Sun, UserRound } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -20,6 +20,7 @@ import { ROLE_LABELS } from "@/lib/roles"
 import { ShopSwitch } from "@/components/shop-switch"
 import { BrandBusyOverlay } from "@/components/brand-busy-overlay"
 import { InstallAppGuide, InstallAppMenuItem } from "@/components/install-app"
+import { NotificationBell } from "@/components/notifications/notification-bell"
 
 /**
  * The top bar carries the page name on the left and the few controls that are
@@ -123,16 +124,7 @@ export function Header({
           <Moon className="hidden h-5 w-5 dark:block" />
         </Button>
 
-        <a
-          href="/notifications"
-          className="relative inline-flex h-10 w-10 items-center justify-center rounded-lg text-foreground hover:bg-muted"
-          aria-label={unread > 0 ? `Alerts, ${unread} unread` : "Alerts"}
-        >
-          <Bell className="h-5 w-5" />
-          {unread > 0 ? (
-            <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-danger ring-2 ring-background" />
-          ) : null}
-        </a>
+        <NotificationBell initialUnread={unread} />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

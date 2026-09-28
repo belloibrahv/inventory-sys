@@ -13,6 +13,8 @@ import { pathIsAllowed } from "@/lib/access-path"
 import { OfflineBanner } from "@/components/offline-banner"
 import { OfflineGuard } from "@/components/offline-guard"
 import { WarmOfflineCache } from "@/components/warm-offline-cache"
+import { NotificationCenter } from "@/components/notifications/notification-center"
+import { PriceApprovalDock } from "@/components/notifications/price-approval-dock"
 import { ShopCalculator } from "@/components/shop-calculator"
 import { DecisionProvider } from "@/hooks/use-decision"
 import { readSavedDesktopSidebar, useUI } from "@/store/ui"
@@ -73,6 +75,8 @@ export function AppShell({
         <ShopCalculator />
         <OfflineGuard />
         <WarmOfflineCache />
+        <NotificationCenter initialUnread={unread ?? 0} />
+        <PriceApprovalDock />
       </div>
     </DecisionProvider>
   )

@@ -893,9 +893,9 @@ export async function getAuditLogs() {
 export async function getNotifications() {
   const user = await requireUser()
   return prisma.notification.findMany({
-    where: { userId: user.id },
+    where: { userId: user.id, status: { not: "ARCHIVED" } },
     orderBy: { createdAt: "desc" },
-    take: 50,
+    take: 100,
   })
 }
 

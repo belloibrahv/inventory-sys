@@ -428,82 +428,6 @@ export async function getShopImeiSheet(branchId: string) {
   }
 }
 
-/**
- * The CEO or Super Admin signs off a price the seller may not give alone:
- * under the lowest allowed price, under cost, or an order discount that goes
- * under either. They type their own email and password on the seller's till.
- * Nothing is sold here; the till gets back an approval for this exact deal and
- * sends it with the sale.
- */
-export async function approveTillPrice(input: {
-  email: string
-  password: string
-  branchId: string
-  deal: ApprovedDeal
-}) {
-  const seller = await requireUser()
-  if (!(await canSell(seller.role))) return { error: "You are not allowed to sell. Ask the main admin." }
-  if (!input.deal?.items?.length) return { error: "Add at least one item." }
-
-  // Five wrong passwords in ten minutes on this seller's till stops the box for
-  // a while, so it cannot be used to guess the CEO's password.
-  const since = new Date(Date.now() - 10 * 60 * 1000)
-  const recentFails = await prisma.auditLog.count({
-    where: { userId: seller.id, entityType: "PriceApproval", success: false, createdAt: { gte: since } },
-  })
-  if (recentFails >= 5) {
-    return { error: "Too many wrong tries. Wait ten minutes, or have the CEO sign in and make the sale." }
-  }
-
-  const email = String(input.email || "").toLowerCase().trim()
-  const password = String(input.password || "")
-  if (!email || !password) return { error: "The CEO types their own email and password." }
-
-  const approver = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true, name: true, role: true, isActive: true, password: true },
-  })
-  const valid = approver?.isActive ? await bcrypt.compare(password, approver.password) : false
-  const allowed = valid && approver ? await can(approver.role, "action.override_floor") : false
-  if (!approver || !valid || !allowed) {
-    await writeAudit({
-      userId: seller.id,
-      action: "DENIED",
-      entityType: "PriceApproval",
-      entityId: email,
-      newValue: JSON.stringify({ reason: !approver || !valid ? "bad_login" : "no_permission" }),
-      branchId: input.branchId || seller.branchId || null,
-      success: false,
-      risk: "HIGH",
-    })
-    return {
-      error: valid
-        ? `${approver?.name || email} is not allowed to approve prices. Only the CEO can, or someone the CEO has allowed.`
-        : "That email and password do not match.",
-    }
-  }
-
-  const approverName = approver.name || email
-  await writeAudit({
-    userId: approver.id,
-    action: "APPROVE",
-    entityType: "PriceApproval",
-    entityId: seller.id,
-    newValue: JSON.stringify({
-      seller: seller.name ?? seller.id,
-      wholesale: Boolean(input.deal.wholesale),
-      orderDiscount: money(input.deal.orderDiscount ?? 0),
-      items: input.deal.items.map((item) => ({ productId: item.productId, imeiId: item.imeiId, unitPrice: money(item.unitPrice), quantity: item.quantity })),
-    }),
-    branchId: input.branchId || seller.branchId || null,
-    risk: "MEDIUM",
-  })
-  return {
-    approval: signPriceApproval({ approverId: approver.id, approverName, sellerId: seller.id, deal: input.deal }),
-    approverName,
-  }
-}
-
 export async function checkoutSale(input: {
   customerId?: string
   branchId: string
@@ -523,8 +447,10 @@ export async function checkoutSale(input: {
   discountReason?: string
   queuedAt?: string
   offlineId?: string
-  /** The CEO or Super Admin's sign-off for this deal, from approveTillPrice. */
+  /** The CEO or Super Admin's sign-off for this deal, from an approved price request. */
   priceApproval?: string
+  /** The price request that approval came from, so it can be marked used. */
+  priceRequestId?: string
   items: Array<{
     productId: string
     imeiId?: string
@@ -571,7 +497,7 @@ export async function checkoutSale(input: {
   if (!settings.allowBelowMinimum && !hasFloorPermission && input.priceApproval) {
     const claim = readPriceApproval(input.priceApproval, user.id, input)
     if (!claim) {
-      return { error: "The CEO's approval no longer fits this sale. A price changed, or it is more than a day old. Ask them to approve it again." }
+      return { error: "The CEO's approval no longer fits this sale. A price changed, or it is more than a day old. Ask for approval again." }
     }
     const approver = await prisma.user.findUnique({
       where: { id: claim.approverId },
@@ -654,7 +580,7 @@ export async function checkoutSale(input: {
     if (item.unitPrice < floorPrice) {
       if (!canOverrideFloor) {
         return {
-          error: `${product.name} is below its lowest allowed price (₦${floorPrice.toLocaleString("en-NG")}). Raise it, or have the CEO or Super Admin approve this price on the till.`,
+          error: `${product.name} is below its lowest allowed price (₦${floorPrice.toLocaleString("en-NG")}). Raise it, or ask the CEO or Super Admin to approve it from the till.`,
         }
       }
       if (!reason) {
@@ -664,7 +590,7 @@ export async function checkoutSale(input: {
     if (belowCost(item.unitPrice, basis.costPrice)) {
       if (!canOverrideFloor) {
         return {
-          error: `${product.name} is below what it cost us (₦${basis.costPrice.toLocaleString("en-NG")}). The shop loses money at that price. Have the CEO or Super Admin approve it on the till.`,
+          error: `${product.name} is below what it cost us (₦${basis.costPrice.toLocaleString("en-NG")}). The shop loses money at that price. Ask the CEO or Super Admin to approve it from the till.`,
         }
       }
       if (!reason) {
@@ -1089,6 +1015,13 @@ export async function checkoutSale(input: {
   })
 
   if (input.offlineId) await markParkedPosted(input.offlineId, sale.id)
+  if (input.priceRequestId && approvedBy) {
+    // The approved ask has now been sold; it cannot be used again.
+    await prisma.priceRequest.updateMany({
+      where: { id: input.priceRequestId, sellerId: user.id, status: "APPROVED" },
+      data: { status: "USED", saleId: sale.id },
+    })
+  }
 
   revalidatePath("/sales")
   revalidatePath("/pos")
@@ -1145,7 +1078,7 @@ async function fanOutSaleAlerts(input: {
           where: {
             isActive: true,
             OR: [
-              { role: { in: ["ACCOUNTANT", "CEO"] } },
+              { role: { in: ["ACCOUNTANT", "CEO", "SUPER_ADMIN"] } },
               { role: "BRANCH_MANAGER", branchId: input.branchId },
             ],
           },

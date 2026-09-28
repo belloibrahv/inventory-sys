@@ -17,11 +17,13 @@ const pageExpiry = new ExpirationPlugin({
   maxAgeFrom: "last-used",
 })
 
-/** Health pings and sign-in must hit the live server, never a cached shop page. */
+/** Health pings, alerts and sign-in must hit the live server, never a cached copy. */
 const liveOnly: RuntimeCaching = {
   matcher: ({ url, sameOrigin }) =>
     sameOrigin &&
     (url.pathname.startsWith("/api/health") ||
+      // Alerts and price approvals must always be the live answer.
+      url.pathname.startsWith("/api/notifications") ||
       url.pathname.startsWith("/api/auth") ||
       url.pathname === "/login" ||
       url.pathname === "/"),
@@ -110,3 +112,24 @@ self.addEventListener("message", (event) => {
     }
   })
 })
+
+// A tap on a shop alert (a price approval, or its answer) opens that screen,
+// reusing an open window of the app when there is one.
+self.addEventListener("notificationclick", (event) => {
+  const note = (event as NotificationEvent).notification
+  note.close()
+  const url = (note.data as { url?: string } | undefined)?.url || "/notifications"
+  ;(event as NotificationEvent).waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (clients) => {
+      for (const client of clients) {
+        if ("focus" in client) {
+          await (client as WindowClient).focus()
+          await (client as WindowClient).navigate(url).catch(() => undefined)
+          return
+        }
+      }
+      await self.clients.openWindow(url)
+    })
+  )
+})
+

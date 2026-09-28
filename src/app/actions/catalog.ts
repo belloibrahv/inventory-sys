@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { watDayKey } from "@/lib/lagos-day"
 import { setStock } from "@/lib/concurrency"
 import { requireUser } from "@/lib/session"
-import { canChangePrices, canHardDelete, canManageCatalog } from "@/lib/rbac"
+import { canChangePrices, canHardDelete, canManageCatalog, canSeeCost } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { shopError } from "@/lib/shop-speak"
 import { UNSAFE_KEYS } from "@/lib/table-file"
@@ -219,7 +219,8 @@ export async function setProductPrices(input: {
   reason?: string
 }) {
   const user = await requireUser()
-  if (!canChangePrices(user.role)) return { error: "Only the CEO can change prices." }
+  // The Prices panel shows and sets cost, so it is the CEO's alone.
+  if (!canSeeCost(user.role)) return { error: "Only the CEO can change prices here." }
 
   const next = {
     costPrice: Number(input.costPrice),
@@ -294,7 +295,7 @@ export async function setProductPrices(input: {
 
 export async function updateSelectedPrices(formData: FormData) {
   const user = await requireUser()
-  if (!canChangePrices(user.role)) return { error: "Only the CEO can change prices." }
+  if (!canChangePrices(user.role)) return { error: "Only the main admin or the CEO can change prices." }
 
   const reason = String(formData.get("reason") || "Several prices updated together").trim() || "Several prices updated together"
   let parsed: unknown
@@ -946,7 +947,9 @@ export async function updateProduct(formData: FormData) {
   // edits the details and the prices stay exactly as they were, whatever the
   // form sends.
   const pricesAllowed = canChangePrices(user.role)
-  const costPrice = pricesAllowed ? Number(formData.get("costPrice") || 0) : money(existing.costPrice)
+  // Cost only from someone who may see it (the CEO); the main admin changes
+  // the selling and lowest prices and the cost stays as it was.
+  const costPrice = canSeeCost(user.role) ? Number(formData.get("costPrice") || 0) : money(existing.costPrice)
   const sellingPrice = pricesAllowed ? Number(formData.get("sellingPrice") || 0) : money(existing.sellingPrice)
   const minimumPrice = pricesAllowed ? Number(formData.get("minimumPrice") || sellingPrice) : money(existing.minimumPrice)
   if (![costPrice, sellingPrice, minimumPrice].every((value) => Number.isFinite(value) && value >= 0)) {

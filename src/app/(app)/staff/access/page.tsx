@@ -4,13 +4,15 @@ import { getRoleMatrix, saveRoleAccess } from "@/app/actions/access"
 import { ActionForm } from "@/components/action-form"
 import { PageHeader } from "@/components/shared"
 import { ACTION_PERMS, CEO_ONLY_KEYS, VIEW_PERMS } from "@/lib/permissions"
-import { ROLE_LABELS, isCEO, isShopOwner } from "@/lib/rbac"
+import { ROLE_LABELS, isShopOwner } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { cn } from "@/lib/utils"
 import { UserRole } from "@prisma/client"
 
-/** Everyone but the CEO. The main admin's own row is the CEO's to set. */
-const editableRoles = (Object.keys(ROLE_LABELS) as UserRole[]).filter((role) => role !== "CEO")
+/** The main admin and the CEO always keep every page; everyone else is set here. */
+const editableRoles = (Object.keys(ROLE_LABELS) as UserRole[]).filter(
+  (role) => role !== "SUPER_ADMIN" && role !== "CEO"
+)
 
 function RoleAccessCard({
   role,
@@ -60,15 +62,13 @@ function RoleAccessCard({
 }
 
 const ROLE_NOTES: Partial<Record<UserRole, string>> = {
-  SUPER_ADMIN:
-    "System Administrator: keeps the system running (staff logins, shops, settings, backups, Who did what). Tick business pages only if the main admin truly needs them.",
   AUDITOR: "Internal Auditor: full shop oversight on the left menu. Post money. Cannot sell, load stock, or change this list.",
   ACCOUNTANT:
     "Financial Accountant: money and books pages only. Keep Sell now, Upload stock, repairs, and other floor jobs off unless you mean to give them.",
 }
 
 /** Auditor and Accountant first: they are the jobs owners adjust most. */
-const FIRST: UserRole[] = ["SUPER_ADMIN", "AUDITOR", "ACCOUNTANT"]
+const FIRST: UserRole[] = ["AUDITOR", "ACCOUNTANT"]
 const roleOrder = [...FIRST, ...editableRoles.filter((role) => !FIRST.includes(role))]
 
 export default async function AccessPage({ searchParams }: { searchParams: Promise<{ role?: string }> }) {
@@ -78,15 +78,14 @@ export default async function AccessPage({ searchParams }: { searchParams: Promi
   if ("error" in matrix) redirect("/staff")
   const allowed = new Map(matrix.rows.map((row) => [`${row.role}:${row.permKey}`, row.allowed]))
   const { role: asked } = await searchParams
-  // Only the CEO sets the main admin's job.
-  const roles = isCEO(user.role) ? roleOrder : roleOrder.filter((row) => row !== "SUPER_ADMIN")
+  const roles = roleOrder
   const role = roles.find((row) => row === asked) ?? roles[0]
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Who can see what"
-        description="Pick a job, then tick the pages it may open. The left menu only shows what is ticked for that job. The CEO keeps every page, and alone sees profit and cost prices and changes prices."
+        description="Pick a job, then tick the pages it may open. The left menu only shows what is ticked for that job. The main admin and the CEO keep every page; only the CEO sees profit and what items cost."
       />
 
       <nav aria-label="Pick a job" className="flex flex-wrap gap-2">

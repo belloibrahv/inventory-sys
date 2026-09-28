@@ -219,10 +219,24 @@ enum NotificationType {
   LOW_STOCK
   PRICE_UPDATE
   APPROVAL_REQUEST
+  PRICE_REQUEST
   DUE_PAYMENT
   TRANSFER
   RETURN
   SYSTEM
+}
+
+/**
+ * A seller asking the CEO or the main admin to let a sale go under the lowest
+ * allowed price, or under cost. Decided in the app; see price-requests.ts.
+ */
+enum PriceRequestStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  CANCELLED
+  EXPIRED
+  USED
 }
 
 enum NotificationStatus {
@@ -259,6 +273,8 @@ model User {
   returns         StockReturn[]
   approvalsReq    Approval[]       @relation("ApprovalRequester")
   approvalsDec    Approval[]       @relation("ApprovalDecider")
+  priceRequests   PriceRequest[]   @relation("PriceRequestSeller")
+  priceDecisions  PriceRequest[]   @relation("PriceRequestDecider")
   reconciliations Reconciliation[]
   incomingLots    IncomingLot[]
   dayCloses       DayClose[]
@@ -302,6 +318,7 @@ model Branch {
   stockMoves      StockMovement[]
   openingStock    OpeningStock?
   bankAccounts    BankAccount[]
+  priceRequests   PriceRequest[]
   /// Cash in the till on the day this shop started using the software.
   openingCash     Decimal    @default(0)
   openingCashAt   DateTime?
@@ -1177,4 +1194,43 @@ model OpeningStock {
   updatedAt      DateTime           @updatedAt
 
   @@index([status])
+}
+
+/**
+ * One ask from the till: "may I sell this deal at these prices?"
+ *
+ * The seller sends it instead of the CEO typing a password on their till. The
+ * CEO or main admin answers from wherever they are in the app; the first
+ * answer decides. On yes, the signed approval for this exact deal is kept here
+ * and handed to the seller's till, which sends it with the sale.
+ */
+model PriceRequest {
+  id            String             @id @default(cuid())
+  requestNumber String             @unique
+  branchId      String
+  branch        Branch             @relation(fields: [branchId], references: [id])
+  sellerId      String
+  seller        User               @relation("PriceRequestSeller", fields: [sellerId], references: [id])
+  status        PriceRequestStatus @default(PENDING)
+  /// The deal as the till will send it (JSON ApprovedDeal): what the approval is bound to.
+  deal          String
+  /// What the approver reads (JSON): lines with names, asked and standard prices, and the sale total.
+  summary       String
+  total         Decimal
+  reason        String?
+  customerName  String?
+  decidedById   String?
+  decidedBy     User?              @relation("PriceRequestDecider", fields: [decidedById], references: [id])
+  decidedAt     DateTime?
+  decisionNote  String?
+  /// The signed approval, only ever returned to the seller who asked.
+  approvalToken String?
+  saleId        String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@index([status])
+  @@index([sellerId, status])
+  @@index([branchId, status])
+  @@index([createdAt])
 }

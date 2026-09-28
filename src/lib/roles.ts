@@ -21,19 +21,18 @@ export function isSuperAdmin(role: UserRole) {
 }
 
 /**
- * Main admin and CEO share the system upkeep jobs: staff logins, Who can see
- * what, shops, backups. Business corrections (undoing money, opening stock,
- * prices) belong to the CEO alone; use isCEO for those.
+ * Main admin and CEO both run the shop: every screen, every correction, Who
+ * can see what. Only profit and what items cost us stay with the CEO alone
+ * (canSeeProfit, canSeeCost).
  */
 export function isShopOwner(role: UserRole) {
   return role === "SUPER_ADMIN" || role === "CEO"
 }
 
 /**
- * The CEO owns the business. Profit, margins, what items cost us, and changing
- * prices are theirs alone. These are fixed here in code rather than left as
- * boxes on Who can see what, so no screen can hand them to anyone else, the
- * main admin included.
+ * The CEO owns the business. Profit, margins and what items cost us are theirs
+ * alone. These are fixed here in code rather than left as boxes on Who can see
+ * what, so no screen can hand them to anyone else, the main admin included.
  */
 export function isCEO(role: UserRole) {
   return role === "CEO"
@@ -54,11 +53,13 @@ export function canSeeCost(role: UserRole) {
 }
 
 /**
- * Changing the selling, lowest or cost price of an item already on the list.
- * A new item still gets its starting prices from whoever adds or loads it.
+ * Changing the selling or lowest price of an item already on the list: the
+ * CEO and the main admin. The cost price follows canSeeCost (the CEO only),
+ * because whoever types a cost sees it. A new item still gets its starting
+ * prices from whoever adds or loads it.
  */
 export function canChangePrices(role: UserRole) {
-  return isCEO(role)
+  return isShopOwner(role)
 }
 
 /**

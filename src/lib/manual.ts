@@ -26,11 +26,11 @@ export type RoleManual = {
 
 const ROLE_JOB: Record<UserRole, { job: string; shops: string }> = {
   SUPER_ADMIN: {
-    job: "You keep the system running: staff logins, shops, Settings, backups, Who did what, and Who can see what for the other jobs. The business side (selling, stock, money, prices and profit) is the CEO's; the CEO can tick more pages for you if you need them.",
+    job: "You can open every page except Profit, and change prices, undo a true money mistake, tick Who can see what, change Settings, and open or close a shop. Profit and what items cost us are the CEO's alone. Nobody can secretly rewrite an old invoice.",
     shops: "You see every shop.",
   },
   CEO: {
-    job: "You own the business. You open every page, and only you see profit, margins and what items cost us, and only you change prices (on Business today or the price list). You can undo a true money mistake and set what every other job sees, the main admin included. Nobody can secretly rewrite an old invoice.",
+    job: "You own the business with the main admin. You open every page, and only you see profit, margins and what items cost us (Profit, and the Prices panel on Business today). You can correct money, staff, shops, settings, prices and Who can see what. Nobody can secretly rewrite an old invoice.",
     shops: "You see every shop.",
   },
   AUDITOR: {
@@ -102,8 +102,8 @@ const PAGES: Array<
       "OPENING STOCK SHEET, for a full shop count: fill the opening stock Excel one shop at a time, pick or add the supplier, and upload. There is no paid or unpaid on that sheet.",
       "PHONES: one row per phone with the IMEI. LAPTOPS: one row per laptop with the serial. ACCESSORIES and SCREEN: how many pieces.",
       "Open Correct and close opening stock to count the shelf, then close it. After that, new cartons use Supplier bill.",
-      "Found a wrong price or count after closing? The CEO opens Correct and close opening stock, types why, and taps Reopen opening stock. Fix the lines, then close it again. The shop keeps selling the whole time, and anything already sold stays sold.",
-      "Loaded onto the wrong shop? On Correct and close opening stock, tick the items, or tick a whole category, and click Remove ticked. The CEO can remove the whole shop's opening stock at the bottom. Then load the file onto the right shop.",
+      "Found a wrong price or count after closing? The CEO or Super Admin opens Correct and close opening stock, types why, and taps Reopen opening stock. Fix the lines, then close it again. The shop keeps selling the whole time, and anything already sold stays sold.",
+      "Loaded onto the wrong shop? On Correct and close opening stock, tick the items, or tick a whole category, and click Remove ticked. The CEO or main admin can remove the whole shop's opening stock at the bottom. Then load the file onto the right shop.",
       "OLD EXCEL & CSV: use this only when the item list is already on the system and you are topping up from a plain sheet.",
     ],
     watch: [
@@ -136,7 +136,7 @@ const PAGES: Array<
     ],
     watch: [
       "One list keeps names and prices the same in every shop.",
-      "The person who loads stock adds new items. Only the CEO changes prices or sees what items cost. A shop manager reads the list but cannot change it.",
+      "The person who loads stock adds new items. The main admin or the CEO changes prices; only the CEO sees what items cost. A shop manager reads the list but cannot change it.",
       "This is not a carton sale. You still sell by the unit. Bulk here means many prices in one save.",
       "A phone marked Damaged is not for Sell now. On All phones, use Set Good (sellable) or Set Damaged when it must change.",
     ],
@@ -194,7 +194,7 @@ const PAGES: Array<
       "Add phone lines with one IMEI per line, at least 14 digits. Add no-number items with a piece count.",
       "Save. Shop stock Coming goes up. Sell now still cannot find those IMEIs.",
       "When the rider arrives, mark They have arrived. In shop goes up. Then cashiers can sell.",
-      "The CEO can show a hidden list to staff who have this page.",
+      "The main admin or the CEO can show a hidden list to staff who have this page.",
     ],
     watch: [
       "If you mix Coming with In shop, cashiers will sell phones that are still on the road.",
@@ -244,7 +244,7 @@ const PAGES: Array<
       "A waiting sale shows a banner on every signed-in page until it is sent.",
       "After two hours The main admin, the CEO, and the records checker get an alert.",
       "If someone wipes a waiting sale off the device, Who did what records it as vanished.",
-      "The floor is the item's lowest allowed price, not the price the till offers first. You may price a deal anywhere from the floor up, and raise it for a walk-in buyer. There is no percentage limit: any price can be charged. Going under the floor, or under what the item cost us, needs a reason and the CEO or Super Admin. If they are not the one selling, tap Complete sale and they type their own email and password on your till to approve that price. Change a price after they approve and it needs approving again. Every price that leaves the standard one shows on Profit, under Price changes, with who approved it.",
+      "The floor is the item's lowest allowed price, not the price the till offers first. You may price a deal anywhere from the floor up, and raise it for a walk-in buyer. There is no percentage limit: any price can be charged. Going under the floor, or under what the item cost us, needs a reason and the CEO or Super Admin. If they are not the one selling, tap Complete sale, then Send for approval: the CEO and the main admin see it on their screens at once, with your prices and reasons, and the first to answer decides. Keep working while you wait; the till tells you the answer and, once approved, you tap Complete sale. Change a price after they approve and it needs approving again. A request nobody answers lapses after 30 minutes. Every price that leaves the standard one shows on Profit, under Price changes, with who approved it.",
     ],
     cannot: ["You cannot sell a Coming phone. You cannot force a live sale while an older day with sales is still open."],
     lookup: ["sell", "till", "pos", "scan", "parked", "offline", "complete sale"],
