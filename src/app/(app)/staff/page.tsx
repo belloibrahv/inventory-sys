@@ -45,7 +45,8 @@ export default async function StaffPage() {
               canAdd &&
               user.id !== me.id &&
               (owner || (user.branchId && me.branchId && user.branchId === me.branchId)) &&
-              (admin || user.role !== "SUPER_ADMIN")
+              (admin || user.role !== "SUPER_ADMIN") &&
+              (me.role === "CEO" || user.role !== "CEO")
 
             return (
               <div key={user.id} className="surface-card p-4 sm:p-5">
@@ -59,7 +60,7 @@ export default async function StaffPage() {
                       <span className="text-xs text-muted-foreground">{user.isActive ? "Active" : "Disabled"}</span>
                     </div>
                   </div>
-                  {ceo && user.id !== me.id && (admin || user.role !== "SUPER_ADMIN") ? (
+                  {ceo && user.id !== me.id && (admin || user.role !== "SUPER_ADMIN") && (me.role === "CEO" || user.role !== "CEO") ? (
                     <ActionForm
                       action={setStaffActive}
                       submit={user.isActive ? "Disable" : "Restore"}

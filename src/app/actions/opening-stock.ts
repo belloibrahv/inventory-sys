@@ -52,6 +52,17 @@ function canCorrectRole(role: UserRole) {
   )
 }
 
+/**
+ * Who may change a shop's opening figures. Loading stock (action.upload) used
+ * to be enough, which let shop managers edit them too. The client wants the
+ * opening and closing stock read-only for managers: they see every figure for
+ * their shop, and the CEO, main admin, books desk and stock loaders change it.
+ */
+function mayCorrectOpening(role: UserRole, canUpload: boolean) {
+  if (role === "BRANCH_MANAGER") return false
+  return canCorrectRole(role) || canUpload
+}
+
 async function viewer() {
   const user = await requireUser()
   const [uploads, reports] = await Promise.all([can(user.role, "view.uploads"), can(user.role, "view.reports")])
@@ -59,7 +70,7 @@ async function viewer() {
   return {
     user,
     allowed: uploads || reports || canCorrectRole(user.role) || canCloseRole(user.role),
-    canCorrect: canCorrectRole(user.role) || canUpload,
+    canCorrect: mayCorrectOpening(user.role, canUpload),
   }
 }
 
@@ -192,7 +203,7 @@ type Gate =
       userId: string
       /** Main admin or CEO: may move the lowest or selling price of an item already on the list. */
       pricesAllowed: boolean
-      /** The CEO only: may move its cost. */
+      /** The CEO or main admin: may move its cost. */
       costAllowed: boolean
       record: { id: string; branchId: string; purchaseId: string; invoiceNumber: string; supplierId: string }
       lines: BookLine[]
@@ -201,8 +212,8 @@ type Gate =
 async function correctionGate(branchId: string): Promise<Gate> {
   const user = await requireUser()
   const canUpload = await can(user.role, "action.upload")
-  if (!canCorrectRole(user.role) && !canUpload) {
-    return { error: "You do not have permission to correct opening stock. Super Admins, CEOs, Auditors, Accountants, and Stock Uploaders can correct opening stock." }
+  if (!mayCorrectOpening(user.role, canUpload)) {
+    return { error: "Opening stock is read-only for your job. The CEO, the main admin, the Auditor, the Accountant, or the stock loader can correct it." }
   }
   const record = await prisma.openingStock.findUnique({
     where: { branchId },
@@ -212,7 +223,7 @@ async function correctionGate(branchId: string): Promise<Gate> {
   if (record.status === "CLOSED") {
     return { error: "This shop's opening stock is closed, so it can no longer be changed. Use Stock count or a supplier bill." }
   }
-  const canCorrect = canCorrectRole(user.role) || canUpload || isShopOwner(user.role)
+  const canCorrect = mayCorrectOpening(user.role, canUpload) || isShopOwner(user.role)
   return {
     userId: user.id,
     pricesAllowed: canCorrect || canChangePrices(user.role),

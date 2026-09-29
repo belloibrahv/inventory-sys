@@ -580,6 +580,13 @@ export async function checkoutSale(input: {
     }
     const floorPrice = sellFloor(basis, { reseller: isReseller })
     const reason = String(item.priceReason || "").trim()
+    // A name a shop manager added has no prices until the CEO or main admin
+    // sets them. With no floor it could go for any figure, so it waits.
+    if (!(basis.sellingPrice > 0) && !(basis.minimumPrice > 0) && !canOverrideFloor) {
+      return {
+        error: `${product.name} has no price yet. Ask the CEO or the main admin to set its prices on the price list, then sell it.`,
+      }
+    }
     if (item.unitPrice < floorPrice) {
       if (!canOverrideFloor) {
         return {

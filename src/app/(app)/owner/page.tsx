@@ -68,8 +68,7 @@ function Figure({
 export default async function OwnerBoardPage() {
   const board = await getOwnerBoard()
   if (!board) redirect("/dashboard")
-  // The price desk and every cost in it go to the CEO only.
-  // The price desk changes cost as well as prices: the CEO's alone, even
+  // The price desk changes cost as well as prices: the CEO and the main admin, even
   // though the books desk also sees profit on this board.
   const priceItems = canChangeCost((await requireUser()).role)
     ? (await getProducts()).map((product) => ({

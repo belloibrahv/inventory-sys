@@ -625,7 +625,7 @@ export async function saveBankOpening(formData: FormData) {
 export async function takeBankOffTheBooks(formData: FormData) {
   const user = await requireUser()
   if (!canHardDelete(user.role)) {
-    return { error: "Only the Managing Director can take a bank account off the books. Ask the CEO." }
+    return { error: "Only the CEO or the main admin can take a bank account off the books." }
   }
   const id = String(formData.get("id") || "")
   if (!id) return { error: "We could not find that bank account." }
@@ -1060,6 +1060,11 @@ export async function resetStaffPassword(formData: FormData) {
   const target = await prisma.user.findUnique({ where: { id } })
   if (!target) return { error: "We could not find that staff." }
   if (target.id === user.id) return { error: "Change your own password on Your login." }
+  // The main admin runs the system under the CEO's watch, so the CEO's own
+  // login stays the CEO's: nobody else resets it, edits it, or locks it.
+  if (target.role === "CEO" && user.role !== "CEO") {
+    return { error: "Only the CEO can change the CEO's password." }
+  }
   if (target.role === "SUPER_ADMIN" && !isSuperAdmin(user.role)) {
     return { error: "Only the main admin can reset another main admin's password." }
   }
@@ -1115,6 +1120,9 @@ export async function updateStaff(formData: FormData) {
 
   if (role === "SUPER_ADMIN" && !isSuperAdmin(user.role)) {
     return { error: "Only the main admin can make someone a main admin." }
+  }
+  if ((target.role === "CEO" || role === "CEO") && user.role !== "CEO") {
+    return { error: "Only the CEO can edit the CEO's login or make someone CEO." }
   }
   if (target.role === "SUPER_ADMIN" && !isSuperAdmin(user.role)) {
     return { error: "Only the main admin can edit another main admin." }

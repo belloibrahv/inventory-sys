@@ -6,13 +6,14 @@ import { PageHeader } from "@/components/shared"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { statusLabel } from "@/lib/status"
+import { ROLE_LABELS } from "@/lib/roles"
 
 const ACTIONS = ["LOGIN", "LOGOUT", "CREATE", "UPDATE", "DELETE", "APPROVE", "REJECT", "EXPORT", "IMPORT", "DENIED", "VIEW"]
 
 export default async function AuditPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; action?: string; risk?: string; userId?: string; result?: string; from?: string; to?: string; views?: string }>
+  searchParams: Promise<{ q?: string; action?: string; risk?: string; userId?: string; role?: string; result?: string; from?: string; to?: string; views?: string }>
 }) {
   const filters = await searchParams
   const [data, books] = await Promise.all([getAuditMonitor(filters), getBooksCheck()])
@@ -48,7 +49,8 @@ export default async function AuditPage({
         </a>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-4 xl:grid-cols-7">
+        <WatchCard href="/audit?role=SUPER_ADMIN" label="Main admin's work (7 days)" value={data.watch.mainAdmin} hot={data.watch.mainAdmin > 0} />
         <WatchCard href="/audit?result=failed&action=LOGIN" label="Failed sign-ins (24 hours)" value={data.watch.failedLogins} hot={data.watch.failedLogins > 0} />
         <WatchCard href="/audit?risk=HIGH" label="High-risk work (24 hours)" value={data.watch.highRisk} hot={data.watch.highRisk > 0} />
         <WatchCard href="/audit?action=DENIED" label="Not allowed (24 hours)" value={data.watch.denied} hot={data.watch.denied > 0} />
@@ -90,6 +92,15 @@ export default async function AuditPage({
           </Select>
         </label>
         <label className="text-sm">
+          <span className="mb-1 block text-muted-foreground">Job</span>
+          <Select name="role" defaultValue={filters.role ?? ""}>
+            <option value="">Every job</option>
+            {Object.entries(ROLE_LABELS).map(([role, label]) => (
+              <option key={role} value={role}>{label}</option>
+            ))}
+          </Select>
+        </label>
+        <label className="text-sm">
           <span className="mb-1 block text-muted-foreground">Result</span>
           <Select name="result" defaultValue={filters.result ?? ""}>
             <option value="">All Results</option>
@@ -121,7 +132,7 @@ export default async function AuditPage({
             <p className="text-xs text-muted-foreground">Select any log entry to view client telemetry, payload differentials, and mutated records.</p>
           </div>
           <AuditLogRows
-            resetKey={[filters.q, filters.action, filters.risk, filters.userId, filters.result, filters.from, filters.to, filters.views].join("|")}
+            resetKey={[filters.q, filters.action, filters.risk, filters.userId, filters.role, filters.result, filters.from, filters.to, filters.views].join("|")}
             logs={data.logs.map((log) => ({
               ...log,
               when: log.when,

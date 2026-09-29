@@ -65,14 +65,17 @@ export async function saveRoleAccess(formData: FormData) {
 export async function setStaffActive(formData: FormData) {
   const user = await requireUser()
   if (!canHardDelete(user.role)) {
-    return { error: "Only the Managing Director can disable or restore a staff login. Ask the CEO." }
+    return { error: "Only the CEO or the main admin can disable or restore a staff login." }
   }
   const id = String(formData.get("id") || "")
   const next = String(formData.get("active") || "") === "true"
   const target = await prisma.user.findUnique({ where: { id } })
   if (!target) return { error: "We could not find that staff." }
   if (target.id === user.id) return { error: "You cannot lock your own login." }
-  if (target.role === "SUPER_ADMIN") return { error: "The CEO cannot lock the main admin. Only another main admin, after a proper handover, can do that." }
+  if (target.role === "SUPER_ADMIN" && user.role !== "SUPER_ADMIN") {
+    return { error: "The CEO cannot lock the main admin. Only another main admin, after a proper handover, can do that." }
+  }
+  if (target.role === "CEO" && user.role !== "CEO") return { error: "Only the CEO can lock or restore the CEO's login." }
 
   await prisma.user.update({ where: { id }, data: { isActive: next } })
   await prisma.auditLog.create({

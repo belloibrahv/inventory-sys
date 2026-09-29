@@ -1427,13 +1427,18 @@ export function PosClient({
                       ) : null}
 
                       {wantsReason ? (
-                        <Input
-                          className="mt-2 h-9 text-sm"
-                          value={line.priceReason ?? ""}
-                          onChange={(event) => updateLine(index, { priceReason: event.target.value })}
-                          placeholder="Why this price? Kept on the invoice and on Price changes"
-                          aria-label={`Reason for the price on ${line.name}`}
-                        />
+                        <label className="mt-2 block">
+                          <span className="mb-1 block text-xs font-medium text-warning">
+                            Special price: a reason is required
+                          </span>
+                          <Input
+                            className={`h-9 text-sm ${String(line.priceReason ?? "").trim() ? "" : "border-warning"}`}
+                            value={line.priceReason ?? ""}
+                            onChange={(event) => updateLine(index, { priceReason: event.target.value })}
+                            placeholder="Why this price? e.g. old stock, loyal customer. Sent with the approval request"
+                            aria-label={`Reason for the price on ${line.name}`}
+                          />
+                        </label>
                       ) : null}
                     </li>
                   )

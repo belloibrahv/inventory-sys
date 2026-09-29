@@ -1,6 +1,6 @@
 "use server"
 
-import { AuditAction } from "@prisma/client"
+import { AuditAction, UserRole } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { can } from "@/lib/permissions"
 import { requireUser } from "@/lib/session"
@@ -14,6 +14,8 @@ export type AuditFilters = {
   action?: string
   risk?: string
   userId?: string
+  /** Only this job's work, e.g. SUPER_ADMIN to watch the main admin. */
+  role?: string
   result?: string
   from?: string
   to?: string
@@ -39,6 +41,9 @@ function whereFrom(filters: AuditFilters) {
     ...action,
     ...(filters.risk ? { risk: filters.risk } : {}),
     ...(filters.userId ? { userId: filters.userId } : {}),
+    ...(filters.role && (Object.values(UserRole) as string[]).includes(filters.role)
+      ? { user: { role: filters.role as UserRole } }
+      : {}),
     ...(filters.result === "failed" ? { success: false } : filters.result === "ok" ? { success: true } : {}),
     ...(filters.q
       ? {
@@ -62,7 +67,7 @@ export async function getAuditMonitor(filters: AuditFilters = {}) {
     return {
       logs: [],
       staff: [],
-      watch: { failedLogins: 0, highRisk: 0, exports: 0, denied: 0, afterHours: 0, screens: 0 },
+      watch: { failedLogins: 0, highRisk: 0, exports: 0, denied: 0, afterHours: 0, screens: 0, mainAdmin: 0 },
       activity: [],
       integrity: { ok: true, checked: 0, brokenAt: null as string | null },
     }
@@ -71,7 +76,7 @@ export async function getAuditMonitor(filters: AuditFilters = {}) {
   const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
 
-  const [logs, staff, failedLogins, highRisk, exports, denied, screens, weekLogs, integrity] = await Promise.all([
+  const [logs, staff, failedLogins, highRisk, exports, denied, screens, weekLogs, integrity, mainAdmin] = await Promise.all([
     prisma.auditLog.findMany({
       where: whereFrom(filters),
       include: { user: { select: { id: true, name: true, email: true, role: true } } },
@@ -93,6 +98,9 @@ export async function getAuditMonitor(filters: AuditFilters = {}) {
       select: { userId: true, user: { select: { name: true } }, createdAt: true, risk: true },
     }),
     verifyAuditChain(),
+    prisma.auditLog.count({
+      where: { user: { role: "SUPER_ADMIN" }, action: { notIn: ["VIEW", "LOGIN", "LOGOUT"] }, createdAt: { gte: weekAgo } },
+    }),
   ])
 
   const afterHours = weekLogs.filter((row) => isAfterHours(row.createdAt)).length
@@ -122,7 +130,7 @@ export async function getAuditMonitor(filters: AuditFilters = {}) {
       afterHours: isAfterHours(log.createdAt),
     })),
     staff,
-    watch: { failedLogins, highRisk, exports, denied, afterHours, screens },
+    watch: { failedLogins, highRisk, exports, denied, afterHours, screens, mainAdmin },
     activity: [...activityMap.values()].sort((a, b) => b.count - a.count).slice(0, 8),
     integrity,
   }

@@ -1,7 +1,8 @@
+import Link from "next/link"
 import { getProductLookups, getProducts } from "@/app/actions/catalog"
 import { ProductPriceList, type PriceRow } from "@/app/(app)/products/price-list"
 import { PageHeader } from "@/components/shared"
-import { canChangePrices, canHardDelete, canManageCatalog, canSeeCost } from "@/lib/rbac"
+import { canAddItemName, canChangePrices, canHardDelete, canManageCatalog, canSeeCost } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { toPriceRow } from "./to-price-row"
 
@@ -22,6 +23,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
     getProductLookups(),
   ])
   const canRemove = canHardDelete(me.role)
+  const canAddName = await canAddItemName(me.role)
   const canPrice = canChangePrices(me.role)
   const showCost = canSeeCost(me.role)
   const rows: PriceRow[] = products.map((product) => toPriceRow(product, showCost))
@@ -34,7 +36,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
           canRemove
             ? "Names, cost, lowest price, and selling price. Tick lines to change prices, or use Change or remove on a line to edit any detail, reduce stock, or take an item off the active list."
             : canPrice
-              ? "Names, lowest price, and selling price. Tick lines to change prices, or use Change on a line to edit its details or reduce stock. Only the Managing Director can remove an item."
+              ? "Names, lowest price, and selling price. Tick lines to change prices, or use Change on a line to edit its details or reduce stock. Only the CEO or the main admin can remove an item."
               : canEdit
                 ? "Names, lowest price, and selling price. Use Change on a line to edit its details or reduce stock. Only the main admin or the CEO changes prices."
                 : "Names, lowest price, and selling price. Only the main admin or the CEO changes prices."
@@ -42,7 +44,17 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
       />
       {!canEdit && !canPrice ? (
         <div className="surface-card p-5 text-sm text-muted-foreground">
-          This list is read-only for your job. The stock uploader adds names; the main admin or the CEO changes prices.
+          {canAddName ? (
+            <>
+              Prices on this list are read-only for your job. You can add a new item name from{" "}
+              <Link href="/products/new" className="font-medium text-primary hover:underline">
+                Add one item
+              </Link>
+              ; the main admin or the CEO sets its prices.
+            </>
+          ) : (
+            "This list is read-only for your job. The stock uploader adds names; the main admin or the CEO changes prices."
+          )}
         </div>
       ) : null}
       <ProductPriceList

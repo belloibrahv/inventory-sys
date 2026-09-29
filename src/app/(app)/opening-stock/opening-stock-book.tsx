@@ -219,6 +219,13 @@ export function OpeningStockBook({ branchId, book }: { branchId: string; book: O
         </p>
       ) : null}
 
+      {!closed && !book.canCorrect ? (
+        <p className="rounded-lg bg-muted/60 p-3 text-sm text-muted-foreground">
+          Read-only for your job. You see every opening and closing figure for this shop; the CEO, the main admin, the
+          books desk or the stock loader corrects it.
+        </p>
+      ) : null}
+
       {book.canReopen ? <ReopenCard branchId={branchId} shop={record.shopName} /> : null}
 
       <div className="grid gap-4 xl:grid-cols-2">

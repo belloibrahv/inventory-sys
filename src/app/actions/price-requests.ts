@@ -132,10 +132,20 @@ export async function requestPriceApproval(input: {
       reason: String(input.reasons?.[index] ?? "").trim(),
     })
   }
+  // Going under the lowest price is a special sale, and the CEO or main admin
+  // decides it on the reason: no reason, no request.
+  const unexplained = lines.find((line) => (line.underFloor || line.underCost) && !line.reason)
+  if (unexplained) {
+    return { error: `Say why ${unexplained.name} is going below the lowest allowed price before asking for approval.` }
+  }
   const gross = lines.reduce((sum, line) => sum + line.asked * line.quantity, 0)
   const orderDiscount = Math.max(0, money(input.deal.orderDiscount ?? 0))
   const total = Math.max(0, gross - orderDiscount)
   const summary: Summary = { lines, orderDiscount, discountReason: String(input.discountReason ?? "").trim(), gross, total }
+  if (orderDiscount > 0 && !summary.discountReason) {
+    const floorTotal = lines.reduce((sum, line) => sum + line.floor * line.quantity, 0)
+    if (total < floorTotal) return { error: "Say why this order is going below what the stock may be sold for before asking for approval." }
+  }
 
   const people = await approvers()
   if (people.length === 0) return { error: "There is no CEO or main admin login to send this to." }

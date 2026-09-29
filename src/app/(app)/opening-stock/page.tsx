@@ -42,7 +42,7 @@ export default async function OpeningStockBookPage({
         description="Count the shelf. Fill missing cost or sell prices and piece counts here before Close."
       />
 
-      {selected.status === "OPEN" ? (
+      {selected.status === "OPEN" && book?.canCorrect ? (
         <p className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm">
           Opening stock is still open. You can type cost, lowest sell, and selling price on each line, and fix accessory piece counts. Rows skipped on the Excel (blank quantity) can be added with Add a missing item. Close only when the shelf and the prices are right.
         </p>

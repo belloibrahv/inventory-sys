@@ -56,15 +56,19 @@ export function canSeeCost(role: UserRole) {
   return PROFIT_ROLES.includes(role)
 }
 
-/** Changing what an item cost us, and the Prices panel on Business today: the CEO only. */
+/**
+ * Changing what an item cost us, and the Prices panel on Business today: the
+ * CEO and the main admin. The main admin holds full control of the system for
+ * the CEO; every change lands in Who did what, and the CEO is alerted to the
+ * main admin's cost changes and high-risk work (see lib/prisma).
+ */
 export function canChangeCost(role: UserRole) {
-  return isCEO(role)
+  return isShopOwner(role)
 }
 
 /**
  * Changing the selling or lowest price of an item already on the list: the
- * CEO and the main admin. Changing a cost price stays with the CEO
- * (canChangeCost). A new item still gets its starting
+ * CEO and the main admin, as is the cost price (canChangeCost). A new item still gets its starting
  * prices from whoever adds or loads it.
  */
 export function canChangePrices(role: UserRole) {
@@ -72,12 +76,13 @@ export function canChangePrices(role: UserRole) {
 }
 
 /**
- * Permanent remove / lock-from-system actions.
- * Only the Managing Director (CEO) for now — even Super Admin and the
- * all-shop auditor cannot wipe brands, items, banks, or disable staff logins.
+ * Permanent remove / lock-from-system actions: wiping brands, items and banks,
+ * and disabling staff logins. The CEO and the main admin; the all-shop auditor
+ * cannot. Each one is high risk in Who did what, so the CEO is alerted when the
+ * main admin does it.
  */
 export function canHardDelete(role: UserRole) {
-  return role === "CEO"
+  return isShopOwner(role)
 }
 
 /**

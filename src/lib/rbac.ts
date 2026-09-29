@@ -26,6 +26,20 @@ export async function canManageCatalog(role: UserRole) {
   return can(role, "action.catalog")
 }
 
+/**
+ * Putting a new item name on the list. Full catalog staff can, and so can a
+ * role given only Add new item names (shop managers): their new items carry
+ * no prices until the CEO or main admin sets them (setsStartingPrices).
+ */
+export async function canAddItemName(role: UserRole) {
+  return (await canManageCatalog(role)) || (await can(role, "action.add_item"))
+}
+
+/** May this person type the starting prices on a brand-new item? */
+export async function setsStartingPrices(role: UserRole) {
+  return isShopOwner(role) || (await canManageCatalog(role))
+}
+
 export async function canSell(role: UserRole) {
   return can(role, "action.sell")
 }

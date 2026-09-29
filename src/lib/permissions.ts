@@ -39,6 +39,7 @@ export const VIEW_PERMS = [
 export const ACTION_PERMS = [
   { key: "action.sell", label: "Sell and take payment" },
   { key: "action.catalog", label: "Add items, brands and categories" },
+  { key: "action.add_item", label: "Add new item names (the CEO or main admin sets their prices)" },
   { key: "action.upload", label: "Upload stock from a sheet or supplier bill" },
   { key: "action.intake", label: "Put one phone on the shelf" },
   { key: "action.incoming", label: "Book goods on the way" },
@@ -125,7 +126,7 @@ const DEFAULTS: Record<UserRole, string[]> = {
     "view.swaps", "view.repairs", "view.reconciliation", "view.finance", "view.expenses",
     "view.approvals", "view.staff", "view.reports", "view.notifications",
     "action.sell", "action.upload", "action.intake", "action.incoming", "action.transfer",
-    "action.return", "action.swap", "action.repair", "action.recon", "action.approve", "action.finance", "action.deposit", "action.staff"
+    "action.return", "action.swap", "action.repair", "action.recon", "action.approve", "action.finance", "action.deposit", "action.staff", "action.add_item"
   ),
   VAULT_MANAGER: V(
     "view.dashboard", "view.products", "view.uploads", "view.imei", "view.inventory", "view.incoming", "view.purchases",

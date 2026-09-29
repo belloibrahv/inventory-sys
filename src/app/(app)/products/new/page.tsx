@@ -7,7 +7,7 @@ import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { SHOP_CONDITION_OPTIONS } from "@/lib/conditions"
 import { TRACKING_OPTIONS } from "@/lib/unit-identity"
-import { canManageCatalog } from "@/lib/rbac"
+import { canAddItemName, setsStartingPrices } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { CatalogLocked } from "../catalog-locked"
 import { ShopScopeFields } from "../shop-scope-fields"
@@ -17,8 +17,8 @@ const SUGGESTED_CATEGORIES = ["Phones", "Laptops", "Accessories", "Screen"]
 /** Register one product name, with a brand, onto the list. */
 export default async function NewProductPage() {
   const me = await requireUser()
-  const canEdit = await canManageCatalog(me.role)
-  if (!canEdit) return <CatalogLocked title="Add one item" />
+  const [canAdd, canPrice] = await Promise.all([canAddItemName(me.role), setsStartingPrices(me.role)])
+  if (!canAdd) return <CatalogLocked title="Add one item" />
 
   const lookups = await getProductLookups()
   const categoryChoices = [
@@ -119,17 +119,27 @@ export default async function NewProductPage() {
           </div>
         </FormSection>
 
-        <FormSection title="Prices (₦)">
+        <FormSection title={canPrice ? "Prices (₦)" : "Warranty and note"}>
+          {canPrice ? null : (
+            <p className="mb-4 rounded-lg bg-muted/60 px-4 py-3 text-sm text-muted-foreground">
+              You add the name. The CEO or the main admin sets its cost, lowest and selling price, and they are told
+              the moment you save. Until then the item cannot be sold at the till.
+            </p>
+          )}
           <div className="grid gap-4 sm:grid-cols-3">
-            <FormField label="Cost price">
-              <Input name="costPrice" type="number" inputMode="decimal" min={0} />
-            </FormField>
-            <FormField label="Lowest price">
-              <Input name="minimumPrice" type="number" inputMode="decimal" min={0} />
-            </FormField>
-            <FormField label="Selling price">
-              <Input name="sellingPrice" type="number" inputMode="decimal" min={0} />
-            </FormField>
+            {canPrice ? (
+              <>
+                <FormField label="Cost price">
+                  <Input name="costPrice" type="number" inputMode="decimal" min={0} />
+                </FormField>
+                <FormField label="Lowest price">
+                  <Input name="minimumPrice" type="number" inputMode="decimal" min={0} />
+                </FormField>
+                <FormField label="Selling price">
+                  <Input name="sellingPrice" type="number" inputMode="decimal" min={0} />
+                </FormField>
+              </>
+            ) : null}
             <FormField label="Warranty days" hint="0 means no warranty. Cashiers can add days on Sell now.">
               <Input name="warrantyDays" type="number" min={0} defaultValue={0} />
             </FormField>

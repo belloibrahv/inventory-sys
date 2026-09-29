@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { watDayKey } from "@/lib/lagos-day"
 import { setStock } from "@/lib/concurrency"
 import { requireUser } from "@/lib/session"
-import { canChangeCost, canChangePrices, canHardDelete, canManageCatalog } from "@/lib/rbac"
+import { canAddItemName, canChangeCost, canChangePrices, canHardDelete, canManageCatalog, setsStartingPrices } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { shopError } from "@/lib/shop-speak"
 import { UNSAFE_KEYS } from "@/lib/table-file"
@@ -60,6 +60,29 @@ async function shopsForScope(formData: FormData) {
   return { shops }
 }
 
+/**
+ * A new item saved without prices (a shop manager added the name) cannot be
+ * sold until it is priced, so the CEO and main admin are told straight away.
+ */
+async function askOwnersToPrice(names: string[], byName: string) {
+  if (names.length === 0) return
+  const owners = await prisma.user.findMany({
+    where: { isActive: true, role: { in: ["CEO", "SUPER_ADMIN"] } },
+    select: { id: true },
+  })
+  if (owners.length === 0) return
+  const shown = names.slice(0, 3).join(", ") + (names.length > 3 ? ` and ${names.length - 3} more` : "")
+  await prisma.notification.createMany({
+    data: owners.map((owner) => ({
+      userId: owner.id,
+      type: "SYSTEM" as const,
+      title: names.length === 1 ? "A new item needs its prices" : `${names.length} new items need their prices`,
+      message: `${byName} added ${shown}. It cannot be sold until you set its cost, lowest and selling price.`,
+      actionUrl: names.length === 1 ? `/products?q=${encodeURIComponent(names[0])}` : "/products",
+    })),
+  })
+}
+
 async function putNameOnShops(productId: string, shopIds: string[]) {
   for (const branchId of shopIds) {
     await prisma.inventory.upsert({
@@ -106,7 +129,10 @@ export async function getProducts(search?: string) {
 
 export async function createProduct(formData: FormData) {
   const user = await requireUser()
-  if (!(await canManageCatalog(user.role))) return { error: "You are not allowed to add or change items. Ask the main admin." }
+  if (!(await canAddItemName(user.role))) return { error: "You are not allowed to add items. Ask the main admin." }
+  // A shop manager adds the name only. Prices stay with the CEO and main admin,
+  // so whatever the form sends, their new item starts with no prices.
+  const pricesAllowed = await setsStartingPrices(user.role)
 
   const name = String(formData.get("name") ?? "").trim()
   if (!name) return { error: "Type the product name." }
@@ -150,9 +176,9 @@ export async function createProduct(formData: FormData) {
     )
   }
 
-  const costPrice = Number(formData.get("costPrice") || 0)
-  const sellingPrice = Number(formData.get("sellingPrice") || 0)
-  const minimumPrice = Number(formData.get("minimumPrice") || sellingPrice || 0)
+  const costPrice = pricesAllowed ? Number(formData.get("costPrice") || 0) : 0
+  const sellingPrice = pricesAllowed ? Number(formData.get("sellingPrice") || 0) : 0
+  const minimumPrice = pricesAllowed ? Number(formData.get("minimumPrice") || sellingPrice || 0) : 0
   if (!Number.isFinite(costPrice) || !Number.isFinite(sellingPrice) || sellingPrice < 0 || costPrice < 0) {
     return { error: "Cost and sell price must be numbers. Use 0 if you will set prices later." }
   }
@@ -194,10 +220,13 @@ export async function createProduct(formData: FormData) {
       action: "CREATE",
       entityType: "Product",
       entityId: product.id,
-      newValue: JSON.stringify({ sku, name, shops: shops.shops.map((shop) => shop.code) }),
+      newValue: JSON.stringify({ sku, name, shops: shops.shops.map((shop) => shop.code), pricesSet: sellingPrice > 0 }),
       branchId: user.branchId,
     },
   })
+  if (!(sellingPrice > 0)) {
+    await askOwnersToPrice([[name, storage].filter(Boolean).join(" ")], user.name || user.email)
+  }
 
   revalidatePath("/products")
   revalidatePath("/products/new")
@@ -219,8 +248,8 @@ export async function setProductPrices(input: {
   reason?: string
 }) {
   const user = await requireUser()
-  // The Prices panel shows and sets cost, so it is the CEO's alone.
-  if (!canChangeCost(user.role)) return { error: "Only the CEO can change prices here." }
+  // The Prices panel shows and sets cost: the CEO and the main admin.
+  if (!canChangeCost(user.role)) return { error: "Only the CEO or the main admin can change prices here." }
 
   const next = {
     costPrice: Number(input.costPrice),
@@ -558,6 +587,9 @@ export async function importProducts(formData: FormData) {
 
   const shopsPicked = await shopsForScope(formData)
   if ("error" in shopsPicked) return { error: shopsPicked.error }
+  // Same rule as Add one item: only people who price items give new ones prices.
+  const pricesAllowed = await setsStartingPrices(user.role)
+  const unpriced: string[] = []
 
   const [brands, categories] = await Promise.all([
     prisma.brand.findMany(),
@@ -596,9 +628,11 @@ export async function importProducts(formData: FormData) {
       continue
     }
 
-    const costPrice = Number(cell(row, "cost", "cost_price") || 0)
-    const sellingPrice = Number(cell(row, "selling", "selling_price") || 0)
-    const minimumPrice = Number(cell(row, "minimum", "minimum_price", "min", "lowest_price", "lowest") || sellingPrice)
+    const costPrice = pricesAllowed ? Number(cell(row, "cost", "cost_price") || 0) : 0
+    const sellingPrice = pricesAllowed ? Number(cell(row, "selling", "selling_price") || 0) : 0
+    const minimumPrice = pricesAllowed
+      ? Number(cell(row, "minimum", "minimum_price", "min", "lowest_price", "lowest") || sellingPrice)
+      : 0
     if (!Number.isFinite(costPrice) || !Number.isFinite(sellingPrice) || sellingPrice < 0 || costPrice < 0) {
       errors.push(`Line ${line}: cost and sell price must be numbers. Leave them empty to register the name only.`)
       continue
@@ -658,7 +692,9 @@ export async function importProducts(formData: FormData) {
       shopsPicked.shops.map((shop) => shop.id)
     )
     created += 1
+    if (!(sellingPrice > 0)) unpriced.push(name)
   }
+  await askOwnersToPrice(unpriced, user.name || user.email)
 
   await prisma.auditLog.create({
     data: {
@@ -777,7 +813,7 @@ export async function updateBrand(formData: FormData) {
 export async function deleteBrand(formData: FormData) {
   const user = await requireUser()
   if (!canHardDelete(user.role)) {
-    return { error: "Only the Managing Director can permanently remove a brand. Ask the CEO." }
+    return { error: "Only the CEO or the main admin can permanently remove a brand." }
   }
   if (!(await canManageCatalog(user.role))) return { error: "You are not allowed to remove brands. Ask the main admin." }
   const id = String(formData.get("id") || "")
@@ -888,7 +924,7 @@ export async function updateCategory(formData: FormData) {
 export async function deleteCategory(formData: FormData) {
   const user = await requireUser()
   if (!canHardDelete(user.role)) {
-    return { error: "Only the Managing Director can permanently remove a category. Ask the CEO." }
+    return { error: "Only the CEO or the main admin can permanently remove a category." }
   }
   if (!(await canManageCatalog(user.role))) return { error: "You are not allowed to remove categories. Ask the main admin." }
   const id = String(formData.get("id") || "")
@@ -943,7 +979,7 @@ export async function updateProduct(formData: FormData) {
   if (!(trackingRaw in ProductTracking)) return { error: "Pick how we count this item: IMEI, Serial number, or No number." }
   const tracking = trackingRaw as ProductTracking
 
-  // Prices on an item already on the list are the CEO's to change. Anyone else
+  // Prices on an item already on the list are the CEO's and main admin's to change. Anyone else
   // edits the details and the prices stay exactly as they were, whatever the
   // form sends.
   const pricesAllowed = canChangePrices(user.role)
@@ -1255,7 +1291,7 @@ export async function deleteProduct(formData: FormData) {
   const user = await requireUser()
   if (!(await canManageCatalog(user.role))) return { error: "You are not allowed to delete items. Ask the main admin." }
   if (!canHardDelete(user.role)) {
-    return { error: "Only the Managing Director can remove or hide an item from the catalog. Ask the CEO." }
+    return { error: "Only the CEO or the main admin can remove or hide an item from the catalog." }
   }
   const id = String(formData.get("id") || "")
   if (!id) return { error: "Item ID missing." }

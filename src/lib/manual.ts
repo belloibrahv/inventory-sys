@@ -817,7 +817,7 @@ export function buildRoleManual(role: UserRole, keys: Set<string>, allowedHrefs:
   const pages = sections.filter((row) => row.href).map((row) => row.title)
   const actions = [
     keys.has("action.sell") ? "Sell and collect money" : "",
-    keys.has("action.catalog") ? "Add items and change prices" : "",
+    keys.has("action.catalog") ? "Add items and change prices" : keys.has("action.add_item") ? "Add new item names (the CEO or main admin prices them)" : "",
     keys.has("action.intake") ? "Receive phones and supplier goods" : "",
     keys.has("action.incoming") ? "Book goods before they arrive" : "",
     keys.has("action.transfer") ? "Send and receive goods between shops" : "",
