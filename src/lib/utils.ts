@@ -28,8 +28,14 @@ export function formatCurrencyShort(amount: number | string | null | undefined) 
   return `${sign}₦${Math.round(abs).toLocaleString("en-NG")}`
 }
 
+/**
+ * Dates and times are always shown in Lagos time. Without a time zone the
+ * server (UTC on Railway) printed times an hour behind the shops' clocks, and
+ * a screen drawn on the server disagreed with the same screen in the browser.
+ */
 export function formatDate(date: Date | string) {
   return new Intl.DateTimeFormat("en-NG", {
+    timeZone: "Africa/Lagos",
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -38,6 +44,7 @@ export function formatDate(date: Date | string) {
 
 export function formatDateTime(date: Date | string) {
   return new Intl.DateTimeFormat("en-NG", {
+    timeZone: "Africa/Lagos",
     year: "numeric",
     month: "short",
     day: "numeric",

@@ -26,7 +26,7 @@ function dayLabel(iso: string) {
   const same = (a: Date, b: Date) => a.toDateString() === b.toDateString()
   if (same(day, today)) return "Today"
   if (same(day, yesterday)) return "Yesterday"
-  return day.toLocaleDateString("en-NG", { weekday: "long", day: "numeric", month: "long" })
+  return day.toLocaleDateString("en-NG", { timeZone: "Africa/Lagos", weekday: "long", day: "numeric", month: "long" })
 }
 
 export function AlertsList({ rows: initial }: { rows: Row[] }) {

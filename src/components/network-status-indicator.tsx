@@ -4,17 +4,11 @@ import * as React from "react"
 import { createPortal } from "react-dom"
 import { useRouter } from "next/navigation"
 import {
-  Wifi,
   WifiOff,
   RefreshCw,
-  Clock,
   Database,
   CheckCircle2,
-  AlertTriangle,
   Send,
-  Layers,
-  HelpCircle,
-  ExternalLink,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useNetworkStatus, getNetworkMonitor } from "@/lib/network-status"
@@ -27,7 +21,7 @@ import {
   type OfflineEvent,
   type QueuedSale,
 } from "@/lib/offline-sales"
-import { formatCurrency, money } from "@/lib/utils"
+import { formatCurrency } from "@/lib/utils"
 import { formatShopWhen } from "@/lib/lagos-day"
 import { Button } from "@/components/ui/button"
 import {

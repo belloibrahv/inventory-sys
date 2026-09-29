@@ -357,7 +357,7 @@ export default async function DayClosePage({
                       sale.items.map((it) =>
                         [
                           sale.invoiceNumber,
-                          new Date(sale.saleDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                          new Date(sale.saleDate).toLocaleTimeString("en-GB", { timeZone: "Africa/Lagos", hour: "2-digit", minute: "2-digit" }),
                           `"${sale.customer.replace(/"/g, '""')}"`,
                           `"${it.name.replace(/"/g, '""')}"`,
                           it.storage || "",
@@ -412,7 +412,7 @@ export default async function DayClosePage({
                       {sale.invoiceNumber}
                     </Link>
                     <p className="text-[11px] text-muted-foreground mt-0.5">
-                      {new Date(sale.saleDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      {new Date(sale.saleDate).toLocaleTimeString("en-GB", { timeZone: "Africa/Lagos", hour: "2-digit", minute: "2-digit" })}
                     </p>
                   </td>
                   <td className="px-4 py-3 font-medium align-top">{sale.customer}</td>

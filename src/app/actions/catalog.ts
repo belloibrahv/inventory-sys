@@ -1,10 +1,9 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { ProductCondition, ProductTracking } from "@prisma/client"
+import { ProductTracking } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { watDayKey } from "@/lib/lagos-day"
-import { setStock } from "@/lib/concurrency"
 import { requireUser } from "@/lib/session"
 import { canAddItemName, canChangeCost, canChangePrices, canHardDelete, canManageCatalog, setsStartingPrices } from "@/lib/rbac"
 import { can } from "@/lib/permissions"

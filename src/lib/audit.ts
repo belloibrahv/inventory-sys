@@ -1,5 +1,5 @@
 import type { AuditAction } from "@prisma/client"
-import { inferRisk, isAfterHours, stampHash, type AuditRisk } from "@/lib/audit-meta"
+import { stampHash, type AuditRisk } from "@/lib/audit-meta"
 import { prisma } from "@/lib/prisma"
 
 export { inferRisk, isAfterHours, requestContext, stampHash, type AuditRisk } from "@/lib/audit-meta"

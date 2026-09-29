@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/prisma"
 import { viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
-import { canSeeCost, scopedBranchId } from "@/lib/rbac"
+import { canSeeCost } from "@/lib/rbac"
 import { money } from "@/lib/utils"
 import { healOpeningStockBills } from "@/lib/opening-stock-money"
 import { payablePurchaseWhere, groupSupplierLedgers } from "@/lib/purchase-money"

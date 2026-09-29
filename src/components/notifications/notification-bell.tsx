@@ -33,7 +33,7 @@ export function whenLabel(iso: string) {
   if (minutes < 60) return `${minutes} min ago`
   const hours = Math.floor(minutes / 60)
   if (hours < 24) return `${hours} h ago`
-  return new Date(iso).toLocaleDateString("en-NG", { day: "numeric", month: "short" })
+  return new Date(iso).toLocaleDateString("en-NG", { timeZone: "Africa/Lagos", day: "numeric", month: "short" })
 }
 
 /**

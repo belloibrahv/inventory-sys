@@ -15,11 +15,9 @@ import { markParkedPosted } from "@/app/actions/parked"
 import { isBlockedFromSell } from "@/lib/phone-look"
 import { reservedTransferImeiSet, reservedSwapImeiSet } from "@/app/actions/ops"
 import { shopPayChannel } from "@/lib/sale-money"
-import { belowCost, blindTillPrices, discountOff, needsReason, sellFloor, type PriceBasis } from "@/lib/pricing"
-import { readPriceApproval, signPriceApproval, type ApprovedDeal } from "@/lib/price-approval"
-import { writeAudit } from "@/lib/audit"
+import { belowCost, blindTillPrices, discountOff, sellFloor, type PriceBasis } from "@/lib/pricing"
+import { readPriceApproval } from "@/lib/price-approval"
 import { dueAfterReturns, returnedValueBySale } from "@/lib/returned-value"
-import * as bcrypt from "bcryptjs"
 
 export async function getSales() {
   const user = await requireUser()

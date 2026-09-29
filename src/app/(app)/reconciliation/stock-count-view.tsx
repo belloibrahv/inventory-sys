@@ -247,12 +247,12 @@ export function StockCountView({
           brand={brand}
           documentKind="Stock count"
           documentTitle="Stock count"
-          meta={[selectedBranch?.name || "", new Date().toLocaleDateString("en-NG")]}
+          meta={[selectedBranch?.name || "", new Date().toLocaleDateString("en-NG", { timeZone: "Africa/Lagos" })]}
         />
         <div className="border-b px-6 py-3 text-sm">
           <p>
             Shop: <strong>{selectedBranch?.name}</strong> · Date:{" "}
-            <strong>{new Date().toLocaleDateString("en-NG")}</strong>
+            <strong>{new Date().toLocaleDateString("en-NG", { timeZone: "Africa/Lagos" })}</strong>
           </p>
           <p className="mt-1 text-xs">
             On the system: {formatCurrency(summary.systemValue)} · Counted: {formatCurrency(summary.countedValue)} ·

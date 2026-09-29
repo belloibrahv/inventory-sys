@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { AlertTriangle, AlertCircle, HelpCircle, Info, ShieldAlert, Loader2 } from "lucide-react"
+import { AlertTriangle, HelpCircle, Info, ShieldAlert, Loader2 } from "lucide-react"
 import {
   Dialog,
   DialogContent,
