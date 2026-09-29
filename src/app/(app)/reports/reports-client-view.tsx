@@ -346,16 +346,19 @@ export function ReportsClientView({
           Barnabas". One shop at a time is a first-class choice here, and All is
           something you pick rather than something you are given.
         */}
+        {/* On a phone the controls sit in a tight grid (shop across the top,
+            period and date side by side) and the actions scroll in one row, so
+            the headline figures are not pushed off the first screen. */}
         <Toolbar className="justify-between">
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-2 text-sm">
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
+            <label className="col-span-2 flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-2">
               <span className="eyebrow">Reporting on</span>
               <Select
                 value={selectedBranchId ?? ""}
                 onChange={(event) => {
                   router.push(reportsHref({ branchId: event.target.value }))
                 }}
-                className="h-9 w-56"
+                className="h-9 w-full sm:w-56"
               >
                 <option value="">All shops together</option>
                 {branches.map((branch) => (
@@ -365,32 +368,36 @@ export function ReportsClientView({
                 ))}
               </Select>
             </label>
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-2">
               <span className="eyebrow">Period</span>
               <Select
                 value={range}
                 onChange={(event) => router.push(reportsHref({ range: event.target.value }))}
-                className="h-9 w-40"
+                className="h-9 w-full sm:w-40"
               >
                 <option value="day">One day</option>
                 <option value="week">Last 7 days</option>
                 <option value="month">This month so far</option>
               </Select>
             </label>
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-2">
               <span className="eyebrow">Ending on</span>
               <input
                 type="date"
                 value={date}
                 onChange={(event) => router.push(reportsHref({ date: event.target.value }))}
-                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm sm:w-auto"
               />
             </label>
-            <TonePill tone={selectedBranchId ? "primary" : "neutral"}>{pack.scope}</TonePill>
-            <TonePill tone="neutral">{pack.periodLabel}</TonePill>
+            <span className="hidden sm:inline-flex">
+              <TonePill tone={selectedBranchId ? "primary" : "neutral"}>{pack.scope}</TonePill>
+            </span>
+            <span className="col-span-2 justify-self-start">
+              <TonePill tone="neutral">{pack.periodLabel}</TonePill>
+            </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="-mx-1 flex w-full items-center gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:w-auto sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 [&>*]:shrink-0">
             <Button asChild variant="ghost" size="sm">
               <Link href="/audit/books">Check the books</Link>
             </Button>
@@ -417,28 +424,6 @@ export function ReportsClientView({
             />
           </div>
         </Toolbar>
-
-        <div className="surface-card grid gap-3 p-4 md:grid-cols-3">
-          <div>
-            <p className="eyebrow">This period</p>
-            <p className="mt-1 text-sm font-semibold">{pack.periodLabel}</p>
-            <p className="mt-1 text-sm text-muted-foreground">Sales {formatCurrency(pack.totals.revenue)}</p>
-          </div>
-          <div>
-            <p className="eyebrow">Compared with</p>
-            <p className="mt-1 text-sm font-semibold">
-              {pack.range === "day" ? formatWatLong(pack.compare.from) : `${formatWatLong(pack.compare.from)} to ${formatWatLong(pack.compare.to)}`}
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">Sales {formatCurrency(pack.compare.revenue)}</p>
-          </div>
-          <div>
-            <p className="eyebrow">Movement</p>
-            <p className="mt-1 text-sm font-semibold">{movement(pack.totals.revenue, pack.compare.revenue)}</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Payments received {movement(pack.totals.collected, pack.compare.collected)}. Expenses {movement(pack.totals.expenses, pack.compare.expenses)}.
-            </p>
-          </div>
-        </div>
 
         {/* One lead figure and the four that explain it. Everything else is one
             tap away under More figures, which says when something in it needs
@@ -490,6 +475,29 @@ export function ReportsClientView({
             onClick={() => setDrilldown("STOCK")}
           />
         </StatGrid>
+
+        {/* The comparison reads after the headline figures, not before them. */}
+        <div className="surface-card grid gap-3 p-4 md:grid-cols-3">
+          <div>
+            <p className="eyebrow">This period</p>
+            <p className="mt-1 text-sm font-semibold">{pack.periodLabel}</p>
+            <p className="mt-1 text-sm text-muted-foreground">Sales {formatCurrency(pack.totals.revenue)}</p>
+          </div>
+          <div>
+            <p className="eyebrow">Compared with</p>
+            <p className="mt-1 text-sm font-semibold">
+              {pack.range === "day" ? formatWatLong(pack.compare.from) : `${formatWatLong(pack.compare.from)} to ${formatWatLong(pack.compare.to)}`}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">Sales {formatCurrency(pack.compare.revenue)}</p>
+          </div>
+          <div>
+            <p className="eyebrow">Movement</p>
+            <p className="mt-1 text-sm font-semibold">{movement(pack.totals.revenue, pack.compare.revenue)}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Payments received {movement(pack.totals.collected, pack.compare.collected)}. Expenses {movement(pack.totals.expenses, pack.compare.expenses)}.
+            </p>
+          </div>
+        </div>
 
         <details className="group surface-card overflow-hidden" open={moreOpen} onToggle={(event) => setMoreOpen((event.target as HTMLDetailsElement).open)}>
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold transition-colors duration-press ease-standard hover:bg-muted/40 [&::-webkit-details-marker]:hidden">

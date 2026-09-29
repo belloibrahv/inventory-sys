@@ -145,7 +145,7 @@ function PriceRow({ item }: { item: PanelItem }) {
         <div className="min-w-0">
           <p className="font-medium leading-snug">{item.name}</p>
           <p className="truncate text-xs text-muted-foreground">
-            {item.brand} · {item.category} · <span className="font-mono">{item.sku}</span> · {item.units} on shelf
+            {item.brand} · {item.category} · <span className="font-mono [overflow-wrap:anywhere]">{item.sku}</span> · {item.units} on shelf
           </p>
         </div>
         <p
