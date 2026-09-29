@@ -230,7 +230,7 @@ body {
 
   /* A card the whole of which is a link or button. */
   .surface-card-interactive {
-    @apply surface-card text-left transition-[border-color,box-shadow,background-color] hover:border-primary/40 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply surface-card text-left transition-[border-color,box-shadow,background-color,transform] duration-small ease-standard hover:-translate-y-px hover:border-primary/40 hover:bg-muted/30 hover:shadow-[0_6px_18px_-10px_rgb(15_23_42_/_0.25)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
   }
 
   /* Small capital label above a value or section. One size, one spacing. */
@@ -422,16 +422,6 @@ body {
   }
 }
 
-/* Sell now keeps a pay bar at the bottom of a phone screen. The calculator
-   button lifts above it instead of covering the Complete sale button. */
-@media (max-width: 1023px) {
-  body:has(.till-bar) .shop-calculator > button {
-    bottom: 6.5rem;
-  }
-  body:has(.till-bar) .shop-calculator > div {
-    bottom: 10.5rem;
-  }
-}
 
 /* A figure sizes itself to its card, so ₦555,780,500 never breaks onto two
    lines in a narrow card and still reads large in a wide one. */
@@ -442,13 +432,134 @@ body {
   font-size: clamp(1rem, 13cqi, 1.7rem);
 }
 
-/* The phone tab bar sits at the bottom of every screen but Sell now; the
-   calculator button lifts above it. */
-@media (max-width: 1023px) {
-  body:has(.tab-bar) .shop-calculator > button {
-    bottom: 5.5rem;
+/*
+ * Motion. Every animation answers "did that work?" and finishes inside half a
+ * second. Only transform and opacity move, which phones draw smoothly.
+ *   press 120ms · small 200ms · panel 280ms · page 400ms
+ *   standard (.2,0,0,1) · decelerate (.05,.7,.1,1) · accelerate (.3,0,.8,.15)
+ */
+:root {
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --ease-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+}
+
+/* A screen arriving fades in. Only opacity here: a transform left on the page
+   wrapper would make it the frame for everything fixed inside it, and the
+   till's pay bar and the calculator would stop sticking to the screen. */
+.motion-page {
+  animation: motion-fade 280ms var(--ease-standard) both;
+}
+
+/* Blocks rising into place, children one after another. `backwards` holds
+   the start frame during the delay and lets go at the end, so no transform
+   stays behind. The resting state is fully visible. */
+.motion-rise {
+  animation: motion-rise 400ms var(--ease-decelerate) backwards;
+}
+.motion-stagger > * {
+  animation: motion-rise 400ms var(--ease-decelerate) backwards;
+}
+.motion-stagger > *:nth-child(2) { animation-delay: 40ms; }
+.motion-stagger > *:nth-child(3) { animation-delay: 80ms; }
+.motion-stagger > *:nth-child(4) { animation-delay: 120ms; }
+.motion-stagger > *:nth-child(5) { animation-delay: 160ms; }
+.motion-stagger > *:nth-child(n + 6) { animation-delay: 200ms; }
+
+/* Something small appearing: a panel, a menu, the calculator. */
+.motion-pop {
+  animation: motion-pop 200ms var(--ease-decelerate) backwards;
+  transform-origin: top right;
+}
+
+/* A line landing on the sale: slides in and flashes once so the cashier
+   sees it arrived without looking twice. */
+.motion-line-in {
+  animation:
+    motion-line-in 280ms var(--ease-decelerate) backwards,
+    motion-flash 900ms var(--ease-standard) 120ms;
+}
+.motion-line-out {
+  animation: motion-line-out 200ms var(--ease-accelerate) both;
+}
+
+/* A figure that just changed. */
+.motion-bump {
+  animation: motion-bump 280ms var(--ease-decelerate);
+}
+
+/* The tick drawn on a finished sale. */
+.motion-check path {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: motion-draw 400ms var(--ease-decelerate) 60ms forwards;
+}
+
+/* Loading placeholders instead of blank pauses. */
+.motion-skeleton {
+  background: linear-gradient(90deg, hsl(var(--muted)) 0%, hsl(var(--muted) / 0.45) 50%, hsl(var(--muted)) 100%);
+  background-size: 200% 100%;
+  animation: motion-shimmer 1.2s linear infinite;
+}
+
+@keyframes motion-fade {
+  from { opacity: 0.001; }
+  to { opacity: 1; }
+}
+@keyframes motion-rise {
+  from { transform: translateY(8px); opacity: 0.001; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes motion-pop {
+  from { transform: translateY(-6px) scale(0.97); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes motion-line-in {
+  from { transform: translateY(-6px) scale(0.985); opacity: 0.001; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes motion-line-out {
+  to { transform: translateX(16px); opacity: 0; }
+}
+@keyframes motion-flash {
+  0% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.35); background-color: hsl(var(--primary-soft)); }
+  100% { box-shadow: 0 0 0 10px hsl(var(--primary) / 0); }
+}
+@keyframes motion-bump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+@keyframes motion-draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes motion-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+/* Anyone who asked their phone for less motion gets instant changes. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
   }
-  body:has(.tab-bar) .shop-calculator > div {
-    bottom: 9.5rem;
-  }
+}
+
+/* The lead figure: ink on a bright screen; on a dark screen a deep blue
+   panel, since a white slab would shout louder than everything around it. */
+:root {
+  --lead-bg: var(--foreground);
+  --lead-fg: var(--background);
+}
+.dark {
+  --lead-bg: 232 48% 20%;
+  --lead-fg: 220 18% 96%;
+}
+.stat-card-lead .eyebrow {
+  color: hsl(var(--lead-fg) / 0.7);
 }

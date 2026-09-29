@@ -21,6 +21,12 @@ import { formatCondition } from "@/lib/status"
 import { phoneLookLabel, isBlockedFromSell } from "@/lib/phone-look"
 import { BellRing, ChevronDown, Loader2, PlusCircle, RotateCcw, ScanLine, Trash2 } from "lucide-react"
 import { useDecision } from "@/hooks/use-decision"
+import { AnimatedNumber } from "@/components/animated-number"
+
+/** One stable key per sale line: a phone by its IMEI, pieces by their item (they merge). */
+function lineKey(line: { imeiId?: string | null; productId: string }) {
+  return line.imeiId ?? `piece-${line.productId}`
+}
 
 function Kbd({ children }: { children: React.ReactNode }) {
   return (
@@ -1115,10 +1121,23 @@ export function PosClient({
     })
   }
 
-  function removeLine(index: number) {
-    const next = cart.filter((_, i) => i !== index)
-    setCart(next)
-    syncPaid(next)
+  // A removed line slides out first, then leaves the sale. Found again by its
+  // key when the slide ends, in case other lines moved meanwhile.
+  const [leaving, setLeaving] = useState<Set<string>>(() => new Set())
+  function removeLineAnimated(key: string) {
+    setLeaving((current) => new Set(current).add(key))
+    window.setTimeout(() => {
+      setLeaving((current) => {
+        const next = new Set(current)
+        next.delete(key)
+        return next
+      })
+      setCart((current) => {
+        const next = current.filter((line) => lineKey(line) !== key)
+        syncPaid(next)
+        return next
+      })
+    }, 190)
   }
 
   const methodHint =
@@ -1268,7 +1287,10 @@ export function PosClient({
                     0
                   const lineTotal = (Number.isFinite(line.unitPrice) ? line.unitPrice : 0) * line.quantity
                   return (
-                    <li key={`${line.imeiId ?? line.productId}-${index}`} className="px-4 py-4 sm:px-5">
+                    <li
+                      key={lineKey(line)}
+                      className={`px-4 py-4 sm:px-5 ${leaving.has(lineKey(line)) ? "motion-line-out" : "motion-line-in"}`}
+                    >
                       <div className="flex items-start gap-3">
                         <div className="min-w-0 flex-1">
                           <p className="font-semibold leading-snug">{line.name}</p>
@@ -1298,8 +1320,8 @@ export function PosClient({
                         </div>
                         <button
                           type="button"
-                          onClick={() => removeLine(index)}
-                          className="-mr-1 -mt-1 rounded-md p-2 text-muted-foreground transition-colors hover:bg-danger-soft hover:text-danger"
+                          onClick={() => removeLineAnimated(lineKey(line))}
+                          className="-mr-1 -mt-1 rounded-md p-2 text-muted-foreground transition-colors duration-press ease-standard hover:bg-danger-soft hover:text-danger active:scale-90"
                           aria-label={`Remove ${line.name}`}
                           title="Remove from this sale"
                         >
@@ -1451,7 +1473,9 @@ export function PosClient({
         <aside id="finish-sale" className="surface-card overflow-hidden lg:sticky lg:top-20">
           <div className="border-b border-border bg-muted/40 px-5 py-4">
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Sale total</p>
-            <p className="mt-0.5 text-3xl font-semibold tabular-nums tracking-tight">{formatCurrency(total)}</p>
+            <p className="mt-0.5 text-3xl font-semibold tabular-nums tracking-tight">
+              <AnimatedNumber value={total} />
+            </p>
             <div className="mt-1 space-y-0.5 text-sm tabular-nums text-muted-foreground">
               {appliedDiscount > 0 ? (
                 <p>{formatCurrency(grossTotal)} less {formatCurrency(appliedDiscount)} discount</p>
@@ -1817,7 +1841,9 @@ export function PosClient({
             <span className="block text-xs text-muted-foreground">
               {itemCount} {itemCount === 1 ? "item" : "items"} · {method === "BANK" ? "Bank" : method === "SPLIT" ? "Split" : method === "CREDIT" ? "Credit" : "Cash"}
             </span>
-            <span className="block truncate text-xl font-semibold tabular-nums">{formatCurrency(total)}</span>
+            <span className="block truncate text-xl font-semibold tabular-nums">
+              <AnimatedNumber value={total} />
+            </span>
           </button>
           <Button className="min-h-12 shrink-0 px-6 text-base" disabled={!cart.length || busy} onClick={checkout}>
             {busy ? "Saving" : "Complete sale"}

@@ -65,6 +65,29 @@ const TASK_ICON: Record<string, LucideIcon> = {
   "/approvals": BadgeCheck,
 }
 
+/**
+ * How urgent each "Needs you" line is. Stuck work (money or a phone in limbo,
+ * a day not closed, someone waiting on a yes) comes first, then work waiting
+ * on another person, then tidying. The dot carries the level, so the list
+ * reads at a glance instead of every line wearing the same amber.
+ */
+const URGENCY: Record<string, { rank: number; dot: string; word: string }> = {
+  "/swaps": { rank: 0, dot: "bg-danger", word: "Stuck" },
+  "/audit?risk=HIGH": { rank: 0, dot: "bg-danger", word: "Stuck" },
+  "/approvals": { rank: 0, dot: "bg-danger", word: "Waiting on you" },
+  "/finance/close": { rank: 0, dot: "bg-danger", word: "Stuck" },
+  "/returns": { rank: 1, dot: "bg-warning", word: "Waiting" },
+  "/pos": { rank: 1, dot: "bg-warning", word: "Waiting" },
+  "/incoming": { rank: 1, dot: "bg-warning", word: "Waiting" },
+  "/transfers": { rank: 1, dot: "bg-warning", word: "Waiting" },
+  "/sales": { rank: 2, dot: "bg-info", word: "Tidy up" },
+  "/inventory": { rank: 2, dot: "bg-info", word: "Tidy up" },
+}
+const TIDY = { rank: 2, dot: "bg-info", word: "Tidy up" }
+
+/** Office jobs that watch the shops rather than sell in them. */
+const OFFICE_ROLES = ["SUPER_ADMIN", "CEO", "ACCOUNTANT", "AUDITOR"]
+
 function greeting() {
   const hour = Number(
     new Intl.DateTimeFormat("en-GB", { hour: "numeric", hour12: false, timeZone: "Africa/Lagos" }).format(new Date())
@@ -84,10 +107,16 @@ export default async function DashboardPage() {
   // Sales, money and stock figures are for people who work the business. A
   // system-only main admin gets their jobs and what needs them, nothing more.
   const seesBusiness = ["/sales", "/finance", "/reports", "/owner", "/inventory", "/pos"].some((href) => allowed.has(href))
-  const tasks = data.tasks.filter((task) => allowed.has(task.href.split("?")[0]))
+  const tasks = data.tasks
+    .filter((task) => allowed.has(task.href.split("?")[0]))
+    .map((task) => ({ ...task, urgency: URGENCY[task.href] ?? TIDY }))
+    .sort((a, b) => a.urgency.rank - b.urgency.rank || b.count - a.count)
+  // "Your sales today" is for people who sell. The office sees it only on a
+  // day they rang something up themselves.
+  const showMine = sellsHere && (!OFFICE_ROLES.includes(data.user.role) || data.today.mine > 0)
 
   return (
-    <div className="space-y-6">
+    <div className="motion-stagger space-y-6">
       <InstallAppBanner />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -107,8 +136,8 @@ export default async function DashboardPage() {
               href={action.href}
               className={
                 action.primary
-                  ? "flex flex-col items-center justify-center gap-1.5 rounded-xl bg-primary px-2 py-3.5 text-center text-sm font-semibold text-primary-foreground shadow-sm transition-transform hover:bg-primary/90 active:scale-[0.98]"
-                  : "surface-card-interactive flex flex-col items-center justify-center gap-1.5 px-2 py-3.5 text-center text-sm font-medium"
+                  ? "flex flex-col items-center justify-center gap-1.5 rounded-xl bg-primary px-2 py-3.5 text-center text-sm font-semibold text-primary-foreground shadow-sm transition-[transform,background-color] duration-press ease-standard hover:-translate-y-0.5 hover:bg-primary/90 active:scale-[0.97]"
+                  : "surface-card-interactive flex flex-col items-center justify-center gap-1.5 px-2 py-3.5 text-center text-sm font-medium transition-transform duration-press ease-standard hover:-translate-y-0.5 active:scale-[0.97]"
               }
             >
               <action.icon className="h-5 w-5" />
@@ -121,12 +150,12 @@ export default async function DashboardPage() {
       {seesBusiness ? (
       <section>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Today</h3>
-        <StatGrid className={sellsHere ? "xl:grid-cols-3" : "xl:grid-cols-2"}>
+        <StatGrid className={showMine ? "xl:grid-cols-3" : "xl:grid-cols-2"}>
           <StatCard
+            lead
             label="Sales today"
             value={formatCurrency(data.today.sales)}
             hint={`${data.today.count} sale${data.today.count === 1 ? "" : "s"}`}
-            tone="primary"
             href="/sales"
           />
           <StatCard
@@ -137,9 +166,8 @@ export default async function DashboardPage() {
                 ? `Includes ${formatCurrency(data.today.debtsCollected)} debts collected on earlier sales`
                 : "Money that came in today"
             }
-            tone="success"
           />
-          {sellsHere ? (
+          {showMine ? (
             <StatCard
               label="Your sales today"
               value={formatCurrency(data.today.mine)}
@@ -152,20 +180,30 @@ export default async function DashboardPage() {
       ) : null}
 
       <section>
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Needs you</h3>
+        <div className="mb-2 flex items-baseline justify-between gap-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Needs you</h3>
+          {tasks.length ? <span className="text-xs text-muted-foreground">Most urgent first</span> : null}
+        </div>
         {tasks.length ? (
           <ul className="surface-card divide-y divide-border overflow-hidden">
             {tasks.map((task) => {
               const Icon = TASK_ICON[task.href] ?? AlertTriangle
               return (
                 <li key={task.href + task.label}>
-                  <Link href={task.href} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-warning-soft text-warning">
+                  <Link
+                    href={task.href}
+                    className="group flex items-center gap-3 px-4 py-3 transition-colors duration-press ease-standard hover:bg-muted/50"
+                  >
+                    <span className={`h-2 w-2 shrink-0 rounded-full ${task.urgency.dot}`} title={task.urgency.word} aria-hidden />
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                       <Icon className="h-4 w-4" />
                     </span>
-                    <span className="min-w-0 flex-1 text-sm font-medium">{task.label}</span>
+                    <span className="min-w-0 flex-1 text-sm font-medium">
+                      {task.label}
+                      <span className="sr-only"> ({task.urgency.word})</span>
+                    </span>
                     <span className="rounded-full bg-muted px-2.5 py-0.5 text-sm font-semibold tabular-nums">{task.count}</span>
-                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-press ease-standard group-hover:translate-x-0.5" />
                   </Link>
                 </li>
               )

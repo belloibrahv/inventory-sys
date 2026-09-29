@@ -80,6 +80,19 @@ const config: Config = {
           border: "hsl(var(--sidebar-border))",
         },
       },
+      /* The motion system: four speeds, three curves. Exits run faster than
+         entrances so a screen never feels like it is waiting. */
+      transitionDuration: {
+        press: "120ms",
+        small: "200ms",
+        panel: "280ms",
+        page: "400ms",
+      },
+      transitionTimingFunction: {
+        standard: "cubic-bezier(.2,0,0,1)",
+        decelerate: "cubic-bezier(.05,.7,.1,1)",
+        accelerate: "cubic-bezier(.3,0,.8,.15)",
+      },
       borderRadius: {
         xl: "calc(var(--radius) + 4px)",
         lg: "var(--radius)",

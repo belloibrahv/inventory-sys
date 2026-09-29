@@ -6,7 +6,7 @@ import { pageTitles } from "@/components/layout/titles"
 import { ArrowLeft } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { statusLabel, statusTone } from "@/lib/status"
-import { cn } from "@/lib/utils"
+import { cn, formatCurrencyShort } from "@/lib/utils"
 
 /**
  * The screen vocabulary.
@@ -142,11 +142,28 @@ export function SectionCard({
   )
 }
 
+/** A naira figure as the screens print it ("₦30,396,500", "-₦16,441,500"), as a number. */
+function readNaira(value: ReactNode): number | null {
+  if (typeof value !== "string") return null
+  const match = value.trim().match(/^(-)?₦([\d,]+(?:\.\d+)?)$/)
+  if (!match) return null
+  const amount = Number(match[2].replace(/,/g, ""))
+  return Number.isFinite(amount) ? (match[1] ? -amount : amount) : null
+}
+
+/** Only these tones colour a figure: something owed, short or wrong. */
+const STATE_TONES: Tone[] = ["warning", "danger"]
+
 /**
  * One figure with its label. The only way a number should be put on a screen.
  *
  * Give it `href` or `onClick` and the whole card becomes the target, which is how
  * every headline figure drills through to the rows behind it.
+ *
+ * Colour means state. Figures print in ink; only a warning or danger tone
+ * colours one, and never a zero (a red ₦0 is not news). Naira in the millions
+ * shows short (₦30.4m) with the exact figure on hover; tables and downloads
+ * keep every naira. `lead` marks the one figure a screen answers first.
  */
 export function StatCard({
   label,
@@ -157,6 +174,8 @@ export function StatCard({
   href,
   onClick,
   className,
+  lead = false,
+  exact = false,
 }: {
   label: string
   value: ReactNode
@@ -166,15 +185,29 @@ export function StatCard({
   href?: string
   onClick?: () => void
   className?: string
+  /** The screen's headline figure: drawn larger, in ink. One per screen. */
+  lead?: boolean
+  /** Keep every naira on the tile instead of the short form. */
+  exact?: boolean
 }) {
   const interactive = Boolean(href || onClick)
+  const amount = readNaira(value)
+  const isZero = amount === 0 || (typeof value === "string" && !/[1-9]/.test(value))
+  const stateTone = STATE_TONES.includes(tone) && !isZero ? tone : "neutral"
+  const shortened = amount !== null && !exact && Math.abs(amount) >= 1_000_000
+  const shown = shortened ? formatCurrencyShort(amount) : value
 
   const body = (
     <>
       <div className="flex items-start justify-between gap-2 sm:gap-3">
         <p className="eyebrow min-w-0 leading-snug">{label}</p>
         {icon ? (
-          <span className={cn("hidden h-7 w-7 shrink-0 items-center justify-center rounded-md sm:inline-flex", toneIcon[tone])}>
+          <span
+            className={cn(
+              "hidden h-7 w-7 shrink-0 items-center justify-center rounded-md sm:inline-flex",
+              lead ? "bg-[hsl(var(--lead-fg)/0.12)] text-[hsl(var(--lead-fg)/0.85)]" : toneIcon[stateTone]
+            )}
+          >
             {icon}
           </span>
         ) : null}
@@ -182,18 +215,25 @@ export function StatCard({
       <p
         className={cn(
           "stat-value mt-1.5 whitespace-nowrap font-semibold leading-tight tracking-tight num sm:mt-2",
-          toneText[tone]
+          lead ? "text-[hsl(var(--lead-fg))]" : toneText[stateTone]
         )}
+        title={shortened ? String(value) : undefined}
       >
-        {value}
+        {shown}
       </p>
-      {hint ? <p className="mt-1 line-clamp-2 text-xs leading-snug text-muted-foreground">{hint}</p> : null}
+      {hint ? (
+        <p className={cn("mt-1 line-clamp-2 text-xs leading-snug", lead ? "text-[hsl(var(--lead-fg)/0.7)]" : "text-muted-foreground")}>
+          {hint}
+        </p>
+      ) : null}
     </>
   )
 
   const classes = cn(
     interactive ? "surface-card-interactive group" : "surface-card",
     "stat-card block min-w-0 p-3 text-left sm:p-4",
+    lead &&
+      "stat-card-lead border-[hsl(var(--lead-bg))] bg-[hsl(var(--lead-bg))] text-[hsl(var(--lead-fg))] hover:border-[hsl(var(--lead-bg))] hover:bg-[hsl(var(--lead-bg)/0.92)]",
     className
   )
 

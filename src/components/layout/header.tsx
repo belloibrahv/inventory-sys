@@ -5,7 +5,7 @@ import type { UserRole } from "@prisma/client"
 import { leaveTheShop } from "@/lib/leave-shop"
 import { useTheme } from "@/components/theme-provider"
 import { useRouter, usePathname } from "next/navigation"
-import { ArrowLeft, BookOpen, ChevronDown, LogOut, Menu, Moon, Search, Sun, UserRound } from "lucide-react"
+import { ArrowLeft, BookOpen, Calculator, ChevronDown, LogOut, Menu, Moon, Search, Sun, UserRound } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -43,6 +43,7 @@ export function Header({
 }) {
   const { setTheme, resolvedTheme } = useTheme()
   const setCommandOpen = useUI((state) => state.setCommandOpen)
+  const toggleCalculator = useUI((state) => state.toggleCalculator)
   const toggleNav = useUI((state) => state.toggleNav)
   const desktopSidebar = useUI((state) => state.desktopSidebar)
   const sidebarOpen = useUI((state) => state.sidebarOpen)
@@ -77,7 +78,7 @@ export function Header({
                 router.push("/dashboard")
               }
             }}
-            className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg border-2 border-primary/50 bg-primary/10 px-2.5 text-sm font-bold text-primary shadow-sm transition-all hover:border-primary hover:bg-primary hover:text-primary-foreground active:scale-95 sm:px-3"
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-muted-foreground transition-[color,background-color,transform] duration-press ease-standard hover:bg-muted hover:text-foreground active:scale-95"
             aria-label="Back to previous page"
             title="Go back to the page you were on"
           >
@@ -85,7 +86,9 @@ export function Header({
             <span className="hidden sm:inline">Back</span>
           </button>
         ) : null}
-        <h1 className="min-w-0 truncate text-base font-semibold tracking-tight" title={title}>
+        {/* The page names itself in its own heading; up here it is a quiet
+            label, so the two do not compete. */}
+        <h1 className="min-w-0 truncate text-sm font-medium text-muted-foreground" title={title}>
           {title}
         </h1>
       </div>
@@ -122,6 +125,16 @@ export function Header({
         >
           <Sun className="h-5 w-5 dark:hidden" />
           <Moon className="hidden h-5 w-5 dark:block" />
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleCalculator}
+          aria-label="Shop calculator"
+          title="Shop calculator"
+        >
+          <Calculator className="h-5 w-5" />
         </Button>
 
         <NotificationBell initialUnread={unread} />

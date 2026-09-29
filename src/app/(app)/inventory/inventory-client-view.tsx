@@ -115,8 +115,13 @@ export function InventoryClientView({
     () => scoped.filter((row) => matchesStockCategory(row.product.category.name, categoryFilter)),
     [scoped, categoryFilter]
   )
+  // Rows with nothing on the shelf sink below the ones people came to read;
+  // the order within each part is kept.
   const filtered = useMemo(
-    () => inCategory.filter((row) => (stockFilter === "LOW" ? isLow(row) : stockFilter === "GAP" ? hasGap(row) : true)),
+    () =>
+      inCategory
+        .filter((row) => (stockFilter === "LOW" ? isLow(row) : stockFilter === "GAP" ? hasGap(row) : true))
+        .sort((a, b) => Number(b.quantity > 0) - Number(a.quantity > 0)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [inCategory, stockFilter, imeiFor, serialized, lowStockThreshold]
   )
@@ -201,13 +206,26 @@ export function InventoryClientView({
       ),
     },
     { id: "shop", header: "Shop", sortValue: (row) => row.branch.code, cell: (row) => <ShopTag>{row.branch.code}</ShopTag> },
-    { id: "cost", header: "Cost", align: "right", hideBelow: "lg", sortValue: (row) => money(row.product.costPrice), cell: (row) => formatCurrency(money(row.product.costPrice)) },
+    {
+      id: "cost",
+      header: "Cost",
+      align: "right",
+      hideBelow: "lg",
+      sortValue: (row) => money(row.product.costPrice),
+      cell: (row) =>
+        money(row.product.costPrice) > 0 ? formatCurrency(money(row.product.costPrice)) : <span className="text-muted-foreground">—</span>,
+    },
     {
       id: "sell",
       header: "Sell price",
       align: "right",
       sortValue: (row) => money(row.product.sellingPrice),
-      cell: (row) => <span className="font-medium">{formatCurrency(money(row.product.sellingPrice))}</span>,
+      cell: (row) =>
+        money(row.product.sellingPrice) > 0 ? (
+          <span className="font-medium">{formatCurrency(money(row.product.sellingPrice))}</span>
+        ) : (
+          <TonePill tone="warning">Needs a price</TonePill>
+        ),
     },
     {
       id: "profit",
@@ -217,6 +235,10 @@ export function InventoryClientView({
       sortValue: (row) => marginPct(money(row.product.costPrice), money(row.product.sellingPrice)),
       cell: (row) => {
         const margin = marginPct(money(row.product.costPrice), money(row.product.sellingPrice))
+        // No price or no cost yet: there is no margin to judge, so no red pill.
+        if (!(money(row.product.sellingPrice) > 0) || !(money(row.product.costPrice) > 0)) {
+          return <span className="text-muted-foreground">—</span>
+        }
         return (
           <TonePill tone={margin >= 20 ? "success" : margin > 0 ? "warning" : "danger"}>
             {margin > 0 ? "+" : ""}
@@ -320,7 +342,8 @@ export function InventoryClientView({
               ? `${totals.lowLines} item${totals.lowLines === 1 ? "" : "s"} below the low-stock warning`
               : "Every item is above the low-stock warning"
           }
-          tone={totals.lowLines > 0 ? "warning" : "neutral"}
+          // As a margin, amber only when it is thin; as a low-stock count, amber when any line is low.
+          tone={showCost ? (totals.cost > 0 && totals.margin < 10 ? "warning" : "neutral") : totals.lowLines > 0 ? "warning" : "neutral"}
           icon={<AlertTriangle className="h-4 w-4" />}
         />
       </StatGrid>

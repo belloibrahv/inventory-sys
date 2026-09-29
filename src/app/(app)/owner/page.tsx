@@ -2,7 +2,7 @@ import { redirect } from "next/navigation"
 import { getOwnerBoard } from "@/app/actions/owner-board"
 import { DaysOfCover, SalesTrend, StockValueByCategory, TopSellers } from "@/components/owner-charts"
 import { ExportCsv } from "@/components/export-csv"
-import { PageHeader } from "@/components/shared"
+import { PageHeader, StatCard } from "@/components/shared"
 import { formatWatLong } from "@/lib/lagos-day"
 import { getProducts } from "@/app/actions/catalog"
 import { PricesPanel } from "./prices-panel"
@@ -39,30 +39,21 @@ const MOVE_WORDS: Record<string, string> = {
   HAND_CORRECTION: "Corrected by hand",
 }
 
+/** The owner's figures, on the same tile as every other screen: ink, one lead. */
 function Figure({
   label,
   value,
   hint,
   tone = "neutral",
+  lead = false,
 }: {
   label: string
   value: string
   hint?: string
   tone?: "neutral" | "good" | "warning"
+  lead?: boolean
 }) {
-  return (
-    <div className="surface-card p-5">
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p
-        className={`mt-1 text-3xl font-semibold tabular-nums ${
-          tone === "good" ? "text-success" : tone === "warning" ? "text-warning" : ""
-        }`}
-      >
-        {value}
-      </p>
-      {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
-    </div>
-  )
+  return <StatCard label={label} value={value} hint={hint} tone={tone === "warning" ? "warning" : "neutral"} lead={lead} />
 }
 
 export default async function OwnerBoardPage() {
@@ -169,6 +160,7 @@ export default async function OwnerBoardPage() {
           hint={showProfit ? `Worth ${formatCurrency(board.stockValueTotal)} at cost` : undefined}
         />
         <Figure
+          lead
           label="Sold today"
           value={totals.sold.toLocaleString("en-NG")}
           hint={`${formatCurrency(totals.soldValue)} taken`}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { Calculator, X } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
+import { useUI } from "@/store/ui"
 
 type Op = "+" | "-" | "×" | "÷"
 
@@ -19,8 +20,14 @@ function show(value: number) {
   return text === "-0" ? "0" : text
 }
 
+/**
+ * The shop calculator opens from the top bar. It used to be a round button
+ * floating over the bottom corner, where it covered table columns and the
+ * till's pay bar.
+ */
 export function ShopCalculator() {
-  const [open, setOpen] = useState(false)
+  const open = useUI((state) => state.calculatorOpen)
+  const setOpen = useUI((state) => state.setCalculatorOpen)
   const [display, setDisplay] = useState("0")
   const [stored, setStored] = useState<number | null>(null)
   const [op, setOp] = useState<Op | null>(null)
@@ -139,17 +146,21 @@ export function ShopCalculator() {
 
   return (
     <div className="shop-calculator">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="fixed bottom-5 right-5 z-50 flex min-h-12 min-w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg"
-        aria-label={open ? "Close calculator" : "Open calculator"}
-      >
-        {open ? <X className="h-5 w-5" /> : <Calculator className="h-5 w-5" />}
-      </button>
       {open ? (
-        <div className="fixed bottom-20 right-5 z-50 w-[min(22rem,calc(100vw-2rem))] rounded-lg border border-border bg-card p-4 shadow-xl">
-          <p className="text-xs text-muted-foreground">Shop calculator · it stays on this phone only</p>
+        <div className="motion-pop fixed right-3 top-16 z-50 w-[min(22rem,calc(100vw-1.5rem))] rounded-xl border border-border bg-card p-4 shadow-xl sm:right-5">
+          <div className="flex items-center justify-between gap-2">
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Calculator className="h-3.5 w-3.5" /> Shop calculator · it stays on this phone only
+            </p>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+              aria-label="Close calculator"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
           <p className="mt-2 break-all text-right text-3xl font-semibold tabular-nums">{display}</p>
           <p className="min-h-5 text-right text-xs text-muted-foreground">
             {Number.isFinite(naira) ? formatCurrency(naira) : ""}

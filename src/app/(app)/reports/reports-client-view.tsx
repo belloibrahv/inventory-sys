@@ -170,6 +170,11 @@ export function ReportsClientView({
     : opening.lines.reduce((sum, line) => sum + line.openingQty * line.sellingPrice, 0)
   const boughtValue = opening.boughtSince.reduce((sum, row) => sum + row.total, 0)
   const stillOpen = opening.shops.filter((row) => row.status === "OPEN")
+  const [moreOpen, setMoreOpen] = useState(false)
+  // Things under More figures that want a look: unfinished swaps and returns,
+  // opening stock still being counted.
+  const moreAttention =
+    (pack.waiting.swaps > 0 ? 1 : 0) + (pack.waiting.returns > 0 ? 1 : 0) + (stillOpen.length > 0 ? 1 : 0)
   const fileScope = `${pack.statementRef}`
 
   const byShopPager = usePagedRows(pack.byShop, scopeKey)
@@ -435,8 +440,13 @@ export function ReportsClientView({
           </div>
         </div>
 
-        <StatGrid>
+        {/* One lead figure and the four that explain it. Everything else is one
+            tap away under More figures, which says when something in it needs
+            attention so nothing is hidden by the fold. */}
+        <StatGrid className="xl:grid-cols-5">
           <StatCard
+            lead
+            className="col-span-2 xl:col-span-1"
             label="Total sales"
             value={formatCurrency(pack.totals.revenue)}
             hint={
@@ -445,7 +455,6 @@ export function ReportsClientView({
                 : `${sales.length} sale${sales.length === 1 ? "" : "s"}`
             }
             icon={<TrendingUp className="h-4 w-4" />}
-            tone="neutral"
             onClick={() => setDrilldown("REVENUE")}
           />
           <StatCard
@@ -461,54 +470,10 @@ export function ReportsClientView({
             onClick={() => setDrilldown("RECEIVED")}
           />
           <StatCard
-            label="Approved expenses"
-            value={formatCurrency(pack.totals.expenses)}
-            hint={`${expenses.length} expense${expenses.length === 1 ? "" : "s"}`}
-            icon={<TrendingDown className="h-4 w-4" />}
-            tone="danger"
-            onClick={() => setDrilldown("EXPENSES")}
-          />
-          <StatCard
-            label={showCost ? "Stock at cost" : "Stock at sell price"}
-            value={formatCurrency(pack.totals.stock)}
-            hint={`${inventory.length} unit${inventory.length === 1 ? "" : "s"}`}
-            icon={<Package className="h-4 w-4" />}
-            tone="warning"
-            onClick={() => setDrilldown("STOCK")}
-          />
-        </StatGrid>
-
-        {/*
-          The opening position and what was bought after it, kept apart: "any
-          financial reporting, it will guide us right to see the actual, clear
-          picture of what we used to open ... then subsequent uploading value".
-        */}
-        <StatGrid>
-          <StatCard
-            label={showCost ? "Opening stock" : "Opening stock at sell price"}
-            value={formatCurrency(openingValue)}
-            hint={
-              opening.shops.length === 0
-                ? "No shop has loaded opening stock yet"
-                : stillOpen.length
-                  ? `Still being counted: ${stillOpen.map((row) => row.shop).join(", ")}. Not final yet.`
-                  : `Closed for ${opening.shops.map((row) => row.shop).join(", ")}`
-            }
-            icon={<Lock className="h-4 w-4" />}
-            tone={stillOpen.length ? "warning" : "success"}
-            onClick={() => setDrilldown("OPENING")}
-          />
-          <StatCard
-            label="Bought after opening"
-            value={formatCurrency(boughtValue)}
-            hint={`${opening.boughtSince.length} supplier bill${opening.boughtSince.length === 1 ? "" : "s"}`}
-            icon={<PackagePlus className="h-4 w-4" />}
-            onClick={() => setDrilldown("BOUGHT")}
-          />
-          <StatCard
             label="Customers still owe, in total"
             value={formatCurrency(pack.totals.owing)}
             hint={`${pack.debtors.length} customer${pack.debtors.length === 1 ? "" : "s"} · everything owed today, whatever the period. ${formatCurrency(pack.waiting.periodDue)} of it is still unpaid on this period's sales.`}
+            tone="warning"
             onClick={() => setDrilldown("DEBTORS")}
           />
           <StatCard
@@ -518,36 +483,86 @@ export function ReportsClientView({
             onClick={() => setDrilldown("CREDITORS")}
           />
           <StatCard
-            label="They owe us"
-            value={formatCurrency(supplierCredit)}
-            hint={supplierCredit > 0 ? "After send-backs" : undefined}
+            label={showCost ? "Stock at cost" : "Stock at sell price"}
+            value={formatCurrency(pack.totals.stock)}
+            hint={`${inventory.length} unit${inventory.length === 1 ? "" : "s"}`}
+            icon={<Package className="h-4 w-4" />}
+            onClick={() => setDrilldown("STOCK")}
           />
         </StatGrid>
 
-        <StatGrid>
-          <StatCard
-            label="Swap Deal value"
-            value={formatCurrency(pack.totals.swaps)}
-            hint={
-              pack.waiting.swaps > 0
-                ? `Trade-in value of swaps finished in this period (${formatCurrency(pack.totals.swapBalance)} paid on top). Plus ${pack.waiting.swaps} swap${pack.waiting.swaps === 1 ? "" : "s"} not finished yet, ${formatCurrency(pack.waiting.swapBalance)} balance not recorded. Finish them on Swap Deal.`
-                : `Trade-in value of swaps finished in this period · ${formatCurrency(pack.totals.swapBalance)} paid on top.`
-            }
-            tone={pack.waiting.swaps > 0 ? "warning" : undefined}
-            onClick={() => setDrilldown("SWAPS")}
-          />
-          <StatCard
-            label="Sales returns"
-            value={formatCurrency(pack.totals.salesReturns)}
-            hint={
-              pack.waiting.returns > 0
-                ? `Refunds and credit notes finished in this period. Plus ${formatCurrency(pack.waiting.returnValue)} on ${pack.waiting.returns} not finished yet. ${pack.totals.returns} logged in this period.`
-                : `Refunds and credit notes finished in this period · ${pack.totals.returns} logged`
-            }
-            tone={pack.waiting.returns > 0 ? "warning" : undefined}
-            onClick={() => setDrilldown("RETURNS")}
-          />
-        </StatGrid>
+        <details className="group surface-card overflow-hidden" open={moreOpen} onToggle={(event) => setMoreOpen((event.target as HTMLDetailsElement).open)}>
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold transition-colors duration-press ease-standard hover:bg-muted/40 [&::-webkit-details-marker]:hidden">
+            <span>
+              More figures
+              <span className="ml-2 font-normal text-muted-foreground">expenses, opening stock, swaps, returns</span>
+            </span>
+            <span className="flex items-center gap-2">
+              {moreAttention > 0 ? <TonePill tone="warning">{moreAttention} need{moreAttention === 1 ? "s" : ""} attention</TonePill> : null}
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-small ease-standard group-open:rotate-180" />
+            </span>
+          </summary>
+          <div className="motion-rise border-t border-border p-3 sm:p-4">
+            <StatGrid className="xl:grid-cols-3">
+              <StatCard
+                label="Approved expenses"
+                value={formatCurrency(pack.totals.expenses)}
+                hint={`${expenses.length} expense${expenses.length === 1 ? "" : "s"}`}
+                icon={<TrendingDown className="h-4 w-4" />}
+                tone="danger"
+                onClick={() => setDrilldown("EXPENSES")}
+              />
+              <StatCard
+                label={showCost ? "Opening stock" : "Opening stock at sell price"}
+                value={formatCurrency(openingValue)}
+                hint={
+                  opening.shops.length === 0
+                    ? "No shop has loaded opening stock yet"
+                    : stillOpen.length
+                      ? `Still being counted: ${stillOpen.map((row) => row.shop).join(", ")}. Not final yet.`
+                      : `Closed for ${opening.shops.map((row) => row.shop).join(", ")}`
+                }
+                icon={<Lock className="h-4 w-4" />}
+                tone={stillOpen.length ? "warning" : "success"}
+                onClick={() => setDrilldown("OPENING")}
+              />
+              <StatCard
+                label="Bought after opening"
+                value={formatCurrency(boughtValue)}
+                hint={`${opening.boughtSince.length} supplier bill${opening.boughtSince.length === 1 ? "" : "s"}`}
+                icon={<PackagePlus className="h-4 w-4" />}
+                onClick={() => setDrilldown("BOUGHT")}
+              />
+              <StatCard
+                label="They owe us"
+                value={formatCurrency(supplierCredit)}
+                hint={supplierCredit > 0 ? "After send-backs" : undefined}
+              />
+              <StatCard
+                label="Swap Deal value"
+                value={formatCurrency(pack.totals.swaps)}
+                hint={
+                  pack.waiting.swaps > 0
+                    ? `Trade-in value of swaps finished in this period (${formatCurrency(pack.totals.swapBalance)} paid on top). Plus ${pack.waiting.swaps} swap${pack.waiting.swaps === 1 ? "" : "s"} not finished yet, ${formatCurrency(pack.waiting.swapBalance)} balance not recorded. Finish them on Swap Deal.`
+                    : `Trade-in value of swaps finished in this period · ${formatCurrency(pack.totals.swapBalance)} paid on top.`
+                }
+                tone={pack.waiting.swaps > 0 ? "warning" : undefined}
+                onClick={() => setDrilldown("SWAPS")}
+              />
+              <StatCard
+                label="Sales returns"
+                value={formatCurrency(pack.totals.salesReturns)}
+                hint={
+                  pack.waiting.returns > 0
+                    ? `Refunds and credit notes finished in this period. Plus ${formatCurrency(pack.waiting.returnValue)} on ${pack.waiting.returns} not finished yet. ${pack.totals.returns} logged in this period.`
+                    : `Refunds and credit notes finished in this period · ${pack.totals.returns} logged`
+                }
+                tone={pack.waiting.returns > 0 ? "warning" : undefined}
+                onClick={() => setDrilldown("RETURNS")}
+              />
+            </StatGrid>
+          </div>
+        </details>
 
         <div className="grid gap-4 xl:grid-cols-2">
           <TableShell

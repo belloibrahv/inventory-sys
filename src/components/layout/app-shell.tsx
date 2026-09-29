@@ -67,7 +67,11 @@ export function AppShell({
             </div>
             {allowed ? <SectionTabs allowedHrefs={allowedHrefs} /> : null}
             {/* Room under the last card for the phone tab bar. */}
-            <main className="space-y-5 pb-24 pt-5 md:pt-6 lg:pb-6">{allowed ? children : null}</main>
+            {/* A new screen rises in (keyed on the page, so filters that only
+                change the address's query do not replay it). */}
+            <main key={pathname} className="motion-page space-y-5 pb-24 pt-5 md:pt-6 lg:pb-6">
+              {allowed ? children : null}
+            </main>
           </div>
         </div>
         <MobileTabBar allowedHrefs={allowedHrefs} />

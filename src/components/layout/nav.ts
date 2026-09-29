@@ -71,126 +71,25 @@ export type NavGroup = {
   items: NavItem[]
 }
 
+/**
+ * Six areas, in the order a shop day runs: what needs doing today, selling,
+ * stock, money, keeping watch, and setting up. Every page is still here; the
+ * menu only shows the ones a job may open, and Ctrl K reaches any of them.
+ */
 export const navGroups: NavGroup[] = [
   {
-    label: "Start",
+    label: "Today",
     items: [
       { name: "Home", href: "/dashboard", icon: LayoutDashboard },
-      { name: "Business today", href: "/owner", icon: Gauge },
-      { name: "How to use this", href: "/help", icon: BookOpen },
-    ],
-  },
-  {
-    label: "Stock",
-    items: [
-      {
-        name: "Upload stock",
-        href: "/uploads",
-        icon: Upload,
-        children: [
-          {
-            name: "Supplier bill",
-            href: "/uploads",
-            icon: PackagePlus,
-            hint: "Add phones one by one or many on one supplier bill",
-          },
-          {
-            name: "Many at once (Excel)",
-            href: "/uploads/opening-stock",
-            icon: FileSpreadsheet,
-            hint: "Put a whole shop on the system from one Excel file",
-          },
-          {
-            name: "Old Excel sheets",
-            href: "/uploads/sheets",
-            icon: ListOrdered,
-            hint: "Step-by-step sheets for items, stock, IMEIs, and customers",
-          },
-        ],
-      },
-      { name: "Correct & close opening stock", href: "/opening-stock", icon: Lock },
-      {
-        name: "Phones & items",
-        href: "/products",
-        icon: Smartphone,
-        children: [
-          { name: "Price list", href: "/products", icon: Tags, hint: "Names, cost, lowest price, and selling price" },
-          { name: "Brands", href: "/products/brands", icon: Factory, hint: "Samsung, Tecno, Apple and the rest" },
-          { name: "Categories", href: "/products/categories", icon: FolderTree, hint: "Kinds of items and the reseller markup" },
-          { name: "Add one item", href: "/products/new", icon: PlusCircle, hint: "Register one product name and brand" },
-          { name: "Add from a sheet", href: "/products/bulk", icon: FileSpreadsheet, hint: "Upload a list of product names" },
-          { name: "Warranty days", href: "/products/warranty", icon: ShieldCheck, hint: "Default warranty days on an item" },
-        ],
-      },
-      {
-        name: "Phone numbers (IMEI)",
-        href: "/imei",
-        icon: ScanLine,
-        children: [
-          { name: "All phone numbers", href: "/imei", icon: ScanLine, hint: "Find any phone by IMEI and see its life" },
-          { name: "One phone at a time", href: "/imei/intake", icon: PackagePlus, hint: "Put one phone already in your hand onto the shelf" },
-        ],
-      },
-      { name: "Shop stock", href: "/inventory", icon: Boxes },
-      {
-        name: "Goods on the way",
-        href: "/incoming",
-        icon: Package,
-        children: [
-          { name: "On the way", href: "/incoming", icon: Package, hint: "Left the supplier, not in the shop yet" },
-          { name: "Book goods coming", href: "/incoming/new", icon: PlusCircle, hint: "Scan IMEIs or type pieces still coming" },
-        ],
-      },
-    ],
-  },
-  {
-    label: "Sell & buy",
-    items: [
-      { name: "Sales", href: "/sales", icon: ShoppingCart },
       { name: "Sell now", href: "/pos", icon: Store },
       { name: "Balance the till", href: "/finance/close", icon: ClipboardCheck },
-      {
-        name: "Goods from supplier",
-        href: "/purchases",
-        icon: Truck,
-        children: [
-          { name: "Supplier bills", href: "/purchases", icon: Truck, hint: "Every supplier bill, paid and owed" },
-          { name: "Book expected goods", href: "/purchases/new", icon: PlusCircle, hint: "A supplier carton on its way" },
-          { name: "Send back to supplier", href: "/purchases/send-back", icon: Undo2, hint: "Phones going back to the supplier" },
-        ],
-      },
-      {
-        name: "Customers & money owed",
-        href: "/customers",
-        icon: Users,
-        children: [
-          { name: "All customers", href: "/customers", icon: Users, hint: "Who bought, paid and still owes" },
-          { name: "Add a customer", href: "/customers/new", icon: PlusCircle, hint: "One name and one phone for one buyer" },
-        ],
-      },
-      {
-        name: "Suppliers",
-        href: "/suppliers",
-        icon: Factory,
-        children: [
-          { name: "All suppliers", href: "/suppliers", icon: Factory, hint: "Bought, paid and still owed" },
-          { name: "Add a supplier", href: "/suppliers/new", icon: PlusCircle, hint: "One name and one phone for one house" },
-        ],
-      },
+      { name: "Needs approval", href: "/approvals", icon: BadgeCheck },
     ],
   },
   {
-    label: "Daily work",
+    label: "Sell",
     items: [
-      {
-        name: "Shop to shop (Stock Transfer)",
-        href: "/transfers",
-        icon: ArrowLeftRight,
-        children: [
-          { name: "All transfers", href: "/transfers", icon: ArrowLeftRight, hint: "Waiting, on the way, accepted and rejected" },
-          { name: "Start a transfer", href: "/transfers/new", icon: PlusCircle, hint: "Send stock to another Abu Twins shop" },
-        ],
-      },
+      { name: "Sales", href: "/sales", icon: ShoppingCart },
       {
         name: "Returns",
         href: "/returns",
@@ -218,15 +117,104 @@ export const navGroups: NavGroup[] = [
           { name: "Open a repair", href: "/repairs/new", icon: PlusCircle, hint: "Scan the phone, say what is wrong" },
         ],
       },
+      {
+        name: "Customers & money owed",
+        href: "/customers",
+        icon: Users,
+        children: [
+          { name: "All customers", href: "/customers", icon: Users, hint: "Who bought, paid and still owes" },
+          { name: "Add a customer", href: "/customers/new", icon: PlusCircle, hint: "One name and one phone for one buyer" },
+        ],
+      },
+    ],
+  },
+  {
+    label: "Stock",
+    items: [
+      { name: "Shop stock", href: "/inventory", icon: Boxes },
+      {
+        name: "Phones & items",
+        href: "/products",
+        icon: Smartphone,
+        children: [
+          { name: "Price list", href: "/products", icon: Tags, hint: "Names, cost, lowest price, and selling price" },
+          { name: "Brands", href: "/products/brands", icon: Factory, hint: "Samsung, Tecno, Apple and the rest" },
+          { name: "Categories", href: "/products/categories", icon: FolderTree, hint: "Kinds of items and the reseller markup" },
+          { name: "Add one item", href: "/products/new", icon: PlusCircle, hint: "Register one product name and brand" },
+          { name: "Add from a sheet", href: "/products/bulk", icon: FileSpreadsheet, hint: "Upload a list of product names" },
+          { name: "Warranty days", href: "/products/warranty", icon: ShieldCheck, hint: "Default warranty days on an item" },
+        ],
+      },
+      {
+        name: "Phone numbers (IMEI)",
+        href: "/imei",
+        icon: ScanLine,
+        children: [
+          { name: "All phone numbers", href: "/imei", icon: ScanLine, hint: "Find any phone by IMEI and see its life" },
+          { name: "One phone at a time", href: "/imei/intake", icon: PackagePlus, hint: "Put one phone already in your hand onto the shelf" },
+        ],
+      },
+      {
+        name: "Upload stock",
+        href: "/uploads",
+        icon: Upload,
+        children: [
+          {
+            name: "Supplier bill",
+            href: "/uploads",
+            icon: PackagePlus,
+            hint: "Add phones one by one or many on one supplier bill",
+          },
+          {
+            name: "Many at once (Excel)",
+            href: "/uploads/opening-stock",
+            icon: FileSpreadsheet,
+            hint: "Put a whole shop on the system from one Excel file",
+          },
+          {
+            name: "Old Excel sheets",
+            href: "/uploads/sheets",
+            icon: ListOrdered,
+            hint: "Step-by-step sheets for items, stock, IMEIs, and customers",
+          },
+        ],
+      },
+      {
+        name: "Supplier bills & goods",
+        href: "/purchases",
+        icon: Truck,
+        children: [
+          { name: "Supplier bills", href: "/purchases", icon: Truck, hint: "Every supplier bill, paid and owed" },
+          { name: "Book expected goods", href: "/purchases/new", icon: PlusCircle, hint: "A supplier carton on its way" },
+          { name: "Send back to supplier", href: "/purchases/send-back", icon: Undo2, hint: "Phones going back to the supplier" },
+        ],
+      },
+      {
+        name: "Goods on the way",
+        href: "/incoming",
+        icon: Package,
+        children: [
+          { name: "On the way", href: "/incoming", icon: Package, hint: "Left the supplier, not in the shop yet" },
+          { name: "Book goods coming", href: "/incoming/new", icon: PlusCircle, hint: "Scan IMEIs or type pieces still coming" },
+        ],
+      },
+      {
+        name: "Shop to shop",
+        href: "/transfers",
+        icon: ArrowLeftRight,
+        children: [
+          { name: "All transfers", href: "/transfers", icon: ArrowLeftRight, hint: "Waiting, on the way, accepted and rejected" },
+          { name: "Start a transfer", href: "/transfers/new", icon: PlusCircle, hint: "Send stock to another Abu Twins shop" },
+        ],
+      },
       { name: "Stock count", href: "/reconciliation", icon: ClipboardCheck },
+      { name: "Opening stock", href: "/opening-stock", icon: Lock },
     ],
   },
   {
     label: "Money",
     items: [
       { name: "Money in & out", href: "/finance", icon: Wallet },
-      { name: "Check the books", href: "/audit/books", icon: Scale },
-      { name: "Profit", href: "/profits", icon: TrendingUp },
       {
         name: "Shop expenses",
         href: "/expenses",
@@ -236,11 +224,30 @@ export const navGroups: NavGroup[] = [
           { name: "Ask for a shop bill", href: "/expenses/new", icon: PlusCircle, hint: "A manager says yes before money leaves" },
         ],
       },
-      { name: "Needs approval", href: "/approvals", icon: BadgeCheck },
+      {
+        name: "Suppliers",
+        href: "/suppliers",
+        icon: Factory,
+        children: [
+          { name: "All suppliers", href: "/suppliers", icon: Factory, hint: "Bought, paid and still owed" },
+          { name: "Add a supplier", href: "/suppliers/new", icon: PlusCircle, hint: "One name and one phone for one house" },
+        ],
+      },
+      { name: "Profit", href: "/profits", icon: TrendingUp },
+      { name: "Reports", href: "/reports", icon: BarChart3 },
+      { name: "Check the books", href: "/audit/books", icon: Scale },
     ],
   },
   {
-    label: "Shop & people",
+    label: "Oversight",
+    items: [
+      { name: "Business today", href: "/owner", icon: Gauge },
+      { name: "Who did what", href: "/audit", icon: ScrollText },
+      { name: "Alerts", href: "/notifications", icon: Bell },
+    ],
+  },
+  {
+    label: "Setup",
     items: [
       {
         name: "Shops",
@@ -261,9 +268,6 @@ export const navGroups: NavGroup[] = [
           { name: "Who can see what", href: "/staff/access", icon: Shield, hint: "Which screens each job opens" },
         ],
       },
-      { name: "Reports", href: "/reports", icon: BarChart3 },
-      { name: "Who did what", href: "/audit", icon: ScrollText },
-      { name: "Alerts", href: "/notifications", icon: Bell },
       {
         name: "Settings",
         href: "/settings",
@@ -274,6 +278,7 @@ export const navGroups: NavGroup[] = [
           { name: "Shop backup", href: "/settings/backup", icon: DatabaseBackup, hint: "Download a copy of the shop records" },
         ],
       },
+      { name: "How to use this", href: "/help", icon: BookOpen },
     ],
   },
 ]

@@ -44,8 +44,19 @@ function saleBalance(sale: SaleRow) {
   return sale.paidAmount - sale.totalAmount
 }
 
+/**
+ * A sale's balance is negative while the buyer still owes. That money is owed
+ * to us, not lost, so it shows as the amount still owed, in amber, never as a
+ * red minus figure that reads like a loss.
+ */
 function balanceTone(balance: number) {
-  return balance < -0.005 ? "text-danger" : balance > 0.005 ? "text-success" : "text-muted-foreground"
+  return balance < -0.005 ? "text-warning" : balance > 0.005 ? "text-success" : "text-muted-foreground"
+}
+
+function balanceWords(balance: number) {
+  if (balance < -0.005) return formatCurrency(-balance)
+  if (balance > 0.005) return `${formatCurrency(balance)} over`
+  return "—"
 }
 
 function searchText(sale: SaleRow) {
@@ -64,7 +75,7 @@ function searchText(sale: SaleRow) {
 
 function exportRows(rows: SaleRow[]) {
   return [
-    ["Invoice", "Date", "Shop", "Buyer", "Sold by", "Items", "Sales", "Paid", "Balance", "Payment", "Status"],
+    ["Invoice", "Date", "Shop", "Buyer", "Sold by", "Items", "Sales", "Paid", "Still owed", "Payment", "Status"],
     ...rows.map((sale) => [
       sale.invoiceNumber,
       formatShopWhen(sale.saleDate),
@@ -74,7 +85,7 @@ function exportRows(rows: SaleRow[]) {
       sale.items.map((item) => `${item.quantity} × ${item.name}${item.imei ? ` (${item.imei})` : ""}`).join("; "),
       sale.totalAmount,
       sale.paidAmount,
-      saleBalance(sale),
+      Math.max(0, -saleBalance(sale)),
       statusLabel(sale.paymentMethod),
       statusLabel(sale.status),
     ]),
@@ -189,12 +200,12 @@ export function SalesList({ sales }: { sales: SaleRow[] }) {
     },
     {
       id: "balance",
-      header: "Balance",
+      header: "Still owed",
       align: "right",
       sortValue: (sale) => saleBalance(sale),
       cell: (sale) => {
         const balance = saleBalance(sale)
-        return <span className={cn("font-semibold", balanceTone(balance))}>{formatCurrency(balance)}</span>
+        return <span className={cn("font-semibold", balanceTone(balance))}>{balanceWords(balance)}</span>
       },
     },
     {
@@ -209,12 +220,12 @@ export function SalesList({ sales }: { sales: SaleRow[] }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
-        <Figure label="Sales value" value={totals.sales} hint={`${visible.length} sale${visible.length === 1 ? "" : "s"}`} />
+        <Figure lead label="Sales value" value={totals.sales} hint={`${visible.length} sale${visible.length === 1 ? "" : "s"}`} />
         <Figure label="Received" value={totals.paid} hint="Money already taken" />
         <Figure
-          label="Balance"
-          value={totals.balance}
-          hint={totals.balance < -0.005 ? "Buyers still owe" : "Nothing owed"}
+          label="Still owed to us"
+          value={Math.max(0, -totals.balance)}
+          hint={totals.balance < -0.005 ? "Buyers still owe on these sales" : "Nothing owed"}
           tone={balanceTone(totals.balance)}
         />
       </div>
@@ -267,7 +278,7 @@ export function SalesList({ sales }: { sales: SaleRow[] }) {
             subtitle: `${sale.invoiceNumber} · ${formatShopWhen(sale.saleDate)}`,
             value: formatCurrency(sale.totalAmount),
             valueHint:
-              balance < -0.005 ? <span className="text-danger">Owes {formatCurrency(-balance)}</span> : <span className="text-success">Paid</span>,
+              balance < -0.005 ? <span className="text-warning">Owes {formatCurrency(-balance)}</span> : <span className="text-success">Paid</span>,
             meta: (
               <>
                 <span>{sale.branch.name}</span>
@@ -293,7 +304,7 @@ export function SalesList({ sales }: { sales: SaleRow[] }) {
             <td className="hidden lg:table-cell" />
             <td className="whitespace-nowrap text-right tabular-nums">{formatCurrency(totals.sales)}</td>
             <td className="hidden whitespace-nowrap text-right tabular-nums xl:table-cell">{formatCurrency(totals.paid)}</td>
-            <td className={cn("whitespace-nowrap text-right tabular-nums", balanceTone(totals.balance))}>{formatCurrency(totals.balance)}</td>
+            <td className={cn("whitespace-nowrap text-right tabular-nums", balanceTone(totals.balance))}>{balanceWords(totals.balance)}</td>
             <td className="hidden lg:table-cell" />
           </tr>
         )}
@@ -324,15 +335,20 @@ export function SalesList({ sales }: { sales: SaleRow[] }) {
   )
 }
 
-function Figure({ label, value, hint, tone }: { label: string; value: number; hint: string; tone?: string }) {
+function Figure({ label, value, hint, tone, lead = false }: { label: string; value: number; hint: string; tone?: string; lead?: boolean }) {
   return (
-    <div className="surface-card min-w-0 p-3 sm:p-4" title={formatCurrency(value)}>
-      <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sm:text-xs">{label}</p>
-      <p className={cn("mt-1 truncate text-base font-semibold tabular-nums sm:text-2xl", tone)}>
-        <span className="sm:hidden">{formatCurrencyShort(value)}</span>
-        <span className="hidden sm:inline">{formatCurrency(value)}</span>
+    <div
+      className={cn(
+        "surface-card min-w-0 p-3 sm:p-4",
+        lead && "border-[hsl(var(--lead-bg))] bg-[hsl(var(--lead-bg))] text-[hsl(var(--lead-fg))]"
+      )}
+      title={formatCurrency(value)}
+    >
+      <p className={cn("truncate text-[10px] font-semibold uppercase tracking-wider sm:text-xs", lead ? "text-[hsl(var(--lead-fg)/0.7)]" : "text-muted-foreground")}>{label}</p>
+      <p className={cn("mt-1 truncate text-base font-semibold tabular-nums sm:text-2xl", value === 0 ? "" : tone)}>
+        {value >= 1_000_000 ? formatCurrencyShort(value) : formatCurrency(value)}
       </p>
-      <p className="mt-0.5 hidden truncate text-xs text-muted-foreground sm:block">{hint}</p>
+      <p className={cn("mt-0.5 hidden truncate text-xs sm:block", lead ? "text-[hsl(var(--lead-fg)/0.7)]" : "text-muted-foreground")}>{hint}</p>
     </div>
   )
 }
@@ -351,8 +367,8 @@ function SaleQuickLook({ sale }: { sale: SaleRow }) {
           <p className="font-semibold tabular-nums">{formatCurrency(sale.paidAmount)}</p>
         </div>
         <div>
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Balance</p>
-          <p className={cn("font-semibold tabular-nums", balanceTone(balance))}>{formatCurrency(balance)}</p>
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Still owed</p>
+          <p className={cn("font-semibold tabular-nums", balanceTone(balance))}>{balanceWords(balance)}</p>
         </div>
       </div>
 

@@ -6,6 +6,9 @@ type UIState = {
   sidebarOpen: boolean
   desktopSidebar: boolean
   commandOpen: boolean
+  calculatorOpen: boolean
+  toggleCalculator: () => void
+  setCalculatorOpen: (open: boolean) => void
   toggleSidebar: () => void
   setSidebar: (open: boolean) => void
   setDesktopSidebar: (open: boolean) => void
@@ -27,6 +30,9 @@ export const useUI = create<UIState>((set, get) => ({
   sidebarOpen: false,
   desktopSidebar: true,
   commandOpen: false,
+  calculatorOpen: false,
+  toggleCalculator: () => set((state) => ({ calculatorOpen: !state.calculatorOpen })),
+  setCalculatorOpen: (open) => set({ calculatorOpen: open }),
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
   setSidebar: (open) => set({ sidebarOpen: open }),
   setDesktopSidebar: (open) => {

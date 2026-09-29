@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { ChevronRight, PanelLeftClose, X } from "lucide-react"
+import { ChevronRight, PanelLeftClose, Search, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { BrandLockup } from "@/components/brand-mark"
 import { isOnItem, navGroups, type NavChild, type NavItem } from "@/components/layout/nav"
@@ -12,7 +12,8 @@ import { pathIsAllowed } from "@/lib/access-path"
 import { useUI } from "@/store/ui"
 
 /**
- * Thirty-odd destinations in six groups. The weight is carried by the group
+ * Thirty-odd destinations in six areas (Today, Sell, Stock, Money, Oversight,
+ * Setup), trimmed to what the job may open, with search on top. The weight is carried by the group
  * headings and by the one active item, not by making every label bold, which is
  * what previously made the menu look like a wall.
  *
@@ -27,6 +28,7 @@ export function Sidebar({ allowedHrefs }: { allowedHrefs: string[] }) {
   const setSidebar = useUI((state) => state.setSidebar)
   const desktopSidebar = useUI((state) => state.desktopSidebar)
   const setDesktopSidebar = useUI((state) => state.setDesktopSidebar)
+  const setCommandOpen = useUI((state) => state.setCommandOpen)
 
   const groups = navGroups
     .map((group) => ({
@@ -85,7 +87,23 @@ export function Sidebar({ allowedHrefs }: { allowedHrefs: string[] }) {
             <X className="h-5 w-5" />
           </button>
         </div>
-        <nav className="flex-1 space-y-6 overflow-y-auto px-3 pb-10 pt-4">
+        <div className="px-3 pt-3">
+          <button
+            type="button"
+            onClick={() => {
+              setSidebar(false)
+              setCommandOpen(true)
+            }}
+            className="flex w-full items-center gap-2 rounded-lg border border-sidebar-border bg-sidebar-muted/60 px-2.5 py-2 text-left text-[13px] text-sidebar-foreground/70 transition-colors duration-press ease-standard hover:border-sidebar-foreground/25 hover:text-white"
+          >
+            <Search className="h-4 w-4 shrink-0" />
+            <span className="min-w-0 flex-1 truncate">Search or jump to…</span>
+            <kbd className="hidden rounded border border-sidebar-border px-1.5 py-0.5 font-mono text-[10px] text-sidebar-foreground/60 lg:inline">
+              Ctrl K
+            </kbd>
+          </button>
+        </div>
+        <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-10 pt-4">
           {groups.map((group) => (
             <div key={group.label}>
               <p className="mb-1.5 px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/40">
@@ -139,7 +157,7 @@ function NavLeaf({
       onClick={onNavigate}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] transition-colors",
+        "relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] transition-colors duration-press ease-standard",
         active
           ? "bg-sidebar-active font-semibold text-white"
           : "font-medium text-sidebar-foreground/75 hover:bg-sidebar-muted hover:text-white"
@@ -214,7 +232,7 @@ function NavBranch({
       </div>
 
       {open ? (
-        <div className="relative mt-0.5 space-y-0.5 pb-1 pl-[18px]">
+        <div className="motion-rise relative mt-0.5 space-y-0.5 pb-1 pl-[18px]">
           <span className="absolute inset-y-0 left-[18px] w-px bg-sidebar-border" aria-hidden />
           {item.children.map((child) => {
             const active = child.href === activeHref
