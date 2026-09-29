@@ -5,7 +5,8 @@ import { money } from "@/lib/utils"
 /**
  * Cash sitting in one shop till on the books:
  * opening cash + cash sales − approved shop expenses − other cash pay-outs
- * (refunds, neighbor pay, swap pay-outs) that are not already an approved expense.
+ * (refunds, neighbor pay, swap pay-outs) that are not already an approved expense
+ * − cash paid into the bank (Move cash to bank).
  */
 /** How an undone collection is written in the money ledger. */
 export const UNDO_COLLECTION_NOTE = "Undid money collected on "
@@ -23,7 +24,7 @@ export function isUndoneCollection(entry: { description?: string | null }) {
 }
 
 export async function shopCashOnHand(branchId: string) {
-  const [branch, sales, approvedExpenses, expenseNumbers, cashPayOuts] = await Promise.all([
+  const [branch, sales, approvedExpenses, expenseNumbers, cashPayOuts, deposits] = await Promise.all([
     prisma.branch.findUnique({
       where: { id: branchId },
       select: { openingCash: true, name: true },
@@ -49,6 +50,10 @@ export async function shopCashOnHand(branchId: string) {
       where: { branchId, account: "CASH", type: "EXPENSE" },
       select: { amount: true, reference: true, description: true },
     }),
+    prisma.cashDeposit.aggregate({
+      where: { branchId, undoneAt: null },
+      _sum: { amount: true },
+    }),
   ])
 
   const cashIn = sumSaleTenders(sales).cash
@@ -59,6 +64,7 @@ export async function shopCashOnHand(branchId: string) {
     if (isUndoneCollection(row)) return sum
     return sum + money(row.amount)
   }, 0)
+  const depositedOut = money(deposits._sum.amount)
 
   return {
     branchName: branch?.name ?? "This shop",
@@ -66,7 +72,8 @@ export async function shopCashOnHand(branchId: string) {
     cashIn,
     expenseOut,
     otherOut,
-    available: money(branch?.openingCash) + cashIn - expenseOut - otherOut,
+    depositedOut,
+    available: money(branch?.openingCash) + cashIn - expenseOut - otherOut - depositedOut,
   }
 }
 

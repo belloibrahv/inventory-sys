@@ -457,6 +457,26 @@ const PAGES: Array<
     lookup: ["finance", "money in", "money out", "cash", "owe", "receivable"],
   },
   {
+    id: "deposit",
+    href: "/finance/deposit",
+    title: "Move cash to bank",
+    needAction: "action.deposit",
+    what: "When cash piles up in a till, record the cash paid into the bank here. Cash in the till goes down and the bank account goes up by the same amount. It is our own money changing place, so it is not an expense and it does not touch profit.",
+    doThis: [
+      "Open Money in & out and click Move cash to bank.",
+      "Pick the shop whose till the cash left, and the bank account it went into.",
+      "Type the amount, the day it went into the bank, and the teller slip or transfer reference.",
+      "Click Move this cash to the bank and say yes.",
+    ],
+    watch: [
+      "You cannot move more than the cash in that till. Shop bills waiting for a yes are held back.",
+      "The move shows on both ledgers: Cash to bank on Cash in the till, Cash from the till on Bank.",
+      "Close the day still counts the cash taken that day; a deposit does not change it.",
+    ],
+    cannot: ["Only the CEO or the main admin can undo a deposit, and they must say why. The record stays, marked undone."],
+    lookup: ["deposit", "bank", "lodge", "cash to bank", "move cash", "teller"],
+  },
+  {
     id: "profits",
     href: "/profits",
     title: "Profit",

@@ -280,6 +280,7 @@ model User {
   dayCloses       DayClose[]
   parkedSales     ParkedSale[]
   stockMoves      StockMovement[]
+  cashDeposits    CashDeposit[]
 
   @@index([email])
   @@index([branchId])
@@ -319,6 +320,7 @@ model Branch {
   openingStock    OpeningStock?
   bankAccounts    BankAccount[]
   priceRequests   PriceRequest[]
+  cashDeposits    CashDeposit[]
   /// Cash in the till on the day this shop started using the software.
   openingCash     Decimal    @default(0)
   openingCashAt   DateTime?
@@ -934,10 +936,39 @@ model BankAccount {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   payments       Payment[]
+  cashDeposits   CashDeposit[]
 
   @@index([branchId])
   @@index([accountNumber])
   @@index([isActive])
+}
+
+/// Cash taken out of a shop's till and paid into one of our bank accounts.
+/// Our money only changes place: it leaves Cash in the till and lands on the
+/// named bank, so it is never an expense, a sale, or profit. An undone deposit
+/// keeps its row (undoneAt set) so the record of what happened stays.
+model CashDeposit {
+  id            String      @id @default(cuid())
+  depositNumber String      @unique
+  branchId      String
+  branch        Branch      @relation(fields: [branchId], references: [id])
+  bankAccountId String
+  bankAccount   BankAccount @relation(fields: [bankAccountId], references: [id])
+  amount        Decimal
+  /// The bank teller slip or transfer reference.
+  slipNumber    String?
+  note          String?
+  depositedAt   DateTime    @default(now())
+  createdById   String
+  createdBy     User        @relation(fields: [createdById], references: [id])
+  createdAt     DateTime    @default(now())
+  undoneAt      DateTime?
+  undoneById    String?
+  undoneReason  String?
+
+  @@index([branchId])
+  @@index([bankAccountId])
+  @@index([depositedAt])
 }
 
 model Approval {

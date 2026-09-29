@@ -49,6 +49,7 @@ export const ACTION_PERMS = [
   { key: "action.recon", label: "Send a stock count" },
   { key: "action.approve", label: "Say yes or no to waiting work" },
   { key: "action.finance", label: "Post expenses and pay suppliers" },
+  { key: "action.deposit", label: "Move cash from the till to the bank" },
   { key: "action.staff", label: "Add and edit staff" },
   { key: "action.settings", label: "Change shop settings" },
   { key: "action.all_branches", label: "See every shop" },
@@ -104,6 +105,7 @@ export const ACCOUNTANT_KEYS = V(
   "view.notifications",
   "view.branches",
   "action.finance",
+  "action.deposit",
   "action.all_branches"
 )
 
@@ -123,7 +125,7 @@ const DEFAULTS: Record<UserRole, string[]> = {
     "view.swaps", "view.repairs", "view.reconciliation", "view.finance", "view.expenses",
     "view.approvals", "view.staff", "view.reports", "view.notifications",
     "action.sell", "action.upload", "action.intake", "action.incoming", "action.transfer",
-    "action.return", "action.swap", "action.repair", "action.recon", "action.approve", "action.finance", "action.staff"
+    "action.return", "action.swap", "action.repair", "action.recon", "action.approve", "action.finance", "action.deposit", "action.staff"
   ),
   VAULT_MANAGER: V(
     "view.dashboard", "view.products", "view.uploads", "view.imei", "view.inventory", "view.incoming", "view.purchases",

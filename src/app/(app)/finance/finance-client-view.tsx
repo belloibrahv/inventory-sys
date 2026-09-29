@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import Link from "next/link"
 import {
   ArrowDownLeft,
+  ArrowRightLeft,
   ArrowUpRight,
   Banknote,
   ClipboardCheck,
@@ -55,6 +56,8 @@ type FinanceData = {
   supplierCredits: Array<{ id: string; name: string; owed: number }>
   canSetOpening: boolean
   canRemoveBank: boolean
+  canDeposit: boolean
+  cashToBank: number
   shops: OpeningCashShop[]
   bankAccounts: NamedBankRow[]
 }
@@ -121,6 +124,11 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
     <div className="space-y-5">
       <Toolbar className="justify-end">
         <div className="flex flex-wrap gap-2">
+          <Button asChild variant={data.canDeposit ? "default" : "outline"} size="sm">
+            <Link href="/finance/deposit">
+              <ArrowRightLeft className="mr-1.5 h-4 w-4" /> {data.canDeposit ? "Move cash to bank" : "Cash to bank"}
+            </Link>
+          </Button>
           <Button asChild variant="outline" size="sm">
             <Link href="/finance/close">
               <ClipboardCheck className="mr-1.5 h-4 w-4" /> Close the day
@@ -185,6 +193,7 @@ export function FinanceClientView({ data }: { data: FinanceData }) {
                 <p className="text-sm font-semibold">Cash in the till</p>
                 <p className="text-xs text-muted-foreground">
                   Started with {formatCurrency(data.openingCash)}
+                  {data.cashToBank > 0 ? ` · ${formatCurrency(data.cashToBank)} moved to bank` : ""}
                 </p>
               </div>
             </div>

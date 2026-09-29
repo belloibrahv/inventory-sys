@@ -45,6 +45,8 @@ function emptyFinance() {
     supplierCredits: [] as Array<{ id: string; name: string; owed: number }>,
     canSetOpening: false,
     canRemoveBank: false,
+    canDeposit: false,
+    cashToBank: 0,
     shops: [] as OpeningCashShop[],
     bankAccounts: [] as NamedBankRow[],
   }
@@ -75,6 +77,8 @@ export type NamedBankRow = {
   accountName: string | null
   openingBalance: number
   salesReceived: number
+  /** Cash moved from a till into this account (Move cash to bank). */
+  depositsReceived: number
   branchId: string
   branchName: string
   branchCode: string
@@ -277,6 +281,53 @@ export async function getFinance({ withLedger = false }: { withLedger?: boolean 
     })
   }
 
+  // Move cash to bank: out of the till's shop, into the named account's shop.
+  // Either side can be the shop in view, so each side is counted on its own.
+  const deposits = await prisma.cashDeposit.findMany({
+    where: {
+      undoneAt: null,
+      ...(branchId ? { OR: [{ branchId }, { bankAccount: { branchId } }] } : {}),
+    },
+    include: {
+      branch: { select: { name: true } },
+      bankAccount: { select: { bankName: true, accountNumber: true, branchId: true, branch: { select: { name: true } } } },
+    },
+    orderBy: { depositedAt: "desc" },
+  })
+  let cashToBank = 0
+  let depositsIn = 0
+  const depositsByBank = new Map<string, number>()
+  for (const deposit of deposits) {
+    const amount = money(deposit.amount)
+    const bankLabel = `${deposit.bankAccount.bankName} ${deposit.bankAccount.accountNumber}`
+    const note = deposit.slipNumber ? ` (slip ${deposit.slipNumber})` : ""
+    if (!branchId || deposit.branchId === branchId) {
+      cashToBank += amount
+      cashEntries.push({
+        id: `deposit-out-${deposit.id}`,
+        date: deposit.depositedAt,
+        branch: deposit.branch.name,
+        type: "OUT",
+        category: "Cash to bank",
+        description: `${deposit.depositNumber} paid into ${bankLabel}${note}`,
+        amount,
+      })
+    }
+    if (!branchId || deposit.bankAccount.branchId === branchId) {
+      depositsIn += amount
+      depositsByBank.set(deposit.bankAccountId, (depositsByBank.get(deposit.bankAccountId) ?? 0) + amount)
+      bankEntries.push({
+        id: `deposit-in-${deposit.id}`,
+        date: deposit.depositedAt,
+        branch: deposit.bankAccount.branch.name,
+        type: "IN",
+        category: "Cash from the till",
+        description: `${deposit.depositNumber} cash from ${deposit.branch.name} into ${bankLabel}${note}`,
+        amount,
+      })
+    }
+  }
+
   const approvedExpenseRefs = expenses.filter((e) => e.approvedAt).map((e) => e.expenseNumber)
   const otherCashOuts = await prisma.financeEntry.findMany({
     where: {
@@ -335,6 +386,7 @@ export async function getFinance({ withLedger = false }: { withLedger?: boolean 
     accountName: row.accountName,
     openingBalance: money(row.openingBalance),
     salesReceived: salesByBank.get(row.id) ?? 0,
+    depositsReceived: depositsByBank.get(row.id) ?? 0,
     branchId: row.branchId,
     branchName: row.branch.name,
     branchCode: row.branch.code,
@@ -371,8 +423,8 @@ export async function getFinance({ withLedger = false }: { withLedger?: boolean 
   cashEntries.sort((a, b) => b.date.getTime() - a.date.getTime())
   bankEntries.sort((a, b) => b.date.getTime() - a.date.getTime())
 
-  const cashBalance = openingCash + cashRevenue - expenditure - otherCashOut
-  const bankBalance = openingBank + bankRevenue - supplierPayments
+  const cashBalance = openingCash + cashRevenue - expenditure - otherCashOut - cashToBank
+  const bankBalance = openingBank + bankRevenue - supplierPayments + depositsIn
 
   const seenHouses = new Set(purchases.map((row) => row.supplierId))
   const ledgers = groupSupplierLedgers([
@@ -425,6 +477,8 @@ export async function getFinance({ withLedger = false }: { withLedger?: boolean 
     supplierCredits,
     canSetOpening: canSetOpeningMoney(user.role),
     canRemoveBank: canHardDelete(user.role),
+    canDeposit: await can(user.role, "action.deposit"),
+    cashToBank,
     shops: openingCashShops,
     bankAccounts: namedBanks,
   }
