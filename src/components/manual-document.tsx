@@ -16,7 +16,6 @@ export function ManualDocument({
   statementRef: string
   preparedAt: string
 }) {
-  let lastGroup = ""
   const brand = letterheadFromCompany(company)
 
   return (
@@ -72,8 +71,8 @@ export function ManualDocument({
       </div>
 
       {data.sections.map((section, index) => {
-        const showGroup = section.group !== lastGroup
-        lastGroup = section.group
+        // A group heading goes above the first section of each group.
+        const showGroup = index === 0 || data.sections[index - 1].group !== section.group
         return (
           <article
             key={section.id}

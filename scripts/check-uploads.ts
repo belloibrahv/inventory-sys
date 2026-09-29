@@ -112,7 +112,7 @@ check("half a piece caught", s.problems.filter((p) => p.includes("whole number")
 check("words instead of a number caught", s.problems.filter((p) => p.includes("whole number")).length === 3, s.problems.join(" | "))
 
 console.log("\n6. Customers")
-let c = planCustomers(
+const c = planCustomers(
   [
     { name: "Chidi Okeke", phone: "08031234567", shop: "BOD", "credit limit": "250000" },
     { name: "No Phone", phone: "", shop: "BOD" },

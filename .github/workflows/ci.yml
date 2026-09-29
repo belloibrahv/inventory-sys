@@ -16,9 +16,24 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # A throwaway Postgres with demo data, the same kind of database the shops
+    # run on. Never a real shop's.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci-throwaway
+          POSTGRES_DB: shop
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d shop"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
-      # A throwaway SQLite database with demo data. Never a real shop's.
-      DATABASE_URL: file:./ci.db
+      DATABASE_URL: postgresql://ci:ci-throwaway@localhost:5432/shop
       NEXTAUTH_SECRET: ci-throwaway-signing-key-used-only-by-github-checks
       NEXTAUTH_URL: http://localhost:3000
       SEED_DEMO_USERS: "true"
@@ -35,10 +50,15 @@ jobs:
         run: npm ci
 
       - name: Prisma client
-        run: npx prisma generate
+        run: |
+          node scripts/use-postgres-schema.mjs
+          npx prisma generate
 
       - name: Types
         run: npx tsc --noEmit
+
+      - name: Lint
+        run: npx eslint .
 
       - name: Build
         run: npx next build

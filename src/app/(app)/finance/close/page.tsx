@@ -128,7 +128,7 @@ export default async function DayClosePage({
             href={`/finance/close?branchId=${preview.branchId}&date=${today}`}
             className="text-primary font-semibold hover:underline"
           >
-            Switch to Today's sales ({today}) →
+            Switch to Today&apos;s sales ({today}) →
           </Link>
         </div>
       ) : null}
@@ -377,7 +377,7 @@ export default async function DayClosePage({
                 )}`}
                 download={`sales-ledger-${preview.branchName || "shop"}-${preview.businessDate}.csv`}
               >
-                <Download className="h-3.5 w-3.5" /> Download this day's sales (CSV)
+                <Download className="h-3.5 w-3.5" /> Download this day&apos;s sales (CSV)
               </a>
             )}
             <Link

@@ -175,7 +175,6 @@ export function CommandPalette({ allowedHrefs = [] }: { allowedHrefs?: string[] 
     }
   }
 
-  let lastGroup = ""
   return (
     <Dialog
       open={open}
@@ -203,8 +202,7 @@ export function CommandPalette({ allowedHrefs = [] }: { allowedHrefs?: string[] 
         </div>
         <div ref={listRef} className="max-h-[min(420px,60vh)] overflow-y-auto p-2" role="listbox" aria-label="Results">
           {rows.map((row, index) => {
-            const heading = row.group !== lastGroup ? row.group : null
-            lastGroup = row.group
+            const heading = index === 0 || rows[index - 1].group !== row.group ? row.group : null
             const Icon = row.group === "Do something" ? Zap : row.group === "Opened lately" ? Clock : FileText
             return (
               <div key={row.key}>

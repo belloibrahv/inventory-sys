@@ -1394,7 +1394,7 @@ export async function batchUploadStock(payload: BatchUploadPayload): Promise<Upl
 
   let totalPhones = 0
   let totalPieces = 0
-  let totalProductsAdded = resolvedItems.filter((i) => i.createdProduct).length
+  const totalProductsAdded = resolvedItems.filter((i) => i.createdProduct).length
 
   const purchase = await prisma.$transaction(async (tx) => {
     // Create Purchase (PO)
