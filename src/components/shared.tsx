@@ -3,10 +3,11 @@
 import type { ReactNode } from "react"
 import Link from "next/link"
 import { pageTitles } from "@/components/layout/titles"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Inbox, type LucideIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { statusLabel, statusTone } from "@/lib/status"
-import { cn, formatCurrencyShort } from "@/lib/utils"
+import { cn, formatCurrency, formatCurrencyShort } from "@/lib/utils"
+import { AnimatedNumber } from "@/components/animated-number"
 
 /**
  * The screen vocabulary.
@@ -151,6 +152,36 @@ function readNaira(value: ReactNode): number | null {
   return Number.isFinite(amount) ? (match[1] ? -amount : amount) : null
 }
 
+/**
+ * A small trend line under a figure: a soft area, the line, and a dot on the
+ * latest point. It takes the colour of the text around it, so it works on the
+ * lead tile and on a plain one. The line stretches to the tile; the dot is
+ * drawn separately so it stays round.
+ */
+export function Sparkline({ points, label, className }: { points: number[]; label: string; className?: string }) {
+  if (points.length < 2) return null
+  const max = Math.max(...points)
+  const min = Math.min(...points)
+  const span = max - min || 1
+  const y = (value: number) => (max === min ? 22 : 24 - ((value - min) / span) * 20)
+  const x = (index: number) => (index / (points.length - 1)) * 100
+  const line = points.map((value, index) => `${index ? "L" : "M"}${x(index).toFixed(2)} ${y(value).toFixed(2)}`).join(" ")
+  const lastY = y(points[points.length - 1])
+  return (
+    <div className={cn("relative mt-2 h-7 w-full", className)} role="img" aria-label={label}>
+      <svg viewBox="0 0 100 28" preserveAspectRatio="none" className="h-full w-full overflow-visible" aria-hidden>
+        <path d={`${line} L100 28 L0 28 Z`} fill="currentColor" opacity={0.14} />
+        <path d={line} fill="none" stroke="currentColor" strokeWidth={1.75} vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+      </svg>
+      <span
+        className="absolute h-2 w-2 rounded-full bg-current ring-2 ring-current/25"
+        style={{ left: "calc(100% - 4px)", top: `calc(${(lastY / 28) * 100}% - 4px)` }}
+        aria-hidden
+      />
+    </div>
+  )
+}
+
 /** Only these tones colour a figure: something owed, short or wrong. */
 const STATE_TONES: Tone[] = ["warning", "danger"]
 
@@ -176,6 +207,7 @@ export function StatCard({
   className,
   lead = false,
   exact = false,
+  chart,
 }: {
   label: string
   value: ReactNode
@@ -189,13 +221,28 @@ export function StatCard({
   lead?: boolean
   /** Keep every naira on the tile instead of the short form. */
   exact?: boolean
+  /** A small trend under the figure, e.g. a Sparkline. */
+  chart?: ReactNode
 }) {
   const interactive = Boolean(href || onClick)
   const amount = readNaira(value)
   const isZero = amount === 0 || (typeof value === "string" && !/[1-9]/.test(value))
   const stateTone = STATE_TONES.includes(tone) && !isZero ? tone : "neutral"
   const shortened = amount !== null && !exact && Math.abs(amount) >= 1_000_000
-  const shown = shortened ? formatCurrencyShort(amount) : value
+  // Whole counts such as "2,290" count up too.
+  const count = typeof value === "string" && /^\d{1,3}(,\d{3})*$|^\d+$/.test(value.trim()) ? Number(value.replace(/,/g, "")) : null
+  const shown =
+    amount !== null ? (
+      <AnimatedNumber
+        countUp
+        value={amount}
+        format={shortened ? (n) => formatCurrencyShort(n) : (n) => formatCurrency(n)}
+      />
+    ) : count !== null ? (
+      <AnimatedNumber countUp value={count} format={(n) => Math.round(n).toLocaleString("en-NG")} />
+    ) : (
+      value
+    )
 
   const body = (
     <>
@@ -221,6 +268,7 @@ export function StatCard({
       >
         {shown}
       </p>
+      {chart ? <div className={lead ? "text-[hsl(var(--lead-fg)/0.85)]" : "text-primary"}>{chart}</div> : null}
       {hint ? (
         <p className={cn("mt-1 line-clamp-2 text-xs leading-snug", lead ? "text-[hsl(var(--lead-fg)/0.7)]" : "text-muted-foreground")}>
           {hint}
@@ -321,12 +369,50 @@ export function TableShell({
   )
 }
 
+/**
+ * The one "nothing here" picture: a soft circle with an icon, the message, and
+ * an optional hint and action. Every empty list, table and panel uses it, so
+ * an empty screen reads as calm and finished rather than broken.
+ */
+export function EmptyNote({
+  title,
+  hint,
+  action,
+  icon: Icon = Inbox,
+  className,
+}: {
+  title: ReactNode
+  hint?: ReactNode
+  action?: ReactNode
+  icon?: LucideIcon
+  className?: string
+}) {
+  return (
+    <div className={cn("motion-rise flex flex-col items-center px-6 py-10 text-center", className)}>
+      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        <Icon className="h-5 w-5" />
+      </span>
+      <p className="mt-3 text-sm font-medium text-foreground">{title}</p>
+      {hint ? <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">{hint}</p> : null}
+      {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
+    </div>
+  )
+}
+
 /** The "nothing here" row inside a TableShell. */
-export function TableEmpty({ colSpan, children }: { colSpan: number; children: ReactNode }) {
+export function TableEmpty({
+  colSpan,
+  children,
+  icon,
+}: {
+  colSpan: number
+  children: ReactNode
+  icon?: LucideIcon
+}) {
   return (
     <tr className="hover:bg-transparent">
-      <td colSpan={colSpan} className="px-4 py-10 text-center text-sm text-muted-foreground">
-        {children}
+      <td colSpan={colSpan} className="p-0">
+        <EmptyNote title={children} icon={icon} className="py-8" />
       </td>
     </tr>
   )
@@ -340,16 +426,16 @@ export function EmptyState({
   title,
   hint,
   action,
+  icon,
 }: {
   title: string
   hint?: string
   action?: ReactNode
+  icon?: LucideIcon
 }) {
   return (
-    <div className="rounded-lg border border-dashed border-border px-6 py-12 text-center">
-      <p className="font-medium">{title}</p>
-      {hint ? <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">{hint}</p> : null}
-      {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
+    <div className="rounded-xl border border-dashed border-border">
+      <EmptyNote title={title} hint={hint} action={action} icon={icon} className="py-12" />
     </div>
   )
 }

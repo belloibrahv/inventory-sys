@@ -82,6 +82,33 @@ export default async function SaleDetailPage({
     <>
       <AutoPrint when={receipt === "1"} />
     <div className="space-y-6">
+      {/* Straight after Complete sale: a tick draws itself so the cashier
+          knows the sale landed, while the receipt prints. Not on paper. */}
+      {receipt === "1" ? (
+        <div
+          role="status"
+          className="motion-pop flex items-center gap-3 rounded-xl border border-success/30 bg-success-soft px-4 py-3 text-success print:hidden"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-success text-success-foreground">
+            <svg
+              className="motion-check h-5 w-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={3}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M5 12.5l4.5 4.5L19 7.5" />
+            </svg>
+          </span>
+          <p className="text-sm">
+            <span className="font-semibold">Sale saved</span>
+            <span className="text-success/80"> · {formatCurrency(money(sale.totalAmount))} · the receipt is printing</span>
+          </p>
+        </div>
+      ) : null}
       <PageHeader
         backHref="/sales"
         title={sale.invoiceNumber}

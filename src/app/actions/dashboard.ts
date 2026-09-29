@@ -340,6 +340,18 @@ export async function getDashboardData() {
   // Money in today by the day it arrived, like Balance the till: includes
   // debts collected today on earlier sales.
   const takenToday = await receiptsInWindow({ branchId, start: day.start, end: day.end })
+  // The last seven Lagos days, oldest first, for the trend line under today's
+  // sales. One read of the week's sales, bucketed by the day they were made.
+  const weekKeys = Array.from({ length: 7 }, (_, index) => watDayKey(new Date(Date.now() - (6 - index) * 86_400_000)))
+  const weekRows = await prisma.sale.findMany({
+    where: { ...saleWhere, saleDate: { gte: watBounds(weekKeys[0]).start, lt: day.end } },
+    select: { saleDate: true, totalAmount: true },
+  })
+  const weekTotals = new Map(weekKeys.map((key) => [key, 0]))
+  for (const row of weekRows) {
+    const key = watDayKey(row.saleDate)
+    if (weekTotals.has(key)) weekTotals.set(key, (weekTotals.get(key) ?? 0) + money(row.totalAmount))
+  }
   const [todayAll, todayMine] = await Promise.all([
     prisma.sale.aggregate({
       where: { ...saleWhere, saleDate: { gte: day.start, lt: day.end } },
@@ -363,6 +375,7 @@ export async function getDashboardData() {
       count: todayAll._count,
       mine: money(todayMine._sum.totalAmount),
       mineCount: todayMine._count,
+      week: weekKeys.map((key) => weekTotals.get(key) ?? 0),
     },
     kpis: {
       totalSales: thisSales,

@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState, type ReactNode } from "react"
-import { ArrowDown, ArrowUp, ChevronsUpDown, ChevronRight, Search, X } from "lucide-react"
+import { ArrowDown, ArrowUp, ChevronsUpDown, ChevronRight, Inbox, Search, SearchX, X } from "lucide-react"
 import { TablePager, usePagedRows } from "@/components/table-pager"
 import { cn } from "@/lib/utils"
 
@@ -332,8 +332,20 @@ export function DataTable<T>({
         </ul>
 
         {sorted.length === 0 ? (
-          <div className="px-6 py-12 text-center text-sm text-muted-foreground">
-            {query ? `Nothing matches “${query}”.` : empty ?? `No ${noun} yet.`}
+          <div className="motion-rise flex flex-col items-center px-6 py-10 text-center">
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              {query ? <SearchX className="h-5 w-5" /> : <Inbox className="h-5 w-5" />}
+            </span>
+            <p className="mt-3 text-sm font-medium">{query ? `Nothing matches “${query}”` : empty ?? `No ${noun} yet.`}</p>
+            {query ? (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="mt-3 rounded-lg border border-border px-3 py-1.5 text-sm font-medium transition-colors duration-press ease-standard hover:bg-muted"
+              >
+                Clear the search
+              </button>
+            ) : null}
           </div>
         ) : null}
 

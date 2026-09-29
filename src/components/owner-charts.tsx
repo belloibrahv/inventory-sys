@@ -128,8 +128,16 @@ export function SalesTrend({
             dataKey="value"
             stroke={MONEY}
             strokeWidth={2}
-            dot={false}
+            // Only the latest day gets a dot: where the business is now.
+            dot={(props: { cx?: number; cy?: number; index?: number }) =>
+              props.index === data.length - 1 && props.cx != null && props.cy != null ? (
+                <circle key="latest" cx={props.cx} cy={props.cy} r={4.5} fill={MONEY} stroke="hsl(var(--card))" strokeWidth={2} />
+              ) : (
+                <g key={`dot-${props.index}`} />
+              )
+            }
             activeDot={{ r: 4, strokeWidth: 2, stroke: "hsl(var(--card))" }}
+            animationDuration={500}
           />
         </LineChart>
       </ResponsiveContainer>

@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { ChevronRight, PanelLeftClose, Search, X } from "lucide-react"
+import { ChevronRight, PanelLeftClose, Pin, PinOff, Search, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { BrandLockup } from "@/components/brand-mark"
 import { isOnItem, navGroups, type NavChild, type NavItem } from "@/components/layout/nav"
 import { activeChildHref } from "@/components/layout/nav-active"
 import { pathIsAllowed } from "@/lib/access-path"
 import { useUI } from "@/store/ui"
+import { usePins } from "@/store/pins"
 
 /**
  * Thirty-odd destinations in six areas (Today, Sell, Stock, Money, Oversight,
@@ -29,6 +30,10 @@ export function Sidebar({ allowedHrefs }: { allowedHrefs: string[] }) {
   const desktopSidebar = useUI((state) => state.desktopSidebar)
   const setDesktopSidebar = useUI((state) => state.setDesktopSidebar)
   const setCommandOpen = useUI((state) => state.setCommandOpen)
+  const pins = usePins((state) => state.pins)
+  const loadPins = usePins((state) => state.load)
+  const togglePin = usePins((state) => state.toggle)
+  useEffect(() => loadPins(), [loadPins])
 
   const groups = navGroups
     .map((group) => ({
@@ -48,6 +53,22 @@ export function Sidebar({ allowedHrefs }: { allowedHrefs: string[] }) {
         .filter((item): item is NonNullable<typeof item> => item !== null),
     }))
     .filter((group) => group.items.length > 0)
+
+  // Pinned pages: any page or section the job may open, drawn with its
+  // parent's icon, in the order they were pinned.
+  const pinned = pins
+    .map((href) => {
+      for (const group of navGroups) {
+        for (const item of group.items) {
+          const child = item.children?.find((row) => row.href === href)
+          if (item.href === href || child) {
+            return { href, name: child && child.href !== item.href ? child.name : item.name, icon: item.icon }
+          }
+        }
+      }
+      return null
+    })
+    .filter((row): row is NonNullable<typeof row> => row !== null && pathIsAllowed(row.href, allowedHrefs))
 
   return (
     <>
@@ -104,6 +125,27 @@ export function Sidebar({ allowedHrefs }: { allowedHrefs: string[] }) {
           </button>
         </div>
         <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-10 pt-4">
+          {pinned.length ? (
+            <div className="motion-rise">
+              <p className="mb-1.5 flex items-center gap-1 px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/40">
+                <Pin className="h-3 w-3" /> Pinned
+              </p>
+              <div className="space-y-0.5">
+                {pinned.map((row) => (
+                  <NavLeaf
+                    key={`pin-${row.href}`}
+                    href={row.href}
+                    name={row.name}
+                    icon={row.icon}
+                    active={pathname === row.href}
+                    onNavigate={() => setSidebar(false)}
+                    pinned
+                    onPin={() => togglePin(row.href)}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
           {groups.map((group) => (
             <div key={group.label}>
               <p className="mb-1.5 px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/40">
@@ -117,6 +159,8 @@ export function Sidebar({ allowedHrefs }: { allowedHrefs: string[] }) {
                       item={item as NavItem & { children: NavChild[] }}
                       pathname={pathname}
                       onNavigate={() => setSidebar(false)}
+                      pinned={pins.includes(item.href)}
+                      onPin={() => togglePin(item.href)}
                     />
                   ) : (
                     <NavLeaf
@@ -126,6 +170,8 @@ export function Sidebar({ allowedHrefs }: { allowedHrefs: string[] }) {
                       icon={item.icon}
                       active={isOnItem(pathname, item.href)}
                       onNavigate={() => setSidebar(false)}
+                      pinned={pins.includes(item.href)}
+                      onPin={() => togglePin(item.href)}
                     />
                   )
                 )}
@@ -138,26 +184,49 @@ export function Sidebar({ allowedHrefs }: { allowedHrefs: string[] }) {
   )
 }
 
+/**
+ * Pin or unpin a page. Shown on hover or keyboard focus on a computer; on a
+ * touch screen, where there is no hover, it stays faintly visible.
+ */
+function PinButton({ name, pinned, onPin }: { name: string; pinned: boolean; onPin: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onPin}
+      aria-label={pinned ? `Unpin ${name}` : `Pin ${name} to the top`}
+      title={pinned ? "Unpin" : "Pin to the top"}
+      className="flex h-8 w-7 shrink-0 items-center justify-center rounded-lg text-sidebar-foreground/45 opacity-0 transition-[opacity,color] duration-press ease-standard hover:text-white focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-50"
+    >
+      {pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+    </button>
+  )
+}
+
 function NavLeaf({
   href,
   name,
   icon: Icon,
   active,
   onNavigate,
+  pinned = false,
+  onPin,
 }: {
   href: string
   name: string
   icon: NavItem["icon"]
   active: boolean
   onNavigate: () => void
+  pinned?: boolean
+  onPin?: () => void
 }) {
   return (
+    <div className="group relative flex items-center">
     <Link
       href={href}
       onClick={onNavigate}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] transition-colors duration-press ease-standard",
+        "relative flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] transition-colors duration-press ease-standard",
         active
           ? "bg-sidebar-active font-semibold text-white"
           : "font-medium text-sidebar-foreground/75 hover:bg-sidebar-muted hover:text-white"
@@ -167,6 +236,8 @@ function NavLeaf({
       <Icon className={cn("h-4 w-4 shrink-0", active ? "text-white" : "text-sidebar-foreground/55")} />
       <span className="whitespace-normal leading-snug">{name}</span>
     </Link>
+      {onPin ? <PinButton name={name} pinned={pinned} onPin={onPin} /> : null}
+    </div>
   )
 }
 
@@ -181,10 +252,14 @@ function NavBranch({
   item,
   pathname,
   onNavigate,
+  pinned,
+  onPin,
 }: {
   item: NavItem & { children: NavChild[] }
   pathname: string
   onNavigate: () => void
+  pinned: boolean
+  onPin: () => void
 }) {
   const inside = isOnItem(pathname, item.href) || item.children.some((child) => isOnItem(pathname, child.href))
   const [open, setOpen] = useState(inside)
@@ -200,7 +275,7 @@ function NavBranch({
     <div>
       <div
         className={cn(
-          "relative flex items-center rounded-lg transition-colors",
+          "group relative flex items-center rounded-lg transition-colors",
           inside ? "bg-sidebar-active" : "hover:bg-sidebar-muted"
         )}
       >
@@ -217,6 +292,7 @@ function NavBranch({
           <Icon className={cn("h-4 w-4 shrink-0", inside ? "text-white" : "text-sidebar-foreground/55")} />
           <span className="whitespace-normal leading-snug">{item.name}</span>
         </Link>
+        <PinButton name={item.name} pinned={pinned} onPin={onPin} />
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}

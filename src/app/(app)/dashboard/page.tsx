@@ -28,7 +28,7 @@ import {
 } from "lucide-react"
 import { getDashboardData } from "@/app/actions/dashboard"
 import { DevicePie, SalesPurchaseChart } from "@/components/dashboard-charts"
-import { KpiCard, StatCard, StatGrid } from "@/components/shared"
+import { KpiCard, Sparkline, StatCard, StatGrid } from "@/components/shared"
 import { Badge } from "@/components/ui/badge"
 import { formatShopWhen, formatWatLong, watDayKey } from "@/lib/lagos-day"
 import { getAllowedKeys, hrefsForKeys } from "@/lib/permissions"
@@ -155,7 +155,8 @@ export default async function DashboardPage() {
             lead
             label="Sales today"
             value={formatCurrency(data.today.sales)}
-            hint={`${data.today.count} sale${data.today.count === 1 ? "" : "s"}`}
+            chart={<Sparkline points={data.today.week} label="Sales each day for the last seven days" />}
+            hint={`${data.today.count} sale${data.today.count === 1 ? "" : "s"} · the line is the last seven days`}
             href="/sales"
           />
           <StatCard

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import type { UserRole } from "@prisma/client"
 import { leaveTheShop } from "@/lib/leave-shop"
 import { useTheme } from "@/components/theme-provider"
@@ -30,6 +30,38 @@ import { NotificationBell } from "@/components/notifications/notification-bell"
  * to the avatar, which made every screen open on a crowded strip. They are one
  * click deeper now, inside the avatar menu, where people expect them.
  */
+/**
+ * True while the page's own heading (the first h1 in main) is on screen.
+ * Pages stream in after the address changes, so the heading is looked for a
+ * few times after each change rather than only once.
+ */
+function usePageHeadingInView(pathname: string) {
+  const [inView, setInView] = useState(false)
+  useEffect(() => {
+    let observer: IntersectionObserver | null = null
+    let watched: Element | null = null
+    const attach = () => {
+      const heading = document.querySelector("main h1")
+      if (heading === watched) return
+      observer?.disconnect()
+      watched = heading
+      if (!heading) {
+        setInView(false)
+        return
+      }
+      // The sticky bar is about 56px tall; a heading under it is out of view.
+      observer = new IntersectionObserver(([entry]) => setInView(entry.isIntersecting), { rootMargin: "-56px 0px 0px 0px" })
+      observer.observe(heading)
+    }
+    const timers = [0, 250, 800, 2000].map((delay) => window.setTimeout(attach, delay))
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer))
+      observer?.disconnect()
+    }
+  }, [pathname])
+  return inView
+}
+
 export function Header({
   title,
   unread = 0,
@@ -55,6 +87,7 @@ export function Header({
   const isHome = pathname === "/" || pathname === "/dashboard"
   const [leaving, setLeaving] = useState(false)
   const [installGuide, setInstallGuide] = useState(false)
+  const pageHeadingInView = usePageHeadingInView(pathname)
 
   return (
     <header className="app-header sticky top-0 z-30 flex min-h-14 items-center justify-between gap-2 border-b border-border bg-background/85 px-3 py-2 backdrop-blur-xl sm:px-4 md:px-6">
@@ -86,9 +119,15 @@ export function Header({
             <span className="hidden sm:inline">Back</span>
           </button>
         ) : null}
-        {/* The page names itself in its own heading; up here it is a quiet
-            label, so the two do not compete. */}
-        <h1 className="min-w-0 truncate text-sm font-medium text-muted-foreground" title={title}>
+        {/* One title at a time: while the page's own heading is on screen the
+            bar stays quiet, and the name fades in here once it scrolls away.
+            Screens without a heading of their own (Home, Sell now) keep it. */}
+        <h1
+          className={`min-w-0 truncate text-sm font-medium text-muted-foreground transition-opacity duration-small ease-standard ${
+            pageHeadingInView ? "opacity-0" : "opacity-100"
+          }`}
+          title={title}
+        >
           {title}
         </h1>
       </div>
