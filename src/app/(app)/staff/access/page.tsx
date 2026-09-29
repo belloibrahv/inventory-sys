@@ -85,7 +85,7 @@ export default async function AccessPage({ searchParams }: { searchParams: Promi
     <div className="space-y-6">
       <PageHeader
         title="Who can see what"
-        description="Pick a job, then tick the pages it may open. The left menu only shows what is ticked for that job. The main admin and the CEO keep every page; only the CEO sees profit and what items cost."
+        description="Pick a job, then tick the pages it may open. The left menu only shows what is ticked for that job. The main admin and the CEO keep every page; profit and what items cost are seen by the CEO, the main admin, the Accountant and the Auditor."
       />
 
       <nav aria-label="Pick a job" className="flex flex-wrap gap-2">

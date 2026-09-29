@@ -136,7 +136,7 @@ const PAGES: Array<
     ],
     watch: [
       "One list keeps names and prices the same in every shop.",
-      "The person who loads stock adds new items. The main admin or the CEO changes prices; only the CEO sees what items cost. A shop manager reads the list but cannot change it.",
+      "The person who loads stock adds new items. The main admin or the CEO changes prices; the CEO, the main admin, the Accountant and the Auditor see what items cost. A shop manager reads the list but cannot change it.",
       "This is not a carton sale. You still sell by the unit. Bulk here means many prices in one save.",
       "A phone marked Damaged is not for Sell now. On All phones, use Set Good (sellable) or Set Damaged when it must change.",
     ],
@@ -468,7 +468,7 @@ const PAGES: Array<
       "Open Profit by shop if you can see more than one shop.",
     ],
     watch: ["Figures come from real invoices and approved expenses. The pack does not invent profit."],
-    cannot: ["Only the CEO opens this page. It is not a box on Who can see what.", "This page does not change an invoice."],
+    cannot: ["Only the CEO, the main admin, the Accountant and the Auditor open this page. It is not a box on Who can see what.", "This page does not change an invoice."],
     lookup: ["profit", "margin", "net", "cost price", "extract"],
   },
   {

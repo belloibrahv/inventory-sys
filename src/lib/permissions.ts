@@ -59,13 +59,14 @@ export const ACTION_PERMS = [
 export const ALL_PERM_KEYS = [...VIEW_PERMS, ...ACTION_PERMS].map((row) => row.key)
 
 /**
- * The CEO's alone, fixed in code: profit, and what items cost us. They are not
- * boxes on Who can see what, and no role (the main admin included) gets them
- * from a database row. See canSeeProfit and canSeeCost in lib/roles.
+ * Profit, and what items cost us, fixed in code for PROFIT_ROLES (the CEO, the
+ * main admin and the books desk). They are not boxes on Who can see what, and
+ * no other role gets them from a database row. See canSeeProfit and
+ * canSeeCost in lib/roles.
  */
 export const CEO_ONLY_KEYS: readonly string[] = ["view.profits", "action.see_cost"]
 // Named for history: these are the profit keys, held by PROFIT_ROLES (the CEO
-// and the books desk), decided in code by canSeeProfit, never by a box.
+// the main admin and the books desk), decided in code by canSeeProfit, never by a box.
 
 const ALL = ALL_PERM_KEYS
 
@@ -111,8 +112,7 @@ export const BOOKS_DESK_KEYS = AUDITOR_KEYS
 
 const DEFAULTS: Record<UserRole, string[]> = {
   // The main admin and the CEO run the shop together: every screen and job.
-  // Only profit and cost prices stay the CEO's (CEO_ONLY_KEYS, enforced in
-  // can()). Nobody can secretly rewrite an old invoice.
+  // Profit and cost prices included. Nobody can secretly rewrite an old invoice.
   SUPER_ADMIN: ALL,
   CEO: ALL,
   AUDITOR: AUDITOR_KEYS,
@@ -208,7 +208,7 @@ export const ensureRolePermissions = cache(async () => {
     data: { allowed: true },
   })
 
-  // Profit and cost prices are the CEO's alone. can() already refuses them to
+  // Profit and cost prices belong to PROFIT_ROLES. can() already refuses them to
   // everyone else; closing the rows keeps menus and Who can see what honest.
   await prisma.rolePermission.updateMany({
     where: { role: { notIn: [...PROFIT_ROLES] }, permKey: { in: [...CEO_ONLY_KEYS] }, allowed: true },
@@ -308,8 +308,8 @@ const loadPermissionMap = cache(async () => {
 
 export async function getAllowedKeys(role: UserRole) {
   if (isCEO(role)) return new Set(ALL_PERM_KEYS)
-  // The main admin holds every box, as before, except the CEO's own.
-  if (role === "SUPER_ADMIN") return new Set(ALL_PERM_KEYS.filter((key) => !CEO_ONLY_KEYS.includes(key)))
+  // The main admin holds every box, profit included.
+  if (role === "SUPER_ADMIN") return new Set(ALL_PERM_KEYS)
   const map = await loadPermissionMap()
   // No rows at all means Who can see what has never been set up for this role,
   // so fall back to what it ships with rather than locking the person out.

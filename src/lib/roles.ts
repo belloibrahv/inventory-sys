@@ -22,8 +22,8 @@ export function isSuperAdmin(role: UserRole) {
 
 /**
  * Main admin and CEO both run the shop: every screen, every correction, Who
- * can see what. Only profit and what items cost us stay with the CEO alone
- * (canSeeProfit, canSeeCost).
+ * can see what, profit and what items cost us included (canSeeProfit,
+ * canSeeCost).
  */
 export function isShopOwner(role: UserRole) {
   return role === "SUPER_ADMIN" || role === "CEO"
@@ -31,7 +31,7 @@ export function isShopOwner(role: UserRole) {
 
 /**
  * The CEO owns the business. Profit, margins and what items cost us are shown
- * to the CEO and to the books: the Financial Accountant keeps the accounts and
+ * to the CEO, the main admin (who runs the system for the CEO), and to the books: the Financial Accountant keeps the accounts and
  * the Internal Auditor checks prices, below-cost sales and stock value, and
  * neither can do that without cost. These are fixed here in code rather than
  * boxes on Who can see what. Seeing is not changing: only the CEO changes a
@@ -41,7 +41,7 @@ export function isCEO(role: UserRole) {
   return role === "CEO"
 }
 
-export const PROFIT_ROLES: readonly UserRole[] = ["CEO", "ACCOUNTANT", "AUDITOR"]
+export const PROFIT_ROLES: readonly UserRole[] = ["CEO", "SUPER_ADMIN", "ACCOUNTANT", "AUDITOR"]
 
 /** Profit figures, margins, and "we kept" anywhere in the app. */
 export function canSeeProfit(role: UserRole) {
@@ -63,8 +63,8 @@ export function canChangeCost(role: UserRole) {
 
 /**
  * Changing the selling or lowest price of an item already on the list: the
- * CEO and the main admin. The cost price follows canSeeCost (the CEO only),
- * because whoever types a cost sees it. A new item still gets its starting
+ * CEO and the main admin. Changing a cost price stays with the CEO
+ * (canChangeCost). A new item still gets its starting
  * prices from whoever adds or loads it.
  */
 export function canChangePrices(role: UserRole) {
