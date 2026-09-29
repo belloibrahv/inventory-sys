@@ -9,6 +9,7 @@ import { whenLabel } from "@/components/notifications/notification-bell"
 import { Button } from "@/components/ui/button"
 import { useNotifications } from "@/store/notifications"
 import { cn } from "@/lib/utils"
+import { watDayKey } from "@/lib/lagos-day"
 
 type Row = {
   id: string
@@ -19,13 +20,16 @@ type Row = {
   createdAt: string
 }
 
+/**
+ * Today, Yesterday or the date, all in Lagos time. The device clock gave UTC
+ * on the server and Lagos in the browser, so around midnight the same alert
+ * sat under different days and the page failed to hydrate.
+ */
 function dayLabel(iso: string) {
   const day = new Date(iso)
-  const today = new Date()
-  const yesterday = new Date(Date.now() - 86400000)
-  const same = (a: Date, b: Date) => a.toDateString() === b.toDateString()
-  if (same(day, today)) return "Today"
-  if (same(day, yesterday)) return "Yesterday"
+  const key = watDayKey(day)
+  if (key === watDayKey()) return "Today"
+  if (key === watDayKey(new Date(Date.now() - 86_400_000))) return "Yesterday"
   return day.toLocaleDateString("en-NG", { timeZone: "Africa/Lagos", weekday: "long", day: "numeric", month: "long" })
 }
 
@@ -129,7 +133,11 @@ export function AlertsList({ rows: initial }: { rows: Row[] }) {
                         <span className={cn("block text-sm", isUnread ? "font-semibold" : "font-medium")}>{row.title}</span>
                         <span className="block text-sm text-muted-foreground">{row.message}</span>
                       </span>
-                      <span className="shrink-0 text-xs text-muted-foreground">{whenLabel(row.createdAt)}</span>
+                      {/* "5 min ago" can tick over between the server drawing it and
+                          the browser taking over; that difference is expected. */}
+                      <span className="shrink-0 text-xs text-muted-foreground" suppressHydrationWarning>
+                        {whenLabel(row.createdAt)}
+                      </span>
                     </button>
                   </li>
                 )
