@@ -1,14 +1,16 @@
 import { prisma } from "@/lib/prisma"
 import { getPosLookups } from "@/app/actions/sales"
 import { FormScreen } from "@/components/shared"
-import { canSeeCost } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { money } from "@/lib/utils"
 import { TransferForm } from "../transfer-form"
 
 export default async function StartTransferPage() {
-  // Transfers are valued at cost for the CEO and at sell price for everyone else.
-  const atCost = canSeeCost((await requireUser()).role)
+  // A transfer moves our own stock between our own shops; it is not a sale,
+  // so it is always valued at what the stock cost us, for everyone who
+  // handles it (the owner's rule), never at selling price.
+  await requireUser()
+  const atCost = true
   const [lookups, catalog] = await Promise.all([
     getPosLookups(),
     prisma.product.findMany({

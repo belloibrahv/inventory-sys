@@ -3,14 +3,16 @@ import { Plus } from "lucide-react"
 import { getTransfers } from "@/app/actions/ops"
 import { PageHeader } from "@/components/shared"
 import { Button } from "@/components/ui/button"
-import { canSeeCost } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { money } from "@/lib/utils"
 import { TransfersList } from "./transfers-list"
 
 export default async function TransfersPage() {
-  // Valued at cost for the CEO, at sell price for everyone else.
-  const atCost = canSeeCost((await requireUser()).role)
+  // A transfer moves our own stock between our own shops; it is not a sale,
+  // so it is always valued at what the stock cost us, for everyone who
+  // handles it (the owner's rule), never at selling price.
+  await requireUser()
+  const atCost = true
   const transfers = await getTransfers()
 
   const listRows = transfers.map((transfer) => ({

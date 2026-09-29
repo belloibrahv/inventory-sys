@@ -400,10 +400,13 @@ function formatConditionSearch(condition: string) {
 export async function getShopImeiSheet(branchId: string) {
   const user = await requireUser()
   if (!branchId) return { rows: [] as string[][], truncated: false }
+  // It carries cost prices, so only people who move stock between shops get it.
+  if (!(await can(user.role, "action.transfer"))) return { rows: [] as string[][], truncated: false }
   const scoped = await scopedBranchId(user.role, user.branchId, branchId)
   const shop = scoped || branchId
-  // Only the CEO's sheet carries cost; everyone else's values each phone at its sell price.
-  const showCost = canSeeCost(user.role)
+  // This sheet feeds shop-to-shop transfers, which are always valued at cost:
+  // our own stock moving between our own shops is not a sale.
+  const showCost = true
   const rows = await prisma.imeiRecord.findMany({
     where: { status: "IN_STOCK", branchId: shop },
     include: { product: { select: { sku: true, name: true, costPrice: true, sellingPrice: true } } },
