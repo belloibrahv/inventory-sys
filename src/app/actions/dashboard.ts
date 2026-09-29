@@ -352,6 +352,17 @@ export async function getDashboardData() {
     const key = watDayKey(row.saleDate)
     if (weekTotals.has(key)) weekTotals.set(key, (weekTotals.get(key) ?? 0) + money(row.totalAmount))
   }
+  // The same weekday last week, so today's figures carry a fair comparison
+  // (a Saturday against a Saturday, not against a quiet Friday).
+  const lastWeek = watBounds(watDayKey(new Date(Date.now() - 7 * 86_400_000)))
+  const [lastWeekSales, lastWeekTaken, owing] = await Promise.all([
+    prisma.sale.aggregate({
+      where: { ...saleWhere, saleDate: { gte: lastWeek.start, lt: lastWeek.end } },
+      _sum: { totalAmount: true },
+    }),
+    receiptsInWindow({ branchId, start: lastWeek.start, end: lastWeek.end }),
+    customersOwing(branchId),
+  ])
   const [todayAll, todayMine] = await Promise.all([
     prisma.sale.aggregate({
       where: { ...saleWhere, saleDate: { gte: day.start, lt: day.end } },
@@ -376,6 +387,10 @@ export async function getDashboardData() {
       mine: money(todayMine._sum.totalAmount),
       mineCount: todayMine._count,
       week: weekKeys.map((key) => weekTotals.get(key) ?? 0),
+      lastWeekSales: money(lastWeekSales._sum.totalAmount),
+      lastWeekTaken: lastWeekTaken.total,
+      owed: owing.reduce((sum, row) => sum + row.owed, 0),
+      owedCustomers: owing.filter((row) => row.owed > 0.005).length,
     },
     kpis: {
       totalSales: thisSales,
@@ -387,7 +402,7 @@ export async function getDashboardData() {
       stockValue,
       stockAtCost,
       // Same rule as Reports and Check the books (customersOwing).
-      outstanding: (await customersOwing(branchId)).reduce((sum, row) => sum + row.owed, 0),
+      outstanding: owing.reduce((sum, row) => sum + row.owed, 0),
       returns,
       swaps,
       salesCount: sales._count,

@@ -34,6 +34,7 @@ import { formatShopWhen, formatWatLong, watDayKey } from "@/lib/lagos-day"
 import { getAllowedKeys, hrefsForKeys } from "@/lib/permissions"
 import { getAppSettings, lowStockLimit } from "@/lib/settings"
 import { InstallAppBanner } from "@/components/install-app"
+import { HomeShortcuts } from "./home-shortcuts"
 import { formatCurrency, money } from "@/lib/utils"
 
 /** The jobs people open the app to do, in the order a shop reaches for them. */
@@ -88,6 +89,31 @@ const TIDY = { rank: 2, dot: "bg-info", word: "Tidy up" }
 /** Office jobs that watch the shops rather than sell in them. */
 const OFFICE_ROLES = ["SUPER_ADMIN", "CEO", "ACCOUNTANT", "AUDITOR"]
 
+/** Today against the same weekday last week, as a small chip. */
+function WeekChip({ now, then, lead = false }: { now: number; then: number; lead?: boolean }) {
+  const weekday = new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", weekday: "long" }).format(new Date())
+  if (then <= 0) {
+    if (now <= 0) return null
+    return <Chip lead={lead} up>New on a {weekday}</Chip>
+  }
+  const change = Math.round(((now - then) / then) * 100)
+  if (change === 0) return <Chip lead={lead}>Same as last {weekday}</Chip>
+  return (
+    <Chip lead={lead} up={change > 0}>
+      {change > 0 ? "↑" : "↓"} {Math.abs(change)}% on last {weekday}
+    </Chip>
+  )
+}
+
+function Chip({ children, up = false, lead = false }: { children: React.ReactNode; up?: boolean; lead?: boolean }) {
+  const tone = lead
+    ? "bg-[hsl(var(--lead-fg)/0.14)] text-[hsl(var(--lead-fg))]"
+    : up
+      ? "bg-success-soft text-success"
+      : "bg-muted text-muted-foreground"
+  return <span className={`inline-flex rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${tone}`}>{children}</span>
+}
+
 function greeting() {
   const hour = Number(
     new Intl.DateTimeFormat("en-GB", { hour: "numeric", hour12: false, timeZone: "Africa/Lagos" }).format(new Date())
@@ -117,6 +143,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="motion-stagger space-y-6">
+      <HomeShortcuts canSell={sellsHere} />
       <InstallAppBanner />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -136,12 +163,17 @@ export default async function DashboardPage() {
               href={action.href}
               className={
                 action.primary
-                  ? "flex flex-col items-center justify-center gap-1.5 rounded-xl bg-primary px-2 py-3.5 text-center text-sm font-semibold text-primary-foreground shadow-sm transition-[transform,background-color] duration-press ease-standard hover:-translate-y-0.5 hover:bg-primary/90 active:scale-[0.97]"
+                  ? "relative flex flex-col items-center justify-center gap-1.5 rounded-xl bg-primary px-2 py-3.5 text-center text-sm font-semibold text-primary-foreground shadow-sm transition-[transform,background-color] duration-press ease-standard hover:-translate-y-0.5 hover:bg-primary/90 active:scale-[0.97]"
                   : "surface-card-interactive flex flex-col items-center justify-center gap-1.5 px-2 py-3.5 text-center text-sm font-medium transition-transform duration-press ease-standard hover:-translate-y-0.5 active:scale-[0.97]"
               }
             >
               <action.icon className="h-5 w-5" />
               <span className="leading-tight">{action.label}</span>
+              {action.href === "/pos" ? (
+                <kbd className="absolute right-2 top-2 hidden rounded border border-current/30 px-1.5 font-mono text-[10px] font-medium opacity-70 lg:inline">
+                  S
+                </kbd>
+              ) : null}
             </Link>
           ))}
         </div>
@@ -150,14 +182,16 @@ export default async function DashboardPage() {
       {seesBusiness ? (
       <section>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Today</h3>
-        <StatGrid className={showMine ? "xl:grid-cols-3" : "xl:grid-cols-2"}>
+        <StatGrid className={showMine ? "xl:grid-cols-4" : "xl:grid-cols-3"}>
           <StatCard
             lead
             label="Sales today"
             value={formatCurrency(data.today.sales)}
             chart={<Sparkline points={data.today.week} label="Sales each day for the last seven days" />}
             hint={`${data.today.count} sale${data.today.count === 1 ? "" : "s"} · the line is the last seven days`}
+            note={<WeekChip lead now={data.today.sales} then={data.today.lastWeekSales} />}
             href="/sales"
+            className="col-span-2 xl:col-span-1"
           />
           <StatCard
             label="Taken today"
@@ -167,6 +201,18 @@ export default async function DashboardPage() {
                 ? `Includes ${formatCurrency(data.today.debtsCollected)} debts collected on earlier sales`
                 : "Money that came in today"
             }
+            note={<WeekChip now={data.today.paid} then={data.today.lastWeekTaken} />}
+          />
+          <StatCard
+            label="Still owed to us"
+            value={formatCurrency(data.today.owed)}
+            tone={data.today.owed > 0 ? "warning" : "neutral"}
+            hint={
+              data.today.owedCustomers > 0
+                ? `${data.today.owedCustomers} customer${data.today.owedCustomers === 1 ? "" : "s"} · everything owed today`
+                : "Nobody owes us right now"
+            }
+            href="/customers"
           />
           {showMine ? (
             <StatCard
@@ -232,17 +278,11 @@ export default async function DashboardPage() {
 
       <section>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Money and stock</h3>
-        <StatGrid>
+        <StatGrid className="xl:grid-cols-3">
           <StatCard
             label={data.kpis.stockAtCost ? "Stock at cost" : "Stock at sell price"}
             value={formatCurrency(data.kpis.stockValue)}
             href="/inventory"
-          />
-          <StatCard
-            label="Customers owe us"
-            value={formatCurrency(data.kpis.outstanding)}
-            tone={data.kpis.outstanding > 0 ? "warning" : "neutral"}
-            href="/customers"
           />
           <StatCard
             label="We owe suppliers"

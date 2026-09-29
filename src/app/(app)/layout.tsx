@@ -7,6 +7,7 @@ import { LiveRefresh } from "@/components/live-refresh"
 import { firstAllowedHref, getAllowedKeys, hrefsForKeys, pathIsAllowed } from "@/lib/permissions"
 import { writeAudit } from "@/lib/audit"
 import { getViewShopOptions } from "@/app/actions/view-shop"
+import { isShopOwner } from "@/lib/roles"
 
 const WATCHED = ["/audit", "/settings", "/staff", "/staff/access", "/finance", "/finance/close", "/reports", "/profits"]
 
@@ -23,6 +24,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const keys = await getAllowedKeys(user.role)
   const allowedHrefs = hrefsForKeys(keys)
   if (allowedHrefs.length === 0) redirect("/login")
+
+  // Counts beside menu items: work waiting for a yes (price approvals only for
+  // the CEO and main admin, who answer them) and unread alerts.
+  const [waitingApprovals, waitingPrices] = keys.has("view.approvals")
+    ? await Promise.all([
+        prisma.approval.count({ where: { status: "PENDING" } }),
+        isShopOwner(user.role) ? prisma.priceRequest.count({ where: { status: "PENDING" } }) : Promise.resolve(0),
+      ])
+    : [0, 0]
+  const badges: Record<string, number> = {
+    "/approvals": waitingApprovals + waitingPrices,
+    "/notifications": unread,
+  }
 
   const pathname = (await headers()).get("x-pathname") || ""
   let refused = false
@@ -64,7 +78,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (refused) redirect(firstAllowedHref(keys))
 
   return (
-    <AppFrame unread={unread} shops={shops} user={{ name: user.name, role: user.role, mustChangePassword: user.mustChangePassword }} allowedHrefs={allowedHrefs}>
+    <AppFrame unread={unread} badges={badges} shops={shops} user={{ name: user.name, role: user.role, mustChangePassword: user.mustChangePassword }} allowedHrefs={allowedHrefs}>
       <LiveRefresh />
       {children}
     </AppFrame>

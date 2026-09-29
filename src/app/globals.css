@@ -563,3 +563,44 @@ body {
 .stat-card-lead .eyebrow {
   color: hsl(var(--lead-fg) / 0.7);
 }
+
+/*
+ * Toasts: the same ink panel as the lead figure (deep blue on a dark
+ * screen), a bright tick for done, and red or amber when something went
+ * wrong, so a problem never looks like a confirmation.
+ */
+html [data-sonner-toaster][data-sonner-theme] {
+  --normal-bg: hsl(var(--lead-bg));
+  --normal-border: hsl(var(--lead-bg));
+  --normal-text: hsl(var(--lead-fg));
+  --border-radius: 12px;
+}
+html [data-sonner-toaster] [data-sonner-toast][data-styled="true"] {
+  box-shadow: 0 10px 30px -12px rgb(15 23 42 / 0.45);
+  font-family: inherit;
+}
+html [data-sonner-toaster] [data-sonner-toast] [data-title] {
+  font-weight: 600;
+}
+html [data-sonner-toaster] [data-sonner-toast] [data-description] {
+  color: hsl(var(--lead-fg) / 0.75);
+}
+html [data-sonner-toaster] [data-sonner-toast][data-type="success"] [data-icon] {
+  color: hsl(152 62% 58%);
+}
+html [data-sonner-toaster] [data-sonner-toast][data-styled="true"][data-type="error"] {
+  background: hsl(var(--danger));
+  border-color: hsl(var(--danger));
+  color: hsl(var(--danger-foreground));
+}
+html [data-sonner-toaster] [data-sonner-toast][data-styled="true"][data-type="warning"] {
+  background: hsl(var(--warning));
+  border-color: hsl(var(--warning));
+  color: hsl(var(--warning-foreground));
+}
+html [data-sonner-toaster] [data-sonner-toast][data-type="error"] [data-icon],
+html [data-sonner-toaster] [data-sonner-toast][data-type="warning"] [data-icon],
+html [data-sonner-toaster] [data-sonner-toast][data-type="error"] [data-description],
+html [data-sonner-toaster] [data-sonner-toast][data-type="warning"] [data-description] {
+  color: inherit;
+}

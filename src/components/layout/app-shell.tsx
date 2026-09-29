@@ -32,6 +32,7 @@ function PasswordGate({ mustChange }: { mustChange: boolean }) {
 export function AppShell({
   title,
   unread,
+  badges = {},
   shops = null,
   user,
   allowedHrefs,
@@ -39,6 +40,7 @@ export function AppShell({
 }: {
   title: string
   unread?: number
+  badges?: Record<string, number>
   shops?: { branches: Array<{ id: string; name: string; code: string }>; active: string } | null
   user: { name?: string | null; role: import("@prisma/client").UserRole; mustChangePassword?: boolean }
   allowedHrefs: string[]
@@ -58,7 +60,7 @@ export function AppShell({
       <div className="min-h-screen bg-background">
         <AccessGate allowedHrefs={allowedHrefs} fallback={allowedHrefs[0] || "/login"} />
         <PasswordGate mustChange={Boolean(user.mustChangePassword)} />
-        <Sidebar allowedHrefs={allowedHrefs} />
+        <Sidebar allowedHrefs={allowedHrefs} badges={badges} />
         <div className={cn("transition-[padding] duration-200", desktopSidebar ? "lg:pl-[264px]" : "lg:pl-0")}>
           <Header title={title} unread={unread} user={user} shops={shops} />
           <div className="mx-auto w-full max-w-[1600px] px-4 md:px-6">

@@ -1557,7 +1557,13 @@ export function PosClient({
 
             <div className="text-sm">
               <span className="mb-1.5 block font-medium">How they pay</span>
-              <div role="radiogroup" aria-label="How they pay" className="grid grid-cols-4 gap-1 rounded-lg bg-muted p-1">
+              {/* One highlight slides to the chosen way of paying. */}
+              <div role="radiogroup" aria-label="How they pay" className="relative grid grid-cols-4 rounded-lg bg-muted p-1">
+                <span
+                  aria-hidden
+                  className="absolute bottom-1 left-1 top-1 w-[calc((100%-0.5rem)/4)] rounded-md bg-card shadow-sm ring-1 ring-border transition-transform duration-panel ease-decelerate"
+                  style={{ transform: `translateX(${["CASH", "BANK", "SPLIT", "CREDIT"].indexOf(method) * 100}%)` }}
+                />
                 {(
                   [
                     ["CASH", "Cash"],
@@ -1572,10 +1578,8 @@ export function PosClient({
                     role="radio"
                     aria-checked={method === value}
                     onClick={() => chooseMethod(value)}
-                    className={`rounded-md px-2 py-2 text-sm font-semibold transition-all ${
-                      method === value
-                        ? "bg-card text-foreground shadow-sm ring-1 ring-border"
-                        : "text-muted-foreground hover:text-foreground"
+                    className={`relative z-10 rounded-md px-2 py-2 text-sm font-semibold transition-colors duration-small ease-standard ${
+                      method === value ? "text-foreground" : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
                     {label}

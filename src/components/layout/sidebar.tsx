@@ -23,7 +23,7 @@ import { usePins } from "@/store/pins"
  * nobody has to remember where Opening stock sheet went, and it can be opened by
  * hand from anywhere to jump straight to a section.
  */
-export function Sidebar({ allowedHrefs }: { allowedHrefs: string[] }) {
+export function Sidebar({ allowedHrefs, badges = {} }: { allowedHrefs: string[]; badges?: Record<string, number> }) {
   const pathname = usePathname()
   const open = useUI((state) => state.sidebarOpen)
   const setSidebar = useUI((state) => state.setSidebar)
@@ -141,6 +141,7 @@ export function Sidebar({ allowedHrefs }: { allowedHrefs: string[] }) {
                     onNavigate={() => setSidebar(false)}
                     pinned
                     onPin={() => togglePin(row.href)}
+                    badge={badges[row.href]}
                   />
                 ))}
               </div>
@@ -172,6 +173,7 @@ export function Sidebar({ allowedHrefs }: { allowedHrefs: string[] }) {
                       onNavigate={() => setSidebar(false)}
                       pinned={pins.includes(item.href)}
                       onPin={() => togglePin(item.href)}
+                      badge={badges[item.href]}
                     />
                   )
                 )}
@@ -210,6 +212,7 @@ function NavLeaf({
   onNavigate,
   pinned = false,
   onPin,
+  badge,
 }: {
   href: string
   name: string
@@ -218,6 +221,8 @@ function NavLeaf({
   onNavigate: () => void
   pinned?: boolean
   onPin?: () => void
+  /** How many things wait behind this page, shown as a small count. */
+  badge?: number
 }) {
   return (
     <div className="group relative flex items-center">
@@ -234,7 +239,15 @@ function NavLeaf({
     >
       {active ? <span className="absolute inset-y-1.5 left-0 w-[3px] rounded-r-full bg-brand" /> : null}
       <Icon className={cn("h-4 w-4 shrink-0", active ? "text-white" : "text-sidebar-foreground/55")} />
-      <span className="whitespace-normal leading-snug">{name}</span>
+      <span className="min-w-0 flex-1 whitespace-normal leading-snug">{name}</span>
+      {badge ? (
+        <span
+          className="motion-pop ml-auto shrink-0 rounded-full bg-primary px-1.5 text-[11px] font-semibold leading-5 text-primary-foreground tabular-nums"
+          aria-label={`${badge} waiting`}
+        >
+          {badge > 99 ? "99+" : badge}
+        </span>
+      ) : null}
     </Link>
       {onPin ? <PinButton name={name} pinned={pinned} onPin={onPin} /> : null}
     </div>

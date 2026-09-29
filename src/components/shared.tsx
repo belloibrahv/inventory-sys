@@ -208,6 +208,7 @@ export function StatCard({
   lead = false,
   exact = false,
   chart,
+  note,
 }: {
   label: string
   value: ReactNode
@@ -223,6 +224,8 @@ export function StatCard({
   exact?: boolean
   /** A small trend under the figure, e.g. a Sparkline. */
   chart?: ReactNode
+  /** A chip under the hint, e.g. the change on last week. Never clipped. */
+  note?: ReactNode
 }) {
   const interactive = Boolean(href || onClick)
   const amount = readNaira(value)
@@ -274,6 +277,7 @@ export function StatCard({
           {hint}
         </p>
       ) : null}
+      {note ? <div className="mt-1.5">{note}</div> : null}
     </>
   )
 

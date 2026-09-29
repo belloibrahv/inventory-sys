@@ -16,7 +16,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <ThemeProvider>
         <QueryClientProvider client={client}>
           {children}
-          <Toaster richColors position="top-right" />
+          {/* Styled in globals.css: ink toasts, a green tick, red and amber for trouble. */}
+          {/* Just under the top bar, so a toast never covers search or the bell. */}
+          <Toaster position="top-right" offset={{ top: 68, right: 16 }} mobileOffset={{ top: 64 }} toastOptions={{ duration: 3500 }} />
         </QueryClientProvider>
       </ThemeProvider>
     </SessionProvider>
