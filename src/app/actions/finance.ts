@@ -79,6 +79,8 @@ export type NamedBankRow = {
   salesReceived: number
   /** Cash moved from a till into this account (Move cash to bank). */
   depositsReceived: number
+  /** Refunds on returns paid out of this account. */
+  refundsPaid: number
   branchId: string
   branchName: string
   branchCode: string
@@ -328,6 +330,32 @@ export async function getFinance({ withLedger = false }: { withLedger?: boolean 
     }
   }
 
+  // Refunds on returns paid by bank. They used to come off no balance at all:
+  // Money in & out showed the bank higher than it was. Only return refunds
+  // (RTN- numbers) are read here; supplier payments by bank are already in
+  // supplierPayments and must not come off twice.
+  const bankRefunds = await prisma.financeEntry.findMany({
+    where: { ...where, account: "BANK", type: "EXPENSE", reference: { startsWith: "RTN-" } },
+    include: { branch: { select: { name: true } } },
+    orderBy: { createdAt: "desc" },
+  })
+  let refundsOut = 0
+  const refundsByBank = new Map<string, number>()
+  for (const entry of bankRefunds) {
+    const amount = money(entry.amount)
+    refundsOut += amount
+    if (entry.bankAccountId) refundsByBank.set(entry.bankAccountId, (refundsByBank.get(entry.bankAccountId) ?? 0) + amount)
+    bankEntries.push({
+      id: `refund-${entry.id}`,
+      date: entry.createdAt,
+      branch: entry.branch.name,
+      type: "OUT",
+      category: "Refund on a return",
+      description: entry.description || entry.reference || "Refund",
+      amount,
+    })
+  }
+
   const approvedExpenseRefs = expenses.filter((e) => e.approvedAt).map((e) => e.expenseNumber)
   const otherCashOuts = await prisma.financeEntry.findMany({
     where: {
@@ -387,6 +415,7 @@ export async function getFinance({ withLedger = false }: { withLedger?: boolean 
     openingBalance: money(row.openingBalance),
     salesReceived: salesByBank.get(row.id) ?? 0,
     depositsReceived: depositsByBank.get(row.id) ?? 0,
+    refundsPaid: refundsByBank.get(row.id) ?? 0,
     branchId: row.branchId,
     branchName: row.branch.name,
     branchCode: row.branch.code,
@@ -424,7 +453,7 @@ export async function getFinance({ withLedger = false }: { withLedger?: boolean 
   bankEntries.sort((a, b) => b.date.getTime() - a.date.getTime())
 
   const cashBalance = openingCash + cashRevenue - expenditure - otherCashOut - cashToBank
-  const bankBalance = openingBank + bankRevenue - supplierPayments + depositsIn
+  const bankBalance = openingBank + bankRevenue - supplierPayments + depositsIn - refundsOut
 
   const seenHouses = new Set(purchases.map((row) => row.supplierId))
   const ledgers = groupSupplierLedgers([

@@ -1,17 +1,25 @@
 import { getInStockForReplace, getSoldImeis } from "@/app/actions/ops"
 import { FormScreen } from "@/components/shared"
 import { money } from "@/lib/utils"
+import { requireUser } from "@/lib/session"
+import { canSendToSupplier } from "@/lib/rbac"
 import { ReturnForm } from "../return-form"
 
 export default async function LogReturnPage() {
-  const [sold, stock] = await Promise.all([getSoldImeis(), getInStockForReplace()])
+  const [sold, stock, me] = await Promise.all([getSoldImeis(), getInStockForReplace(), requireUser()])
+  const fullControl = canSendToSupplier(me.role)
   return (
     <FormScreen
       title="Log a return"
-      description="Phones and laptops: pick by IMEI. Accessories, cords and other items: look up the invoice number. It waits for approval before stock or money moves."
+      description={
+        fullControl
+          ? "Phones and laptops: pick by IMEI. Accessories, cords and other items: look up the invoice number. It waits for approval before stock or money moves."
+          : "A return comes back into this shop, as a replacement from our stock or a refund by bank. Phones and laptops by IMEI, other items by invoice. It waits for a manager's approval."
+      }
       backHref="/returns"
     >
       <ReturnForm
+        fullControl={fullControl}
         successHref="/returns"
         sold={sold.map((row) => ({
           id: row.id,

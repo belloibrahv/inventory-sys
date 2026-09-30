@@ -12,7 +12,7 @@ import {
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { requireUser } from "@/lib/session"
-import { canApprove, canManageFinance, canSeeAllBranches, scopedBranchId } from "@/lib/rbac"
+import { canApprove, canManageFinance, canSeeAllBranches, canSendToSupplier, scopedBranchId } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { generateDocNumber, money } from "@/lib/utils"
 import { shopError } from "@/lib/shop-speak"
@@ -775,14 +775,35 @@ export async function getInStockForReplace() {
   })
 }
 
+/** The reasons a return inward from the shop floor may give. */
+const INWARD_RETURN_REASONS: ReturnReason[] = ["FAULTY", "CUSTOMER_DISSATISFACTION", "EXCHANGE"]
+
 export async function createReturn(formData: FormData) {
   const user = await requireUser()
   if (!(await can(user.role, "action.return"))) return { error: "You are not allowed to record a return. Ask the main admin." }
 
   const reason = String(formData.get("reason")) as ReturnReason
   const outcome = String(formData.get("outcome")) as ReturnOutcome
-  const faultClass = String(formData.get("faultClass") || "FAULTY_STOCK") as FaultClass
+  let faultClass = String(formData.get("faultClass") || "FAULTY_STOCK") as FaultClass
   const notesRaw = String(formData.get("notes") || "").trim()
+  if (!(Object.values(ReturnReason) as string[]).includes(reason)) return { error: "Pick why it is coming back." }
+  if (!(Object.values(ReturnOutcome) as string[]).includes(outcome)) return { error: "Pick what happens next." }
+
+  // A cashier's return is a return inward: it comes back into the shop, as a
+  // replacement from our stock or a refund. Anything beyond the shop (back to
+  // the supplier, repair, a credit note) is for the Vault Manager, the shop
+  // Manager, the CEO or the main admin, who take it from there.
+  if (!canSendToSupplier(user.role)) {
+    if (!INWARD_RETURN_REASONS.includes(reason)) {
+      return { error: "Pick Faulty, Dissatisfaction / change of mind, or Replacement." }
+    }
+    if (outcome !== "REPLACEMENT" && outcome !== "REFUND") {
+      return { error: "A return from the shop floor is a replacement from our stock or a refund. A manager decides anything else." }
+    }
+    // A faulty item stays in the shop as faulty for a manager to decide on;
+    // anything else goes back on the shelf.
+    faultClass = reason === "FAULTY" ? "FAULTY_STOCK" : "GOOD_STOCK"
+  }
   const returnRaw = formData.get("returnValue") ?? formData.get("refundAmount")
   const returnMode = String(formData.get("returnMode") || "imei") // "imei" | "invoice"
 
@@ -1037,8 +1058,19 @@ export async function completeReturn(formData: FormData) {
     ? await prisma.sale.findUnique({ where: { id: record.saleId } })
     : null
 
+  if (record.outcome === "SEND_TO_SUPPLIER" && !canSendToSupplier(user.role)) {
+    return { error: "Only the Vault Manager, the shop Manager, the CEO or the main admin can send stock back to a supplier." }
+  }
   const method = String(formData.get("method") || "CASH") as PaymentMethod
   const paidAmount = Number(formData.get("paidAmount") || 0)
+  // Money going back to a customer leaves by bank, from a named account: safer
+  // than cash from the till, and it is how most refunds are paid anyway.
+  const bankAccountId = String(formData.get("bankAccountId") || "").trim()
+  const refundBank = bankAccountId
+    ? await prisma.bankAccount.findFirst({ where: { id: bankAccountId, isActive: true } })
+    : null
+  if (bankAccountId && !refundBank) return { error: "That bank account is no longer on the list. Pick another." }
+  const bankLabel = refundBank ? `${refundBank.bankName} ${refundBank.accountNumber}` : ""
   let replacementImeiId = record.replacementImeiId || String(formData.get("replacementImeiId") || "").trim() || null
   const typedImei = String(formData.get("replacementImei") || "").replace(/[\s-]/g, "").trim()
 
@@ -1056,15 +1088,18 @@ export async function completeReturn(formData: FormData) {
     if (!replacementImeiId) return { error: "Pick or enter the replacement from In shop stock." }
   }
 
-  const payChannel = shopPayChannel(method)
   if (record.outcome === "REFUND") {
+    // The same sum the transaction below pays out: debt on the sale is
+    // cancelled first, and only what was actually paid can come back.
     const asked = money(record.returnValue) || money(record.refundAmount) || (record.imei ? money(record.imei.product.sellingPrice) : 0)
     const salePaid = sale ? money(sale.paidAmount) : asked
-    const cashOut = Math.min(asked, salePaid || asked)
-    if (cashOut > 0 && payChannel === "CASH") {
-      const cashGate = await assertCashAvailable(record.branchId, cashOut)
-      if (!cashGate.ok) return { error: cashGate.error }
-    }
+    const saleDue = sale ? Math.max(0, money(sale.totalAmount) - salePaid) : 0
+    const refundOut = Math.min(asked - Math.min(saleDue, asked), salePaid)
+    if (refundOut > 0 && !refundBank) return { error: "Pick the bank account the refund is paid from." }
+  }
+  if (record.outcome === "REPLACEMENT") {
+    const balance = record.balanceAmount != null ? money(record.balanceAmount) : 0
+    if (balance < 0 && !refundBank) return { error: "Pick the bank account the difference is paid back from." }
   }
 
   try {
@@ -1114,11 +1149,12 @@ export async function completeReturn(formData: FormData) {
         await tx.financeEntry.create({
           data: {
             branchId: record.branchId,
-            account: payChannel === "CASH" ? "CASH" : "BANK",
+            account: "BANK",
             type: "EXPENSE",
             amount: cashOut.toFixed(2),
             reference: record.returnNumber,
-            description: `Refund to ${record.customer.name}`,
+            description: `Refund to ${record.customer.name} from ${bankLabel}`,
+            bankAccountId: refundBank?.id ?? null,
           },
         })
       }
@@ -1219,6 +1255,7 @@ export async function completeReturn(formData: FormData) {
             amount: collected.toFixed(2),
             reference: record.returnNumber,
             description: `Return receivable · ${record.customer.name} · ${record.returnNumber}`,
+            bankAccountId: method === "CASH" ? null : refundBank?.id ?? null,
           },
         })
       }
@@ -1241,11 +1278,12 @@ export async function completeReturn(formData: FormData) {
         await tx.financeEntry.create({
           data: {
             branchId: record.branchId,
-            account: method === "CASH" ? "CASH" : "BANK",
+            account: "BANK",
             type: "EXPENSE",
             amount: payOut.toFixed(2),
             reference: record.returnNumber,
-            description: `Return payable to ${record.customer.name} · ${record.returnNumber}`,
+            description: `Return payable to ${record.customer.name} from ${bankLabel} · ${record.returnNumber}`,
+            bankAccountId: refundBank?.id ?? null,
           },
         })
       }
@@ -2694,8 +2732,11 @@ export async function lookupSupplierReturnImei(imei: string) {
 
 export async function sendUnitsToSupplier(formData: FormData) {
   const user = await requireUser()
-  if (!(await can(user.role, "action.intake")) && !(await can(user.role, "action.return"))) {
-    return { error: "You are not allowed to send goods back to a supplier. Ask the main admin." }
+  // Return outward changes what we owe the supplier and takes stock off the
+  // books, so it is the Vault Manager's, the shop Manager's, the CEO's or the
+  // main admin's decision, never the till's.
+  if (!canSendToSupplier(user.role)) {
+    return { error: "Only the Vault Manager, the shop Manager, the CEO or the main admin can send goods back to a supplier." }
   }
   // The send-back list holds each unit's main number, which for a tablet or
   // laptop is its serial, so short numbers are allowed here.

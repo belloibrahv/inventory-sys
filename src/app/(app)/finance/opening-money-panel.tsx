@@ -117,6 +117,7 @@ export function OpeningMoneyPanel({
                   <th className="px-3 py-2 text-right font-medium">Opening balance</th>
                   <th className="px-3 py-2 text-right font-medium">Sales into this account</th>
                   <th className="px-3 py-2 text-right font-medium">Cash from the till</th>
+                  <th className="px-3 py-2 text-right font-medium">Refunds out</th>
                   {canSet ? <th className="px-3 py-2 font-medium">Change</th> : null}
                 </tr>
               </thead>
@@ -132,6 +133,7 @@ export function OpeningMoneyPanel({
                     <td className="px-3 py-2 text-right num font-semibold">{formatCurrency(row.openingBalance)}</td>
                     <td className="px-3 py-2 text-right num">{formatCurrency(row.salesReceived)}</td>
                     <td className="px-3 py-2 text-right num">{formatCurrency(row.depositsReceived)}</td>
+                    <td className="px-3 py-2 text-right num">{formatCurrency(row.refundsPaid)}</td>
                     {canSet ? (
                       <td className="px-3 py-2">
                         <div className="flex flex-wrap items-end gap-2">
@@ -185,7 +187,7 @@ export function OpeningMoneyPanel({
                 ))}
                 {bankAccounts.length === 0 ? (
                   <tr>
-                    <td className="px-3 py-4 text-sm text-muted-foreground" colSpan={canSet ? 7 : 6}>
+                    <td className="px-3 py-4 text-sm text-muted-foreground" colSpan={canSet ? 8 : 7}>
                       No bank account is on the books yet. Add GTBank, Access, or another account the shops use. Sell now Bank sales pick from this list.
                     </td>
                   </tr>

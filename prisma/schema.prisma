@@ -111,6 +111,8 @@ enum ReturnReason {
   DAMAGED
   SUPPLIER_RETURN
   WRONG_PRODUCT
+  /// The customer wants another item instead (a replacement).
+  EXCHANGE
 }
 
 enum ReturnOutcome {
@@ -914,10 +916,14 @@ model FinanceEntry {
   amount      Decimal
   reference   String?
   description String?
+  /// The named bank the money moved through, when it went by bank (refunds).
+  bankAccountId String?
+  bankAccount   BankAccount? @relation(fields: [bankAccountId], references: [id])
   createdAt   DateTime @default(now())
 
   @@index([branchId])
   @@index([createdAt])
+  @@index([bankAccountId])
 }
 
 /// A named bank or wallet. Opening balance is money already in that account
@@ -937,6 +943,7 @@ model BankAccount {
   updatedAt      DateTime  @updatedAt
   payments       Payment[]
   cashDeposits   CashDeposit[]
+  financeEntries FinanceEntry[]
 
   @@index([branchId])
   @@index([accountNumber])

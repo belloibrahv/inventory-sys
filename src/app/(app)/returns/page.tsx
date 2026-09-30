@@ -4,10 +4,20 @@ import { getInStockForReplace, getReturns } from "@/app/actions/ops"
 import { PageHeader } from "@/components/shared"
 import { Button } from "@/components/ui/button"
 import { money } from "@/lib/utils"
+import { prisma } from "@/lib/prisma"
 import { ReturnsList } from "./returns-list"
 
 export default async function ReturnsPage() {
-  const [rows, stock] = await Promise.all([getReturns(), getInStockForReplace()])
+  const [rows, stock, bankAccounts] = await Promise.all([
+    getReturns(),
+    getInStockForReplace(),
+    // Refunds leave by bank, from a named account.
+    prisma.bankAccount.findMany({
+      where: { isActive: true },
+      include: { branch: { select: { name: true } } },
+      orderBy: [{ bankName: "asc" }, { accountNumber: "asc" }],
+    }),
+  ])
   return (
     <div className="space-y-6">
       <div className="space-y-5">
@@ -27,6 +37,7 @@ export default async function ReturnsPage() {
           // member's login record, password hash included, to the browser.
           rows={rows.map((row) => ({
             id: row.id,
+            branchId: row.branchId,
             returnNumber: row.returnNumber,
             status: row.status,
             reason: row.reason,
@@ -72,6 +83,11 @@ export default async function ReturnsPage() {
                   quantity: row.saleItem.quantity,
                 }
               : null,
+          }))}
+          banks={bankAccounts.map((bank) => ({
+            id: bank.id,
+            branchId: bank.branchId,
+            label: `${bank.bankName} ${bank.accountNumber}${bank.accountName ? ` · ${bank.accountName}` : ""} (${bank.branch.name})`,
           }))}
           stock={stock.map((row) => ({
             id: row.id,

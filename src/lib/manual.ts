@@ -364,13 +364,15 @@ const PAGES: Array<
     doThis: [
       "For a phone or laptop: open the Phone or laptop tab. Pick the sold device from the list, or use Find sold IMEI if it is not there. Confirm the return item value.",
       "For a cord, pouch, or accessory: open the Other item by invoice tab. Type the invoice number and press Find. Pick the item line. If more than one piece is coming back, type how many.",
-      "Pick the outcome: Refund, Credit note, Replace from our stock, Repair (phones only), or Send back to the supplier (phones only).",
+      "Pick why it is coming back: Faulty, Dissatisfaction / change of mind, or Replacement (wants another item).",
+      "Pick what happens next: Replacement from our stock, or Refund. The Vault Manager, the shop Manager, the CEO and the main admin also see Repair, Credit note and Send back to the supplier.",
       "On Replace, pick the shop item going out and confirm its value. Read Receivable or Payable.",
       "Save for approval. Wait on Needs approval.",
-      "After yes, Apply outcome. Collect or pay the balance on a Replace.",
+      "After yes, Apply outcome. A refund, or the difference we pay back on a Replace, is paid by bank: pick the bank account it leaves from.",
     ],
     watch: [
       "Stock and money do not move while the return is Waiting.",
+      "A return from the shop floor always comes back into the shop: a faulty item is kept in the shop as faulty, anything else goes back on the shelf. A manager decides what happens to a faulty item next.",
       "A walk-in sale is blocked until you attach a name on the invoice.",
       "Phones and laptops must use the IMEI tab. The invoice tab refuses lines that have an IMEI.",
       "Only completed sales appear when you type an invoice number.",
@@ -378,6 +380,8 @@ const PAGES: Array<
     cannot: [
       "You cannot rub out the old invoice.",
       "You cannot return more pieces than the invoice sold.",
+      "Sending stock back to a supplier (return outward) is for the Vault Manager, the shop Manager, the CEO or the main admin, on Goods from supplier, Send back to supplier.",
+      "Refunds are not paid in cash from the till.",
     ],
     lookup: ["return", "refund", "faulty", "replace", "receivable", "payable", "return value", "invoice", "accessory", "cord", "pouch", "non-imei", "item return"],
   },

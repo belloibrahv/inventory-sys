@@ -96,6 +96,17 @@ export function canEditLetterhead(role: UserRole) {
   return role === "SUPER_ADMIN" || role === "CEO" || role === "AUDITOR" || role === "ACCOUNTANT"
 }
 
+/**
+ * Deciding what happens beyond the shop with returned stock: sending it back
+ * to the supplier (return outward), repair or a credit note. The client put
+ * this with the Vault Manager, the shop Manager, the CEO and the main admin.
+ * Everyone else (cashiers above all) records a return inward only: it comes
+ * back into the shop, as a replacement from our stock or a refund.
+ */
+export function canSendToSupplier(role: UserRole) {
+  return role === "SUPER_ADMIN" || role === "CEO" || role === "BRANCH_MANAGER" || role === "VAULT_MANAGER"
+}
+
 export function isBooksDesk(role: UserRole) {
   return role === "AUDITOR" || role === "ACCOUNTANT"
 }

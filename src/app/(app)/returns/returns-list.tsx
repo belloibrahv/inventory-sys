@@ -30,8 +30,12 @@ type SaleItemRef = {
   quantity: number
 }
 
+/** A named bank a refund can be paid from. */
+export type RefundBank = { id: string; label: string; branchId: string }
+
 type ReturnRow = {
   id: string
+  branchId: string
   returnNumber: string
   status: string
   reason: string
@@ -102,10 +106,11 @@ function outcomeLabel(outcome: string) {
 function reasonLabel(reason: string) {
   if (reason === "FAULTY") return "Faulty"
   if (reason === "WARRANTY") return "Under warranty"
-  if (reason === "CUSTOMER_DISSATISFACTION") return "Customer not satisfied"
+  if (reason === "CUSTOMER_DISSATISFACTION") return "Dissatisfaction / change of mind"
   if (reason === "DAMAGED") return "Damaged"
   if (reason === "WRONG_PRODUCT") return "Wrong product"
   if (reason === "SUPPLIER_RETURN") return "Send toward supplier"
+  if (reason === "EXCHANGE") return "Replacement (wants another item)"
   return reason
 }
 
@@ -194,11 +199,53 @@ function BalanceLine({ row }: { row: ReturnRow }) {
 
 // ─── Apply form (shown when status === APPROVED) ──────────────────────────────
 
-function ApplyForm({ row, stock, onDone }: { row: ReturnRow; stock: StockUnit[]; onDone?: () => void }) {
+/**
+ * Which bank the money moves through. The return's own shop's accounts come
+ * first. Money going back to a customer always leaves by bank: safer than cash
+ * from the till, and most refunds are transfers anyway.
+ */
+function BankPicker({
+  banks,
+  branchId,
+  label,
+  required,
+}: {
+  banks: RefundBank[]
+  branchId: string
+  label: string
+  required: boolean
+}) {
+  const ordered = [...banks].sort((a, b) => Number(b.branchId === branchId) - Number(a.branchId === branchId))
+  if (!banks.length) {
+    return (
+      <p className="rounded-lg border border-warning/30 bg-warning-soft px-3 py-2 text-sm text-warning">
+        No bank account is listed yet. Add one under Money in &amp; out, then come back to apply this.
+      </p>
+    )
+  }
+  return (
+    <label className="block space-y-1.5 text-sm">
+      <span className="font-medium">{label}</span>
+      <Select name="bankAccountId" required={required} defaultValue="">
+        <option value="" disabled={required}>
+          {required ? "Pick the bank account" : "Which bank received it (optional)"}
+        </option>
+        {ordered.map((bank) => (
+          <option key={bank.id} value={bank.id}>
+            {bank.label}
+          </option>
+        ))}
+      </Select>
+    </label>
+  )
+}
+
+function ApplyForm({ row, stock, banks, onDone }: { row: ReturnRow; stock: StockUnit[]; banks: RefundBank[]; onDone?: () => void }) {
   const returnValue = row.returnValue ?? money(row.refundAmount)
   const balance = row.balanceAmount ?? 0
   const receivable = Math.max(balance, 0)
   const payable = Math.max(-balance, 0)
+  const [method, setMethod] = useState("CASH")
 
   return (
     <div className="mt-4 border-t border-border pt-4">
@@ -231,14 +278,34 @@ function ApplyForm({ row, stock, onDone }: { row: ReturnRow; stock: StockUnit[];
                     : "0"
               }
             />
-            <Select name="method" defaultValue="CASH">
-              <option value="CASH">Cash</option>
-              <option value="TRANSFER">Transfer</option>
-              <option value="POS">POS</option>
-            </Select>
+            {payable > 0 ? (
+              <>
+                <input type="hidden" name="method" value="TRANSFER" />
+                <BankPicker banks={banks} branchId={row.branchId} label="Pay the difference back from" required />
+              </>
+            ) : receivable > 0 ? (
+              <>
+                <Select name="method" value={method} onChange={(event) => setMethod(event.target.value)}>
+                  <option value="CASH">Cash</option>
+                  <option value="TRANSFER">Transfer</option>
+                  <option value="POS">POS</option>
+                </Select>
+                {method !== "CASH" ? (
+                  <BankPicker banks={banks} branchId={row.branchId} label="Which bank received it" required={false} />
+                ) : null}
+              </>
+            ) : null}
             <p className="text-sm text-muted-foreground">
               Stock moves on Apply. Collect the receivable or pay the payable so the books match the event.
             </p>
+          </>
+        ) : row.outcome === "REFUND" ? (
+          <>
+            <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+              This will {refundWords(returnValue, row.invoice)} without editing the original invoice. Refunds are paid by
+              bank.
+            </p>
+            <BankPicker banks={banks} branchId={row.branchId} label="Pay the refund from" required />
           </>
         ) : (
           <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
@@ -260,7 +327,7 @@ function ApplyForm({ row, stock, onDone }: { row: ReturnRow; stock: StockUnit[];
 
 // ─── Main list ────────────────────────────────────────────────────────────────
 
-export function ReturnsList({ rows, stock }: { rows: ReturnRow[]; stock: StockUnit[] }) {
+export function ReturnsList({ rows, stock, banks = [] }: { rows: ReturnRow[]; stock: StockUnit[]; banks?: RefundBank[] }) {
   const [status, setStatus] = useState("all")
 
   const filtered = useMemo(
@@ -395,7 +462,7 @@ export function ReturnsList({ rows, stock }: { rows: ReturnRow[]; stock: StockUn
             description={`${open.customer.name} · ${formatShopWhen(whenOf(open))}`}
             className="sm:w-[520px]"
           >
-            <ReturnDetail row={open} stock={stock} onDone={() => setOpen(null)} />
+            <ReturnDetail row={open} stock={stock} banks={banks} onDone={() => setOpen(null)} />
           </SheetContent>
         ) : null}
       </Sheet>
@@ -403,7 +470,7 @@ export function ReturnsList({ rows, stock }: { rows: ReturnRow[]; stock: StockUn
   )
 }
 
-function ReturnDetail({ row, stock, onDone }: { row: ReturnRow; stock: StockUnit[]; onDone: () => void }) {
+function ReturnDetail({ row, stock, banks, onDone }: { row: ReturnRow; stock: StockUnit[]; banks: RefundBank[]; onDone: () => void }) {
   const returnValue = row.returnValue ?? money(row.refundAmount)
   return (
     <div className="space-y-4">
@@ -458,7 +525,7 @@ function ReturnDetail({ row, stock, onDone }: { row: ReturnRow; stock: StockUnit
           Waiting for approval. Stock and money do not move until Needs approval says yes.
         </p>
       ) : null}
-      {row.status === "APPROVED" ? <ApplyForm row={row} stock={stock} onDone={onDone} /> : null}
+      {row.status === "APPROVED" ? <ApplyForm row={row} stock={stock} banks={banks} onDone={onDone} /> : null}
     </div>
   )
 }

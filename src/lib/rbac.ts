@@ -16,6 +16,7 @@ export {
   BOOKS_DESK_ROLES,
   ROLE_LABELS,
   canEditLetterhead,
+  canSendToSupplier,
 } from "@/lib/roles"
 
 export async function canSeeAllBranches(role: UserRole) {

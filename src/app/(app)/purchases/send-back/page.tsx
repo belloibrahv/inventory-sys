@@ -1,9 +1,14 @@
 import { getSupplierReturnCandidates } from "@/app/actions/ops"
 import { FormScreen, SectionCard } from "@/components/shared"
 import { SupplierReturnForm } from "../supplier-return-form"
+import { requireUser } from "@/lib/session"
+import { canSendToSupplier } from "@/lib/rbac"
 
 export default async function SendBackToSupplierPage() {
-  const returnUnits = await getSupplierReturnCandidates()
+  const [returnUnits, me] = await Promise.all([getSupplierReturnCandidates(), requireUser()])
+  // Return outward is the Vault Manager's, shop Manager's, CEO's or main
+  // admin's decision; everyone else sees what is waiting, read-only.
+  const mayDecide = canSendToSupplier(me.role)
   return (
     <FormScreen
       title="Send back to supplier"
@@ -29,7 +34,14 @@ export default async function SendBackToSupplierPage() {
         </SectionCard>
       }
     >
-      <SupplierReturnForm />
+      {mayDecide ? (
+        <SupplierReturnForm />
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Sending goods back to a supplier is decided by the Vault Manager, the shop Manager, the CEO or the main admin.
+          The phones waiting to go back are listed here for you to see.
+        </p>
+      )}
     </FormScreen>
   )
 }

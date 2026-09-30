@@ -68,10 +68,23 @@ type StockUnit = {
 const REASONS = [
   { value: "FAULTY", label: "Faulty" },
   { value: "WARRANTY", label: "Under warranty" },
-  { value: "CUSTOMER_DISSATISFACTION", label: "Customer not satisfied" },
+  { value: "CUSTOMER_DISSATISFACTION", label: "Dissatisfaction / change of mind" },
   { value: "DAMAGED", label: "Damaged" },
   { value: "WRONG_PRODUCT", label: "Wrong product" },
+  { value: "EXCHANGE", label: "Replacement (wants another item)" },
   { value: "SUPPLIER_RETURN", label: "Send toward supplier" },
+] as const
+
+/**
+ * A return from the shop floor is a return inward: it comes back into the
+ * shop. Only these reasons, and only a replacement from our stock or a refund.
+ * Anything beyond the shop is for the Vault Manager, Manager, CEO or main
+ * admin (the server holds the same rule).
+ */
+const INWARD_REASONS = [
+  { value: "FAULTY", label: "Faulty" },
+  { value: "CUSTOMER_DISSATISFACTION", label: "Dissatisfaction / change of mind" },
+  { value: "EXCHANGE", label: "Replacement (wants another item)" },
 ] as const
 
 const FAULTS = [
@@ -223,6 +236,7 @@ function OutcomeFields({
   shopStock,
   branchId,
   isInvoicePath,
+  fullControl,
 }: {
   outcome: string
   onOutcomeChange: (v: string) => void
@@ -232,8 +246,11 @@ function OutcomeFields({
   shopStock: StockUnit[]
   branchId: string | null
   isInvoicePath: boolean
+  /** Vault Manager, Manager, CEO, main admin: every reason and outcome. */
+  fullControl: boolean
 }) {
   const [replacementId, setReplacementId] = useState("")
+  const [reason, setReason] = useState("FAULTY")
   const [replacementValue, setReplacementValue] = useState("")
 
   const filteredStock = branchId ? shopStock.filter((r) => r.branchId === branchId) : shopStock
@@ -251,7 +268,12 @@ function OutcomeFields({
   }
 
   // Outcomes available for non-IMEI items (no send-to-supplier, no repair for accessories)
-  const outcomeOptions = isInvoicePath
+  const outcomeOptions = !fullControl
+    ? [
+        { value: "REPLACEMENT", label: "Replacement from our stock" },
+        { value: "REFUND", label: "Refund (paid by bank)" },
+      ]
+    : isInvoicePath
     ? [
         { value: "REFUND", label: "Refund" },
         { value: "CREDIT_NOTE", label: "Credit note" },
@@ -270,8 +292,8 @@ function OutcomeFields({
       {/* Return reason */}
       <div className="space-y-1.5">
         <Label htmlFor="reason-select">Why is it coming back?</Label>
-        <Select id="reason-select" name="reason" defaultValue="FAULTY">
-          {REASONS.map((item) => (
+        <Select id="reason-select" name="reason" value={reason} onChange={(e) => setReason(e.target.value)}>
+          {(fullControl ? REASONS : INWARD_REASONS).map((item) => (
             <option key={item.value} value={item.value}>
               {item.label}
             </option>
@@ -297,8 +319,19 @@ function OutcomeFields({
         </Select>
       </div>
 
+      {/* On the shop floor the condition follows the reason: the item always
+          comes back into the shop. */}
+      {!fullControl ? (
+        <p className="flex items-start gap-1.5 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" />
+          {reason === "FAULTY"
+            ? "It comes back into this shop as faulty, not for sale. A manager decides what happens next (repair or back to the supplier)."
+            : "It comes back into this shop and goes back on the shelf."}
+        </p>
+      ) : null}
+
       {/* Fault classification — not needed for refund/credit on accessories */}
-      {(!isInvoicePath || (outcome !== "REFUND" && outcome !== "CREDIT_NOTE")) && (
+      {fullControl && (!isInvoicePath || (outcome !== "REFUND" && outcome !== "CREDIT_NOTE")) && (
         <div className="space-y-1.5">
           <Label htmlFor="fault-select">Condition of the returned item</Label>
           <Select id="fault-select" name="faultClass" defaultValue="FAULTY_STOCK">
@@ -403,7 +436,9 @@ function OutcomeFields({
 
       {(outcome === "REFUND" || outcome === "CREDIT_NOTE") && !isReplace && (
         <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-          {outcome === "REFUND" ? "Refund" : "Credit note"} will use the return item value above.
+          {outcome === "REFUND"
+            ? "The refund uses the return item value above and is paid by bank, from a named account, once a manager approves."
+            : "Credit note will use the return item value above."}{" "}
           The original invoice stays on the books.
         </p>
       )}
@@ -423,15 +458,17 @@ function ImeiReturnForm({
   sold,
   stock,
   successHref,
+  fullControl,
 }: {
   sold: Sold[]
   stock: StockUnit[]
   successHref?: string
+  fullControl: boolean
 }) {
   const [extraSold, setExtraSold] = useState<Sold[]>([])
   const [findCode, setFindCode] = useState("")
   const [finding, setFinding] = useState(false)
-  const [outcome, setOutcome] = useState("REPAIR")
+  const [outcome, setOutcome] = useState(fullControl ? "REPAIR" : "REPLACEMENT")
   const [returnValue, setReturnValue] = useState("")
 
   const soldList = useMemo(() => {
@@ -564,6 +601,7 @@ function ImeiReturnForm({
         shopStock={stock}
         branchId={selected?.branchId ?? null}
         isInvoicePath={false}
+        fullControl={fullControl}
       />
     </ActionForm>
   )
@@ -571,7 +609,7 @@ function ImeiReturnForm({
 
 // ─── Invoice path sub-form ────────────────────────────────────────────────────
 
-function InvoiceReturnForm({ stock, successHref }: { stock: StockUnit[]; successHref?: string }) {
+function InvoiceReturnForm({ stock, successHref, fullControl }: { stock: StockUnit[]; successHref?: string; fullControl: boolean }) {
   const [invoiceInput, setInvoiceInput] = useState("")
   const [finding, setFinding] = useState(false)
   const [foundSale, setFoundSale] = useState<FoundSale | null>(null)
@@ -752,6 +790,7 @@ function InvoiceReturnForm({ stock, successHref }: { stock: StockUnit[]; success
           shopStock={stock}
           branchId={foundSale?.branchId ?? null}
           isInvoicePath={true}
+          fullControl={fullControl}
         />
       )}
     </ActionForm>
@@ -760,16 +799,27 @@ function InvoiceReturnForm({ stock, successHref }: { stock: StockUnit[]; success
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
-export function ReturnForm({ sold, stock, successHref }: { sold: Sold[]; stock: StockUnit[]; successHref?: string }) {
+export function ReturnForm({
+  sold,
+  stock,
+  successHref,
+  fullControl = false,
+}: {
+  sold: Sold[]
+  stock: StockUnit[]
+  successHref?: string
+  /** Vault Manager, Manager, CEO, main admin. Everyone else logs a return inward. */
+  fullControl?: boolean
+}) {
   const [tab, setTab] = useState<"imei" | "invoice">("imei")
 
   return (
     <div className="space-y-4">
       <TabBar active={tab} onChange={setTab} />
       {tab === "imei" ? (
-        <ImeiReturnForm sold={sold} stock={stock} successHref={successHref} />
+        <ImeiReturnForm sold={sold} stock={stock} successHref={successHref} fullControl={fullControl} />
       ) : (
-        <InvoiceReturnForm stock={stock} successHref={successHref} />
+        <InvoiceReturnForm stock={stock} successHref={successHref} fullControl={fullControl} />
       )}
     </div>
   )
