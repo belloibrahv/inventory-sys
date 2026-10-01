@@ -386,7 +386,7 @@ export async function getOwnerBoard(dayKey?: string) {
     .slice(0, 8)
 
   // Managers and the books desk share this board, but what things cost and
-  // what we kept are the CEO's alone. Zeroed here so they never reach the phone.
+  // what we kept are for the profit roles. Zeroed here so they never reach the phone.
   const showMoney = canSeeProfit(user.role)
   if (!showMoney) {
     for (const shop of shops) shop.soldCost = 0

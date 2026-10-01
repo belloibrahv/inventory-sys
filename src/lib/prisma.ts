@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client"
 import { inferRisk, requestContext, stampHash, userIdFromCreate } from "@/lib/audit-meta"
+import { recordKindLabel } from "@/lib/shop-speak"
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
 
@@ -80,12 +81,22 @@ async function watchMainAdmin(row: WatchedRow) {
     if (actor?.role !== "SUPER_ADMIN") return
     const ceos = await base.user.findMany({ where: { role: "CEO", isActive: true }, select: { id: true } })
     if (ceos.length === 0) return
-    const what = costChange ? "changed a cost price" : `${action.toLowerCase()} on ${String(row.entityType ?? "a record")}`
+    const verb: Record<string, string> = {
+      DELETE: "removed",
+      UPDATE: "changed",
+      CREATE: "added",
+      EXPORT: "downloaded",
+      IMPORT: "imported",
+      APPROVE: "approved",
+      REJECT: "rejected",
+    }
+    const kind = recordKindLabel(String(row.entityType ?? ""))
+    const what = costChange ? "changed a cost price" : `${verb[action] ?? action.toLowerCase()} ${kind.toLowerCase()}`
     await base.notification.createMany({
       data: ceos.map((ceo) => ({
         userId: ceo.id,
         type: "SYSTEM" as const,
-        title: "Main admin activity",
+        title: action === "DELETE" ? "Main admin removed something" : "Main admin activity",
         message: `${actor.name || actor.email} ${what}${row.entityId ? ` (${String(row.entityId).slice(0, 60)})` : ""}.`,
         actionUrl: "/audit?role=SUPER_ADMIN",
       })),

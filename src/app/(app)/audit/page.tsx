@@ -49,8 +49,9 @@ export default async function AuditPage({
         </a>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-4 xl:grid-cols-7">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-4 xl:grid-cols-4">
         <WatchCard href="/audit?role=SUPER_ADMIN" label="Main admin's work (7 days)" value={data.watch.mainAdmin} hot={data.watch.mainAdmin > 0} />
+        <WatchCard href="/audit?action=DELETE" label="Removals (7 days)" value={data.watch.removals} hot={data.watch.removals > 0} />
         <WatchCard href="/audit?result=failed&action=LOGIN" label="Failed sign-ins (24 hours)" value={data.watch.failedLogins} hot={data.watch.failedLogins > 0} />
         <WatchCard href="/audit?risk=HIGH" label="High-risk work (24 hours)" value={data.watch.highRisk} hot={data.watch.highRisk > 0} />
         <WatchCard href="/audit?action=DENIED" label="Not allowed (24 hours)" value={data.watch.denied} hot={data.watch.denied > 0} />

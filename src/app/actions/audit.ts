@@ -67,7 +67,7 @@ export async function getAuditMonitor(filters: AuditFilters = {}) {
     return {
       logs: [],
       staff: [],
-      watch: { failedLogins: 0, highRisk: 0, exports: 0, denied: 0, afterHours: 0, screens: 0, mainAdmin: 0 },
+      watch: { failedLogins: 0, highRisk: 0, exports: 0, denied: 0, afterHours: 0, screens: 0, mainAdmin: 0, removals: 0 },
       activity: [],
       integrity: { ok: true, checked: 0, brokenAt: null as string | null },
     }
@@ -76,7 +76,7 @@ export async function getAuditMonitor(filters: AuditFilters = {}) {
   const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
 
-  const [logs, staff, failedLogins, highRisk, exports, denied, screens, weekLogs, integrity, mainAdmin] = await Promise.all([
+  const [logs, staff, failedLogins, highRisk, exports, denied, screens, weekLogs, integrity, mainAdmin, removals] = await Promise.all([
     prisma.auditLog.findMany({
       where: whereFrom(filters),
       include: { user: { select: { id: true, name: true, email: true, role: true } } },
@@ -101,6 +101,8 @@ export async function getAuditMonitor(filters: AuditFilters = {}) {
     prisma.auditLog.count({
       where: { user: { role: "SUPER_ADMIN" }, action: { notIn: ["VIEW", "LOGIN", "LOGOUT"] }, createdAt: { gte: weekAgo } },
     }),
+    // Every removal by anyone: items, brands, banks, payments, opening stock.
+    prisma.auditLog.count({ where: { action: "DELETE", success: true, createdAt: { gte: weekAgo } } }),
   ])
 
   const afterHours = weekLogs.filter((row) => isAfterHours(row.createdAt)).length
@@ -130,7 +132,7 @@ export async function getAuditMonitor(filters: AuditFilters = {}) {
       afterHours: isAfterHours(log.createdAt),
     })),
     staff,
-    watch: { failedLogins, highRisk, exports, denied, afterHours, screens, mainAdmin },
+    watch: { failedLogins, highRisk, exports, denied, afterHours, screens, mainAdmin, removals },
     activity: [...activityMap.values()].sort((a, b) => b.count - a.count).slice(0, 8),
     integrity,
   }

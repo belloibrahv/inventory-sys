@@ -161,7 +161,7 @@ export function ReportsClientView({
     if (change === 0) return "Same as last period"
     return `${change > 0 ? "Up" : "Down"} ${formatCurrency(Math.abs(change))} (${Math.abs(percent)} percent)`
   }
-  // Cost is the CEO's alone. Everyone else sees stock valued at sell price, and
+  // Cost is for the profit roles. Everyone else sees stock valued at sell price, and
   // their data arrives with every cost set to 0.
   const showCost = pack.stockBasis === "cost"
   const valueWord = showCost ? "Value at cost" : "Value at sell price"

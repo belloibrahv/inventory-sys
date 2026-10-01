@@ -34,8 +34,8 @@ export function isShopOwner(role: UserRole) {
  * to the CEO, the main admin (who runs the system for the CEO), and to the books: the Financial Accountant keeps the accounts and
  * the Internal Auditor checks prices, below-cost sales and stock value, and
  * neither can do that without cost. These are fixed here in code rather than
- * boxes on Who can see what. Seeing is not changing: only the CEO changes a
- * cost price (canChangeCost).
+ * boxes on Who can see what. Seeing is not changing: only the CEO and the main
+ * admin change a cost price (canChangeCost).
  */
 export function isCEO(role: UserRole) {
   return role === "CEO"

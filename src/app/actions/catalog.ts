@@ -1224,7 +1224,7 @@ export async function reduceInventoryStock(formData: FormData) {
             product: product.name,
           }),
           branchId,
-          risk: "MEDIUM",
+          risk: "HIGH",
         },
       }),
     ])
@@ -1275,7 +1275,7 @@ export async function reduceInventoryStock(formData: FormData) {
           product: product.name,
         }),
         branchId,
-        risk: "MEDIUM",
+        risk: "HIGH",
       },
     }),
   ])
@@ -1323,15 +1323,17 @@ export async function deleteProduct(formData: FormData) {
       where: { id },
       data: { isActive: false },
     })
+    // A removal, even though the row stays for its history: recorded as one so
+    // the CEO sees it with every other removal.
     await prisma.auditLog.create({
       data: {
         userId: user.id,
-        action: "UPDATE",
+        action: "DELETE",
         entityType: "Product",
-        entityId: id,
+        entityId: `${product.name} (${product.sku})`,
         newValue: JSON.stringify({
           isActive: false,
-          note: `Deactivated item ${product.name} (${product.sku}) with historical transactions or remaining stock.`,
+          note: `Took ${product.name} (${product.sku}) off the active list. Its sales, stock and history are kept.`,
         }),
         branchId: user.branchId,
       },
@@ -1350,7 +1352,7 @@ export async function deleteProduct(formData: FormData) {
         userId: user.id,
         action: "DELETE",
         entityType: "Product",
-        entityId: id,
+        entityId: `${product.name} (${product.sku})`,
         newValue: JSON.stringify({ note: `Permanently deleted unused item ${product.name} (${product.sku}).` }),
         branchId: user.branchId,
       },

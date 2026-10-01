@@ -251,7 +251,7 @@ export type PendingPriceRequest = {
   createdAt: string
   minutesLeft: number
   summary: Summary
-  /** Cost and margin, for the CEO only. */
+  /** Cost and margin, for those who may see cost. */
   margin: { cost: number; kept: number } | null
 }
 

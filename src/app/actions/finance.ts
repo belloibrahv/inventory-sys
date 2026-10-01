@@ -666,7 +666,8 @@ export async function takeBankOffTheBooks(formData: FormData) {
   await prisma.bankAccount.update({ where: { id }, data: { isActive: false } })
   await writeAudit({
     userId: user.id,
-    action: "UPDATE",
+    // A removal from the books, recorded as one so the CEO sees it.
+    action: "DELETE",
     entityType: "BankAccount",
     entityId: `${row.bankName} ${row.accountNumber}`,
     oldValue: JSON.stringify({ isActive: true }),
@@ -1628,7 +1629,7 @@ export async function getReportData(
  */
 export async function getPriceChanges(limit = 200) {
   const user = await requireUser()
-  // Sits on the Profit screen and carries cost and "below cost" lines: the CEO's alone.
+  // Sits on the Profit screen and carries cost and "below cost" lines: profit roles only.
   if (!canSeeProfit(user.role)) {
     return { lines: [] as PriceChangeLine[] }
   }

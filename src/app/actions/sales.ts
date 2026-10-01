@@ -55,7 +55,7 @@ export async function getPosLookups() {
   const viewShop = await viewBranchFilter(user)
   // Shop staff always sell in their own shop. Head office follows the shop picker.
   const branchId = canAll ? viewShop || user.branchId || undefined : user.branchId || undefined
-  // Only the CEO's till carries cost. Everyone else's has none to leak.
+  // Only a till for someone who may see cost carries it. Everyone else's has none to leak.
   const showCost = canSeeCost(user.role)
   const [products, customers, imeis, branches, bankAccounts] = await Promise.all([
     prisma.product.findMany({

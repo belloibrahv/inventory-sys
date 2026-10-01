@@ -76,7 +76,7 @@ export default async function OwnerBoardPage() {
     : null
 
   const { totals } = board
-  // What we kept and what things cost are the CEO's alone. The server has
+  // What we kept and what things cost are for the profit roles. The server has
   // already zeroed them for anyone else; this hides where they would show.
   const showProfit = board.canSeeProfit
   const profitToday = totals.soldValue - totals.soldCost
