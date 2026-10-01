@@ -11,7 +11,7 @@ export default async function StartTransferPage() {
   // handles it (the owner's rule), never at selling price.
   await requireUser()
   const atCost = true
-  const [lookups, catalog] = await Promise.all([
+  const [lookups, catalog, destinations] = await Promise.all([
     getPosLookups(),
     prisma.product.findMany({
       where: { isActive: true },
@@ -21,6 +21,14 @@ export default async function StartTransferPage() {
         inventory: { select: { branchId: true, quantity: true } },
       },
       orderBy: { name: "asc" },
+    }),
+    // Where stock can go: every open shop. The sending list above is the
+    // person's own shop(s); using it for the receiving list too left a shop
+    // manager with no shop to send to.
+    prisma.branch.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, code: true },
+      orderBy: [{ isHq: "desc" }, { name: "asc" }],
     }),
   ])
 
@@ -60,7 +68,7 @@ export default async function StartTransferPage() {
       backHref="/transfers"
       wide
     >
-      <TransferForm branches={lookups.branches} products={products} defaultFromId={lookups.branchId} successHref="/transfers" atCost={atCost} />
+      <TransferForm branches={lookups.branches} destinations={destinations} products={products} defaultFromId={lookups.branchId} successHref="/transfers" atCost={atCost} />
     </FormScreen>
   )
 }

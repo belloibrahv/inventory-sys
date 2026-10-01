@@ -26,6 +26,7 @@ import { getAppSettings } from "@/lib/settings"
 import { healOpeningStockBills } from "@/lib/opening-stock-money"
 import { isOpeningStockPurchase, purchaseBalance } from "@/lib/purchase-money"
 import { isSupplierReturnableStatus, supplierReturnMoneyPlan } from "@/lib/vendor-return"
+import { recordSupplierReturnLine } from "@/lib/supplier-returns"
 import { assertCashAvailable } from "@/lib/shop-cash"
 import { shopPayChannel } from "@/lib/sale-money"
 import { parseShopCondition, shopConditionLabel } from "@/lib/conditions"
@@ -1266,7 +1267,19 @@ export async function completeReturn(formData: FormData) {
           notes: [record.imei.notes, `Sent back to supplier on ${record.returnNumber}`].filter(Boolean).join(" · "),
         },
       })
-      await applySupplierReturnMoney(tx, record.imei)
+      const sentBack = await applySupplierReturnMoney(tx, record.imei)
+      await recordSupplierReturnLine(tx, {
+        reference: record.returnNumber,
+        supplierId: record.supplierId || record.imei.supplierId,
+        branchId: record.branchId,
+        imeiId: record.imeiId,
+        productId: record.imei.productId,
+        purchaseId: record.imei.purchaseId ?? null,
+        cost: sentBack.cost,
+        moneyEffect: sentBack.reason,
+        source: "CUSTOMER_RETURN",
+        userId: user.id,
+      })
     }
 
     if (record.outcome === "REPLACEMENT") {
@@ -2232,6 +2245,8 @@ export async function createTransfer(formData: FormData): Promise<{
 
   const scoped = await scopedBranchId(user.role, user.branchId)
   if (scoped && fromBranchId !== scoped) return { error: "You can only send from your own shop." }
+  const receiving = await prisma.branch.findFirst({ where: { id: toBranchId, isActive: true }, select: { id: true } })
+  if (!receiving) return { error: "That receiving shop is not open. Pick another shop." }
 
   const selectedImeis = [
     ...new Set(
@@ -2898,6 +2913,19 @@ export async function sendUnitsToSupplier(formData: FormData) {
         })
       }
       const moneyMove = await applySupplierReturnMoney(tx, record as SupplierReturnImei)
+      // The returns outward record Reports reads.
+      await recordSupplierReturnLine(tx, {
+        reference: rtv,
+        supplierId: record.supplierId,
+        branchId: record.branchId,
+        imeiId: record.id,
+        productId: record.productId,
+        purchaseId: record.purchaseId ?? null,
+        cost: moneyMove.cost,
+        moneyEffect: moneyMove.reason,
+        source: "SEND_BACK",
+        userId: user.id,
+      })
       await tx.auditLog.create({
         data: {
           userId: user.id,

@@ -33,12 +33,16 @@ type PhonePick = {
 
 export function TransferForm({
   branches,
+  destinations,
   products = [],
   defaultFromId,
   successHref,
   atCost = false,
 }: {
+  /** Shops this person may send from. */
   branches: Branch[]
+  /** Shops stock may go to: every open shop. Falls back to `branches`. */
+  destinations?: Branch[]
   products?: Product[]
   imeis?: unknown
   defaultFromId?: string | null
@@ -53,7 +57,8 @@ export function TransferForm({
   const unitWord = atCost ? "Unit cost" : "Unit price"
   const valueWord = atCost ? "Cost value" : "Value at sell price"
   const [fromId, setFromId] = useState(defaultFromId || branches[0]?.id || "")
-  const [toId, setToId] = useState(() => branches.find((row) => row.id !== (defaultFromId || branches[0]?.id))?.id || "")
+  const receivers = destinations?.length ? destinations : branches
+  const [toId, setToId] = useState(() => receivers.find((row) => row.id !== (defaultFromId || branches[0]?.id))?.id || "")
   const [busy, setBusy] = useState(false)
   const [errors, setErrors] = useState<string[]>([])
   const [phones, setPhones] = useState<PhonePick[]>([])
@@ -63,8 +68,8 @@ export function TransferForm({
   const [query, setQuery] = useState("")
 
   const fromShop = branches.find((row) => row.id === fromId)
-  const toShop = branches.find((row) => row.id === toId)
-  const toOptions = branches.filter((row) => row.id !== fromId)
+  const toShop = receivers.find((row) => row.id === toId)
+  const toOptions = receivers.filter((row) => row.id !== fromId)
 
   const accessories = useMemo(
     () =>

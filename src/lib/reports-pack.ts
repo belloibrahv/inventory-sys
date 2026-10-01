@@ -48,6 +48,13 @@ export type ReportsPack = {
   creditors: Array<{ id: string; invoice: string; supplier: string; shop: string; owed: number }>
   supplierCredits: Array<{ id: string; invoice: string; supplier: string; shop: string; owed: number }>
   lowStock: Array<{ id: string; product: string; shop: string; quantity: number; min: number }>
+  /** Returns outward in the period, grouped by supplier. */
+  supplierReturns?: Array<{
+    supplier: string
+    units: number
+    value: number
+    lines: Array<{ reference: string; item: string; imei: string; shop: string; value: number }>
+  }>
 }
 
 export function reportsKpis(data: ReportsPack) {

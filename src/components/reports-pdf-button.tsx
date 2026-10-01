@@ -175,6 +175,19 @@ export function ReportsPdfButton({ data }: { data: ReportsPack }) {
         })
       }
 
+      section("Returns to suppliers")
+      if (!(data.supplierReturns ?? []).length) {
+        row("Nothing was sent back to a supplier in this period", "")
+      } else {
+        ;(data.supplierReturns ?? []).forEach((house, houseIndex) => {
+          const tint = houseIndex % 2 ? PAPER : undefined
+          row(`${house.supplier}  ·  ${house.units} unit${house.units === 1 ? "" : "s"}`, formatPdfMoney(house.value), tint)
+          house.lines.forEach((line) => {
+            row(`  ${line.reference}  ·  ${line.item}  ·  ${line.imei}  ·  ${line.shop}`, formatPdfMoney(line.value), tint)
+          })
+        })
+      }
+
       section("Low stock warning")
       if (data.lowStock.length === 0) {
         row("No items below the low-stock warning", "")

@@ -13,6 +13,8 @@ import { canSeeCost } from "@/lib/rbac"
 import { isLowStock, shelfKey } from "@/lib/stock-limits"
 import { stockedPairs } from "@/lib/stocked-pairs"
 import { ReportsClientView } from "./reports-client-view"
+import { SupplierReturnsReport } from "./supplier-returns-report"
+import { getSupplierReturnsReport } from "@/app/actions/supplier-returns"
 
 function shopOf(branch: { name: string; code: string }) {
   return { name: branch.name, code: branch.code }
@@ -37,12 +39,13 @@ export default async function ReportsPage({
   const range = asRange(params.range)
   const date = params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : watDayKey()
 
-  const [data, settings, user, branches, opening] = await Promise.all([
+  const [data, settings, user, branches, opening, supplierReturns] = await Promise.all([
     getReportData(selectedBranchId, range, date),
     getAppSettings(),
     requireUser(),
     getBranches(),
     getOpeningReport(selectedBranchId),
+    getSupplierReturnsReport(selectedBranchId, range, date),
   ])
 
   const revenue = data.sales.reduce((sum, sale) => sum + money(sale.totalAmount), 0)
@@ -149,6 +152,17 @@ export default async function ReportsPage({
       shop: row.branch,
       owed: row.owed,
     })),
+    supplierReturns: Object.values(
+      supplierReturns.rows.reduce<
+        Record<string, { supplier: string; units: number; value: number; lines: Array<{ reference: string; item: string; imei: string; shop: string; value: number }> }>
+      >((acc, row) => {
+        const entry = (acc[row.supplier] ??= { supplier: row.supplier, units: 0, value: 0, lines: [] })
+        entry.units += 1
+        entry.value += row.value
+        entry.lines.push({ reference: row.reference, item: row.item, imei: row.imei, shop: row.shopCode, value: row.value })
+        return acc
+      }, {})
+    ).sort((a, b) => b.value - a.value),
     lowStock: lowStock.map((row) => ({
       id: row.id,
       product: row.product.name,
@@ -229,6 +243,8 @@ export default async function ReportsPage({
         range={range}
         date={date}
       />
+      {/* Returns outward: what went back to which supplier, how many, and the value. */}
+      <SupplierReturnsReport rows={supplierReturns.rows} periodLabel={label} />
     </div>
   )
 }

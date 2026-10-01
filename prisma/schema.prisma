@@ -286,6 +286,7 @@ model User {
   parkedSales     ParkedSale[]
   stockMoves      StockMovement[]
   cashDeposits    CashDeposit[]
+  supplierReturnLines SupplierReturnLine[]
 
   @@index([email])
   @@index([branchId])
@@ -330,6 +331,7 @@ model Branch {
   openingCash     Decimal    @default(0)
   openingCashAt   DateTime?
   openingCashBy   String?
+  supplierReturnLines SupplierReturnLine[]
 
   @@index([code])
   @@index([isActive])
@@ -389,6 +391,7 @@ model Product {
   reconItems    ReconciliationItem[]
   incomingItems IncomingItem[]
   stockMoves    StockMovement[]
+  supplierReturnLines SupplierReturnLine[]
 
   @@index([sku])
   @@index([categoryId])
@@ -443,6 +446,7 @@ model ImeiRecord {
   repairs       Repair[]
   swapsOld      Swap[]         @relation("SwapOld")
   swapsNew      Swap[]         @relation("SwapNew")
+  supplierReturnLines SupplierReturnLine[]
 
   @@index([imei1])
   @@index([imei2])
@@ -548,6 +552,7 @@ model Supplier {
   imeiRecords   ImeiRecord[]
   incomingLots  IncomingLot[]
   stockReturns  StockReturn[]
+  supplierReturnLines SupplierReturnLine[]
 
   @@index([isActive])
   @@index([kind])
@@ -585,6 +590,7 @@ model Purchase {
   incomingLots IncomingLot[]
   imeiRecords  ImeiRecord[]
   openingStock OpeningStock?
+  supplierReturnLines SupplierReturnLine[]
 
   @@index([invoiceNumber])
   @@index([supplierId])
@@ -979,6 +985,41 @@ model CashDeposit {
   @@index([branchId])
   @@index([bankAccountId])
   @@index([depositedAt])
+}
+
+/// One unit sent back to a supplier (a return outward). Written by Send back
+/// to supplier (reference RTV-…) and by a customer return applied as "Send
+/// back to the supplier" (reference RTN-…), so Reports can show what went
+/// back, to whom, from which shop, and its value.
+model SupplierReturnLine {
+  id          String     @id @default(cuid())
+  /// The send-back number: RTV-… or the customer return's RTN-….
+  reference   String
+  supplierId  String
+  supplier    Supplier   @relation(fields: [supplierId], references: [id])
+  branchId    String
+  branch      Branch     @relation(fields: [branchId], references: [id])
+  imeiId      String
+  imei        ImeiRecord @relation(fields: [imeiId], references: [id])
+  productId   String
+  product     Product    @relation(fields: [productId], references: [id])
+  purchaseId  String?
+  purchase    Purchase?  @relation(fields: [purchaseId], references: [id])
+  /// What the unit cost us: the value going back.
+  cost        Decimal
+  /// What it did to the money: bill (off the supplier bill), house-credit
+  /// (credit with the supplier), opening-stock, no-supplier or no-cost.
+  moneyEffect String
+  /// SEND_BACK or CUSTOMER_RETURN.
+  source      String
+  userId      String?
+  user        User?      @relation(fields: [userId], references: [id])
+  sentAt      DateTime   @default(now())
+
+  @@unique([reference, imeiId])
+  @@index([sentAt])
+  @@index([supplierId])
+  @@index([branchId])
 }
 
 model Approval {
