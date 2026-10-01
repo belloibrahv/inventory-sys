@@ -37,7 +37,9 @@ const securityHeaders = [
       "img-src 'self' data: blob:",
       "font-src 'self' data:",
       "style-src 'self' 'unsafe-inline'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      // 'unsafe-eval' only in development, where Next's dev runtime needs it.
+      // A production build runs without eval, so the live site does not allow it.
+      process.env.NODE_ENV === "production" ? "script-src 'self' 'unsafe-inline'" : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       "connect-src 'self'",
       "form-action 'self'",
     ].join("; "),
@@ -46,6 +48,8 @@ const securityHeaders = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Do not announce the framework in an x-powered-by header.
+  poweredByHeader: false,
   images: {
     remotePatterns: [],
   },

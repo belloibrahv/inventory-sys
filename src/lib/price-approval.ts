@@ -24,7 +24,15 @@ export type ApprovedDeal = {
 type Claim = { a: string; n: string; s: string; h: string; t: number }
 
 function secret() {
-  return process.env.NEXTAUTH_SECRET || "development-only-price-approval"
+  const value = process.env.NEXTAUTH_SECRET
+  if (value) return value
+  // A built-in key would let anyone who reads the code sign a price approval.
+  // Sign-in already refuses to start in production without the secret; this
+  // refuses too, rather than fall back quietly.
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("NEXTAUTH_SECRET is missing: price approvals cannot be signed.")
+  }
+  return "development-only-price-approval"
 }
 
 function dealHash(deal: ApprovedDeal) {

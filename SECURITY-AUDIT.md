@@ -256,3 +256,50 @@ Recommended next-phase testing: authenticated session fuzzing of every Server
 Action for authorization gaps, JWT handling, upload abuse (zip bombs / malformed
 workbooks), and business-logic tests around approvals, day-close, and payment
 reversals.
+
+---
+
+## 7. Re-assessment — 2026-10-01
+
+**Scope:** the whole application after a month of new features (price approvals,
+live notifications, cash to bank, returns inward/outward, reconfirmation, search,
+the redesign). White-box review of all 166 server actions, the 3 API routes and
+the request proxy; active testing on a local copy with demo data; **passive,
+read-only checks only** on the live site (headers, cookies, exposed files, source
+maps, TLS). No payloads were sent to production.
+
+### 7.1 Findings
+
+| ID | Severity (CVSS 3.1) | Finding | Location | Status | Verification |
+|----|---------------------|---------|----------|--------|--------------|
+| R-1 | Medium 5.9 `AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:H/A:N` | Swap approval exported as a server action with no sign-in, trusting the caller's `userId`: anyone reaching it could approve or reject a Swap Deal (stock and money move) in another person's name. AC:H only because Next 16 action IDs are hard to guess. | `ops.ts: applySwapApprovalDecision` | ✅ Fixed: signed-in approver for that shop; the caller's id is ignored | New CI gate `npm run check:actions` fails on any unguarded server action (proved by a probe action) |
+| R-2 | High 7.1 `AV:N/AC:L/PR:L/UI:N/S:U/C:L/I:H/A:N` | Cross-shop IDOR on mutations: applying returns (incl. refunds), finishing swaps, supplier payments, receiving goods, collecting on invoices and debts, repairs and approvals accepted a record id from any shop. Approvals were listed across shops for shop managers. | `ops.ts`, `sales.ts`, `finance.ts` | ✅ Fixed: `canReachBranch` on the record's shop; approvals scoped per shop | End-to-end on demo data per action |
+| R-3 | Medium 4.3 `AV:N/AC:L/PR:L/UI:N/S:U/C:L/I:N/A:N` | Cost prices of every item returned to any signed-in user by `getProducts` (the screen hid them; the action did not). | `catalog.ts: getProducts` | ✅ Fixed: cost zeroed unless `canSeeCost` | Callers checked: none needs cost for other roles |
+| R-4 | Medium 4.3 (same vector) | Supplier balances and bill amounts returned to any signed-in user. | `parties.ts: getSuppliers` | ✅ Fixed: supplier/stock jobs only | — |
+| R-5 | Medium 4.3 `…/I:L` | Collecting a customer's debt had no permission check. | `sales.ts: collectPayment` | ✅ Fixed: sell or finance permission, and the customer's shop | — |
+| R-6 | Medium 6.5 `AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N` | No login lockout (open since F-8): unlimited password guessing. | `lib/auth.ts` | ✅ Fixed: 5 fails per email / 15 min locks it 15 min; 50 real fails per address (refused tries not counted, so one person cannot lock a shop's shared address) | Verified: right password refused after 5 wrong |
+| R-7 | Low 3.7 `AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N` | Account enumeration by timing: unknown emails answered without a password check. | `lib/auth.ts` | ✅ Fixed: dummy bcrypt compare | — |
+| R-8 | Medium 6.8 `AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:N` | Sessions survived a password change or reset for up to 12 h (a stolen session outlived the reset). | `lib/session.ts`, `User` | ✅ Fixed: `User.sessionsValidAfter`; older sessions refused | Verified: reset ends the old session; own change → sign in again |
+| R-9 | Low 3.5 | Any signed-in user could mark another shop's parked offline sale as posted, hiding it from "vanished from a device". | `parked.ts: markParkedPosted` | ✅ Fixed: real sale in a reachable shop, same shop only | — |
+| R-10 | Info (dependency) | `next@16.3.4` in the range of GHSA-vcvr-r3jv-pc5j (RCE in `next/og`). Not reachable: the app does not use `next/og`. | `package.json` | ✅ Upgraded to 16.3.8 | `npm audit`: no critical |
+| R-11 | High (dependency, open since F-2) | `xlsx@0.18.5` prototype pollution + ReDoS on the upload path; no fix on npm. | `package.json` | ✅ Upgraded to SheetJS 0.20.3 (official CDN tarball) | Spreadsheet and CSV parsing re-tested |
+| R-12 | Low 3.1 | CSP allowed `'unsafe-eval'` in production. | `next.config.mjs` | ✅ Fixed: eval allowed in development only | Production build: 0 CSP violations across 16 pages, Excel, PDF, till, search |
+| R-13 | Info | `x-powered-by: Next.js` header. | `next.config.mjs` | ✅ Removed | — |
+| R-14 | Low | Price-approval signing fell back to a built-in key if the secret was missing. | `lib/price-approval.ts` | ✅ Refuses in production | — |
+
+### 7.2 Tested and not vulnerable
+
+- **SSRF:** no server-side outbound request takes user input; `next/image` allows no remote hosts.
+- **Injection:** no raw SQL (`$queryRaw` only a fixed `SELECT 1`), no `dangerouslySetInnerHTML`, no `eval`; the one `spawnSync` uses fixed arguments.
+- **Middleware bypass (CVE-2025-29927):** patched version, and the proxy is not an auth layer — every page and action authorises itself.
+- **Sessions:** role, shop and active state re-read from the database on every request.
+- **Live site (passive):** HSTS, CSP, frame-ancestors none, nosniff, referrer and permissions policies present; `.env`, `.git`, schema, config and source maps return 404; cookies `__Host-`/`__Secure-`, HttpOnly, Secure, SameSite=Lax.
+- **Secrets:** none in git history (four hits are a CI throwaway, a build placeholder and example templates).
+- **Open redirect:** NextAuth default same-origin callback handling.
+- **API routes:** health exposes nothing sensitive; notifications are per-user and `no-store`.
+
+### 7.3 Remaining
+
+- `npm audit` high advisories in build/CLI tooling only (`@prisma/config` → `deepmerge-ts`, `@serwist/turbopack` → `browserslist`); no user input reaches them; npm's suggested fixes are major downgrades. Revisit with the next Prisma major.
+- Nonce-based CSP (dropping `'unsafe-inline'`) would harden further but forces dynamic rendering; not done.
+- Bank pay-outs from swaps and refunds now reduce the Bank balance; other bank-side ledger types should be reviewed the same way.
