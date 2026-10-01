@@ -12,7 +12,7 @@ import {
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { requireUser } from "@/lib/session"
-import { canApprove, canManageFinance, canSeeAllBranches, canSendToSupplier, scopedBranchId } from "@/lib/rbac"
+import { canApprove, canManageFinance, canSeeAllBranches, canSendToSupplier, isShopOwner, scopedBranchId } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { generateDocNumber, money } from "@/lib/utils"
 import { shopError } from "@/lib/shop-speak"
@@ -759,20 +759,32 @@ export async function findSaleByInvoice(invoiceNumber: string) {
 export async function getInStockForReplace() {
   const user = await requireUser()
   const branchId = await scopedBranchId(user.role, user.branchId)
-  return prisma.imeiRecord.findMany({
-    where: {
-      status: "IN_STOCK",
-      // A phone with no cosmetic grade recorded is an ordinary phone, not a
-      // faulty one. `NOT: { cosmeticGrade: "FAULTY" }` drops those rows, because
-      // SQL cannot compare NULL to a word — it hid every ungraded phone.
-      OR: [{ cosmeticGrade: null }, { cosmeticGrade: { not: "FAULTY" } }],
-      product: { condition: { not: "FAULTY" } },
-      ...(branchId ? { branchId } : {}),
-    },
-    include: { product: true },
-    orderBy: { updatedAt: "desc" },
-    take: 200,
-  })
+  // A replacement must come from the return's own shop. Taking the newest 200
+  // across every shop meant someone who sees all shops (the CEO, the main
+  // admin) could find their shop's list empty, so it is read shop by shop.
+  const shopIds = branchId
+    ? [branchId]
+    : // Every shop, closed ones too: a closed shop can still have returns to apply.
+      (await prisma.branch.findMany({ select: { id: true } })).map((row) => row.id)
+  const perShop = await Promise.all(
+    shopIds.map((shopId) =>
+      prisma.imeiRecord.findMany({
+        where: {
+          status: "IN_STOCK",
+          // A phone with no cosmetic grade recorded is an ordinary phone, not a
+          // faulty one. `NOT: { cosmeticGrade: "FAULTY" }` drops those rows, because
+          // SQL cannot compare NULL to a word — it hid every ungraded phone.
+          OR: [{ cosmeticGrade: null }, { cosmeticGrade: { not: "FAULTY" } }],
+          product: { condition: { not: "FAULTY" } },
+          branchId: shopId,
+        },
+        include: { product: true },
+        orderBy: { updatedAt: "desc" },
+        take: 150,
+      })
+    )
+  )
+  return perShop.flat()
 }
 
 /** The reasons a return inward from the shop floor may give. */
@@ -1058,6 +1070,61 @@ export async function completeReturn(formData: FormData) {
     ? await prisma.sale.findUnique({ where: { id: record.saleId } })
     : null
 
+  // Reconfirmation at Apply. The CEO and the main admin may change the course
+  // of action (send a faulty phone back to the supplier instead of refunding,
+  // say) or the condition before anything moves. Everyone else applies what
+  // was approved. The change is kept on Who did what.
+  const askedOutcome = String(formData.get("outcome") || "").trim()
+  const askedFault = String(formData.get("faultClass") || "").trim()
+  const outcomeChange = askedOutcome !== "" && askedOutcome !== record.outcome
+  const faultChange = askedFault !== "" && askedFault !== record.faultClass
+  if (outcomeChange || faultChange) {
+    if (!isShopOwner(user.role)) {
+      return { error: "Only the CEO or the main admin can change what happens to a return." }
+    }
+    if (outcomeChange && !(Object.values(ReturnOutcome) as string[]).includes(askedOutcome)) {
+      return { error: "Pick what happens next from the list." }
+    }
+    if (faultChange && !(Object.values(FaultClass) as string[]).includes(askedFault)) {
+      return { error: "Pick the condition from the list." }
+    }
+    if (outcomeChange && !record.imeiId && (askedOutcome === "REPAIR" || askedOutcome === "SEND_TO_SUPPLIER")) {
+      return { error: "Repair and Send back to the supplier are for phones and laptops with a number." }
+    }
+    const before = { outcome: record.outcome, faultClass: record.faultClass }
+    const nextOutcome = (outcomeChange ? askedOutcome : record.outcome) as ReturnOutcome
+    const nextFault = (faultChange ? askedFault : record.faultClass) as FaultClass
+    await prisma.stockReturn.update({
+      where: { id },
+      data: {
+        outcome: nextOutcome,
+        faultClass: nextFault,
+        // A replacement agreed at logging belongs to the old course of action.
+        ...(outcomeChange ? { replacementImeiId: null, replacementValue: null, balanceAmount: null } : {}),
+      },
+    })
+    record.outcome = nextOutcome
+    record.faultClass = nextFault
+    if (outcomeChange) {
+      record.replacementImeiId = null
+      record.replacementValue = null
+      record.balanceAmount = null
+      record.replacementImei = null
+    }
+    await prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "UPDATE",
+        entityType: "Return",
+        entityId: record.returnNumber,
+        oldValue: JSON.stringify(before),
+        newValue: JSON.stringify({ outcome: nextOutcome, faultClass: nextFault, reconfirmed: true }),
+        branchId: record.branchId,
+        risk: "HIGH",
+      },
+    })
+  }
+
   if (record.outcome === "SEND_TO_SUPPLIER" && !canSendToSupplier(user.role)) {
     return { error: "Only the Vault Manager, the shop Manager, the CEO or the main admin can send stock back to a supplier." }
   }
@@ -1098,7 +1165,14 @@ export async function completeReturn(formData: FormData) {
     if (refundOut > 0 && !refundBank) return { error: "Pick the bank account the refund is paid from." }
   }
   if (record.outcome === "REPLACEMENT") {
-    const balance = record.balanceAmount != null ? money(record.balanceAmount) : 0
+    // A replacement chosen now has no agreed balance yet: it is the unit's price
+    // less the return value, the same sum the transaction below uses.
+    let balance = record.balanceAmount != null ? money(record.balanceAmount) : 0
+    if (record.balanceAmount == null && replacementImeiId) {
+      const unit = await prisma.imeiRecord.findUnique({ where: { id: replacementImeiId }, include: { product: true } })
+      const returnValue = money(record.returnValue) || money(record.refundAmount) || (record.imei ? money(record.imei.product.sellingPrice) : 0)
+      balance = unit ? money(unit.product.sellingPrice) - returnValue : 0
+    }
     if (balance < 0 && !refundBank) return { error: "Pick the bank account the difference is paid back from." }
   }
 

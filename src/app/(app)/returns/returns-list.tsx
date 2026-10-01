@@ -178,7 +178,11 @@ function TypeTag({ row }: { row: ReturnRow }) {
 
 function BalanceLine({ row }: { row: ReturnRow }) {
   if (row.outcome !== "REPLACEMENT" || row.balanceAmount == null) return null
-  const balance = row.balanceAmount ?? 0
+  return <BalanceFigure balance={row.balanceAmount ?? 0} />
+}
+
+/** Receivable, payable or even, for any replacement balance. */
+function BalanceFigure({ balance }: { balance: number }) {
   const receivable = Math.max(balance, 0)
   const payable = Math.max(-balance, 0)
   return (
@@ -240,44 +244,136 @@ function BankPicker({
   )
 }
 
-function ApplyForm({ row, stock, banks, onDone }: { row: ReturnRow; stock: StockUnit[]; banks: RefundBank[]; onDone?: () => void }) {
+const OUTCOME_CHOICES = [
+  { value: "REFUND", label: "Refund (paid by bank)" },
+  { value: "REPLACEMENT", label: "Replacement from our stock" },
+  { value: "CREDIT_NOTE", label: "Credit note" },
+  { value: "REPAIR", label: "Repair", phoneOnly: true },
+  { value: "SEND_TO_SUPPLIER", label: "Send back to the supplier", phoneOnly: true },
+] as const
+
+const CONDITION_CHOICES = [
+  { value: "GOOD_STOCK", label: "Good — back on the shelf" },
+  { value: "FAULTY_STOCK", label: "Faulty — kept in the shop, not for sale" },
+  { value: "REPAIR_STOCK", label: "Needs repair" },
+  { value: "SCRAP_STOCK", label: "Scrap — write off" },
+] as const
+
+/**
+ * Apply an approved return. Everyone applies what was approved; the CEO and
+ * the main admin can reconfirm first and change the course of action (for
+ * example, send a faulty phone back to the supplier instead of refunding) or
+ * the condition. The change is written to Who did what.
+ */
+function ApplyForm({
+  row,
+  stock,
+  banks,
+  canReconfirm,
+  onDone,
+}: {
+  row: ReturnRow
+  stock: StockUnit[]
+  banks: RefundBank[]
+  canReconfirm: boolean
+  onDone?: () => void
+}) {
   const returnValue = row.returnValue ?? money(row.refundAmount)
-  const balance = row.balanceAmount ?? 0
+  const [outcome, setOutcome] = useState(row.outcome)
+  const [condition, setCondition] = useState(row.faultClass)
+  const [pickedId, setPickedId] = useState("")
+  const [method, setMethod] = useState("CASH")
+  const changed = outcome !== row.outcome || condition !== row.faultClass
+
+  // A replacement agreed at logging keeps its unit and balance; one chosen now
+  // takes its balance from the unit picked here.
+  const keepsAgreedReplacement = outcome === "REPLACEMENT" && row.outcome === "REPLACEMENT" && row.replacementImei
+  const shopStock = stock.filter((unit) => unit.branchId === row.branchId)
+  const picked = shopStock.find((unit) => unit.id === pickedId)
+  const balance = keepsAgreedReplacement
+    ? row.balanceAmount ?? 0
+    : picked
+      ? picked.product.sellingPrice - returnValue
+      : 0
   const receivable = Math.max(balance, 0)
   const payable = Math.max(-balance, 0)
-  const [method, setMethod] = useState("CASH")
+  const refundOut = outcome === "REFUND" ? refundSplit(returnValue, row.invoice).paysBack : 0
+  const choices = OUTCOME_CHOICES.filter((choice) => !("phoneOnly" in choice) || row.imei)
 
   return (
     <div className="mt-4 border-t border-border pt-4">
-      <ActionForm action={completeReturn} submit="Apply outcome" className="space-y-3" onSuccess={onDone}>
+      <ActionForm
+        action={completeReturn}
+        submit={changed ? "Apply the changed outcome" : "Apply outcome"}
+        className="space-y-3"
+        onSuccess={onDone}
+      >
         <input type="hidden" name="id" value={row.id} />
 
-        {row.outcome === "REPLACEMENT" ? (
+        {canReconfirm ? (
+          <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-3">
+            <p className="text-sm font-semibold">Reconfirm before applying</p>
+            <label className="block space-y-1.5 text-sm">
+              <span className="font-medium">Course of action</span>
+              <Select name="outcome" value={outcome} onChange={(event) => setOutcome(event.target.value)}>
+                {choices.map((choice) => (
+                  <option key={choice.value} value={choice.value}>
+                    {choice.label}
+                    {choice.value === row.outcome ? " (as approved)" : ""}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            {row.imei ? (
+              <label className="block space-y-1.5 text-sm">
+                <span className="font-medium">Condition of what came back</span>
+                <Select name="faultClass" value={condition} onChange={(event) => setCondition(event.target.value)}>
+                  {CONDITION_CHOICES.map((choice) => (
+                    <option key={choice.value} value={choice.value}>
+                      {choice.label}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            ) : null}
+            {changed ? (
+              <p className="text-xs text-warning">
+                Changed from {outcomeLabel(row.outcome)}. The change is kept on Who did what.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {outcome === "REPLACEMENT" ? (
           <>
-            {!row.replacementImei ? (
-              <Select name="replacementImeiId" required emptyLabel="No In shop unit is ready.">
+            {keepsAgreedReplacement ? (
+              <input type="hidden" name="replacementImeiId" value={row.replacementImei!.id} />
+            ) : (
+              <Select
+                name="replacementImeiId"
+                required
+                value={pickedId}
+                onChange={(event) => setPickedId(event.target.value)}
+                emptyLabel="No In shop unit is ready in this shop."
+              >
                 <option value="">Pick the item to give out</option>
-                {stock.map((unit) => (
+                {shopStock.map((unit) => (
                   <option key={unit.id} value={unit.id}>
                     {deviceLabel(unit)} · {unit.product.name} · {formatCurrency(unit.product.sellingPrice)}
                   </option>
                 ))}
               </Select>
-            ) : (
-              <input type="hidden" name="replacementImeiId" value={row.replacementImei.id} />
             )}
-            <Input
-              name="paidAmount"
-              type="number"
-              defaultValue={receivable > 0 ? receivable : payable}
-              placeholder={
-                receivable > 0
-                  ? "Amount received from customer (₦)"
-                  : payable > 0
-                    ? "Amount paid to customer (₦)"
-                    : "0"
-              }
-            />
+            {!keepsAgreedReplacement && picked ? <BalanceFigure balance={balance} /> : null}
+            {receivable > 0 || payable > 0 ? (
+              <Input
+                name="paidAmount"
+                type="number"
+                key={`${pickedId}-${balance}`}
+                defaultValue={receivable > 0 ? receivable : payable}
+                placeholder={receivable > 0 ? "Amount received from customer (₦)" : "Amount paid to customer (₦)"}
+              />
+            ) : null}
             {payable > 0 ? (
               <>
                 <input type="hidden" name="method" value="TRANSFER" />
@@ -299,24 +395,26 @@ function ApplyForm({ row, stock, banks, onDone }: { row: ReturnRow; stock: Stock
               Stock moves on Apply. Collect the receivable or pay the payable so the books match the event.
             </p>
           </>
-        ) : row.outcome === "REFUND" ? (
+        ) : outcome === "REFUND" ? (
           <>
             <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-              This will {refundWords(returnValue, row.invoice)} without editing the original invoice. Refunds are paid by
-              bank.
+              This will {refundWords(returnValue, row.invoice)} without editing the original invoice.
+              {refundOut > 0 ? " Refunds are paid by bank." : ""}
             </p>
-            <BankPicker banks={banks} branchId={row.branchId} label="Pay the refund from" required />
+            {/* Only when money actually goes back: a refund on a sale still owed
+                just clears the debt, with nothing to pay out. */}
+            {refundOut > 0 ? (
+              <BankPicker banks={banks} branchId={row.branchId} label="Pay the refund from" required />
+            ) : null}
           </>
         ) : (
           <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
             This will{" "}
-            {row.outcome === "REFUND"
-              ? refundWords(returnValue, row.invoice)
-              : row.outcome === "REPAIR"
-                ? "open a repair job for this phone"
-                : row.outcome === "SEND_TO_SUPPLIER"
-                  ? "send this phone back to the supplier — it will not stay in this shop"
-                  : "post a credit note against what the customer owes"}{" "}
+            {outcome === "REPAIR"
+              ? "open a repair job for this phone"
+              : outcome === "SEND_TO_SUPPLIER"
+                ? "send this phone back to the supplier — it will not stay in this shop"
+                : "post a credit note against what the customer owes"}{" "}
             without editing the original invoice.
           </p>
         )}
@@ -327,7 +425,18 @@ function ApplyForm({ row, stock, banks, onDone }: { row: ReturnRow; stock: Stock
 
 // ─── Main list ────────────────────────────────────────────────────────────────
 
-export function ReturnsList({ rows, stock, banks = [] }: { rows: ReturnRow[]; stock: StockUnit[]; banks?: RefundBank[] }) {
+export function ReturnsList({
+  rows,
+  stock,
+  banks = [],
+  canReconfirm = false,
+}: {
+  rows: ReturnRow[]
+  stock: StockUnit[]
+  banks?: RefundBank[]
+  /** CEO and main admin: may change the course of action when applying. */
+  canReconfirm?: boolean
+}) {
   const [status, setStatus] = useState("all")
 
   const filtered = useMemo(
@@ -462,7 +571,7 @@ export function ReturnsList({ rows, stock, banks = [] }: { rows: ReturnRow[]; st
             description={`${open.customer.name} · ${formatShopWhen(whenOf(open))}`}
             className="sm:w-[520px]"
           >
-            <ReturnDetail row={open} stock={stock} banks={banks} onDone={() => setOpen(null)} />
+            <ReturnDetail row={open} stock={stock} banks={banks} canReconfirm={canReconfirm} onDone={() => setOpen(null)} />
           </SheetContent>
         ) : null}
       </Sheet>
@@ -470,7 +579,19 @@ export function ReturnsList({ rows, stock, banks = [] }: { rows: ReturnRow[]; st
   )
 }
 
-function ReturnDetail({ row, stock, banks, onDone }: { row: ReturnRow; stock: StockUnit[]; banks: RefundBank[]; onDone: () => void }) {
+function ReturnDetail({
+  row,
+  stock,
+  banks,
+  canReconfirm,
+  onDone,
+}: {
+  row: ReturnRow
+  stock: StockUnit[]
+  banks: RefundBank[]
+  canReconfirm: boolean
+  onDone: () => void
+}) {
   const returnValue = row.returnValue ?? money(row.refundAmount)
   return (
     <div className="space-y-4">
@@ -525,7 +646,7 @@ function ReturnDetail({ row, stock, banks, onDone }: { row: ReturnRow; stock: St
           Waiting for approval. Stock and money do not move until Needs approval says yes.
         </p>
       ) : null}
-      {row.status === "APPROVED" ? <ApplyForm row={row} stock={stock} banks={banks} onDone={onDone} /> : null}
+      {row.status === "APPROVED" ? <ApplyForm row={row} stock={stock} banks={banks} canReconfirm={canReconfirm} onDone={onDone} /> : null}
     </div>
   )
 }

@@ -5,10 +5,12 @@ import { PageHeader } from "@/components/shared"
 import { Button } from "@/components/ui/button"
 import { money } from "@/lib/utils"
 import { prisma } from "@/lib/prisma"
+import { requireUser } from "@/lib/session"
+import { isShopOwner } from "@/lib/roles"
 import { ReturnsList } from "./returns-list"
 
 export default async function ReturnsPage() {
-  const [rows, stock, bankAccounts] = await Promise.all([
+  const [rows, stock, bankAccounts, me] = await Promise.all([
     getReturns(),
     getInStockForReplace(),
     // Refunds leave by bank, from a named account.
@@ -17,6 +19,7 @@ export default async function ReturnsPage() {
       include: { branch: { select: { name: true } } },
       orderBy: [{ bankName: "asc" }, { accountNumber: "asc" }],
     }),
+    requireUser(),
   ])
   return (
     <div className="space-y-6">
@@ -84,6 +87,8 @@ export default async function ReturnsPage() {
                 }
               : null,
           }))}
+          // The CEO and the main admin reconfirm on Apply and may change the course of action.
+          canReconfirm={isShopOwner(me.role)}
           banks={bankAccounts.map((bank) => ({
             id: bank.id,
             branchId: bank.branchId,
