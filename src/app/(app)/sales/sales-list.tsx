@@ -28,20 +28,31 @@ export type SaleRow = {
   customer: { name: string; phone: string | null } | null
   branch: { code: string; name: string }
   soldBy: string | null
+  /** What finished refunds and credit notes took off this sale. */
+  returned: number
   items: Array<{ id: string; name: string; imei: string | null; quantity: number; unitPrice: number; totalPrice: number }>
 }
 
 type PayFilter = "all" | "paid" | "part" | "unpaid"
 
+/** Still due on a sale after what came back: the same rule as Customers and Reports. */
+function saleDue(sale: SaleRow) {
+  return Math.max(0, sale.totalAmount - sale.paidAmount - sale.returned)
+}
+
 function payKey(sale: SaleRow): Exclude<PayFilter, "all"> {
+  if (saleDue(sale) <= 0.001) return "paid"
   if (sale.paidAmount <= 0) return "unpaid"
-  if (sale.paidAmount + 0.001 >= sale.totalAmount) return "paid"
   return "part"
 }
 
 /** Paid minus sales. Zero when settled. Negative when the buyer still owes. */
 function saleBalance(sale: SaleRow) {
-  return sale.paidAmount - sale.totalAmount
+  // A return clears what was owed first, so a returned sale is settled, not
+  // overpaid. Only money paid beyond the invoice itself shows as "over".
+  const due = saleDue(sale)
+  if (due > 0.005) return -due
+  return Math.max(0, sale.paidAmount - sale.totalAmount)
 }
 
 /**
@@ -75,7 +86,7 @@ function searchText(sale: SaleRow) {
 
 function exportRows(rows: SaleRow[]) {
   return [
-    ["Invoice", "Date", "Shop", "Buyer", "Sold by", "Items", "Sales", "Paid", "Still owed", "Payment", "Status"],
+    ["Invoice", "Date", "Shop", "Buyer", "Sold by", "Items", "Sales", "Paid", "Returned", "Still owed", "Payment", "Status"],
     ...rows.map((sale) => [
       sale.invoiceNumber,
       formatShopWhen(sale.saleDate),
@@ -85,6 +96,7 @@ function exportRows(rows: SaleRow[]) {
       sale.items.map((item) => `${item.quantity} × ${item.name}${item.imei ? ` (${item.imei})` : ""}`).join("; "),
       sale.totalAmount,
       sale.paidAmount,
+      sale.returned,
       Math.max(0, -saleBalance(sale)),
       statusLabel(sale.paymentMethod),
       statusLabel(sale.status),
@@ -131,10 +143,11 @@ export function SalesList({ sales }: { sales: SaleRow[] }) {
         (acc, sale) => {
           acc.sales += sale.totalAmount
           acc.paid += sale.paidAmount
+          acc.returned += sale.returned
           acc.balance += saleBalance(sale)
           return acc
         },
-        { sales: 0, paid: 0, balance: 0 }
+        { sales: 0, paid: 0, returned: 0, balance: 0 }
       ),
     [visible]
   )
@@ -199,6 +212,19 @@ export function SalesList({ sales }: { sales: SaleRow[] }) {
       cell: (sale) => formatCurrency(sale.paidAmount),
     },
     {
+      id: "returned",
+      header: "Returned",
+      align: "right",
+      hideBelow: "lg",
+      sortValue: (sale) => sale.returned,
+      cell: (sale) =>
+        sale.returned > 0 ? (
+          <span className="font-medium text-warning">−{formatCurrency(sale.returned)}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
       id: "balance",
       header: "Still owed",
       align: "right",
@@ -219,9 +245,27 @@ export function SalesList({ sales }: { sales: SaleRow[] }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-2 sm:gap-3">
-        <Figure lead label="Sales value" value={totals.sales} hint={`${visible.length} sale${visible.length === 1 ? "" : "s"}`} />
+      {/* The real sales value: what was sold less what came back for a refund
+          or a credit note. The return log keeps the detail; this keeps the
+          headline honest at a glance. */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+        <Figure
+          lead
+          label="Sales after returns"
+          value={totals.sales - totals.returned}
+          hint={
+            totals.returned > 0
+              ? `${formatCurrency(totals.sales)} sold, ${formatCurrency(totals.returned)} returned`
+              : `${visible.length} sale${visible.length === 1 ? "" : "s"}`
+          }
+        />
         <Figure label="Received" value={totals.paid} hint="Money already taken" />
+        <Figure
+          label="Returned"
+          value={totals.returned}
+          hint={totals.returned > 0 ? "Refunds and credit notes on these sales" : "Nothing returned"}
+          tone={totals.returned > 0 ? "text-warning" : undefined}
+        />
         <Figure
           label="Still owed to us"
           value={Math.max(0, -totals.balance)}
@@ -304,6 +348,9 @@ export function SalesList({ sales }: { sales: SaleRow[] }) {
             <td className="hidden lg:table-cell" />
             <td className="whitespace-nowrap text-right tabular-nums">{formatCurrency(totals.sales)}</td>
             <td className="hidden whitespace-nowrap text-right tabular-nums xl:table-cell">{formatCurrency(totals.paid)}</td>
+            <td className="hidden whitespace-nowrap text-right tabular-nums text-warning lg:table-cell">
+              {totals.returned > 0 ? `−${formatCurrency(totals.returned)}` : "—"}
+            </td>
             <td className={cn("whitespace-nowrap text-right tabular-nums", balanceTone(totals.balance))}>{balanceWords(totals.balance)}</td>
             <td className="hidden lg:table-cell" />
           </tr>
@@ -357,11 +404,17 @@ function SaleQuickLook({ sale }: { sale: SaleRow }) {
   const balance = saleBalance(sale)
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-3 gap-2 rounded-xl bg-muted/60 p-3 text-center">
+      <div className={cn("grid gap-2 rounded-xl bg-muted/60 p-3 text-center", sale.returned > 0 ? "grid-cols-4" : "grid-cols-3")}>
         <div>
           <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Sales</p>
           <p className="font-semibold tabular-nums">{formatCurrency(sale.totalAmount)}</p>
         </div>
+        {sale.returned > 0 ? (
+          <div>
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Returned</p>
+            <p className="font-semibold tabular-nums text-warning">−{formatCurrency(sale.returned)}</p>
+          </div>
+        ) : null}
         <div>
           <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Paid</p>
           <p className="font-semibold tabular-nums">{formatCurrency(sale.paidAmount)}</p>

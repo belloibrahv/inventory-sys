@@ -10,7 +10,7 @@ import { getAppSettings, lowStockLimit } from "@/lib/settings"
 import { letterheadFromSettings } from "@/lib/letterhead"
 import { generateDocNumber, money } from "@/lib/utils"
 import { ConflictError, claimImei, creditInvoice, drawStock, settle, shiftCustomerBalance } from "@/lib/concurrency"
-import { resolveWritableShopId, scopeRecord, viewBranchFilter } from "@/lib/branch-scope"
+import { canReachBranch, OTHER_SHOP, resolveWritableShopId, scopeRecord, viewBranchFilter } from "@/lib/branch-scope"
 import { markParkedPosted } from "@/app/actions/parked"
 import { isBlockedFromSell } from "@/lib/phone-look"
 import { reservedTransferImeiSet, reservedSwapImeiSet } from "@/app/actions/ops"
@@ -1114,6 +1114,10 @@ async function fanOutSaleAlerts(input: {
 
 export async function collectPayment(formData: FormData) {
   const user = await requireUser()
+  // Same door as collecting on an invoice: it used to accept any signed-in job.
+  if (!(await canSell(user.role)) && !(await canManageFinance(user.role))) {
+    return { error: "You are not allowed to collect money from a customer. Ask the main admin." }
+  }
   const customerId = String(formData.get("customerId"))
   const bankAccountIdRaw = String(formData.get("bankAccountId") || "").trim()
   const cashPart = Math.max(0, Number(formData.get("cashAmount") || 0) || 0)
@@ -1151,6 +1155,7 @@ export async function collectPayment(formData: FormData) {
         select: { id: true, name: true, branchId: true, currentBalance: true },
       })
       if (!customer) throw new ConflictError("We could not find that customer.")
+      if (!(await canReachBranch(user, customer.branchId))) throw new ConflictError(OTHER_SHOP)
       const owing = money(customer.currentBalance)
       if (owing <= 0) throw new ConflictError("This customer does not owe us anything.")
 
@@ -1297,6 +1302,7 @@ export async function collectInvoicePayment(formData: FormData) {
     select: { id: true, status: true, branchId: true, customerId: true, invoiceNumber: true, totalAmount: true, paidAmount: true },
   })
   if (!sale) return { error: "We could not find that sale." }
+  if (!(await canReachBranch(user, sale.branchId))) return { error: OTHER_SHOP }
   if (sale.status !== "COMPLETED") return { error: "You can only collect money on a sale that is finished." }
   const returned = (await returnedValueBySale(prisma, [sale.id])).get(sale.id) ?? 0
   if (dueAfterReturns(sale, returned) <= 0) {

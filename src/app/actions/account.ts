@@ -32,7 +32,9 @@ export async function changePassword(formData: FormData) {
   if (!valid) return { error: "Current password is not correct." }
   await prisma.user.update({
     where: { id: user.id },
-    data: { password: await bcrypt.hash(next, 10), mustChangePassword: false },
+    // Every session signed in with the old password ends, this one included:
+    // whoever had it must now sign in with the new one.
+    data: { password: await bcrypt.hash(next, 10), mustChangePassword: false, sessionsValidAfter: new Date() },
   })
   await prisma.auditLog.create({
     data: {
@@ -45,7 +47,7 @@ export async function changePassword(formData: FormData) {
     },
   })
   revalidatePath("/account")
-  return { success: true }
+  return { success: true, redirectTo: "/login?changed=1" }
 }
 
 export async function exportShopBackup() {

@@ -11,6 +11,8 @@ declare module "next-auth" {
       role: UserRole
       branchId: string | null
     }
+    /** When this session was signed in (seconds since 1970), from the token. */
+    issuedAt?: number
   }
 
   interface User {

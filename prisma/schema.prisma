@@ -259,6 +259,9 @@ model User {
   twoFactorEnabled   Boolean   @default(false)
   totpSecret         String?
   mustChangePassword Boolean   @default(false)
+  /// Sessions signed in before this moment are refused. Set when the password
+  /// is changed or reset, so a stolen session ends with the old password.
+  sessionsValidAfter DateTime?
   lastLoginAt        DateTime?
   lastLoginIp        String?
   createdAt          DateTime  @default(now())

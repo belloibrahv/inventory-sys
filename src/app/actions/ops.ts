@@ -16,7 +16,7 @@ import { canApprove, canManageFinance, canSeeAllBranches, canSendToSupplier, isS
 import { can } from "@/lib/permissions"
 import { generateDocNumber, money } from "@/lib/utils"
 import { shopError } from "@/lib/shop-speak"
-import { canReachBranch, resolveWritableShopId, viewBranchFilter } from "@/lib/branch-scope"
+import { canReachBranch, OTHER_SHOP, resolveWritableShopId, viewBranchFilter } from "@/lib/branch-scope"
 import { ConflictError, claimImei, claimImeis, drawStock, recordMovement, returnStock, shiftCustomerBalance } from "@/lib/concurrency"
 import { warrantyState } from "@/lib/warranty"
 import { cell, readTableFile } from "@/lib/table-file"
@@ -51,6 +51,8 @@ function parseTransferIds(raw: string) {
 
 /** IMEIs on transfers still waiting for the other shop to accept or reject. */
 export async function reservedTransferImeiSet(branchId?: string) {
+  // Exported from a server-actions file, so callable on its own: signed in only.
+  await requireUser()
   const rows = await prisma.stockTransfer.findMany({
     where: {
       status: "PENDING",
@@ -63,6 +65,7 @@ export async function reservedTransferImeiSet(branchId?: string) {
 
 /** Shop devices on a Swap Deal still waiting for approval. Stock has not left yet. */
 export async function reservedSwapImeiSet(branchId?: string) {
+  await requireUser()
   const rows = await prisma.swap.findMany({
     where: {
       status: "PENDING",
@@ -362,6 +365,7 @@ export async function receivePurchaseImeis(formData: FormData) {
     include: { items: { include: { product: true } }, supplier: true },
   })
   if (!purchase) return { error: "We could not find that supplier bill." }
+  if (!(await canReachBranch(user, purchase.branchId))) return { error: OTHER_SHOP }
   if (purchase.status === "RECEIVED") return { error: "These goods have already been received and the bill is closed." }
 
   const item = purchase.items[0]
@@ -556,6 +560,7 @@ export async function payPurchase(formData: FormData) {
     include: { supplier: true, openingStock: true },
   })
   if (!purchase) return { error: "We could not find that supplier bill." }
+  if (!(await canReachBranch(user, purchase.branchId))) return { error: OTHER_SHOP }
   if (isOpeningStockPurchase(purchase)) {
     return { error: "Opening stock is the value the shop started with. It is not a bill to pay." }
   }
@@ -1062,6 +1067,9 @@ export async function completeReturn(formData: FormData) {
     },
   })
   if (!record) return { error: "We could not find that return." }
+  // A record id is easy to guess or pass on: only someone who can reach the
+  // return's shop may apply it (and pay its refund).
+  if (!(await canReachBranch(user, record.branchId))) return { error: OTHER_SHOP }
   if (record.status === "COMPLETED") return { error: "That return is already finished." }
   if (record.status !== "APPROVED" && !(await canApprove(user.role))) {
     return { error: "Management has not approved this return yet." }
@@ -1708,13 +1716,21 @@ export async function createSwap(formData: FormData) {
 export async function applySwapApprovalDecision(
   swapId: string,
   status: "APPROVED" | "REJECTED",
-  userId: string
+  _callerUserId?: string
 ) {
+  // Exported from a server-actions file, so it is a public endpoint of its own.
+  // It used to trust whoever called it and the userId they passed: anyone who
+  // reached it could approve or reject a Swap Deal in another person's name.
+  // The signed-in person is the decider, and they must be allowed to decide.
+  const actor = await requireUser()
+  if (!(await canApprove(actor.role))) return { error: "You are not allowed to say yes or no to a Swap Deal." }
+  const userId = actor.id
   const swap = await prisma.swap.findUnique({
     where: { id: swapId },
     include: { customer: true, newProduct: true, oldImei: true, newImei: true },
   })
   if (!swap) return { error: "We could not find that Swap Deal." }
+  if (!(await canReachBranch(actor, swap.branchId))) return { error: OTHER_SHOP }
   if (swap.status !== "PENDING") return { error: "Somebody has already decided on this Swap Deal." }
 
   try {
@@ -1810,12 +1826,16 @@ export async function completeSwap(formData: FormData) {
   const user = await requireUser()
   const id = String(formData.get("id"))
   const paid = Number(formData.get("paidAmount") || 0)
-  const method = String(formData.get("method") || "TRANSFER") as PaymentMethod
+  // A Swap Deal is settled in cash or by bank transfer. By transfer, the named
+  // bank account the money went into, or came out of, is picked.
+  const method = (String(formData.get("method") || "TRANSFER") === "CASH" ? "CASH" : "TRANSFER") as PaymentMethod
+  const bankAccountId = String(formData.get("bankAccountId") || "").trim()
   const swap = await prisma.swap.findUnique({
     where: { id },
     include: { customer: true, newProduct: true, oldImei: true, newImei: true },
   })
   if (!swap || !swap.newImeiId) return { error: "We could not find that swap." }
+  if (!(await canReachBranch(user, swap.branchId))) return { error: OTHER_SHOP }
   if (swap.status === "COMPLETED") return { error: "That swap is already finished." }
   if (swap.status !== "APPROVED") {
     return { error: "Wait for approval on Needs approval before settling the money." }
@@ -1839,6 +1859,15 @@ export async function completeSwap(formData: FormData) {
   const payable = Math.max(-balance, 0)
   const collected = Math.min(Math.max(0, paid), receivable || payable)
   const payChannel = shopPayChannel(method)
+  const movesMoney = (receivable > 0 && collected > 0) || payable > 0
+  const swapBank =
+    payChannel !== "CASH" && movesMoney && bankAccountId
+      ? await prisma.bankAccount.findFirst({ where: { id: bankAccountId, isActive: true } })
+      : null
+  if (payChannel !== "CASH" && movesMoney && !swapBank) {
+    return { error: "Pick the bank account the money went into or came out of." }
+  }
+  const swapBankLabel = swapBank ? ` · ${swapBank.bankName} ${swapBank.accountNumber}` : ""
   if (payable > 0 && payChannel === "CASH") {
     const payOut = collected > 0 ? Math.min(collected, payable) : payable
     const cashGate = await assertCashAvailable(swap.branchId, payOut)
@@ -1933,7 +1962,7 @@ export async function completeSwap(formData: FormData) {
         },
         payments:
           receivable > 0 && collected > 0
-            ? { create: { amount: collected.toFixed(2), method } }
+            ? { create: { amount: collected.toFixed(2), method, bankAccountId: swapBank?.id ?? null } }
             : undefined,
       },
     })
@@ -1965,7 +1994,8 @@ export async function completeSwap(formData: FormData) {
           type: "INCOME",
           amount: collected.toFixed(2),
           reference: invoiceNumber,
-          description: `Swap receivable ${swap.swapNumber}`,
+          description: `Swap receivable ${swap.swapNumber}${swapBankLabel}`,
+          bankAccountId: swapBank?.id ?? null,
         },
       })
     }
@@ -1978,7 +2008,8 @@ export async function completeSwap(formData: FormData) {
           type: "EXPENSE",
           amount: payOut.toFixed(2),
           reference: invoiceNumber,
-          description: `Swap payable to ${swap.customer.name} · ${swap.swapNumber}`,
+          description: `Swap payable to ${swap.customer.name} · ${swap.swapNumber}${swapBankLabel}`,
+          bankAccountId: swapBank?.id ?? null,
         },
       })
     }
@@ -2073,6 +2104,7 @@ export async function advanceRepair(formData: FormData) {
     include: { customer: true, imei: { include: { product: true } } },
   })
   if (!repair) return { error: "We could not find that repair." }
+  if (!(await canReachBranch(user, repair.branchId))) return { error: OTHER_SHOP }
 
   const nextCost = formData.get("repairCost") ? Number(formData.get("repairCost")) : money(repair.repairCost)
   const closing = status === "COMPLETED" || status === "DELIVERED"

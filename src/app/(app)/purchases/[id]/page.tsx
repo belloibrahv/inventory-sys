@@ -32,6 +32,13 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
   const item = purchase.items[0]
   const remaining = item ? item.quantity - item.receivedQty : 0
   const billMoney = purchaseBalance(purchase.totalAmount, purchase.paidAmount, purchase.returnedAmount)
+  // The units on this bill that went back to the supplier, so the bill shows
+  // its true value and exactly what was returned.
+  const sentBackUnits = await prisma.imeiRecord.findMany({
+    where: { purchaseId: purchase.id, status: "RETURNED_TO_SUPPLIER" },
+    select: { id: true, imei1: true, serialNumber: true, updatedAt: true, product: { select: { name: true } } },
+    orderBy: { updatedAt: "desc" },
+  })
   const due = isOpening ? 0 : billMoney.owed
   const surplus = isOpening ? 0 : billMoney.surplus
   const step = isOpening
@@ -109,11 +116,49 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
           ) : null}
         </div>
       ) : null}
+      {!isOpening && (billMoney.sentBack > 0 || sentBackUnits.length > 0) ? (
+        <div className="surface-card space-y-3 border-warning/30 p-4 sm:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold">Sent back to the supplier</p>
+              <p className="text-sm text-muted-foreground">
+                Billed {formatCurrency(billMoney.billed)} · sent back{" "}
+                <span className="font-medium text-warning">{formatCurrency(billMoney.sentBack)}</span>
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-muted-foreground">True value of this bill</p>
+              <p className="text-xl font-semibold tabular-nums">{formatCurrency(billMoney.remaining)}</p>
+            </div>
+          </div>
+          {sentBackUnits.length ? (
+            <ul className="divide-y divide-border rounded-lg border border-border text-sm">
+              {sentBackUnits.map((unit) => (
+                <li key={unit.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                  <span className="min-w-0">
+                    <span className="font-medium">{unit.product.name}</span>{" "}
+                    <span className="font-mono text-xs text-muted-foreground">
+                      {unit.imei1}
+                      {unit.serialNumber && unit.serialNumber !== unit.imei1 ? ` · ${unit.serialNumber}` : ""}
+                    </span>
+                  </span>
+                  <span className="text-xs text-muted-foreground">Sent back {formatDate(unit.updatedAt)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
       <div className="grid grid-cols-2 gap-2 sm:gap-4 xl:grid-cols-4">
         <div className="surface-card min-w-0 p-3 sm:p-5">
           <p className="text-sm text-muted-foreground">Status</p>
           <StatusBadge value={purchase.status} />
-          <p className="mt-3 text-sm">Value {formatCurrency(money(purchase.totalAmount))}</p>
+          <p className="mt-3 text-sm">
+            Value {formatCurrency(money(purchase.totalAmount))}
+            {billMoney.sentBack > 0 ? (
+              <span className="block text-xs text-warning">After send-backs {formatCurrency(billMoney.remaining)}</span>
+            ) : null}
+          </p>
         </div>
         <div className="surface-card min-w-0 p-3 sm:p-5">
           <p className="text-sm text-muted-foreground">On the supplier bill</p>

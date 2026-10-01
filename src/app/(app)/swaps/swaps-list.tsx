@@ -14,8 +14,12 @@ import { formatShopWhen } from "@/lib/lagos-day"
 import { formatCurrency } from "@/lib/utils"
 import { shopConditionLabel } from "@/lib/conditions"
 
+/** A named bank a Swap Deal's money can go through. */
+type SwapBank = { id: string; label: string; branchId: string }
+
 type SwapRow = {
   id: string
+  branchId: string
   swapNumber: string
   status: string
   tradeValue: number
@@ -44,7 +48,7 @@ function deviceLabel(row: { imei1: string; serialNumber?: string | null }) {
   return row.imei1
 }
 
-export function SwapsList({ swaps }: { swaps: SwapRow[] }) {
+export function SwapsList({ swaps, banks = [] }: { swaps: SwapRow[]; banks?: SwapBank[] }) {
   const [status, setStatus] = useState("all")
 
   const filtered = useMemo(
@@ -172,7 +176,7 @@ export function SwapsList({ swaps }: { swaps: SwapRow[] }) {
       <Sheet open={Boolean(open)} onOpenChange={(value) => !value && setOpen(null)}>
         {open ? (
           <SheetContent title={open.swapNumber} description={`${open.customer.name} · ${formatShopWhen(whenOf(open))}`} className="sm:w-[520px]">
-            <SwapDetail swap={open} onDone={() => setOpen(null)} />
+            <SwapDetail swap={open} banks={banks} onDone={() => setOpen(null)} />
           </SheetContent>
         ) : null}
       </Sheet>
@@ -186,7 +190,39 @@ function SwapBalance({ balance }: { balance: number }) {
   return <span className="text-muted-foreground">Even</span>
 }
 
-function SwapDetail({ swap, onDone }: { swap: SwapRow; onDone: () => void }) {
+/** Cash, or a bank transfer through one of our named accounts (the swap's shop first). */
+function SwapPaymentFields({ banks, branchId, payingOut }: { banks: SwapBank[]; branchId: string; payingOut: boolean }) {
+  const [method, setMethod] = useState("TRANSFER")
+  const ordered = [...banks].sort((a, b) => Number(b.branchId === branchId) - Number(a.branchId === branchId))
+  return (
+    <>
+      <Select name="method" value={method} onChange={(event) => setMethod(event.target.value)} aria-label="How">
+        <option value="CASH">Cash</option>
+        <option value="TRANSFER">Bank transfer</option>
+      </Select>
+      {method === "TRANSFER" ? (
+        banks.length ? (
+          <Select name="bankAccountId" required defaultValue="" aria-label="Bank account" className="sm:col-span-2">
+            <option value="" disabled>
+              {payingOut ? "Paid out of which bank account?" : "Received into which bank account?"}
+            </option>
+            {ordered.map((bank) => (
+              <option key={bank.id} value={bank.id}>
+                {bank.label}
+              </option>
+            ))}
+          </Select>
+        ) : (
+          <p className="text-sm text-warning sm:col-span-2">
+            No bank account is listed yet. Add one under Money in &amp; out, or settle this in cash.
+          </p>
+        )
+      ) : null}
+    </>
+  )
+}
+
+function SwapDetail({ swap, banks, onDone }: { swap: SwapRow; banks: SwapBank[]; onDone: () => void }) {
   const receivable = Math.max(swap.balanceAmount, 0)
   const payable = Math.max(-swap.balanceAmount, 0)
   const givenOut = swap.newImei ? deviceLabel(swap.newImei) : swap.newProduct.name
@@ -264,11 +300,9 @@ function SwapDetail({ swap, onDone }: { swap: SwapRow; onDone: () => void }) {
               placeholder={receivable > 0 ? "Amount received" : payable > 0 ? "Amount paid out" : "0"}
               aria-label="Amount"
             />
-            <Select name="method" defaultValue="TRANSFER" aria-label="How">
-              <option value="CASH">Cash</option>
-              <option value="TRANSFER">Transfer</option>
-              <option value="POS">POS</option>
-            </Select>
+            {receivable > 0 || payable > 0 ? (
+              <SwapPaymentFields banks={banks} branchId={swap.branchId} payingOut={payable > 0} />
+            ) : null}
           </ActionForm>
         </div>
       ) : null}

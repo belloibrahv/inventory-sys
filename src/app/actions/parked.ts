@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { requireUser } from "@/lib/session"
 import { alertWatchers, writeAudit } from "@/lib/audit"
 import { scopedBranchId } from "@/lib/rbac"
+import { canReachBranch } from "@/lib/branch-scope"
 
 const SIT_MS = 2 * 60 * 60 * 1000
 const VANISH_GRACE_MS = 90 * 1000
@@ -106,10 +107,15 @@ export async function heartbeatParkedSales(input: {
 }
 
 export async function markParkedPosted(offlineId: string, saleId: string) {
-  await requireUser()
+  const user = await requireUser()
   if (!offlineId || !saleId) return
+  // Only a real sale, in a shop this person can reach, can close a parked one,
+  // and only that shop's parked sale. Otherwise anyone could mark another
+  // shop's parked sale as posted and hide it from "vanished from a device".
+  const sale = await prisma.sale.findUnique({ where: { id: saleId }, select: { branchId: true } })
+  if (!sale || !(await canReachBranch(user, sale.branchId))) return
   await prisma.parkedSale.updateMany({
-    where: { id: offlineId },
+    where: { id: offlineId, branchId: sale.branchId },
     data: { status: "POSTED", postedSaleId: saleId, lastSeenAt: new Date() },
   })
 }

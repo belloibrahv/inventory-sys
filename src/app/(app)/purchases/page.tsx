@@ -24,6 +24,7 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
   const paid = regularPurchases.reduce((sum, row) => sum + money(row.paidAmount), 0)
   const balances = regularPurchases.map((row) => purchaseBalance(row.totalAmount, row.paidAmount, row.returnedAmount))
   const owed = balances.reduce((sum, row) => sum + row.owed, 0)
+  const sentBack = balances.reduce((sum, row) => sum + row.sentBack, 0)
   const surplus = balances.reduce((sum, row) => sum + row.surplus, 0)
   const openingValue = openingPurchases.reduce((sum, row) => sum + money(row.totalAmount), 0)
 
@@ -78,10 +79,24 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
 
       {/* The money first: what these bills came to, what we paid, what is left. */}
       <StatGrid>
+        {/* The true purchase value: what was billed less what went back to the
+            supplier, so a send-back shows here and not only on Send back. */}
         <StatCard
-          label="Value of these bills"
-          value={formatCurrency(billed)}
-          hint={`${regularPurchases.length} supplier bill${regularPurchases.length === 1 ? "" : "s"}`}
+          lead
+          label="Purchases after send-backs"
+          value={formatCurrency(billed - sentBack)}
+          hint={
+            sentBack > 0
+              ? `${formatCurrency(billed)} billed, ${formatCurrency(sentBack)} sent back`
+              : `${regularPurchases.length} supplier bill${regularPurchases.length === 1 ? "" : "s"}`
+          }
+        />
+        <StatCard
+          label="Sent back to suppliers"
+          value={formatCurrency(sentBack)}
+          hint={sentBack > 0 ? "Goods returned on these bills" : "Nothing sent back"}
+          tone={sentBack > 0 ? "warning" : "neutral"}
+          href="/purchases/send-back"
         />
         <StatCard
           label="Payment"
@@ -135,6 +150,7 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
                 when: (row.receivedDate ?? row.createdAt).toISOString(),
                 received: Boolean(row.receivedDate),
                 total: money(row.totalAmount),
+                sentBack: balance.sentBack,
                 paid: money(row.paidAmount),
                 owed: balance.owed,
                 surplus: balance.surplus,

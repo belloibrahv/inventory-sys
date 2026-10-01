@@ -28,6 +28,16 @@ function resolveAuthSecret() {
   return secret
 }
 
+/** Sign-in lockout: this many failed tries in the window locks the email or address. */
+const LOCKOUT_WINDOW_MS = 15 * 60 * 1000
+const MAX_FAILS_PER_EMAIL = 5
+// Generous on purpose: a whole shop signs in from one internet address.
+const MAX_FAILS_PER_ADDRESS = 50
+/** The message the sign-in page turns into "too many tries". */
+export const LOCKED_OUT = "TooManyAttempts"
+/** A bcrypt hash of a random string nobody knows, used only to keep timing even. */
+const TIMING_DUMMY_HASH = "$2b$10$tjEEXjJCCx39ISSIBsCKFOpEV64Fhsf6wrKrPCESiMxttwlkhDfru"
+
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
@@ -43,13 +53,52 @@ export const authOptions: NextAuthOptions = {
           throw new Error("Invalid credentials")
         }
 
+        // Lockout. Five failed tries on one email in 15 minutes, or fifty from
+        // one network address, and further tries are refused for 15 minutes,
+        // even with the right password, so guessing stops working. The count
+        // comes from the failed sign-ins already in Who did what.
+        const since = new Date(Date.now() - LOCKOUT_WINDOW_MS)
+        const ip = (await requestContext()).ip
+        const [emailFails, ipFails] = await Promise.all([
+          prisma.auditLog.count({ where: { action: "LOGIN", success: false, entityId: email, createdAt: { gte: since } } }),
+          // Real wrong guesses only. A refused try during a lockout is not
+          // counted here, or one locked-out person retrying could keep a whole
+          // shop (one shared address) from signing in.
+          ip
+            ? prisma.auditLog.count({
+                where: {
+                  action: "LOGIN",
+                  success: false,
+                  ipAddress: ip,
+                  createdAt: { gte: since },
+                  NOT: { newValue: { contains: "locked_out" } },
+                },
+              })
+            : 0,
+        ])
+        if (emailFails >= MAX_FAILS_PER_EMAIL || ipFails >= MAX_FAILS_PER_ADDRESS) {
+          await writeAudit({
+            userId: null,
+            action: "LOGIN",
+            entityType: "User",
+            entityId: email,
+            newValue: JSON.stringify({ result: "denied", reason: "locked_out" }),
+            success: false,
+            risk: "HIGH",
+          })
+          throw new Error(LOCKED_OUT)
+        }
+
         const user = await prisma.user.findUnique({ where: { email } })
         // A password pasted from a message often carries a space at either end.
         // Try it as typed first, then without those spaces.
         const valid = user?.isActive
           ? (await bcrypt.compare(password, user.password)) ||
             (password.trim() !== password && password.trim().length > 0 && (await bcrypt.compare(password.trim(), user.password)))
-          : false
+          : // No such login (or a locked one): spend the same time on a password
+            // check anyway, so how long the answer takes cannot reveal which
+            // emails belong to staff.
+            (await bcrypt.compare(password, TIMING_DUMMY_HASH)) && false
         if (!user || !user.isActive || !valid) {
           await writeAudit({
             userId: user?.id ?? null,
@@ -61,9 +110,9 @@ export const authOptions: NextAuthOptions = {
             success: false,
             risk: "HIGH",
           })
-          const since = new Date(Date.now() - 10 * 60 * 1000)
+          const alertSince = new Date(Date.now() - 10 * 60 * 1000)
           const fails = await prisma.auditLog.count({
-            where: { action: "LOGIN", success: false, entityId: email, createdAt: { gte: since } },
+            where: { action: "LOGIN", success: false, entityId: email, createdAt: { gte: alertSince } },
           })
           if (fails >= 3) {
             await alertWatchers(
@@ -128,10 +177,14 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id
         token.role = user.role
         token.branchId = user.branchId
+        // Stamped now, so the sign-in time is known from the first request.
+        token.iat = Math.floor(Date.now() / 1000)
       }
       return token
     },
     async session({ session, token }) {
+      // When this session was signed in, so a password change can end it.
+      session.issuedAt = typeof token.iat === "number" ? token.iat : undefined
       if (session.user) {
         session.user.id = token.id as string
         session.user.role = token.role as UserRole

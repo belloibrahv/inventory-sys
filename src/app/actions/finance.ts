@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma"
 import { setStock } from "@/lib/concurrency"
 import { branchFilter, canReachBranch, OTHER_SHOP, resolveWritableShopId, viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
-import { canApprove, canHardDelete, canManageFinance, canManageStaff, canEditLetterhead, canSetOpeningMoney, canSeeProfit, isSuperAdmin, scopedBranchId } from "@/lib/rbac"
+import { canApprove, canHardDelete, canManageFinance, canManageStaff, canEditLetterhead, canSeeAllBranches, canSetOpeningMoney, canSeeProfit, isSuperAdmin, scopedBranchId } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { isLetterheadKey } from "@/lib/letterhead"
 import { generateDocNumber, money } from "@/lib/utils"
@@ -335,7 +335,14 @@ export async function getFinance({ withLedger = false }: { withLedger?: boolean 
   // (RTN- numbers) are read here; supplier payments by bank are already in
   // supplierPayments and must not come off twice.
   const bankRefunds = await prisma.financeEntry.findMany({
-    where: { ...where, account: "BANK", type: "EXPENSE", reference: { startsWith: "RTN-" } },
+    where: {
+      ...where,
+      account: "BANK",
+      type: "EXPENSE",
+      // Return refunds and Swap Deal pay-outs. Supplier payments are left out:
+      // they are already in supplierPayments.
+      OR: [{ reference: { startsWith: "RTN-" } }, { description: { startsWith: "Swap payable" } }],
+    },
     include: { branch: { select: { name: true } } },
     orderBy: { createdAt: "desc" },
   })
@@ -350,7 +357,7 @@ export async function getFinance({ withLedger = false }: { withLedger?: boolean 
       date: entry.createdAt,
       branch: entry.branch.name,
       type: "OUT",
-      category: "Refund on a return",
+      category: entry.description?.startsWith("Swap payable") ? "Swap Deal pay-out" : "Refund on a return",
       description: entry.description || entry.reference || "Refund",
       amount,
     })
@@ -718,12 +725,43 @@ export async function createExpense(formData: FormData) {
   return { success: true }
 }
 
+/**
+ * The shop each approval belongs to, read from the record it is about. An
+ * approval row itself carries no shop, so a shop manager used to see, and could
+ * decide, every shop's expenses, returns, swaps, counts and deliveries.
+ */
+async function approvalShops(rows: Array<{ id: string; entityType: string; entityId: string }>) {
+  const ids = (type: string) => rows.filter((row) => row.entityType === type).map((row) => row.entityId)
+  const [expenses, returns, swaps, counts, lots] = await Promise.all([
+    prisma.expense.findMany({ where: { expenseNumber: { in: ids("Expense") } }, select: { expenseNumber: true, branchId: true } }),
+    prisma.stockReturn.findMany({ where: { id: { in: ids("Return") } }, select: { id: true, branchId: true } }),
+    prisma.swap.findMany({ where: { id: { in: ids("Swap") } }, select: { id: true, branchId: true } }),
+    prisma.reconciliation.findMany({ where: { id: { in: ids("Reconciliation") } }, select: { id: true, branchId: true } }),
+    prisma.incomingLot.findMany({ where: { lotNumber: { in: ids("IncomingLot") } }, select: { lotNumber: true, branchId: true } }),
+  ])
+  const byKey = new Map<string, string>([
+    ...expenses.map((row) => [`Expense:${row.expenseNumber}`, row.branchId] as const),
+    ...returns.map((row) => [`Return:${row.id}`, row.branchId] as const),
+    ...swaps.map((row) => [`Swap:${row.id}`, row.branchId] as const),
+    ...counts.map((row) => [`Reconciliation:${row.id}`, row.branchId] as const),
+    ...lots.map((row) => [`IncomingLot:${row.lotNumber}`, row.branchId] as const),
+  ])
+  return new Map(rows.map((row) => [row.id, byKey.get(`${row.entityType}:${row.entityId}`) ?? null]))
+}
+
 export async function getApprovals() {
   const user = await requireUser()
   if (!(await can(user.role, "view.approvals"))) return []
-  return prisma.approval.findMany({
+  const rows = await prisma.approval.findMany({
     include: { requester: { select: { id: true, name: true, email: true, role: true, branchId: true } }, decider: { select: { id: true, name: true, email: true, role: true, branchId: true } } },
     orderBy: { requestedAt: "desc" },
+  })
+  if (await canSeeAllBranches(user.role)) return rows
+  // Everyone else sees their own shop's approvals only.
+  const shops = await approvalShops(rows)
+  return rows.filter((row) => {
+    const shop = shops.get(row.id)
+    return shop == null || shop === user.branchId
   })
 }
 
@@ -734,6 +772,9 @@ export async function decideApproval(id: string, status: "APPROVED" | "REJECTED"
   }
   const approval = await prisma.approval.findUnique({ where: { id } })
   if (!approval || approval.status !== "PENDING") return { error: "Somebody has already decided on this one." }
+  // Only for a shop this person can reach (a shop manager: their own shop).
+  const approvalShop = (await approvalShops([approval])).get(approval.id) ?? null
+  if (!(await canReachBranch(user, approvalShop))) return { error: OTHER_SHOP }
 
   if (approval.type === "INCOMING_RECEIVE" && approval.requestedBy === user.id) {
     return { error: "Someone else must say yes. You already checked this carton." }
@@ -1105,7 +1146,9 @@ export async function resetStaffPassword(formData: FormData) {
 
   await prisma.user.update({
     where: { id: target.id },
-    data: { password: await bcrypt.hash(password, 10), mustChangePassword: true },
+    // The person's open sessions end: a reset after a lost or stolen password
+    // must not leave the old session working.
+    data: { password: await bcrypt.hash(password, 10), mustChangePassword: true, sessionsValidAfter: new Date() },
   })
   await prisma.auditLog.create({
     data: {

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma"
 import { resolveWritableShopId, scopeRecord, viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
 import { isShopOwner } from "@/lib/rbac"
+import { can } from "@/lib/permissions"
 import { displayPartyName } from "@/lib/party-key"
 import { findDuplicateSupplier } from "@/lib/supplier-identity"
 import { healOpeningStockBills } from "@/lib/opening-stock-money"
@@ -113,7 +114,15 @@ export async function createCustomer(formData: FormData) {
 }
 
 export async function getSuppliers() {
-  await requireUser()
+  const user = await requireUser()
+  // Supplier balances and bill amounts are for the jobs that deal with
+  // suppliers or load stock, not for anyone who happens to be signed in.
+  const allowed = (
+    await Promise.all(
+      ["view.suppliers", "view.purchases", "view.uploads", "action.intake", "action.upload"].map((key) => can(user.role, key))
+    )
+  ).some(Boolean)
+  if (!allowed) return []
   await healOpeningStockBills()
   return prisma.supplier.findMany({
     where: {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { BrandLockup, BrandMark } from "@/components/brand-mark"
@@ -18,12 +18,27 @@ export default function LoginPage() {
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const [entering, setEntering] = useState(false)
+  const [notice, setNotice] = useState("")
+
+  // After a password change every session ends, this one included, so say why.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("changed") === "1") {
+      setNotice("Password changed. Sign in again with your new password.")
+    }
+  }, [])
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault()
     setLoading(true)
     setError("")
     const result = await signIn("credentials", { email, password, redirect: false })
+    if (result?.error === "TooManyAttempts") {
+      setLoading(false)
+      setError(
+        "Too many tries that did not work. Sign-in is paused for 15 minutes for this email. If you have forgotten the password, the main admin or the CEO can reset it on Staff."
+      )
+      return
+    }
     if (result?.error) {
       setLoading(false)
       // Never says which part was wrong, so it cannot be used to find real emails.
@@ -98,6 +113,11 @@ export default function LoginPage() {
           <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:bg-amber-500/15 dark:text-amber-200">
             First time here? You will be asked to change your password after you sign in.
           </p>
+          {notice && !error ? (
+            <p role="status" className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200">
+              {notice}
+            </p>
+          ) : null}
           {error ? (
             <p
               role="alert"

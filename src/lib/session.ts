@@ -10,11 +10,25 @@ export async function getSession() {
 export async function getCurrentUser() {
   const session = await getSession()
   if (!session?.user?.id) return null
-  const user = await prisma.user.findUnique({
+  const row = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { id: true, email: true, name: true, role: true, branchId: true, isActive: true, mustChangePassword: true },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      branchId: true,
+      isActive: true,
+      mustChangePassword: true,
+      sessionsValidAfter: true,
+    },
   })
-  if (!user || !user.isActive) return null
+  if (!row || !row.isActive) return null
+  // A session signed in before the password last changed is over.
+  if (row.sessionsValidAfter && (!session.issuedAt || session.issuedAt * 1000 < row.sessionsValidAfter.getTime())) {
+    return null
+  }
+  const { sessionsValidAfter: _validAfter, ...user } = row
   return user
 }
 

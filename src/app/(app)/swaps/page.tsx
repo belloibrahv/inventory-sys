@@ -4,10 +4,18 @@ import { getSwaps } from "@/app/actions/ops"
 import { PageHeader } from "@/components/shared"
 import { Button } from "@/components/ui/button"
 import { money } from "@/lib/utils"
+import { prisma } from "@/lib/prisma"
 import { SwapsList } from "./swaps-list"
 
 export default async function SwapsPage() {
-  const swaps = await getSwaps()
+  const [swaps, bankAccounts] = await Promise.all([
+    getSwaps(),
+    prisma.bankAccount.findMany({
+      where: { isActive: true },
+      include: { branch: { select: { name: true } } },
+      orderBy: [{ bankName: "asc" }, { accountNumber: "asc" }],
+    }),
+  ])
   return (
     <div className="space-y-6">
       <PageHeader
@@ -22,8 +30,14 @@ export default async function SwapsPage() {
         }
       />
       <SwapsList
+        banks={bankAccounts.map((bank) => ({
+          id: bank.id,
+          branchId: bank.branchId,
+          label: `${bank.bankName} ${bank.accountNumber}${bank.accountName ? ` · ${bank.accountName}` : ""} (${bank.branch.name})`,
+        }))}
         swaps={swaps.map((swap) => ({
           id: swap.id,
+          branchId: swap.branchId,
           swapNumber: swap.swapNumber,
           status: swap.status,
           tradeValue: money(swap.tradeValue),

@@ -1,11 +1,11 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { ProductTracking } from "@prisma/client"
+import { Prisma, ProductTracking } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { watDayKey } from "@/lib/lagos-day"
 import { requireUser } from "@/lib/session"
-import { canAddItemName, canChangeCost, canChangePrices, canHardDelete, canManageCatalog, setsStartingPrices } from "@/lib/rbac"
+import { canAddItemName, canChangeCost, canChangePrices, canHardDelete, canManageCatalog, canSeeCost, setsStartingPrices } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { shopError } from "@/lib/shop-speak"
 import { UNSAFE_KEYS } from "@/lib/table-file"
@@ -103,8 +103,8 @@ export async function getProductLookups() {
 }
 
 export async function getProducts(search?: string) {
-  await requireUser()
-  return prisma.product.findMany({
+  const user = await requireUser()
+  const rows = await prisma.product.findMany({
     where: {
       isActive: true,
       ...(search
@@ -124,6 +124,10 @@ export async function getProducts(search?: string) {
     },
     orderBy: { updatedAt: "desc" },
   })
+  // A server action is a public endpoint: the price list hides cost on screen,
+  // but this used to hand every cost price to anyone signed in who called it.
+  if (canSeeCost(user.role)) return rows
+  return rows.map((row) => ({ ...row, costPrice: new Prisma.Decimal(0) }))
 }
 
 export async function createProduct(formData: FormData) {

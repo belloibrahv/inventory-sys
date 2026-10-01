@@ -4,11 +4,16 @@ import { getSales } from "@/app/actions/sales"
 import { PageHeader } from "@/components/shared"
 import { Button } from "@/components/ui/button"
 import { money } from "@/lib/utils"
+import { prisma } from "@/lib/prisma"
+import { returnedValueBySale } from "@/lib/returned-value"
 import { SalesList, type SaleRow } from "./sales-list"
 import { CachePageData } from "@/components/cache-page-data"
 
 export default async function SalesPage() {
   const raw = await getSales()
+  // Refunds and credit notes already finished against each sale, so the
+  // figures show the real sales value and what is really still owed.
+  const returned = await returnedValueBySale(prisma, raw.map((sale) => sale.id))
   // Plain numbers and strings only. Database money values are not plain
   // objects, and handing them to the browser raised a warning per figure.
   const sales: SaleRow[] = raw.map((sale) => ({
@@ -24,6 +29,7 @@ export default async function SalesPage() {
     customer: sale.customer ? { name: sale.customer.name, phone: sale.customer.phone } : null,
     branch: { code: sale.branch.code, name: sale.branch.name },
     soldBy: sale.user?.name ?? null,
+    returned: returned.get(sale.id) ?? 0,
     items: sale.items.map((item) => ({
       id: item.id,
       name: item.product.name,
