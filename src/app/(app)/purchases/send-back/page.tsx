@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { getSupplierReturnCandidates } from "@/app/actions/ops"
 import { FormScreen, SectionCard } from "@/components/shared"
 import { SupplierReturnForm } from "../supplier-return-form"
@@ -29,8 +30,19 @@ export default async function SendBackToSupplierPage() {
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-muted-foreground">No phone is waiting. You can still scan an In shop IMEI.</p>
+            <p className="text-sm text-muted-foreground">No phone is waiting. You can still type or scan an In shop IMEI.</p>
           )}
+          <div className="mt-4 border-t border-border pt-3">
+            <Link
+              href="/purchases/returns-history"
+              className="text-sm font-medium text-primary hover:underline"
+            >
+              View full returns history →
+            </Link>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Every unit ever sent back, grouped by supplier, with values and Excel export.
+            </p>
+          </div>
         </SectionCard>
       }
     >

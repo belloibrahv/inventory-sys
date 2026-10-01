@@ -77,3 +77,56 @@ export async function getSupplierReturnsReport(requestedBranchId?: string, range
   }))
   return { rows, from: period.from, to: period.to }
 }
+
+/**
+ * Full all-time supplier returns history for the dedicated history page.
+ * No date cap — returns every SupplierReturnLine the shop has, newest first,
+ * scoped to the branch the user may see. Managers use this to audit every
+ * send-back, see totals per supplier, and export the complete record to Excel.
+ */
+export async function getSupplierReturnsHistory(requestedBranchId?: string) {
+  const user = await requireUser()
+  if (!(await can(user.role, "view.purchases"))) return { rows: [] as SupplierReturnRow[] }
+  await backfillSupplierReturnLines()
+
+  const scoped = await scopedBranchId(user.role, user.branchId, requestedBranchId)
+  const branchId = scoped || requestedBranchId || (await viewBranchFilter(user))
+
+  const lines = await prisma.supplierReturnLine.findMany({
+    where: branchId ? { branchId } : undefined,
+    include: {
+      supplier: { select: { name: true } },
+      branch:   { select: { name: true, code: true } },
+      product:  { select: { name: true, storage: true } },
+      imei:     { select: { imei1: true, serialNumber: true } },
+      purchase: { select: { invoiceNumber: true } },
+      user:     { select: { name: true, email: true } },
+    },
+    orderBy: { sentAt: "desc" },
+  })
+
+  const rows: SupplierReturnRow[] = lines.map((line) => ({
+    id: line.id,
+    reference: line.reference,
+    sentAt: line.sentAt.toISOString(),
+    supplier: line.supplier.name,
+    shop: line.branch.name,
+    shopCode: line.branch.code,
+    item:
+      line.product.storage &&
+      !line.product.name.toLowerCase().includes(line.product.storage.toLowerCase())
+        ? `${line.product.name} ${line.product.storage}`
+        : line.product.name,
+    imei:
+      line.imei.serialNumber && line.imei.serialNumber !== line.imei.imei1
+        ? `${line.imei.imei1} · ${line.imei.serialNumber}`
+        : line.imei.imei1,
+    bill: line.purchase?.invoiceNumber ?? null,
+    value: money(line.cost),
+    effect: moneyEffectWords(line.moneyEffect),
+    source: line.source === "CUSTOMER_RETURN" ? "CUSTOMER_RETURN" : "SEND_BACK",
+    by: line.user?.name || line.user?.email || "—",
+  }))
+
+  return { rows }
+}

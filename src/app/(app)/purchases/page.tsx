@@ -36,6 +36,11 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
         actions={
           <>
             <Button asChild variant="outline">
+              <Link href="/purchases/returns-history">
+                Returns history
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
               <Link href="/purchases/send-back">
                 <Undo2 className="mr-1.5 h-4 w-4" /> Send back
                 {returnUnits.length ? (
@@ -94,9 +99,9 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
         <StatCard
           label="Sent back to suppliers"
           value={formatCurrency(sentBack)}
-          hint={sentBack > 0 ? "Goods returned on these bills" : "Nothing sent back"}
+          hint={sentBack > 0 ? "Tap to see the full record" : "Nothing sent back"}
           tone={sentBack > 0 ? "warning" : "neutral"}
-          href="/purchases/send-back"
+          href="/purchases/returns-history"
         />
         <StatCard
           label="Payment"
