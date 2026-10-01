@@ -258,8 +258,16 @@ export function SalesList({ sales }: { sales: SaleRow[] }) {
               ? `${formatCurrency(totals.sales)} sold, ${formatCurrency(totals.returned)} returned`
               : `${visible.length} sale${visible.length === 1 ? "" : "s"}`
           }
+          active={pay === "all"}
+          onClick={() => setPay("all")}
         />
-        <Figure label="Received" value={totals.paid} hint="Money already taken" />
+        <Figure
+          label="Received"
+          value={totals.paid}
+          hint={`${counts.paid} paid up · tap to see`}
+          active={pay === "paid"}
+          onClick={() => setPay("paid")}
+        />
         <Figure
           label="Returned"
           value={totals.returned}
@@ -269,8 +277,10 @@ export function SalesList({ sales }: { sales: SaleRow[] }) {
         <Figure
           label="Still owed to us"
           value={Math.max(0, -totals.balance)}
-          hint={totals.balance < -0.005 ? "Buyers still owe on these sales" : "Nothing owed"}
+          hint={`${counts.part + counts.unpaid} bill${counts.part + counts.unpaid === 1 ? "" : "s"} · tap to see`}
           tone={balanceTone(totals.balance)}
+          active={pay === "unpaid" || pay === "part"}
+          onClick={() => setPay(pay === "unpaid" ? "part" : "unpaid")}
         />
       </div>
 
@@ -382,16 +392,42 @@ export function SalesList({ sales }: { sales: SaleRow[] }) {
   )
 }
 
-function Figure({ label, value, hint, tone, lead = false }: { label: string; value: number; hint: string; tone?: string; lead?: boolean }) {
+function Figure({
+  label, value, hint, tone, lead = false, active, onClick,
+}: {
+  label: string
+  value: number
+  hint: string
+  tone?: string
+  lead?: boolean
+  active?: boolean
+  onClick?: () => void
+}) {
+  const isClickable = Boolean(onClick)
   return (
     <div
+      role={isClickable ? "button" : undefined}
+      tabIndex={isClickable ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={isClickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.() } } : undefined}
+      title={isClickable ? `${formatCurrency(value)} — tap to filter the list` : formatCurrency(value)}
       className={cn(
-        "surface-card min-w-0 p-3 sm:p-4",
-        lead && "border-[hsl(var(--lead-bg))] bg-[hsl(var(--lead-bg))] text-[hsl(var(--lead-fg))]"
+        "surface-card min-w-0 p-3 sm:p-4 transition-all",
+        lead && "border-[hsl(var(--lead-bg))] bg-[hsl(var(--lead-bg))] text-[hsl(var(--lead-fg))]",
+        isClickable && "cursor-pointer select-none",
+        isClickable && active && "ring-2 ring-primary ring-offset-1",
+        isClickable && !active && "hover:border-primary/40 hover:shadow-sm"
       )}
-      title={formatCurrency(value)}
     >
-      <p className={cn("truncate text-[10px] font-semibold uppercase tracking-wider sm:text-xs", lead ? "text-[hsl(var(--lead-fg)/0.7)]" : "text-muted-foreground")}>{label}</p>
+      <p className={cn("truncate text-[10px] font-semibold uppercase tracking-wider sm:text-xs", lead ? "text-[hsl(var(--lead-fg)/0.7)]" : "text-muted-foreground")}>
+        {label}
+        {isClickable && !active && (
+          <span className="ml-1 hidden font-normal normal-case tracking-normal text-muted-foreground/60 sm:inline">tap to filter</span>
+        )}
+        {isClickable && active && (
+          <span className="ml-1 hidden font-normal normal-case tracking-normal text-primary sm:inline">filtered</span>
+        )}
+      </p>
       <p className={cn("mt-1 truncate text-base font-semibold tabular-nums sm:text-2xl", value === 0 ? "" : tone)}>
         {value >= 1_000_000 ? formatCurrencyShort(value) : formatCurrency(value)}
       </p>
