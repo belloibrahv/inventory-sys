@@ -124,6 +124,7 @@ export function PosClient({
   const [payCash, setPayCash] = useState(0)
   const [payBank, setPayBank] = useState(0)
   const [bankAccountId, setBankAccountId] = useState("")
+  const [paymentRef, setPaymentRef] = useState("")
   const [paid, setPaid] = useState(0)
   const [notes, setNotes] = useState("")
   const [wholesale, setWholesale] = useState(false)
@@ -194,6 +195,7 @@ export function PosClient({
     setPayBank(0)
     setCustomerId("")
     setNotes("")
+    setPaymentRef("")
     setWholesale(false)
     setOrderDiscount(0)
     setDiscountReason("")
@@ -909,6 +911,10 @@ export function PosClient({
       toast.error("Pick which bank account received this money. Add banks under Money in and out if the list is empty.")
       return
     }
+    if (wantsBank && !paymentRef.trim()) {
+      toast.error("Type the transfer or POS reference number so the payment can be checked against the terminal.")
+      return
+    }
     const underFloor = cart.filter((line) => line.unitPrice < line.minPrice)
     const underCost = cart.filter((line) => belowCost(line.unitPrice, line.costPrice))
     const missingReason = cart.find(
@@ -1005,6 +1011,7 @@ export function PosClient({
         method === "CREDIT" && tenders.length === 1 ? tenders[0].method : undefined,
       splitTenders: tenders.length > 1 ? tenders : undefined,
       bankAccountId: wantsBank ? bankAccountId : undefined,
+      paymentReference: wantsBank ? paymentRef.trim() : undefined,
       notes,
       wholesale,
       orderDiscount: appliedDiscount,
@@ -1096,6 +1103,7 @@ export function PosClient({
 
   function chooseMethod(next: typeof method) {
     setMethod(next)
+    setPaymentRef("")
     if (next === "CREDIT") {
       setPaid(0)
       setPayCash(0)
@@ -1658,6 +1666,7 @@ export function PosClient({
             ) : null}
 
             {wantsBank ? (
+              <>
               <label className="block text-sm">
                 <span className="mb-1.5 block font-medium">Bank account that received it</span>
                 {shopBanks.length ? (
@@ -1690,6 +1699,24 @@ export function PosClient({
                   </div>
                 )}
               </label>
+              <label className="block text-sm">
+                <span className="mb-1.5 block font-medium">
+                  Payment reference
+                  <span className="ml-1.5 rounded-full bg-danger-soft px-1.5 py-0.5 text-[10px] font-semibold text-danger">Required</span>
+                </span>
+                <Input
+                  value={paymentRef}
+                  onChange={(event) => setPaymentRef(event.target.value)}
+                  placeholder="Transfer description, POS approval code, or last 4 digits"
+                  aria-label="Payment reference number"
+                  autoComplete="off"
+                  className="font-mono"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  This is how the admin checks the cashier record against the bank or POS terminal. It will appear on the invoice.
+                </p>
+              </label>
+              </>
             ) : null}
 
             <div className="rounded-lg border border-border">

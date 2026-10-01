@@ -26,6 +26,7 @@ export function Receipt({
   discount = 0,
   paid,
   method,
+  paymentReference,
   notes,
 }: {
   brand: LetterheadBrand
@@ -41,6 +42,8 @@ export function Receipt({
   discount?: number
   paid: number
   method: string
+  /** Transfer description or POS approval code for bank payments. */
+  paymentReference?: string | null
   notes?: string | null
 }) {
   const due = Math.max(0, total - paid)
@@ -98,6 +101,7 @@ export function Receipt({
       <div className="grid gap-4 px-6 py-5 md:grid-cols-2">
         <div className="text-xs text-slate-500">
           <p>Payment: {method}</p>
+          {paymentReference ? <p className="mt-0.5">Ref: {paymentReference}</p> : null}
           {notes ? <p className="mt-1">{notes}</p> : null}
           <p className="mt-3">This paper shows what was sold. Any money paid later, and any return or swap, is written down on its own. Nobody can change this invoice.</p>
           <p className="mt-2 print:hidden">If a receipt printer is connected, printing this can open the cash drawer.</p>

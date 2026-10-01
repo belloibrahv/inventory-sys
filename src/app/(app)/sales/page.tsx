@@ -30,6 +30,7 @@ export default async function SalesPage() {
     branch: { code: sale.branch.code, name: sale.branch.name },
     soldBy: sale.user?.name ?? null,
     returned: returned.get(sale.id) ?? 0,
+    paymentRef: sale.payments.find((p) => p.reference)?.reference ?? null,
     items: sale.items.map((item) => ({
       id: item.id,
       name: item.product.name,

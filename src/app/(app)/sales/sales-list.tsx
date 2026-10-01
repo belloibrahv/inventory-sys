@@ -30,6 +30,8 @@ export type SaleRow = {
   soldBy: string | null
   /** What finished refunds and credit notes took off this sale. */
   returned: number
+  /** Transfer description or POS approval code from the payment record. */
+  paymentRef: string | null
   items: Array<{ id: string; name: string; imei: string | null; quantity: number; unitPrice: number; totalPrice: number }>
 }
 
@@ -86,7 +88,7 @@ function searchText(sale: SaleRow) {
 
 function exportRows(rows: SaleRow[]) {
   return [
-    ["Invoice", "Date", "Shop", "Buyer", "Sold by", "Items", "Sales", "Paid", "Returned", "Still owed", "Payment", "Status"],
+    ["Invoice", "Date", "Shop", "Buyer", "Sold by", "Items", "Sales", "Paid", "Returned", "Still owed", "Payment", "Ref", "Status"],
     ...rows.map((sale) => [
       sale.invoiceNumber,
       formatShopWhen(sale.saleDate),
@@ -99,6 +101,7 @@ function exportRows(rows: SaleRow[]) {
       sale.returned,
       Math.max(0, -saleBalance(sale)),
       statusLabel(sale.paymentMethod),
+      sale.paymentRef ?? "",
       statusLabel(sale.status),
     ]),
   ]
@@ -241,6 +244,18 @@ export function SalesList({ sales }: { sales: SaleRow[] }) {
       sortValue: (sale) => statusLabel(sale.paymentMethod),
       cell: (sale) => <span className="whitespace-nowrap">{statusLabel(sale.paymentMethod)}</span>,
     },
+    {
+      id: "ref",
+      header: "Ref",
+      hideBelow: "xl",
+      sortValue: (sale) => sale.paymentRef ?? "",
+      cell: (sale) =>
+        sale.paymentRef ? (
+          <span className="font-mono text-xs text-foreground">{sale.paymentRef}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
   ]
 
   return (
@@ -363,6 +378,7 @@ export function SalesList({ sales }: { sales: SaleRow[] }) {
             </td>
             <td className={cn("whitespace-nowrap text-right tabular-nums", balanceTone(totals.balance))}>{balanceWords(totals.balance)}</td>
             <td className="hidden lg:table-cell" />
+            <td className="hidden xl:table-cell" />
           </tr>
         )}
         empty={sales.length === 0 ? "No sales on the books yet." : "No sale matches these filters."}
@@ -467,7 +483,14 @@ function SaleQuickLook({ sale }: { sale: SaleRow }) {
           {sale.customer ? `${sale.customer.name}${sale.customer.phone ? ` · ${sale.customer.phone}` : ""}` : "Walk-in"}
         </dd>
         <dt className="text-muted-foreground">Payment</dt>
-        <dd>{statusLabel(sale.paymentMethod)}{sale.isWholesale ? " · reseller" : ""}</dd>
+        <dd>
+          {statusLabel(sale.paymentMethod)}{sale.isWholesale ? " · reseller" : ""}
+          {sale.paymentRef ? (
+            <span className="ml-2 inline-flex items-center rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] font-medium text-foreground">
+              Ref: {sale.paymentRef}
+            </span>
+          ) : null}
+        </dd>
         <dt className="text-muted-foreground">Status</dt>
         <dd><StatusBadge value={sale.status} /></dd>
         {sale.discount > 0 ? (

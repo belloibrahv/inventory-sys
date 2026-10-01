@@ -43,6 +43,8 @@ export type ReceiptData = {
   total: number
   paid: number
   method: string
+  /** Transfer description or POS approval code for bank payments. */
+  paymentReference?: string | null
   notes?: string | null
 }
 
@@ -153,6 +155,16 @@ export function drawReceipt(doc: jsPDF, data: ReceiptData, mark?: string) {
     doc.text(label, right - 50, y, { align: "right" })
     doc.text(value, right, y, { align: "right" })
     y += 5
+  }
+
+  if (data.paymentReference) {
+    y += 2
+    doc.setFont("helvetica", "bold")
+    doc.setFontSize(7)
+    doc.setTextColor(...MUTED)
+    doc.text(`Ref: ${data.paymentReference}`, left, y)
+    y += 3.5
+    doc.setFont("helvetica", "normal")
   }
 
   if (data.notes) {

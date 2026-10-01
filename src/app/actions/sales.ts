@@ -24,7 +24,7 @@ export async function getSales() {
   const branchId = await viewBranchFilter(user)
   return prisma.sale.findMany({
     where: branchId ? { branchId } : undefined,
-    include: { customer: true, branch: true, user: { select: { id: true, name: true, email: true, role: true, branchId: true } }, items: { include: { product: true, imei: true } } },
+    include: { customer: true, branch: true, user: { select: { id: true, name: true, email: true, role: true, branchId: true } }, items: { include: { product: true, imei: true } }, payments: { select: { method: true, reference: true, bankAccountId: true } } },
     orderBy: { saleDate: "desc" },
     take: 500,
   })
@@ -42,7 +42,7 @@ export async function getSale(id: string) {
       branch: true,
       user: { select: { id: true, name: true, email: true, role: true, branchId: true } },
       items: { include: { product: true, imei: true } },
-      payments: true,
+      payments: { include: { bankAccount: { select: { bankName: true, accountNumber: true, accountName: true } } } },
     },
   }))
 }
@@ -436,6 +436,10 @@ export async function checkoutSale(input: {
   paidAmount: number
   /** Named bank when money came in by bank. Required for Bank sales with money received. */
   bankAccountId?: string
+  /** Transfer description, POS approval code, or any text the cashier saw on the terminal.
+   *  Required when bank money is received. Written to Payment.reference so the admin can
+   *  reconcile the cashier record against the bank or POS terminal. */
+  paymentReference?: string
   /** Cash or Bank channel for a credit-sale deposit when only one channel is used. */
   depositMethod?: "CASH" | "TRANSFER"
   /** Cash and bank together on a credit deposit (or older parked full splits). */
@@ -838,12 +842,14 @@ export async function checkoutSale(input: {
                         amount: t.amount.toFixed(2),
                         method: t.method,
                         bankAccountId: shopPayChannel(t.method) === "TRANSFER" ? bankAccountId : null,
+                        reference: shopPayChannel(t.method) === "TRANSFER" ? (input.paymentReference?.trim() || null) : null,
                       }))
                     : [
                         {
                           amount: paid.toFixed(2),
                           method: receivedChannel,
                           bankAccountId: receivedChannel === "CASH" ? null : bankAccountId,
+                          reference: receivedChannel === "CASH" ? null : (input.paymentReference?.trim() || null),
                         },
                       ],
                 }

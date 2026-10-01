@@ -75,6 +75,7 @@ export default async function SaleDetailPage({
     total: money(sale.totalAmount),
     paid: money(sale.paidAmount),
     method: statusLabel(sale.paymentMethod),
+    paymentReference: sale.payments.find((p) => p.reference)?.reference ?? null,
     notes: sale.notes,
   }
 
@@ -207,7 +208,18 @@ export default async function SaleDetailPage({
           <div className="space-y-2 text-sm">
             {sale.payments.map((payment) => (
               <div key={payment.id} className="flex justify-between border-b border-border/70 pb-2">
-                <span>{statusLabel(payment.method)}{payment.notes ? ` · ${payment.notes}` : ""}</span>
+                <span>
+                  {statusLabel(payment.method)}
+                  {payment.bankAccount
+                    ? ` · ${payment.bankAccount.bankName}${payment.bankAccount.accountName ? ` (${payment.bankAccount.accountName})` : ""}`
+                    : ""}
+                  {payment.reference ? (
+                    <span className="ml-1.5 inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] font-medium text-foreground">
+                      Ref: {payment.reference}
+                    </span>
+                  ) : null}
+                  {payment.notes ? ` · ${payment.notes}` : ""}
+                </span>
                 <span className="tabular-nums">{formatCurrency(money(payment.amount))}</span>
               </div>
             ))}
@@ -277,6 +289,7 @@ export default async function SaleDetailPage({
           discount={money(sale.discount)}
           paid={money(sale.paidAmount)}
           method={statusLabel(sale.paymentMethod)}
+          paymentReference={sale.payments.find((p) => p.reference)?.reference ?? null}
           notes={sale.notes}
         />
         </div>
