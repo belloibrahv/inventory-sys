@@ -3,6 +3,7 @@ import { getPendingPriceRequests } from "@/app/actions/price-requests"
 import { prisma } from "@/lib/prisma"
 import { isShopOwner } from "@/lib/roles"
 import { getCurrentUser } from "@/lib/session"
+import { settleDoneAlerts } from "@/lib/settled-alerts"
 
 export const dynamic = "force-dynamic"
 
@@ -15,6 +16,8 @@ export const dynamic = "force-dynamic"
 export async function GET() {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ signedOut: true }, { status: 401 })
+  // Decided requests and paid invoices drop off the bell while it is open.
+  await settleDoneAlerts(user.id).catch(() => {})
 
   const [unread, latest, pricePending] = await Promise.all([
     prisma.notification.count({ where: { userId: user.id, status: "UNREAD" } }),

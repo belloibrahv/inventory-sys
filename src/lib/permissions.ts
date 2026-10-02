@@ -206,8 +206,10 @@ export const ensureRolePermissions = cache(async () => {
     data: { allowed: true },
   })
 
+  // The CEO and the main admin hold every box. can() already lets them
+  // through; opening the rows keeps Who can see what showing the same thing.
   await prisma.rolePermission.updateMany({
-    where: { role: "CEO", allowed: false },
+    where: { role: { in: ["CEO", "SUPER_ADMIN"] }, allowed: false },
     data: { allowed: true },
   })
 

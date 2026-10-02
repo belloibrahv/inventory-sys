@@ -8,12 +8,17 @@ import { firstAllowedHref, getAllowedKeys, hrefsForKeys, pathIsAllowed } from "@
 import { writeAudit } from "@/lib/audit"
 import { getViewShopOptions } from "@/app/actions/view-shop"
 import { isShopOwner } from "@/lib/roles"
+import { settleDoneAlerts } from "@/lib/settled-alerts"
 
 const WATCHED = ["/audit", "/settings", "/staff", "/staff/access", "/finance", "/finance/close", "/reports", "/profits"]
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser()
   if (!user) redirect("/login")
+
+  // Alerts whose work someone already finished are put away first, so the bell
+  // never says a decided return or a paid invoice is still waiting.
+  await settleDoneAlerts(user.id).catch(() => {})
 
   const [unread, shops] = await Promise.all([
     prisma.notification.count({ where: { userId: user.id, status: "UNREAD" } }),
