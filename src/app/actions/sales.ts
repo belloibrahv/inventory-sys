@@ -1126,6 +1126,7 @@ export async function collectPayment(formData: FormData) {
   }
   const customerId = String(formData.get("customerId"))
   const bankAccountIdRaw = String(formData.get("bankAccountId") || "").trim()
+  const paymentReference = String(formData.get("paymentReference") || "").trim() || null
   const cashPart = Math.max(0, Number(formData.get("cashAmount") || 0) || 0)
   const bankPart = Math.max(0, Number(formData.get("bankAmount") || 0) || 0)
   const legacyAmount = Number(formData.get("amount") || 0)
@@ -1145,6 +1146,10 @@ export async function collectPayment(formData: FormData) {
   const wantsBank = tenders.some((row) => row.method === "TRANSFER")
   if (wantsBank && !bankAccountIdRaw) {
     return { error: "Pick which bank account received this money." }
+  }
+  // The admin matches every bank collection to the bank statement by this.
+  if (wantsBank && !paymentReference) {
+    return { error: "Type the payment reference for the bank money." }
   }
 
   const payRef = generateDocNumber("PAY")
@@ -1239,7 +1244,7 @@ export async function collectPayment(formData: FormData) {
               amount: take.toFixed(2),
               method: row.method,
               bankAccountId: row.method === "TRANSFER" ? bankAccountId : null,
-              reference: payRef,
+              reference: row.method === "TRANSFER" ? paymentReference : payRef,
               notes: "Taken from what the customer paid on their account. The invoice was not changed.",
             },
           })
@@ -1322,6 +1327,8 @@ export async function collectInvoicePayment(formData: FormData) {
   let bankAccountId: string | null = null
   if (wantsBank) {
     if (!bankAccountIdRaw) return { error: "Pick which bank account received this money." }
+    // The admin matches every bank collection to the bank statement by this.
+    if (!paymentReference) return { error: "Type the payment reference for the bank money." }
     const bank = await prisma.bankAccount.findFirst({
       where: { id: bankAccountIdRaw, isActive: true, branchId: sale.branchId },
       select: { id: true },
