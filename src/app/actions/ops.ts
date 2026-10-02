@@ -12,6 +12,7 @@ import {
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { requireUser } from "@/lib/session"
+import { writeAudit } from "@/lib/audit"
 import { canApprove, canManageFinance, canSeeAllBranches, canSendToSupplier, isShopOwner, scopedBranchId } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { generateDocNumber, money } from "@/lib/utils"
@@ -2232,11 +2233,42 @@ export async function getTransfers() {
   }))
 }
 
-export async function createTransfer(formData: FormData): Promise<{
-  error?: string
-  errors?: string[]
-  success?: boolean
-}> {
+type TransferOutcome = { error?: string; errors?: string[]; success?: boolean }
+
+export async function createTransfer(formData: FormData): Promise<TransferOutcome> {
+  const user = await requireUser()
+  let outcome: TransferOutcome
+  try {
+    outcome = await submitTransfer(formData)
+  } catch (error) {
+    outcome = { error: shopError(error, "Could not submit this transfer. Nothing left the shop.") }
+  }
+  // A refused transfer used to leave no trace: only the person at the screen
+  // ever saw why. It goes into Who did what with the reason, so a shop that
+  // cannot send stock can be put right without guessing.
+  if (outcome.error) {
+    const picked = String(formData.get("selectedImeis") || "").split(/[\s,;]+/).filter(Boolean).length
+    await writeAudit({
+      userId: user.id,
+      action: "CREATE",
+      entityType: "StockTransfer",
+      entityId: "Refused",
+      newValue: JSON.stringify({
+        reason: outcome.error,
+        reasons: outcome.errors?.slice(0, 10),
+        fromBranchId: String(formData.get("fromBranchId") || ""),
+        toBranchId: String(formData.get("toBranchId") || ""),
+        phones: picked,
+        accessoryLines: String(formData.get("accessoryLines") || "").slice(0, 500),
+      }),
+      branchId: String(formData.get("fromBranchId") || "") || user.branchId,
+      success: false,
+    }).catch(() => {})
+  }
+  return outcome
+}
+
+async function submitTransfer(formData: FormData): Promise<TransferOutcome> {
   const user = await requireUser()
   if (!(await can(user.role, "action.transfer"))) return { error: "You are not allowed to send goods to another shop. Ask the main admin." }
   const fromBranchId = String(formData.get("fromBranchId") || "")

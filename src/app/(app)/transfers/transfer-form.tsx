@@ -292,8 +292,15 @@ export function TransferForm({
     const imeis = Object.entries(pickedImeis)
       .filter(([, on]) => on)
       .map(([imei]) => imei)
+    // Send the quantity the table shows. The box caps what it displays at what
+    // is on the shelf, but used to send whatever was typed, so typing 5 when 3
+    // were on hand read as 3 on screen and was refused by the server as 5.
+    const shelfById = new Map(accessories.map((row) => [row.id, row.onShelf]))
     const accessoryLines = Object.entries(accessoryQty)
-      .map(([productId, quantity]) => ({ productId, quantity: Number(quantity) || 0 }))
+      .map(([productId, quantity]) => ({
+        productId,
+        quantity: Math.min(shelfById.get(productId) ?? 0, Math.max(0, Math.floor(Number(quantity) || 0))),
+      }))
       .filter((row) => row.quantity > 0)
     data.set("selectedImeis", imeis.join("\n"))
     data.set("accessoryLines", JSON.stringify(accessoryLines))
