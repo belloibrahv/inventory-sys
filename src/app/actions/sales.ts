@@ -1287,6 +1287,7 @@ export async function collectInvoicePayment(formData: FormData) {
   }
   const saleId = String(formData.get("saleId") || "")
   const bankAccountIdRaw = String(formData.get("bankAccountId") || "").trim()
+  const paymentReference = String(formData.get("paymentReference") || "").trim() || null
   const cashPart = Math.max(0, Number(formData.get("cashAmount") || 0) || 0)
   const bankPart = Math.max(0, Number(formData.get("bankAmount") || 0) || 0)
   const legacyAmount = Number(formData.get("amount") || 0)
@@ -1367,6 +1368,7 @@ export async function collectInvoicePayment(formData: FormData) {
             amount: row.amount.toFixed(2),
             method: row.method,
             bankAccountId: row.method === "TRANSFER" ? bankAccountId : null,
+            reference: row.method === "TRANSFER" ? paymentReference : null,
             notes: "Money collected on a finished invoice. The items and IMEIs were not changed",
           },
         })

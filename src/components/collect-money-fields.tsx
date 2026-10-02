@@ -33,6 +33,7 @@ export function CollectMoneyFields({
   const [bankAmount, setBankAmount] = useState(
     allowSplit && defaultAmount != null && banks.length ? String(defaultAmount) : ""
   )
+  const [paymentRef, setPaymentRef] = useState("")
 
   // Whole naira only. A box that took kobo let ₦100,000.03 through on a
   // ₦100,000 payment, and the stray kobo then showed on the till and the books.
@@ -66,22 +67,42 @@ export function CollectMoneyFields({
         </label>
         {bankTyped > 0 ? (
           banks.length ? (
-            <label className="block text-sm md:col-span-full">
-              <span className="mb-1 block text-muted-foreground">Bank account that received it</span>
-              <Select
-                name="bankAccountId"
-                value={bankAccountId}
-                onChange={(event) => setBankAccountId(event.target.value)}
-                required
-              >
-                {banks.map((row) => (
-                  <option key={row.id} value={row.id}>
-                    {row.bankName} · {row.accountNumber}
-                    {row.accountName ? ` · ${row.accountName}` : ""}
-                  </option>
-                ))}
-              </Select>
-            </label>
+            <>
+              <label className="block text-sm md:col-span-full">
+                <span className="mb-1 block text-muted-foreground">Bank account that received it</span>
+                <Select
+                  name="bankAccountId"
+                  value={bankAccountId}
+                  onChange={(event) => setBankAccountId(event.target.value)}
+                  required
+                >
+                  {banks.map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {row.bankName} · {row.accountNumber}
+                      {row.accountName ? ` · ${row.accountName}` : ""}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+              <label className="block text-sm md:col-span-full">
+                <span className="mb-1 block text-muted-foreground">
+                  Payment reference
+                  <span className="ml-1.5 rounded-full bg-danger-soft px-1.5 py-0.5 text-[10px] font-semibold text-danger">Required</span>
+                </span>
+                <Input
+                  name="paymentReference"
+                  value={paymentRef}
+                  onChange={(event) => setPaymentRef(event.target.value)}
+                  placeholder="Transfer description, POS approval code, or last 4 digits"
+                  autoComplete="off"
+                  className="font-mono"
+                  required
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  This is how the admin checks this collection against the bank or POS terminal.
+                </p>
+              </label>
+            </>
           ) : (
             <p className="text-xs text-muted-foreground md:col-span-full">
               No bank account is on the books for this shop. Add one under Money in and out before recording a bank payment.
@@ -97,6 +118,7 @@ export function CollectMoneyFields({
     )
   }
 
+  const wantsBank = method === "TRANSFER"
   return (
     <>
       <Input
@@ -111,26 +133,43 @@ export function CollectMoneyFields({
       <Select
         name="method"
         value={method}
-        onChange={(event) => setMethod(event.target.value as "CASH" | "TRANSFER")}
+        onChange={(event) => { setMethod(event.target.value as "CASH" | "TRANSFER"); setPaymentRef("") }}
       >
         <option value="CASH">Cash</option>
         <option value="TRANSFER">Bank</option>
       </Select>
-      {method === "TRANSFER" ? (
+      {wantsBank ? (
         banks.length ? (
-          <Select
-            name="bankAccountId"
-            value={bankAccountId}
-            onChange={(event) => setBankAccountId(event.target.value)}
-            required
-          >
-            {banks.map((row) => (
-              <option key={row.id} value={row.id}>
-                {row.bankName} · {row.accountNumber}
-                {row.accountName ? ` · ${row.accountName}` : ""}
-              </option>
-            ))}
-          </Select>
+          <>
+            <Select
+              name="bankAccountId"
+              value={bankAccountId}
+              onChange={(event) => setBankAccountId(event.target.value)}
+              required
+            >
+              {banks.map((row) => (
+                <option key={row.id} value={row.id}>
+                  {row.bankName} · {row.accountNumber}
+                  {row.accountName ? ` · ${row.accountName}` : ""}
+                </option>
+              ))}
+            </Select>
+            <label className="block text-sm">
+              <span className="mb-1 block text-muted-foreground">
+                Payment reference
+                <span className="ml-1.5 rounded-full bg-danger-soft px-1.5 py-0.5 text-[10px] font-semibold text-danger">Required</span>
+              </span>
+              <Input
+                name="paymentReference"
+                value={paymentRef}
+                onChange={(event) => setPaymentRef(event.target.value)}
+                placeholder="Transfer description, POS approval code, or last 4 digits"
+                autoComplete="off"
+                className="font-mono"
+                required
+              />
+            </label>
+          </>
         ) : (
           <p className="text-xs text-muted-foreground md:col-span-full">
             No bank account is on the books for this shop. Add one under Money in and out before recording a bank payment.
