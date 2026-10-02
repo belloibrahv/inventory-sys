@@ -46,7 +46,8 @@ function parseUnitCodes(raw: string, tracking: string) {
 
 function parseTransferIds(raw: string) {
   const match = raw.match(/IMEIs:\s*(.+)/i)
-  const list = match ? match[1] : raw
+  if (!match) return []
+  const list = match[1]
   return [...new Set(list.split(/[\s,;]+/).map((item) => item.trim()).filter((item) => item.length >= 4 && !item.includes(":")))]
 }
 
