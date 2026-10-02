@@ -45,6 +45,16 @@ function parseUnitCodes(raw: string, tracking: string) {
   return [...new Set(raw.split(/[\s,;]+/).map((item) => item.trim()).filter((item) => item.length >= 4))]
 }
 
+/**
+ * Numbers typed or scanned at the receiving shop. Unlike a transfer's notes
+ * they carry no "IMEIs:" label, so they must not go through parseTransferIds:
+ * once that stopped reading unlabelled text, every scanned phone list read as
+ * empty and no transfer with phones could be accepted.
+ */
+function parseScannedCodes(raw: string) {
+  return [...new Set(raw.split(/[\s,;]+/).map((item) => item.trim()).filter((item) => item.length >= 4))]
+}
+
 function parseTransferIds(raw: string) {
   const match = raw.match(/IMEIs:\s*(.+)/i)
   if (!match) return []
@@ -2573,10 +2583,28 @@ export async function receiveTransfer(formData: FormData) {
   }
 
   const expected = parseTransferIds(transfer.notes ?? "")
-  const confirmed = parseTransferIds(String(formData.get("imeis") || ""))
   if (expected.length) {
-    if (confirmed.length !== expected.length || expected.some((imei) => !confirmed.includes(imei))) {
-      return { error: "Scan or paste every IMEI on this transfer that actually arrived." }
+    // A box is often scanned for its second IMEI or its serial number. Each
+    // scanned code counts as the phone it belongs to (by its first IMEI, the
+    // number the transfer was written with).
+    const scanned = parseScannedCodes(String(formData.get("imeis") || ""))
+    const units = await prisma.imeiRecord.findMany({
+      where: { imei1: { in: expected } },
+      select: { imei1: true, imei2: true, serialNumber: true },
+    })
+    const phoneByCode = new Map<string, string>()
+    for (const unit of units) {
+      for (const code of [unit.imei1, unit.imei2, unit.serialNumber]) if (code) phoneByCode.set(code, unit.imei1)
+    }
+    const arrived = new Set(scanned.map((code) => phoneByCode.get(code) ?? code))
+    const missing = expected.filter((imei) => !arrived.has(imei))
+    const strangers = scanned.filter((code) => !phoneByCode.has(code) && !expected.includes(code))
+    if (missing.length || strangers.length) {
+      return {
+        error: missing.length
+          ? `Scan or paste every IMEI on this transfer that actually arrived. Still missing: ${missing.slice(0, 5).join(", ")}${missing.length > 5 ? ` and ${missing.length - 5} more` : ""}.`
+          : `${strangers.slice(0, 5).join(", ")} ${strangers.length === 1 ? "is" : "are"} not on this transfer.`,
+      }
     }
   }
 
