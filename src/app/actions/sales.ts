@@ -24,7 +24,7 @@ export async function getSales() {
   const branchId = await viewBranchFilter(user)
   return prisma.sale.findMany({
     where: branchId ? { branchId } : undefined,
-    include: { customer: true, branch: true, user: { select: { id: true, name: true, email: true, role: true, branchId: true } }, items: { include: { product: true, imei: true } }, payments: { select: { method: true, reference: true, bankAccountId: true } } },
+    include: { customer: true, branch: true, user: { select: { id: true, name: true, email: true, role: true, branchId: true } }, items: { include: { product: true, imei: true } }, payments: { select: { method: true, reference: true, bankAccountId: true, bankAccount: { select: { bankName: true, accountNumber: true } } } } },
     orderBy: { saleDate: "desc" },
     take: 500,
   })
@@ -1070,7 +1070,7 @@ async function fanOutSaleAlerts(input: {
       const staff = await prisma.user.findMany({
         where: {
           isActive: true,
-          OR: [{ branchId: input.branchId }, { role: { in: ["VAULT_MANAGER", "CEO", "BRANCH_MANAGER"] } }],
+          OR: [{ branchId: input.branchId }, { role: { in: ["VAULT_MANAGER", "CEO", "SUPER_ADMIN", "BRANCH_MANAGER"] } }],
         },
         select: { id: true },
       })

@@ -31,6 +31,11 @@ export default async function SalesPage() {
     soldBy: sale.user?.name ?? null,
     returned: returned.get(sale.id) ?? 0,
     paymentRef: sale.payments.find((p) => p.reference)?.reference ?? null,
+    paymentBank: (() => {
+      const bankPayment = sale.payments.find((p) => p.method !== "CASH" && p.bankAccount)
+      if (!bankPayment?.bankAccount) return null
+      return `${bankPayment.bankAccount.bankName} · ${bankPayment.bankAccount.accountNumber}`
+    })(),
     items: sale.items.map((item) => ({
       id: item.id,
       name: item.product.name,

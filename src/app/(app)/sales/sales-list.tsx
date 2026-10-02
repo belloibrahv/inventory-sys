@@ -32,6 +32,8 @@ export type SaleRow = {
   returned: number
   /** Transfer description or POS approval code from the payment record. */
   paymentRef: string | null
+  /** Bank name and account number that received a non-cash payment. */
+  paymentBank: string | null
   items: Array<{ id: string; name: string; imei: string | null; quantity: number; unitPrice: number; totalPrice: number }>
 }
 
@@ -88,7 +90,7 @@ function searchText(sale: SaleRow) {
 
 function exportRows(rows: SaleRow[]) {
   return [
-    ["Invoice", "Date", "Shop", "Buyer", "Sold by", "Items", "Sales", "Paid", "Returned", "Still owed", "Payment", "Ref", "Status"],
+    ["Invoice", "Date", "Shop", "Buyer", "Sold by", "Items", "Sales", "Paid", "Returned", "Still owed", "Payment", "Bank", "Ref", "Status"],
     ...rows.map((sale) => [
       sale.invoiceNumber,
       formatShopWhen(sale.saleDate),
@@ -101,6 +103,7 @@ function exportRows(rows: SaleRow[]) {
       sale.returned,
       Math.max(0, -saleBalance(sale)),
       statusLabel(sale.paymentMethod),
+      sale.paymentBank ?? "",
       sale.paymentRef ?? "",
       statusLabel(sale.status),
     ]),
@@ -483,12 +486,17 @@ function SaleQuickLook({ sale }: { sale: SaleRow }) {
           {sale.customer ? `${sale.customer.name}${sale.customer.phone ? ` · ${sale.customer.phone}` : ""}` : "Walk-in"}
         </dd>
         <dt className="text-muted-foreground">Payment</dt>
-        <dd>
-          {statusLabel(sale.paymentMethod)}{sale.isWholesale ? " · reseller" : ""}
+        <dd className="space-y-0.5">
+          <span>{statusLabel(sale.paymentMethod)}{sale.isWholesale ? " · reseller" : ""}</span>
+          {sale.paymentBank ? (
+            <p className="text-xs text-muted-foreground">{sale.paymentBank}</p>
+          ) : null}
           {sale.paymentRef ? (
-            <span className="ml-2 inline-flex items-center rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] font-medium text-foreground">
-              Ref: {sale.paymentRef}
-            </span>
+            <p>
+              <span className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] font-medium text-foreground">
+                Ref: {sale.paymentRef}
+              </span>
+            </p>
           ) : null}
         </dd>
         <dt className="text-muted-foreground">Status</dt>
