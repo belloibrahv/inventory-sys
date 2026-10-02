@@ -1,19 +1,24 @@
 "use client"
 
+import { useState } from "react"
+import { ArrowDownLeft, ArrowUpRight, ChevronRight } from "lucide-react"
 import { ActionForm } from "@/components/action-form"
+import { DrilldownModal } from "@/components/drilldown-modal"
 import { SectionCard } from "@/components/shared"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import {
   createBankAccount,
+  getBankAccountLedger,
   saveBankOpening,
   saveOpeningCash,
   takeBankOffTheBooks,
   type NamedBankRow,
   type OpeningCashShop,
 } from "@/app/actions/finance"
-import { formatCurrency } from "@/lib/utils"
+import { cn, formatCurrency } from "@/lib/utils"
+import { formatShopWhen } from "@/lib/lagos-day"
 
 export function OpeningMoneyPanel({
   shops,
@@ -30,7 +35,27 @@ export function OpeningMoneyPanel({
   openingCash: number
   openingBank: number
 }) {
+  const [drillAccount, setDrillAccount] = useState<NamedBankRow | null>(null)
+  const [drillLines, setDrillLines] = useState<Awaited<ReturnType<typeof getBankAccountLedger>>>([])
+  const [drillLoading, setDrillLoading] = useState(false)
+
+  async function openDrill(account: NamedBankRow) {
+    setDrillAccount(account)
+    setDrillLines([])
+    setDrillLoading(true)
+    try {
+      const lines = await getBankAccountLedger(account.id)
+      setDrillLines(lines)
+    } finally {
+      setDrillLoading(false)
+    }
+  }
+
+  const drillBalance = drillAccount
+    ? drillAccount.openingBalance + drillAccount.salesReceived + drillAccount.depositsReceived - drillAccount.refundsPaid
+    : 0
   return (
+    <>
     <SectionCard
       title="Money we started with"
       description="Cash and banks already there when this software started. Not opening stock."
@@ -118,15 +143,25 @@ export function OpeningMoneyPanel({
                   <th className="px-3 py-2 text-right font-medium">Sales into this account</th>
                   <th className="px-3 py-2 text-right font-medium">Cash from the till</th>
                   <th className="px-3 py-2 text-right font-medium">Refunds out</th>
+                  <th className="px-3 py-2 text-right font-medium">Balance</th>
                   {canSet ? <th className="px-3 py-2 font-medium">Change</th> : null}
                 </tr>
               </thead>
               <tbody>
                 {bankAccounts.map((row) => (
-                  <tr key={row.id} className="border-t border-border">
+                  <tr
+                    key={row.id}
+                    className="group cursor-pointer border-t border-border transition-colors hover:bg-muted/60"
+                    onClick={() => void openDrill(row)}
+                  >
                     <td className="px-3 py-2">
-                      <p className="font-medium">{row.bankName}</p>
-                      {row.accountName ? <p className="text-xs text-muted-foreground">{row.accountName}</p> : null}
+                      <div className="flex items-center gap-2">
+                        <div>
+                          <p className="font-medium group-hover:text-primary">{row.bankName}</p>
+                          {row.accountName ? <p className="text-xs text-muted-foreground">{row.accountName}</p> : null}
+                        </div>
+                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                      </div>
                     </td>
                     <td className="px-3 py-2 num">{row.accountNumber}</td>
                     <td className="px-3 py-2">{row.branchName}</td>
@@ -134,8 +169,11 @@ export function OpeningMoneyPanel({
                     <td className="px-3 py-2 text-right num">{formatCurrency(row.salesReceived)}</td>
                     <td className="px-3 py-2 text-right num">{formatCurrency(row.depositsReceived)}</td>
                     <td className="px-3 py-2 text-right num">{formatCurrency(row.refundsPaid)}</td>
+                    <td className="px-3 py-2 text-right num font-semibold text-primary">
+                      {formatCurrency(row.openingBalance + row.salesReceived + row.depositsReceived - row.refundsPaid)}
+                    </td>
                     {canSet ? (
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                         <div className="flex flex-wrap items-end gap-2">
                           <ActionForm
                             action={saveBankOpening}
@@ -187,7 +225,7 @@ export function OpeningMoneyPanel({
                 ))}
                 {bankAccounts.length === 0 ? (
                   <tr>
-                    <td className="px-3 py-4 text-sm text-muted-foreground" colSpan={canSet ? 8 : 7}>
+                    <td className="px-3 py-4 text-sm text-muted-foreground" colSpan={canSet ? 9 : 8}>
                       No bank account is on the books yet. Add GTBank, Access, or another account the shops use. Sell now Bank sales pick from this list.
                     </td>
                   </tr>
@@ -257,5 +295,119 @@ export function OpeningMoneyPanel({
         )}
       </div>
     </SectionCard>
+
+    {/* ── Per-account drilldown modal ─────────────────────────────────────── */}
+    {drillAccount ? (
+      <DrilldownModal
+        open={Boolean(drillAccount)}
+        onClose={() => { setDrillAccount(null); setDrillLines([]) }}
+        eyebrow={`${drillAccount.bankName} · ${drillAccount.accountNumber}${drillAccount.accountName ? ` · ${drillAccount.accountName}` : ""} · ${drillAccount.branchName}`}
+        title="All transactions on this account"
+        summary={
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              { label: "Opening balance", value: drillAccount.openingBalance, tone: "" },
+              { label: "Sales received", value: drillAccount.salesReceived, tone: "text-success" },
+              { label: "Cash from till", value: drillAccount.depositsReceived, tone: "text-success" },
+              { label: "Refunds out", value: drillAccount.refundsPaid, tone: "text-warning" },
+            ].map((item) => (
+              <div key={item.label} className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-center">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{item.label}</p>
+                <p className={cn("mt-0.5 text-base font-semibold tabular-nums", item.tone)}>{formatCurrency(item.value)}</p>
+              </div>
+            ))}
+          </div>
+        }
+        download={{
+          filename: `bank-${drillAccount.bankName}-${drillAccount.accountNumber}`,
+          rows: () => [
+            ["Date", "Type", "Category", "Description", "Ref", "Amount (₦)", "Balance (₦)"],
+            ...drillLines.map((line) => [
+              formatShopWhen(line.date),
+              line.type === "IN" ? "In" : "Out",
+              line.category,
+              line.description,
+              line.reference ?? "",
+              line.type === "IN" ? line.amount : -line.amount,
+              line.runningBalance,
+            ]),
+            [],
+            ["Balance", "", "", "", "", "", drillBalance],
+          ],
+        }}
+        width="wide"
+      >
+        {drillLoading ? (
+          <p className="px-5 py-8 text-center text-sm text-muted-foreground">Loading transactions for this account</p>
+        ) : drillLines.length === 0 ? (
+          <p className="px-5 py-8 text-center text-sm text-muted-foreground">
+            No transactions on this account yet.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-border text-left">
+                <tr>
+                  <th className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Date</th>
+                  <th className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Category</th>
+                  <th className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Description</th>
+                  <th className="hidden px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:table-cell">Ref</th>
+                  <th className="px-5 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Amount</th>
+                  <th className="px-5 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {drillLines.map((line) => (
+                  <tr key={line.id} className="border-b border-border/60 hover:bg-muted/40">
+                    <td className="whitespace-nowrap px-5 py-2.5 tabular-nums text-muted-foreground">
+                      {formatShopWhen(line.date)}
+                    </td>
+                    <td className="px-5 py-2.5">
+                      <span className={cn(
+                        "inline-flex items-center gap-1 text-xs font-medium",
+                        line.type === "IN" ? "text-success" : "text-warning"
+                      )}>
+                        {line.type === "IN"
+                          ? <ArrowDownLeft className="h-3 w-3 shrink-0" />
+                          : <ArrowUpRight className="h-3 w-3 shrink-0" />}
+                        {line.category}
+                      </span>
+                    </td>
+                    <td className="px-5 py-2.5">
+                      <p className="text-sm">{line.description}</p>
+                    </td>
+                    <td className="hidden whitespace-nowrap px-5 py-2.5 sm:table-cell">
+                      {line.reference ? (
+                        <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px]">{line.reference}</span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className={cn(
+                      "whitespace-nowrap px-5 py-2.5 text-right tabular-nums font-semibold",
+                      line.type === "IN" ? "text-success" : "text-warning"
+                    )}>
+                      {line.type === "IN" ? "+" : "−"}{formatCurrency(line.amount)}
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-2.5 text-right tabular-nums font-semibold">
+                      {formatCurrency(line.runningBalance)}
+                    </td>
+                  </tr>
+                ))}
+                {/* Balance row */}
+                <tr className="border-t-2 border-border bg-muted/40">
+                  <td colSpan={4} className="px-5 py-2.5 text-sm font-semibold">Balance</td>
+                  <td />
+                  <td className="px-5 py-2.5 text-right tabular-nums text-lg font-semibold text-primary">
+                    {formatCurrency(drillBalance)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </DrilldownModal>
+    ) : null}
+    </>
   )
 }

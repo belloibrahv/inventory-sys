@@ -557,6 +557,133 @@ export async function getFinanceLedger(account: "CASH" | "BANK") {
   return account === "CASH" ? data.cashAccount.entries : data.bankAccount.entries
 }
 
+/**
+ * All transactions into and out of one named bank account, newest first.
+ * Used by the per-account drilldown on the bank accounts table so the admin
+ * can see every sale, deposit, refund and the running balance without opening
+ * the combined bank ledger.
+ */
+export async function getBankAccountLedger(bankAccountId: string) {
+  const user = await requireUser()
+  if (!(await can(user.role, "view.finance")) && !(await can(user.role, "view.expenses"))) return []
+
+  const account = await prisma.bankAccount.findUnique({
+    where: { id: bankAccountId },
+    include: { branch: { select: { name: true, code: true } } },
+  })
+  if (!account) return []
+  if (!(await canReachBranch(user, account.branchId))) return []
+
+  type Entry = {
+    id: string
+    date: Date
+    type: "IN" | "OUT"
+    category: string
+    description: string
+    amount: number
+    reference: string | null
+  }
+
+  const entries: Entry[] = []
+
+  // Opening balance
+  if (money(account.openingBalance) > 0) {
+    entries.push({
+      id: `opening-${account.id}`,
+      date: account.createdAt,
+      type: "IN",
+      category: "Opening balance",
+      description: `${account.bankName} ${account.accountNumber} when this software started`,
+      amount: money(account.openingBalance),
+      reference: null,
+    })
+  }
+
+  // Bank sales: all Payment rows for this account
+  const payments = await prisma.payment.findMany({
+    where: { bankAccountId, method: { not: "CASH" } },
+    include: {
+      sale: {
+        select: {
+          invoiceNumber: true,
+          saleDate: true,
+          customer: { select: { name: true } },
+        },
+      },
+    },
+    orderBy: { paidAt: "desc" },
+  })
+  for (const payment of payments) {
+    entries.push({
+      id: `payment-${payment.id}`,
+      date: payment.sale.saleDate,
+      type: "IN",
+      category: "Sale received",
+      description: `${payment.sale.invoiceNumber} · ${payment.sale.customer?.name ?? "Walk-in"}`,
+      amount: money(payment.amount),
+      reference: payment.reference,
+    })
+  }
+
+  // Cash deposits into this account
+  const deposits = await prisma.cashDeposit.findMany({
+    where: { bankAccountId, undoneAt: null },
+    include: { branch: { select: { name: true } } },
+    orderBy: { depositedAt: "desc" },
+  })
+  for (const deposit of deposits) {
+    entries.push({
+      id: `deposit-${deposit.id}`,
+      date: deposit.depositedAt,
+      type: "IN",
+      category: "Cash from the till",
+      description: `${deposit.depositNumber} · cash from ${deposit.branch.name}${deposit.slipNumber ? ` · slip ${deposit.slipNumber}` : ""}`,
+      amount: money(deposit.amount),
+      reference: deposit.slipNumber,
+    })
+  }
+
+  // Refunds and swap pay-outs out of this account
+  const outflows = await prisma.financeEntry.findMany({
+    where: {
+      bankAccountId,
+      account: "BANK",
+      type: "EXPENSE",
+      OR: [{ reference: { startsWith: "RTN-" } }, { description: { startsWith: "Swap payable" } }],
+    },
+    include: { branch: { select: { name: true } } },
+    orderBy: { createdAt: "desc" },
+  })
+  for (const entry of outflows) {
+    entries.push({
+      id: `out-${entry.id}`,
+      date: entry.createdAt,
+      type: "OUT",
+      category: entry.description?.startsWith("Swap payable") ? "Swap Deal pay-out" : "Refund on a return",
+      description: entry.description || entry.reference || "Payment out",
+      amount: money(entry.amount),
+      reference: entry.reference,
+    })
+  }
+
+  // Sort newest first
+  entries.sort((a, b) => b.date.getTime() - a.date.getTime())
+
+  // Build running balance (running backwards: newest first, so we compute from
+  // the known current total downward)
+  const totalIn = entries.filter((e) => e.type === "IN").reduce((s, e) => s + e.amount, 0)
+  const totalOut = entries.filter((e) => e.type === "OUT").reduce((s, e) => s + e.amount, 0)
+  const currentBalance = totalIn - totalOut
+
+  let running = currentBalance
+  return entries.map((entry) => {
+    const balance = running
+    if (entry.type === "IN") running -= entry.amount
+    else running += entry.amount
+    return { ...entry, date: entry.date.toISOString(), runningBalance: balance }
+  })
+}
+
 async function assertOpeningMoneyAccess(user: { id: string; role: UserRole; branchId: string | null }, branchId: string) {
   if (!canSetOpeningMoney(user.role)) {
     return { error: "Only the main admin, the CEO, the accountant, or the records checker can set opening money." }
