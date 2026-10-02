@@ -212,3 +212,10 @@ export function groupSupplierLedgers(bills: SupplierLedgerBill[]): SupplierLedge
     })
     .sort((a, b) => b.owed - a.owed || b.surplus - a.surplus || a.name.localeCompare(b.name))
 }
+
+/**
+ * How a payment on a supplier bill is written in the money ledger, followed by
+ * the bill number. Money in and out reads it back to tell a supplier paid in
+ * cash (already out of the till) from one paid by bank.
+ */
+export const SUPPLIER_PAYMENT_NOTE = "Supplier payment "

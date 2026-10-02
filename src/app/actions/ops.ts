@@ -24,7 +24,7 @@ import { buildBillTrace, type SupplierBillTrace } from "@/lib/supplier-trace"
 import { watBounds, watDayKey } from "@/lib/lagos-day"
 import { getAppSettings } from "@/lib/settings"
 import { healOpeningStockBills } from "@/lib/opening-stock-money"
-import { isOpeningStockPurchase, purchaseBalance } from "@/lib/purchase-money"
+import { isOpeningStockPurchase, purchaseBalance, SUPPLIER_PAYMENT_NOTE } from "@/lib/purchase-money"
 import { isSupplierReturnableStatus, supplierReturnMoneyPlan } from "@/lib/vendor-return"
 import { recordSupplierReturnLine } from "@/lib/supplier-returns"
 import { assertCashAvailable } from "@/lib/shop-cash"
@@ -599,7 +599,7 @@ export async function payPurchase(formData: FormData) {
         type: "EXPENSE",
         amount: sent.toFixed(2),
         reference: payRef,
-        description: `Supplier payment ${purchase.invoiceNumber} · ${purchase.supplier.name}`,
+        description: `${SUPPLIER_PAYMENT_NOTE}${purchase.invoiceNumber} · ${purchase.supplier.name}`,
       },
     })
     await tx.auditLog.create({

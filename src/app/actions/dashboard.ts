@@ -6,13 +6,13 @@ import { requireUser } from "@/lib/session"
 import { canSeeCost } from "@/lib/rbac"
 import { money } from "@/lib/utils"
 import { healOpeningStockBills } from "@/lib/opening-stock-money"
-import { payablePurchaseWhere, groupSupplierLedgers } from "@/lib/purchase-money"
+import { payablePurchaseWhere, groupSupplierLedgers, SUPPLIER_PAYMENT_NOTE } from "@/lib/purchase-money"
 import { getUnclosedBusinessDays } from "@/app/actions/day-close"
 import { getParkedWatch } from "@/app/actions/parked"
 import { getAppSettings } from "@/lib/settings"
 import { isLowStock, shelfKey } from "@/lib/stock-limits"
 import { stockedPairs } from "@/lib/stocked-pairs"
-import { watBounds, watDayKey } from "@/lib/lagos-day"
+import { shopPeriodWindow, shopPreviousWindow, watBounds, watDayKey } from "@/lib/lagos-day"
 import { receiptsInWindow } from "@/lib/receipts"
 import { customersOwing } from "@/lib/owed"
 
@@ -28,9 +28,22 @@ export async function getDashboardData() {
   const expenseWhere = branchId ? { branchId } : {}
 
   const now = new Date()
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-  const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0)
+  // Months run on Lagos days, like Reports. The server clock is UTC, so a
+  // month built from it started an hour late, and "last month" stopped at the
+  // first minute of its final day, leaving that whole day out of the trends.
+  const thisMonth = shopPeriodWindow(watDayKey(), "month")
+  const lastMonth = shopPreviousWindow(thisMonth.from, "month")
+  const inThisMonth = { gte: thisMonth.start, lt: thisMonth.end }
+  const inLastMonth = { gte: lastMonth.start, lt: lastMonth.end }
+  // Money sent to suppliers by the day it left, from the money ledger. The
+  // amount paid on bills *created* this month missed payments on older bills
+  // and counted later payments on this month's bills in the wrong month.
+  const supplierPaidWhere = (createdAt: { gte: Date; lt: Date }) => ({
+    ...(branchId ? { branchId } : {}),
+    type: "EXPENSE" as const,
+    description: { startsWith: SUPPLIER_PAYMENT_NOTE },
+    createdAt,
+  })
 
   const [
     sales,
@@ -59,38 +72,26 @@ export async function getDashboardData() {
     receiveShortages,
   ] = await Promise.all([
     prisma.sale.aggregate({
-      where: { ...saleWhere, saleDate: { gte: monthStart } },
+      where: { ...saleWhere, saleDate: inThisMonth },
       _sum: { totalAmount: true, paidAmount: true },
       _count: true,
     }),
     prisma.sale.aggregate({
-      where: { ...saleWhere, saleDate: { gte: lastMonthStart, lte: lastMonthEnd } },
+      where: { ...saleWhere, saleDate: inLastMonth },
       _sum: { totalAmount: true },
     }),
     prisma.expense.aggregate({
-      where: { ...expenseWhere, date: { gte: monthStart }, approvedAt: { not: null } },
+      where: { ...expenseWhere, date: inThisMonth, approvedAt: { not: null } },
       _sum: { amount: true },
     }),
     prisma.expense.aggregate({
-      where: { ...expenseWhere, date: { gte: lastMonthStart, lte: lastMonthEnd }, approvedAt: { not: null } },
+      where: { ...expenseWhere, date: inLastMonth, approvedAt: { not: null } },
       _sum: { amount: true },
     }),
-    prisma.payment.aggregate({
-      where: { paidAt: { gte: monthStart }, ...(branchId ? { sale: { branchId } } : {}) },
-      _sum: { amount: true },
-    }),
-    prisma.payment.aggregate({
-      where: { paidAt: { gte: lastMonthStart, lte: lastMonthEnd }, ...(branchId ? { sale: { branchId } } : {}) },
-      _sum: { amount: true },
-    }),
-    prisma.purchase.aggregate({
-      where: {
-        ...(branchId ? { branchId } : {}),
-        createdAt: { gte: monthStart },
-        ...payablePurchaseWhere,
-      },
-      _sum: { paidAmount: true },
-    }),
+    // Money in by the day it arrived, the same rule as Reports and the till.
+    receiptsInWindow({ branchId, start: thisMonth.start, end: thisMonth.end }),
+    receiptsInWindow({ branchId, start: lastMonth.start, end: lastMonth.end }),
+    prisma.financeEntry.aggregate({ where: supplierPaidWhere(inThisMonth), _sum: { amount: true } }),
     prisma.customer.aggregate({
       where: branchId ? { branchId } : {},
       _sum: { currentBalance: true },
@@ -147,7 +148,7 @@ export async function getDashboardData() {
     prisma.incomingLot.count({
       where: {
         status: "COMING",
-        expectedDate: { lt: new Date(now.getFullYear(), now.getMonth(), now.getDate()) },
+        expectedDate: { lt: watBounds(watDayKey()).start },
         ...(branchId ? { branchId } : {}),
       },
     }),
@@ -188,19 +189,10 @@ export async function getDashboardData() {
   const prevSales = money(lastSales._sum.totalAmount)
   const thisExp = money(expenses._sum.amount)
   const prevExp = money(lastExpenses._sum.amount)
-  const received = money(paymentsIn._sum.amount)
-  const sent = money(purchasesPaid._sum.paidAmount) + thisExp
+  const received = paymentsIn.total
+  const sent = money(purchasesPaid._sum.amount) + thisExp
   const lastSent = money(
-    (
-      await prisma.purchase.aggregate({
-        where: {
-          ...(branchId ? { branchId } : {}),
-          createdAt: { gte: lastMonthStart, lte: lastMonthEnd },
-          ...payablePurchaseWhere,
-        },
-        _sum: { paidAmount: true },
-      })
-    )._sum.paidAmount
+    (await prisma.financeEntry.aggregate({ where: supplierPaidWhere(inLastMonth), _sum: { amount: true } }))._sum.amount
   ) + prevExp
 
   // One pass to index the catalogue, then every figure below is a map lookup
@@ -215,15 +207,18 @@ export async function getDashboardData() {
     return sum + row.quantity * money(stockAtCost ? product?.costPrice : product?.sellingPrice)
   }, 0)
 
-  const months = Array.from({ length: 6 }, (_, index) => {
-    const date = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1)
-    return {
-      key: `${date.getFullYear()}-${date.getMonth()}`,
-      label: date.toLocaleString("en-NG", { month: "short" }),
-      start: date,
-      end: new Date(date.getFullYear(), date.getMonth() + 1, 1),
-    }
-  })
+  // The last six Lagos months, oldest first, each a whole month.
+  const months: Array<{ key: string; label: string; start: Date; end: Date }> = []
+  for (let window = thisMonth, index = 0; index < 6; index += 1, window = shopPreviousWindow(window.from, "month")) {
+    const [year, month] = window.from.split("-").map(Number)
+    months.unshift({
+      key: window.from.slice(0, 7),
+      label: new Date(Date.UTC(year, month - 1, 15)).toLocaleString("en-NG", { month: "short", timeZone: "UTC" }),
+      start: window.start,
+      // This month's bar runs to the end of today, earlier months to their end.
+      end: window.end,
+    })
+  }
 
   const chartSales = await Promise.all(
     months.map(async (month) => {
@@ -398,7 +393,7 @@ export async function getDashboardData() {
       paymentSent: sent,
       paymentReceived: received,
       paymentSentTrend: trend(sent, lastSent),
-      paymentReceivedTrend: trend(received, money(lastPaymentsIn._sum.amount)),
+      paymentReceivedTrend: trend(received, lastPaymentsIn.total),
       stockValue,
       stockAtCost,
       // Same rule as Reports and Check the books (customersOwing).

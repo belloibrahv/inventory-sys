@@ -11,9 +11,9 @@ import { canApprove, canHardDelete, canManageFinance, canManageStaff, canEditLet
 import { can } from "@/lib/permissions"
 import { isLetterheadKey } from "@/lib/letterhead"
 import { generateDocNumber, money } from "@/lib/utils"
-import { saleTenders, sumSaleTenders } from "@/lib/sale-money"
+import { lineValueAfterOrderDiscount, saleTenders, sumSaleTenders } from "@/lib/sale-money"
 import { healOpeningStockBills } from "@/lib/opening-stock-money"
-import { payablePurchaseWhere, groupSupplierLedgers, purchaseBalance } from "@/lib/purchase-money"
+import { payablePurchaseWhere, groupSupplierLedgers, purchaseBalance, SUPPLIER_PAYMENT_NOTE } from "@/lib/purchase-money"
 import { shopPeriodWindow, shopPreviousWindow, watDayKey, type ShopRange } from "@/lib/lagos-day"
 import { writeAudit } from "@/lib/audit"
 import {
@@ -176,6 +176,21 @@ export async function getFinance({ withLedger = false }: { withLedger?: boolean 
     .filter((e) => e.approvedAt)
     .reduce((sum, e) => sum + money(e.amount), 0)
   const supplierPayments = purchases.reduce((sum, p) => sum + money(p.paidAmount), 0)
+  // Supplier payments made in cash already leave the till as a cash pay-out
+  // (see otherCashOuts below). Taking every supplier payment off the bank as
+  // well counted a cash payment twice: once from the till, once from the bank.
+  const cashToSupplierRows = await prisma.financeEntry.findMany({
+    where: { ...where, account: "CASH", type: "EXPENSE", description: { startsWith: SUPPLIER_PAYMENT_NOTE } },
+    select: { amount: true, description: true },
+  })
+  const cashToSupplierByBill = new Map<string, number>()
+  for (const row of cashToSupplierRows) {
+    const invoice = (row.description ?? "").slice(SUPPLIER_PAYMENT_NOTE.length).split(" ")[0]
+    cashToSupplierByBill.set(invoice, (cashToSupplierByBill.get(invoice) ?? 0) + money(row.amount))
+  }
+  const bankToSupplier = (po: { invoiceNumber: string; paidAmount: unknown }) =>
+    Math.max(0, money(po.paidAmount) - (cashToSupplierByBill.get(po.invoiceNumber) ?? 0))
+  const supplierPaymentsByBank = purchases.reduce((sum, p) => sum + bankToSupplier(p), 0)
   const netCashFlow = revenue - expenditure - supplierPayments
 
   // 2. Account Ledgers
@@ -394,7 +409,7 @@ export async function getFinance({ withLedger = false }: { withLedger?: boolean 
   }
 
   for (const po of purchases) {
-    if (money(po.paidAmount) > 0) {
+    if (bankToSupplier(po) > 0) {
       bankEntries.push({
         id: po.id,
         date: po.receivedDate || po.createdAt,
@@ -402,7 +417,7 @@ export async function getFinance({ withLedger = false }: { withLedger?: boolean 
         type: "OUT" as const,
         category: "Suppliers payment",
         description: `PO ${po.invoiceNumber} payment to ${po.supplier.name}`,
-        amount: money(po.paidAmount),
+        amount: bankToSupplier(po),
       })
     }
   }
@@ -460,7 +475,7 @@ export async function getFinance({ withLedger = false }: { withLedger?: boolean 
   bankEntries.sort((a, b) => b.date.getTime() - a.date.getTime())
 
   const cashBalance = openingCash + cashRevenue - expenditure - otherCashOut - cashToBank
-  const bankBalance = openingBank + bankRevenue - supplierPayments + depositsIn - refundsOut
+  const bankBalance = openingBank + bankRevenue - supplierPaymentsByBank + depositsIn - refundsOut
 
   const seenHouses = new Set(purchases.map((row) => row.supplierId))
   const ledgers = groupSupplierLedgers([
@@ -1777,6 +1792,8 @@ export async function getProfitData() {
         id: true,
         invoiceNumber: true,
         saleDate: true,
+        subtotal: true,
+        discount: true,
         branch: { select: { name: true } },
         items: {
           select: {
@@ -1813,7 +1830,8 @@ export async function getProfitData() {
       // — the old behaviour, and the reason their profit could move on its own.
       const unitCost = money(item.costPrice) || money(item.product.costPrice)
       const cost = unitCost * item.quantity
-      const sell = money(item.totalPrice)
+      // What the line really fetched once the whole-order discount is shared out.
+      const sell = lineValueAfterOrderDiscount(item.totalPrice, sale)
       const list = money(item.listPrice)
       return {
         id: item.id,

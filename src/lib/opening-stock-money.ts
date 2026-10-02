@@ -15,10 +15,15 @@ import { money } from "@/lib/utils"
  * stock. If an earlier heal marked them paid as opening stock, this restores
  * the paid / unpaid state from the bill notes so Reports and Money in and out
  * show the same balance as Goods from supplier.
+ *
+ * Item costs are left alone here. This runs on every Home, Reports and Money
+ * page load, and it used to put every item's cost back to its opening-stock
+ * cost and rewrite the cost on sales already made: a restock at a new price
+ * was undone the next time anyone opened Home. Opening stock corrections set
+ * the cost themselves, when they are made.
  */
 export const healOpeningStockBills = cache(async () => {
   await restoreMisclassifiedSupplierBills()
-  await syncOpeningStockProductCosts()
 
   const bills = await prisma.purchase.findMany({
     where: {
@@ -106,45 +111,5 @@ async function restoreMisclassifiedSupplierBills() {
         description: `Supplier payment on upload for ${row.invoiceNumber}`,
       },
     })
-  }
-}
-
-async function syncOpeningStockProductCosts() {
-  const openingItems = await prisma.purchaseItem.findMany({
-    where: {
-      purchase: {
-        status: { not: "CANCELLED" },
-        OR: [
-          { invoiceNumber: { startsWith: "OPEN-" } },
-          { openingStock: { isNot: null } },
-        ],
-      },
-      costPrice: { gt: 0 },
-    },
-    include: {
-      product: { select: { id: true, costPrice: true } },
-      purchase: { select: { branchId: true } },
-    },
-  })
-
-  for (const item of openingItems) {
-    const itemCost = money(item.costPrice)
-    const prodCost = money(item.product.costPrice)
-    if (itemCost > 0 && prodCost !== itemCost) {
-      await prisma.product.update({
-        where: { id: item.productId },
-        data: { costPrice: item.costPrice },
-      })
-      await prisma.saleItem.updateMany({
-        where: {
-          productId: item.productId,
-          costPrice: item.product.costPrice,
-          sale: { branchId: item.purchase.branchId },
-        },
-        data: {
-          costPrice: item.costPrice,
-        },
-      })
-    }
   }
 }

@@ -157,7 +157,8 @@ async function main() {
     }
   }
   const owedTotal = customers.reduce((s, c) => s + n(c.currentBalance), 0)
-  console.log(`  ${customers.length} customer(s) owing ${naira(owedTotal)} in total`)
+  const owingCount = customers.filter((c) => n(c.currentBalance) > EPSILON).length
+  console.log(`  ${owingCount} of ${customers.length} customer(s) owe ${naira(owedTotal)} in total`)
   verdict("no customer is carrying a negative debt", negativeBalances)
   verdict("each customer's balance matches the last line of their statement", balanceGaps)
   // An opening balance typed when the customer was created is real debt with no
@@ -237,6 +238,27 @@ async function main() {
     { warnOnly: true }
   )
 
+  // A cost far under what the item costs now is almost always a mistyped
+  // cost that was put right after the sale (an ₦550,000 laptop sold while its
+  // cost read ₦2,000). Profit on that line is overstated by the difference.
+  const costedLines = await prisma.saleItem.findMany({
+    where: { sale: { branchId: { in: ids }, status: "COMPLETED" }, costPrice: { gt: 0 } },
+    select: {
+      costPrice: true,
+      totalPrice: true,
+      quantity: true,
+      product: { select: { name: true, costPrice: true } },
+      sale: { select: { invoiceNumber: true } },
+    },
+  })
+  const implausibleCost = costedLines
+    .filter((line) => n(line.product.costPrice) > 0 && n(line.costPrice) < n(line.product.costPrice) * 0.1)
+    .map(
+      (line) =>
+        `${line.sale.invoiceNumber} · ${line.product.name}: sold ${naira(n(line.totalPrice))} at cost ${naira(n(line.costPrice))}, item costs ${naira(n(line.product.costPrice))} now`
+    )
+  verdict("no sale line carries a cost far under what the item costs", implausibleCost, { warnOnly: true })
+
   // ---- 6. Till money lands on the day it arrived ------------------------
   section("6. Till money by day")
   const payments = await prisma.payment.findMany({
@@ -297,6 +319,24 @@ async function main() {
     openSwaps.map(
       (row) =>
         `${shopName.get(row.branchId)} · ${row.swapNumber} approved ${row.approvedAt?.toISOString().slice(0, 10) ?? ""}, balance ${naira(n(row.balanceAmount))} not recorded`
+    ),
+    { warnOnly: true }
+  )
+
+  // An approved return moves nothing until someone presses Apply: the debt it
+  // clears, the refund it pays and the phone it puts back all wait.
+  const openReturns = await prisma.stockReturn.findMany({
+    where: { branchId: { in: ids }, status: "APPROVED" },
+    select: { returnNumber: true, outcome: true, returnValue: true, approvedAt: true, branchId: true },
+  })
+  verdict(
+    "no approved return is waiting for Apply",
+    openReturns.map(
+      (row) =>
+        `${shopName.get(row.branchId)} · ${row.returnNumber} (${row.outcome}) approved ${row.approvedAt?.toISOString().slice(0, 10) ?? ""}, ` +
+        (row.outcome === "REFUND" || row.outcome === "CREDIT_NOTE"
+          ? `${naira(n(row.returnValue))} still on the books as sold`
+          : "the phone has not moved yet")
     ),
     { warnOnly: true }
   )

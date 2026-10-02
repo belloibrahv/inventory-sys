@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import type { Prisma, UserRole } from "@prisma/client"
+import { Prisma, type UserRole } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { recordMovement } from "@/lib/concurrency"
 import { can } from "@/lib/permissions"
@@ -399,11 +399,14 @@ async function applyPlan(
             },
           })
           if (change.costPrice !== undefined) {
+            // Sales already made carry the cost they were sold at. When that was
+            // the mistyped opening cost (or no cost), the correction is the true
+            // cost of the very unit they sold, so their profit is put right too.
             await tx.saleItem.updateMany({
               where: {
                 productId: line.productId,
                 sale: { branchId: record.branchId },
-                costPrice: { in: [line.costPrice.toFixed(2), "0.00", "0", "2000.00", "2000"] },
+                costPrice: { in: [new Prisma.Decimal(line.costPrice), new Prisma.Decimal(0)] },
               },
               data: {
                 costPrice: change.costPrice.toFixed(2),
@@ -1045,6 +1048,7 @@ export async function closeOpeningStock(formData: FormData): Promise<{ error?: s
   const snapshot: Snapshot = { lines: lines.filter((line) => line.openingQty > 0).map((line) => ({ ...line, shelfQty: line.openingQty })) }
 
   for (const line of lines.filter((l) => l.openingQty > 0)) {
+    const before = await prisma.product.findUnique({ where: { id: line.productId }, select: { costPrice: true } })
     await prisma.product.update({
       where: { id: line.productId },
       data: {
@@ -1053,11 +1057,16 @@ export async function closeOpeningStock(formData: FormData): Promise<{ error?: s
         sellingPrice: line.sellingPrice.toFixed(2),
       },
     })
+    // Sales made before the sheet was closed carry the cost the item had then:
+    // none, or the figure since corrected on this sheet. Both become the
+    // sheet's cost, the true cost of the unit sold.
+    const wrongCosts = [new Prisma.Decimal(0)]
+    if (before && money(before.costPrice) !== line.costPrice) wrongCosts.push(before.costPrice)
     await prisma.saleItem.updateMany({
       where: {
         productId: line.productId,
         sale: { branchId },
-        costPrice: { in: ["0.00", "0", "2000.00", "2000"] },
+        costPrice: { in: wrongCosts },
       },
       data: {
         costPrice: line.costPrice.toFixed(2),

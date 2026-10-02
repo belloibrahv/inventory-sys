@@ -34,6 +34,8 @@ export function CollectMoneyFields({
     allowSplit && defaultAmount != null && banks.length ? String(defaultAmount) : ""
   )
 
+  // Whole naira only. A box that took kobo let ₦100,000.03 through on a
+  // ₦100,000 payment, and the stray kobo then showed on the till and the books.
   if (allowSplit) {
     const bankTyped = Math.max(0, Number(bankAmount) || 0)
     return (
@@ -44,7 +46,7 @@ export function CollectMoneyFields({
             name="cashAmount"
             type="number"
             min={0}
-            step="0.01"
+            step="1"
             placeholder="0"
             value={cashAmount}
             onChange={(event) => setCashAmount(event.target.value)}
@@ -56,7 +58,7 @@ export function CollectMoneyFields({
             name="bankAmount"
             type="number"
             min={0}
-            step="0.01"
+            step="1"
             placeholder="0"
             value={bankAmount}
             onChange={(event) => setBankAmount(event.target.value)}
@@ -100,6 +102,8 @@ export function CollectMoneyFields({
       <Input
         name={amountName}
         type="number"
+        min={0}
+        step="1"
         placeholder="Amount"
         defaultValue={defaultAmount != null ? defaultAmount : undefined}
         required

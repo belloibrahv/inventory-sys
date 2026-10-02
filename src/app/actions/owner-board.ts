@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/session"
 import { can } from "@/lib/permissions"
 import { canSeeProfit } from "@/lib/roles"
 import { money } from "@/lib/utils"
+import { lineValueAfterOrderDiscount } from "@/lib/sale-money"
 import { recentWatDays, shiftWatDay, watBounds, watDayKey } from "@/lib/lagos-day"
 
 /**
@@ -149,6 +150,8 @@ export async function getOwnerBoard(dayKey?: string) {
           select: {
             branchId: true,
             invoiceNumber: true,
+            subtotal: true,
+            discount: true,
             branch: { select: { name: true } },
             customer: { select: { name: true } },
           },
@@ -177,7 +180,7 @@ export async function getOwnerBoard(dayKey?: string) {
         totalPrice: true,
         costPrice: true,
         product: { select: { costPrice: true } },
-        sale: { select: { saleDate: true } },
+        sale: { select: { saleDate: true, subtotal: true, discount: true } },
       },
     }),
     prisma.saleItem.groupBy({
@@ -222,7 +225,7 @@ export async function getOwnerBoard(dayKey?: string) {
     const shop = shopRow(line.sale.branchId)
     if (!shop) continue
     shop.sold += line.quantity
-    shop.soldValue += money(line.totalPrice)
+    shop.soldValue += lineValueAfterOrderDiscount(line.totalPrice, line.sale)
     shop.soldCost += (money(line.costPrice) || money(line.product.costPrice)) * line.quantity
   }
   // Every shelf change today, grouped by why it happened. Selling is counted
@@ -280,7 +283,7 @@ export async function getOwnerBoard(dayKey?: string) {
   const soldLines: OwnerSoldLine[] = soldToday
     .map((line) => {
       const unitCost = money(line.costPrice) || money(line.product.costPrice)
-      const value = money(line.totalPrice)
+      const value = lineValueAfterOrderDiscount(line.totalPrice, line.sale)
       return {
         id: line.id,
         invoice: line.sale.invoiceNumber,
@@ -305,7 +308,7 @@ export async function getOwnerBoard(dayKey?: string) {
     const bucket = trendByDay.get(key)
     if (!bucket) continue
     const unitCost = money(line.costPrice) || money(line.product.costPrice)
-    const value = money(line.totalPrice)
+    const value = lineValueAfterOrderDiscount(line.totalPrice, line.sale)
     bucket.units += line.quantity
     bucket.value += value
     bucket.profit += value - unitCost * line.quantity

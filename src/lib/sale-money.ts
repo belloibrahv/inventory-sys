@@ -74,3 +74,22 @@ export function sumSaleTenders(rows: SaleTenderRow[]) {
     { cash: 0, transfer: 0, pos: 0, bank: 0, credit: 0, revenue: 0, collected: 0, received: 0, count: 0 }
   )
 }
+
+/**
+ * What one sale line really brought in once the whole-order discount is shared
+ * out across the invoice, in proportion to each line's value.
+ *
+ * Lines carry their price before that discount (they add up to the subtotal),
+ * so profit read straight off the lines ignored it: a ₦345,000 basket sold for
+ * ₦340,000 after ₦5,000 off showed ₦5,000 more profit than the shop made.
+ */
+export function lineValueAfterOrderDiscount(
+  lineTotal: unknown,
+  sale: { subtotal: unknown; discount: unknown }
+) {
+  const value = money(lineTotal)
+  const subtotal = money(sale.subtotal)
+  const discount = money(sale.discount)
+  if (discount <= 0 || subtotal <= 0) return value
+  return value - (discount * value) / subtotal
+}
