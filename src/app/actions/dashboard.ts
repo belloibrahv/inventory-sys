@@ -3,7 +3,8 @@
 import { prisma } from "@/lib/prisma"
 import { viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
-import { canSeeCost } from "@/lib/rbac"
+import { canSeeCost, scopedBranchId } from "@/lib/rbac"
+import { isShopOwner } from "@/lib/permissions"
 import { money } from "@/lib/utils"
 import { healOpeningStockBills } from "@/lib/opening-stock-money"
 import { payablePurchaseWhere, groupSupplierLedgers, SUPPLIER_PAYMENT_NOTE } from "@/lib/purchase-money"
@@ -269,6 +270,10 @@ export async function getDashboardData() {
   ])
   const unclosedCount = unclosedLists.reduce((sum, days) => sum + days.length, 0)
 
+  // ── CEO / owner: per-staff sales today + unclosed day detail ─────────────
+  // Computed after `day` is declared below. Placeholder — filled after day.
+  const isOwner = isShopOwner(user.role)
+
   // Only lines a shop actually carries: an item registered for every shop but
   // never stocked at one is not "low" there, just not sold there.
   const [stocked, settings] = await Promise.all([stockedPairs(branchId), getAppSettings()])
@@ -371,6 +376,94 @@ export async function getDashboardData() {
     }),
   ])
 
+  // ── CEO / owner: per-staff sales today + unclosed day breakdown ──────────
+  // Fetched after `day` is available. Only for CEO and Super Admin.
+  const todayKey = watDayKey()
+  const [staffSalesToday, allSalesForUnclosed, closedDayKeys] = isOwner
+    ? await Promise.all([
+        prisma.sale.groupBy({
+          by: ["userId"],
+          where: { ...saleWhere, saleDate: { gte: day.start, lt: day.end } },
+          _sum: { totalAmount: true },
+          _count: true,
+        }),
+        prisma.sale.findMany({
+          where: { status: "COMPLETED", ...(branchId ? { branchId } : {}) },
+          select: {
+            branchId: true,
+            userId: true,
+            saleDate: true,
+            totalAmount: true,
+            paidAmount: true,
+            branch: { select: { name: true, code: true } },
+            user: { select: { name: true, email: true, role: true } },
+          },
+        }),
+        prisma.dayClose.findMany({
+          where: branchId ? { branchId } : {},
+          select: { branchId: true, businessDate: true },
+        }),
+      ])
+    : [[], [], []] as [never[], never[], never[]]
+
+  // Staff name lookup for the per-staff panel
+  const staffUserIds = (staffSalesToday as Array<{ userId: string }>).map((r) => r.userId)
+  const staffUsers = staffUserIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: staffUserIds } },
+        select: { id: true, name: true, email: true, role: true, branch: { select: { name: true, code: true } } },
+      })
+    : []
+  const staffUserMap = new Map(staffUsers.map((u) => [u.id, u]))
+
+  const salesByStaff = (staffSalesToday as Array<{ userId: string; _sum: { totalAmount: unknown }; _count: number }>)
+    .map((row) => {
+      const staff = staffUserMap.get(row.userId)
+      return {
+        userId: row.userId,
+        name: staff?.name ?? staff?.email ?? "Staff",
+        role: staff?.role ?? "",
+        shop: staff?.branch?.name ?? "",
+        shopCode: staff?.branch?.code ?? "",
+        salesCount: row._count,
+        salesValue: money(row._sum.totalAmount),
+      }
+    })
+    .sort((a, b) => b.salesValue - a.salesValue)
+
+  // Unclosed days detail — group by shop + business day, cashier, value
+  const closedKeySet = new Set(
+    (closedDayKeys as Array<{ branchId: string; businessDate: string }>).map((dc) => `${dc.branchId}:${dc.businessDate}`)
+  )
+  type UnclosedDayRow = {
+    shop: string; shopCode: string; branchId: string; businessDate: string
+    cashier: string; cashierEmail: string; salesCount: number; salesValue: number; collected: number
+  }
+  const unclosedMap = new Map<string, UnclosedDayRow>()
+  type SaleForUnclosed = {
+    branchId: string; userId: string; saleDate: Date; totalAmount: unknown; paidAmount: unknown
+    branch: { name: string; code: string }
+    user: { name: string | null; email: string; role: string } | null
+  }
+  for (const sale of allSalesForUnclosed as SaleForUnclosed[]) {
+    const dayK = watDayKey(sale.saleDate)
+    if (dayK >= todayKey) continue
+    const mk = `${sale.branchId}:${dayK}`
+    if (closedKeySet.has(mk)) continue
+    const existing = unclosedMap.get(mk)
+    const v = money(sale.totalAmount), c = money(sale.paidAmount)
+    if (!existing) {
+      unclosedMap.set(mk, {
+        shop: sale.branch.name, shopCode: sale.branch.code, branchId: sale.branchId,
+        businessDate: dayK,
+        cashier: sale.user?.name ?? sale.user?.email ?? "Staff",
+        cashierEmail: sale.user?.email ?? "",
+        salesCount: 1, salesValue: v, collected: c,
+      })
+    } else { existing.salesCount += 1; existing.salesValue += v; existing.collected += c }
+  }
+  const unclosedDaysDetail = [...unclosedMap.values()].sort((a, b) => b.businessDate.localeCompare(a.businessDate))
+
   return {
     user,
     unread,
@@ -422,6 +515,9 @@ export async function getDashboardData() {
       })),
     ranking,
     imeiCheck,
+    // CEO / owner: per-staff today and unclosed day detail
+    salesByStaff,
+    unclosedDaysDetail,
     exceptions: (() => {
       const ledgers = groupSupplierLedgers(
         openPurchases.map((row) => ({

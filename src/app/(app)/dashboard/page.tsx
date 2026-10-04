@@ -421,6 +421,95 @@ export default async function DashboardPage() {
           </ul>
         ) : null}
       </div>
+
+      {/* ── CEO / owner panels ─────────────────────────────────────────── */}
+      {data.salesByStaff.length > 0 ? (
+        <section>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Who sold today</h3>
+            <Link href="/sales" className="text-sm font-medium text-primary hover:underline">See all sales</Link>
+          </div>
+          <div className="surface-card overflow-hidden">
+            <ul className="divide-y divide-border">
+              {data.salesByStaff.map((row) => (
+                <li key={row.userId} className="flex items-center gap-3 px-5 py-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                    {(row.name || "?").charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{row.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {row.role.replace(/_/g, " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase())}
+                      {row.shop ? ` · ${row.shop}` : ""}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm font-semibold tabular-nums">{formatCurrency(row.salesValue)}</p>
+                    <p className="text-xs text-muted-foreground">{row.salesCount} sale{row.salesCount === 1 ? "" : "s"}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      ) : null}
+
+      {data.unclosedDaysDetail.length > 0 ? (
+        <section>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Days not balanced
+              <span className="ml-2 rounded-full bg-danger-soft px-2 py-0.5 text-[10px] font-bold text-danger">
+                {data.unclosedDaysDetail.length}
+              </span>
+            </h3>
+            <Link href="/finance/close" className="text-sm font-medium text-primary hover:underline">Balance the till</Link>
+          </div>
+          <div className="surface-card overflow-hidden">
+            <div className="border-b border-border bg-danger-soft px-5 py-2.5 text-xs font-medium text-danger">
+              These days had sales but the cashier has not balanced the till. Call the cashier and ask them to open Balance the till.
+            </div>
+            <ul className="divide-y divide-border">
+              {data.unclosedDaysDetail.map((row) => (
+                <li key={`${row.branchId}:${row.businessDate}`} className="flex items-center gap-3 px-5 py-3.5">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-warning-soft">
+                    <ClipboardCheck className="h-4 w-4 text-warning" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">
+                      {formatWatLong(row.businessDate)}
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">· {row.shop}</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {row.salesCount} sale{row.salesCount === 1 ? "" : "s"} · {row.cashier}
+                      {row.cashierEmail ? (
+                        <a href={`mailto:${row.cashierEmail}`} className="ml-1 text-primary hover:underline">
+                          {row.cashierEmail}
+                        </a>
+                      ) : null}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm font-semibold tabular-nums">{formatCurrency(row.salesValue)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatCurrency(row.collected)} collected
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="border-t border-border px-5 py-3">
+              <Link
+                href="/finance/close"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+              >
+                <ClipboardCheck className="h-4 w-4" />
+                Open Balance the till to close these days
+              </Link>
+            </div>
+          </div>
+        </section>
+      ) : null}
         </>
       ) : null}
     </div>
