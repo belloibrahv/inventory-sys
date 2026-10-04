@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { BrandLockup, BrandMark } from "@/components/brand-mark"
+import { BrandMark } from "@/components/brand-mark"
 import { BrandBusyOverlay } from "@/components/brand-busy-overlay"
 import { LoginHero } from "@/components/login-hero"
 import { Button } from "@/components/ui/button"
@@ -53,7 +53,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-[1.1fr_0.9fr]">
+    <div className="grid min-h-screen grid-cols-[minmax(0,1fr)] lg:grid-cols-[1.1fr_0.9fr]">
       <BrandBusyOverlay
         open={loading || entering}
         title={entering ? "Opening your shop Home" : "Checking your details"}
@@ -69,11 +69,9 @@ export default function LoginPage() {
         }
       />
       <LoginHero />
-      <div className="flex items-center justify-center bg-background px-6 py-12">
+      <div className="flex min-h-[calc(100vh-15rem)] flex-col bg-background sm:min-h-[calc(100vh-18rem)] lg:min-h-screen">
+        <div className="flex flex-1 items-center justify-center px-6 py-10 lg:py-12">
         <form onSubmit={onSubmit} className="w-full max-w-md space-y-6">
-          <div className="lg:hidden">
-            <BrandLockup />
-          </div>
           <div className="hidden items-center gap-3 lg:flex">
             <BrandMark size={40} />
             <p className="text-sm font-medium text-primary">Sign in to the shop system</p>
@@ -130,19 +128,38 @@ export default function LoginPage() {
           <Button className="w-full" disabled={loading || entering} aria-busy={loading || entering}>
             {loading || entering ? "Checking your details" : "Sign in"}
           </Button>
-          <p className="pt-2 text-center text-xs text-muted-foreground">
-            Software by{" "}
-            <a
-              href="https://techvaults.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-[#BC0004] underline-offset-2 hover:underline"
-            >
-              Techvaults Limited
-            </a>
-          </p>
         </form>
+        </div>
+        <SiteFooter />
       </div>
     </div>
+  )
+}
+
+/**
+ * Who the shop is, and who built the software. The Techvaults credit is a
+ * proper maker's mark, not small print under the button.
+ */
+function SiteFooter() {
+  return (
+    <footer className="border-t border-border/70 px-6 py-5">
+      <div className="mx-auto flex max-w-xl flex-wrap items-center justify-center gap-x-6 gap-y-3 text-xs text-muted-foreground sm:justify-between">
+        <p className="whitespace-nowrap">© {new Date().getFullYear()} Abu Twins Softskills Investment</p>
+        <a
+          href="https://techvaults.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Software by Techvaults Limited (opens techvaults.com)"
+          className="group inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-border bg-card px-3 py-1.5 shadow-sm transition hover:border-[#BC0004]/40 hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#BC0004]/50"
+        >
+          <span className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Software by</span>
+          <span className="h-3 w-px bg-border" aria-hidden />
+          <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-foreground transition group-hover:text-[#BC0004]">
+            Techvaults
+            <span className="ml-1 font-medium tracking-[0.14em] text-muted-foreground">Limited</span>
+          </span>
+        </a>
+      </div>
+    </footer>
   )
 }

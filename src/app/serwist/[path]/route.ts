@@ -36,6 +36,11 @@ export const { dynamic, dynamicParams, revalidate, generateStaticParams, GET } =
     { url: "/offline", revision },
     { url: "/manifest.webmanifest", revision },
   ],
+  // The shop film and its poster stay off the precache: fetching ~14 MB of
+  // video onto every staff phone when the app installs would eat their data.
+  // The sign-in page streams them only when it is open.
+  // Setting this replaces Serwist's own default, so that default is kept here.
+  globIgnores: ["**/node_modules/**/*", "public/media/**"],
   swSrc: "src/app/sw.ts",
   useNativeEsbuild: true,
 })
