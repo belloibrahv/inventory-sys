@@ -13,9 +13,11 @@ export function isOpeningStockPurchase(row: {
   invoiceNumber?: string | null
   notes?: string | null
   openingStock?: unknown
+  supplier?: { name: string } | null
 }): boolean {
   if (row.openingStock) return true
   if (String(row.invoiceNumber || "").startsWith("OPEN-")) return true
+  if (row.supplier && /^opening stock/i.test(row.supplier.name)) return true
   return isTrueOpeningStockNotes(row.notes)
 }
 
@@ -65,6 +67,14 @@ export const payablePurchaseWhere: Prisma.PurchaseWhereInput = {
   status: { not: "CANCELLED" },
   invoiceNumber: { not: { startsWith: "OPEN-" } },
   openingStock: { is: null },
+  // UPLOAD_STOCK bills whose supplier is named "Opening Stock" are the
+  // shop's starting stock value — never money owed to a supplier.
+  NOT: {
+    AND: [
+      { source: "UPLOAD_STOCK" },
+      { supplier: { name: { startsWith: "Opening Stock", mode: "insensitive" } } },
+    ],
+  },
 }
 
 /**

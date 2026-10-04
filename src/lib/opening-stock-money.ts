@@ -31,6 +31,14 @@ export const healOpeningStockBills = cache(async () => {
       OR: [
         { invoiceNumber: { startsWith: "OPEN-" } },
         { openingStock: { isNot: null } },
+        // UPLOAD_STOCK bills whose supplier is named "Opening Stock" or
+        // "OPENING STOCK (FAULTY)" are the shop's starting value. Older
+        // uploads created these without the OpeningStock link, so they
+        // appeared as ₦103m owed to suppliers on the dashboard.
+        {
+          source: UPLOAD_STOCK_SOURCE,
+          supplier: { name: { startsWith: "Opening Stock", mode: "insensitive" } },
+        },
       ],
     },
     select: { id: true, invoiceNumber: true, totalAmount: true, paidAmount: true, paymentMethod: true },

@@ -285,6 +285,14 @@ export const ensureRolePermissions = cache(async () => {
     },
     data: { allowed: false },
   })
+
+  // Purge permission rows for keys that no longer exist in the system
+  // (e.g. action.neighbor and view.neighbor-fills from the deleted NeighborFill
+  // feature). Stale allowed=true rows for removed features can mislead Who can
+  // see what and leave dead menu links for staff.
+  await prisma.rolePermission.deleteMany({
+    where: { permKey: { notIn: ALL_PERM_KEYS } },
+  })
 })
 
 /**
