@@ -557,7 +557,7 @@ const PAGES: Array<
       "Confirm you see Iwo Road, Ibadan, Bodija, Ibadan, and Challenge, Ibadan.",
       "If you are the main admin or the CEO, you can open a new shop with a name, a short code, and an address.",
     ],
-    watch: ["Old Lagos or Abuja names do not appear when you sell or book new goods."],
+    watch: ["Only Iwo Road, Bodija and Challenge appear when you sell or book new goods."],
     cannot: ["Only the main admin or the CEO can open or close a shop."],
     lookup: ["shop", "branch", "iwo", "challenge"],
   },

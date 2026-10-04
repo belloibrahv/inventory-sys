@@ -30,8 +30,6 @@ const BRANCHES = [
   },
 ] as const
 
-const RETIRED = ["LOS", "ABJ", "PHC"]
-
 const SETTINGS = [
   { key: "company.name", value: "Abu Twins", description: "Legal trading name printed on invoices" },
   { key: "company.product", value: "Abu Twins Softskills", description: "Line under the name on invoices" },
@@ -108,28 +106,6 @@ async function main() {
     branches.set(row.code, row.id)
   }
 
-  await prisma.branch.updateMany({
-    where: { code: { in: RETIRED } },
-    data: { isActive: false, isHq: false },
-  })
-
-  const hqId = branches.get("IWO")
-  const challengeId = branches.get("CHL")
-  const oldAbuja = await prisma.user.findUnique({ where: { email: "abuja.manager@abutwins.com" } })
-  const challengeLogin = await prisma.user.findUnique({ where: { email: "challenge.manager@abutwins.com" } })
-  if (oldAbuja && !challengeLogin && challengeId) {
-    await prisma.user.update({
-      where: { id: oldAbuja.id },
-      data: { email: "challenge.manager@abutwins.com", branchId: challengeId, name: "Fatima Sule", isActive: true },
-    })
-    console.log("moved abuja.manager to Challenge")
-  }
-  if (hqId) {
-    await prisma.user.updateMany({
-      where: { branch: { code: { in: RETIRED } } },
-      data: { branchId: hqId },
-    })
-  }
 
   // The demo logins (admin123, cashier123 and the rest) must never be created on
   // a real shop's database. This script also sets up the branches, the company

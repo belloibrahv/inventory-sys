@@ -40,31 +40,33 @@ async function main() {
   await prisma.branch.deleteMany()
   await prisma.setting.deleteMany()
 
-  const lagos = await prisma.branch.create({
+  // The three Abu Twins shops, as seed-users.ts sets them up on the live system.
+  const iwoRoad = await prisma.branch.create({
     data: {
-      name: "Computer Village HQ",
-      code: "LOS",
-      address: "14 Otigba Street, Computer Village, Ikeja, Lagos",
-      phone: "+234 803 111 2201",
-      email: "lagos@abutwins.com",
+      name: "Iwo Road, Ibadan",
+      code: "IWO",
+      address: "Iwo Road, Ibadan, Oyo State",
+      phone: "07062454854",
+      email: "iworoad@abutwins.com",
+      isHq: true,
     },
   })
-  const abuja = await prisma.branch.create({
+  const bodija = await prisma.branch.create({
     data: {
-      name: "Wuse II",
-      code: "ABJ",
-      address: "Plot 42 Ademola Adetokunbo Crescent, Wuse II, Abuja",
-      phone: "+234 809 222 3302",
-      email: "abuja@abutwins.com",
+      name: "Bodija, Ibadan",
+      code: "BOD",
+      address: "Bodija, Ibadan, Oyo State",
+      phone: "07062454854",
+      email: "bodija@abutwins.com",
     },
   })
-  const ph = await prisma.branch.create({
+  const challenge = await prisma.branch.create({
     data: {
-      name: "Trans Amadi",
-      code: "PHC",
-      address: "21 Trans Amadi Industrial Layout, Port Harcourt",
-      phone: "+234 806 333 4403",
-      email: "ph@abutwins.com",
+      name: "Challenge, Ibadan",
+      code: "CHL",
+      address: "Challenge, Ibadan, Oyo State",
+      phone: "07062454854",
+      email: "challenge@abutwins.com",
     },
   })
 
@@ -102,7 +104,7 @@ async function main() {
           password: await password("accountant123"),
           name: "Chinedu Bassey",
           role: "ACCOUNTANT",
-          branchId: lagos.id,
+          branchId: iwoRoad.id,
         },
       }),
       prisma.user.create({
@@ -111,7 +113,7 @@ async function main() {
           password: await password("manager123"),
           name: "Halima Yusuf",
           role: "BRANCH_MANAGER",
-          branchId: lagos.id,
+          branchId: iwoRoad.id,
         },
       }),
       prisma.user.create({
@@ -120,7 +122,7 @@ async function main() {
           password: await password("vault123"),
           name: "Ibrahim Lawal",
           role: "VAULT_MANAGER",
-          branchId: lagos.id,
+          branchId: iwoRoad.id,
         },
       }),
       prisma.user.create({
@@ -129,7 +131,7 @@ async function main() {
           password: await password("cashier123"),
           name: "Blessing Adeyemi",
           role: "CASHIER",
-          branchId: lagos.id,
+          branchId: iwoRoad.id,
         },
       }),
       prisma.user.create({
@@ -138,7 +140,7 @@ async function main() {
           password: await password("sales123"),
           name: "Tunde Adebayo",
           role: "SALES_EXECUTIVE",
-          branchId: lagos.id,
+          branchId: iwoRoad.id,
         },
       }),
       prisma.user.create({
@@ -147,18 +149,18 @@ async function main() {
           password: await password("engineer123"),
           name: "Kelechi Nwosu",
           role: "ENGINEER",
-          branchId: lagos.id,
+          branchId: iwoRoad.id,
         },
       }),
     ])
 
   await prisma.user.create({
     data: {
-      email: "abuja.manager@abutwins.com",
+      email: "bodija.manager@abutwins.com",
       password: await password("manager123"),
       name: "Fatima Sule",
       role: "BRANCH_MANAGER",
-      branchId: abuja.id,
+      branchId: bodija.id,
     },
   })
 
@@ -373,7 +375,7 @@ async function main() {
         phone: "08031234567",
         email: "chidi.okeke@gmail.com",
         address: "Lekki Phase 1, Lagos",
-        branchId: lagos.id,
+        branchId: iwoRoad.id,
         creditLimit: naira(500000),
         currentBalance: naira(0),
       },
@@ -384,7 +386,7 @@ async function main() {
         phone: "08098765432",
         email: "aisha.bello@yahoo.com",
         address: "Gwarinpa, Abuja",
-        branchId: abuja.id,
+        branchId: bodija.id,
         creditLimit: naira(250000),
         currentBalance: naira(185000),
       },
@@ -395,7 +397,7 @@ async function main() {
         phone: "07015550990",
         email: "orders@emekawholesale.ng",
         address: "Onitsha Main Market",
-        branchId: lagos.id,
+        branchId: iwoRoad.id,
         creditLimit: naira(2500000),
         currentBalance: naira(420000),
         notes: "Dealer account. Weekly settlement.",
@@ -406,7 +408,7 @@ async function main() {
         name: "Ngozi Umeh",
         phone: "08142223344",
         address: "Rumuokoro, Port Harcourt",
-        branchId: ph.id,
+        branchId: challenge.id,
         creditLimit: naira(0),
       },
     }),
@@ -414,7 +416,7 @@ async function main() {
       data: {
         name: "Walk-in Customer",
         phone: "08000000000",
-        branchId: lagos.id,
+        branchId: iwoRoad.id,
         notes: "Default POS walk-in account",
       },
     }),
@@ -434,21 +436,21 @@ async function main() {
     start: number
     status?: "IN_STOCK" | "SOLD" | "FAULTY" | "REPAIRED"
   }> = [
-    { productId: s24.id, branchId: lagos.id, supplierId: suppliers[0].id, count: 4, start: 11 },
-    { productId: a55.id, branchId: lagos.id, supplierId: suppliers[0].id, count: 6, start: 21 },
-    { productId: ip15.id, branchId: lagos.id, supplierId: suppliers[1].id, count: 3, start: 31 },
-    { productId: ip13.id, branchId: lagos.id, supplierId: suppliers[1].id, count: 5, start: 41 },
-    { productId: ip14.id, branchId: lagos.id, supplierId: suppliers[1].id, count: 3, start: 51 },
-    { productId: note13.id, branchId: lagos.id, supplierId: suppliers[2].id, count: 8, start: 61 },
-    { productId: camon.id, branchId: lagos.id, supplierId: suppliers[2].id, count: 10, start: 71 },
-    { productId: hot30.id, branchId: lagos.id, supplierId: suppliers[2].id, count: 12, start: 81 },
-    { productId: ipad.id, branchId: lagos.id, supplierId: suppliers[1].id, count: 2, start: 91 },
-    { productId: buds.id, branchId: lagos.id, supplierId: suppliers[0].id, count: 6, start: 101 },
-    { productId: s24.id, branchId: abuja.id, supplierId: suppliers[0].id, count: 2, start: 201 },
-    { productId: ip13.id, branchId: abuja.id, supplierId: suppliers[1].id, count: 3, start: 211 },
-    { productId: camon.id, branchId: abuja.id, supplierId: suppliers[2].id, count: 5, start: 221 },
-    { productId: a55.id, branchId: ph.id, supplierId: suppliers[0].id, count: 3, start: 301 },
-    { productId: hot30.id, branchId: ph.id, supplierId: suppliers[2].id, count: 6, start: 311 },
+    { productId: s24.id, branchId: iwoRoad.id, supplierId: suppliers[0].id, count: 4, start: 11 },
+    { productId: a55.id, branchId: iwoRoad.id, supplierId: suppliers[0].id, count: 6, start: 21 },
+    { productId: ip15.id, branchId: iwoRoad.id, supplierId: suppliers[1].id, count: 3, start: 31 },
+    { productId: ip13.id, branchId: iwoRoad.id, supplierId: suppliers[1].id, count: 5, start: 41 },
+    { productId: ip14.id, branchId: iwoRoad.id, supplierId: suppliers[1].id, count: 3, start: 51 },
+    { productId: note13.id, branchId: iwoRoad.id, supplierId: suppliers[2].id, count: 8, start: 61 },
+    { productId: camon.id, branchId: iwoRoad.id, supplierId: suppliers[2].id, count: 10, start: 71 },
+    { productId: hot30.id, branchId: iwoRoad.id, supplierId: suppliers[2].id, count: 12, start: 81 },
+    { productId: ipad.id, branchId: iwoRoad.id, supplierId: suppliers[1].id, count: 2, start: 91 },
+    { productId: buds.id, branchId: iwoRoad.id, supplierId: suppliers[0].id, count: 6, start: 101 },
+    { productId: s24.id, branchId: bodija.id, supplierId: suppliers[0].id, count: 2, start: 201 },
+    { productId: ip13.id, branchId: bodija.id, supplierId: suppliers[1].id, count: 3, start: 211 },
+    { productId: camon.id, branchId: bodija.id, supplierId: suppliers[2].id, count: 5, start: 221 },
+    { productId: a55.id, branchId: challenge.id, supplierId: suppliers[0].id, count: 3, start: 301 },
+    { productId: hot30.id, branchId: challenge.id, supplierId: suppliers[2].id, count: 6, start: 311 },
   ]
 
   const imeis: Awaited<ReturnType<typeof prisma.imeiRecord.create>>[] = []
@@ -479,11 +481,11 @@ async function main() {
     })
   }
 
-  const soldS24 = imeis.find((r) => r.productId === s24.id && r.branchId === lagos.id)!
-  const soldIp13 = imeis.find((r) => r.productId === ip13.id && r.branchId === lagos.id)!
-  const soldCamon = imeis.find((r) => r.productId === camon.id && r.branchId === lagos.id)!
-  const soldNote = imeis.find((r) => r.productId === note13.id && r.branchId === lagos.id)!
-  const soldA55 = imeis.find((r) => r.productId === a55.id && r.branchId === lagos.id)!
+  const soldS24 = imeis.find((r) => r.productId === s24.id && r.branchId === iwoRoad.id)!
+  const soldIp13 = imeis.find((r) => r.productId === ip13.id && r.branchId === iwoRoad.id)!
+  const soldCamon = imeis.find((r) => r.productId === camon.id && r.branchId === iwoRoad.id)!
+  const soldNote = imeis.find((r) => r.productId === note13.id && r.branchId === iwoRoad.id)!
+  const soldA55 = imeis.find((r) => r.productId === a55.id && r.branchId === iwoRoad.id)!
 
   const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000)
 
@@ -562,10 +564,10 @@ async function main() {
   }
 
   await completeSale({
-    invoice: "INV-LOS-1001",
+    invoice: "INV-IWO-1001",
     customerId: chidi.id,
     userId: cashier.id,
-    branchId: lagos.id,
+    branchId: iwoRoad.id,
     imei: soldS24,
     price: 920000,
     method: "TRANSFER",
@@ -573,10 +575,10 @@ async function main() {
     days: 12,
   })
   await completeSale({
-    invoice: "INV-LOS-1002",
+    invoice: "INV-IWO-1002",
     customerId: chidi.id,
     userId: sales.id,
-    branchId: lagos.id,
+    branchId: iwoRoad.id,
     imei: soldIp13,
     price: 385000,
     method: "POS",
@@ -584,10 +586,10 @@ async function main() {
     days: 8,
   })
   const creditSale = await completeSale({
-    invoice: "INV-LOS-1003",
+    invoice: "INV-IWO-1003",
     customerId: emeka.id,
     userId: cashier.id,
-    branchId: lagos.id,
+    branchId: iwoRoad.id,
     imei: soldCamon,
     price: 185000,
     method: "CREDIT",
@@ -596,10 +598,10 @@ async function main() {
     wholesale: true,
   })
   await completeSale({
-    invoice: "INV-LOS-1004",
+    invoice: "INV-IWO-1004",
     customerId: walkin.id,
     userId: cashier.id,
-    branchId: lagos.id,
+    branchId: iwoRoad.id,
     imei: soldNote,
     price: 255000,
     method: "CASH",
@@ -607,10 +609,10 @@ async function main() {
     days: 3,
   })
   const a55Sale = await completeSale({
-    invoice: "INV-LOS-1005",
+    invoice: "INV-IWO-1005",
     customerId: chidi.id,
     userId: sales.id,
-    branchId: lagos.id,
+    branchId: iwoRoad.id,
     imei: soldA55,
     price: 315000,
     method: "POS",
@@ -630,7 +632,7 @@ async function main() {
         type: "SALE",
         amount: naira(235000),
         balance: naira(235000),
-        reference: "INV-LOS-0988",
+        reference: "INV-IWO-0988",
         description: "Prior dealer invoice",
         createdAt: daysAgo(20),
       },
@@ -648,8 +650,8 @@ async function main() {
         type: "SALE",
         amount: naira(185000),
         balance: naira(185000),
-        reference: "INV-ABJ-0441",
-        description: "Outstanding Wuse sale",
+        reference: "INV-BOD-0441",
+        description: "Outstanding Bodija sale",
         createdAt: daysAgo(18),
       },
     ],
@@ -657,9 +659,9 @@ async function main() {
 
   await prisma.purchase.create({
     data: {
-      invoiceNumber: "PO-LOS-2201",
+      invoiceNumber: "PO-IWO-2201",
       supplierId: suppliers[1].id,
-      branchId: lagos.id,
+      branchId: iwoRoad.id,
       userId: vault.id,
       status: "RECEIVED",
       totalAmount: naira(4350000),
@@ -682,9 +684,9 @@ async function main() {
 
   await prisma.purchase.create({
     data: {
-      invoiceNumber: "PO-LOS-2208",
+      invoiceNumber: "PO-IWO-2208",
       supplierId: suppliers[2].id,
-      branchId: lagos.id,
+      branchId: iwoRoad.id,
       userId: vault.id,
       status: "PARTIAL_RECEIVED",
       totalAmount: naira(1960000),
@@ -716,19 +718,19 @@ async function main() {
   await prisma.expense.createMany({
     data: [
       {
-        expenseNumber: "EXP-LOS-301",
-        branchId: lagos.id,
+        expenseNumber: "EXP-IWO-301",
+        branchId: iwoRoad.id,
         userId: accountant.id,
         category: "RENT",
         amount: naira(850000),
-        description: "Computer Village shop rent, August",
+        description: "Iwo Road shop rent, August",
         date: daysAgo(20),
         approvedBy: ceo.id,
         approvedAt: daysAgo(19),
       },
       {
-        expenseNumber: "EXP-LOS-302",
-        branchId: lagos.id,
+        expenseNumber: "EXP-IWO-302",
+        branchId: iwoRoad.id,
         userId: manager.id,
         category: "FUEL",
         amount: naira(48000),
@@ -738,23 +740,23 @@ async function main() {
         approvedAt: daysAgo(5),
       },
       {
-        expenseNumber: "EXP-LOS-303",
-        branchId: lagos.id,
+        expenseNumber: "EXP-IWO-303",
+        branchId: iwoRoad.id,
         userId: accountant.id,
         category: "SALARY",
         amount: naira(620000),
-        description: "Lagos floor staff, August",
+        description: "Iwo Road floor staff, August",
         date: daysAgo(10),
         approvedBy: ceo.id,
         approvedAt: daysAgo(9),
       },
       {
-        expenseNumber: "EXP-ABJ-110",
-        branchId: abuja.id,
+        expenseNumber: "EXP-BOD-110",
+        branchId: bodija.id,
         userId: accountant.id,
         category: "UTILITIES",
         amount: naira(76000),
-        description: "Wuse II PHCN + internet",
+        description: "Bodija PHCN + internet",
         date: daysAgo(7),
       },
     ],
@@ -763,20 +765,20 @@ async function main() {
   await prisma.financeEntry.createMany({
     data: [
       {
-        branchId: lagos.id,
+        branchId: iwoRoad.id,
         account: "BANK",
         type: "EXPENSE",
         amount: naira(850000),
-        reference: "EXP-LOS-301",
+        reference: "EXP-IWO-301",
         description: "Rent",
         createdAt: daysAgo(20),
       },
       {
-        branchId: lagos.id,
+        branchId: iwoRoad.id,
         account: "CASH",
         type: "EXPENSE",
         amount: naira(48000),
-        reference: "EXP-LOS-302",
+        reference: "EXP-IWO-302",
         description: "Diesel",
         createdAt: daysAgo(5),
       },
@@ -789,19 +791,19 @@ async function main() {
       imei2: imei(5901),
       serialNumber: "SNSWAP0001",
       productId: ip13.id,
-      branchId: lagos.id,
+      branchId: iwoRoad.id,
       status: "SWAPPED",
       customerId: ngozi.id,
       notes: "Customer trade-in, battery 76%",
     },
   })
   const outgoingSwapImei = imeis.find(
-    (r) => r.productId === ip14.id && r.branchId === lagos.id && r.status === "IN_STOCK"
+    (r) => r.productId === ip14.id && r.branchId === iwoRoad.id && r.status === "IN_STOCK"
   )!
 
   await prisma.swap.create({
     data: {
-      swapNumber: "SWP-LOS-014",
+      swapNumber: "SWP-IWO-014",
       customerId: ngozi.id,
       oldImeiId: incomingSwapImei.id,
       oldDeviceCondition: "UK_USED",
@@ -810,7 +812,7 @@ async function main() {
       newProductPrice: naira(620000),
       newImeiId: outgoingSwapImei.id,
       balanceAmount: naira(380000),
-      branchId: lagos.id,
+      branchId: iwoRoad.id,
       userId: sales.id,
       status: "COMPLETED",
       approvedBy: manager.id,
@@ -824,17 +826,17 @@ async function main() {
     data: { status: "SOLD", customerId: ngozi.id },
   })
   await prisma.inventory.update({
-    where: { productId_branchId: { productId: ip14.id, branchId: lagos.id } },
+    where: { productId_branchId: { productId: ip14.id, branchId: iwoRoad.id } },
     data: { quantity: { decrement: 1 } },
   })
 
   await prisma.stockReturn.create({
     data: {
-      returnNumber: "RTN-LOS-077",
+      returnNumber: "RTN-IWO-077",
       customerId: chidi.id,
       saleId: a55Sale.id,
       imeiId: soldA55.id,
-      branchId: lagos.id,
+      branchId: iwoRoad.id,
       userId: cashier.id,
       reason: "FAULTY",
       outcome: "REPAIR",
@@ -852,10 +854,10 @@ async function main() {
 
   await prisma.repair.create({
     data: {
-      repairNumber: "RPR-LOS-019",
+      repairNumber: "RPR-IWO-019",
       imeiId: soldA55.id,
       customerId: chidi.id,
-      branchId: lagos.id,
+      branchId: iwoRoad.id,
       userId: engineer.id,
       issue: "Intermittent screen ghosting",
       diagnosis: "Display flex suspected. Awaiting OEM panel.",
@@ -866,13 +868,13 @@ async function main() {
 
   await prisma.stockTransfer.create({
     data: {
-      transferNumber: "TRF-LOS-ABJ-08",
-      fromBranchId: lagos.id,
-      toBranchId: abuja.id,
+      transferNumber: "TRF-IWO-BOD-08",
+      fromBranchId: iwoRoad.id,
+      toBranchId: bodija.id,
       userId: vault.id,
       status: "IN_TRANSIT",
       sentAt: daysAgo(1),
-      notes: "Restock Wuse II for weekend demand",
+      notes: "Restock Bodija for weekend demand",
       items: {
         create: [
           { productId: note13.id, quantity: 3 },
@@ -884,7 +886,7 @@ async function main() {
 
   const recon = await prisma.reconciliation.create({
     data: {
-      branchId: lagos.id,
+      branchId: iwoRoad.id,
       userId: auditor.id,
       startDate: daysAgo(2),
       endDate: new Date(),
@@ -911,15 +913,15 @@ async function main() {
     data: [
       {
         type: "EXPENSE",
-        entityId: "EXP-ABJ-110",
+        entityId: "EXP-BOD-110",
         entityType: "Expense",
         requestedBy: accountant.id,
         status: "PENDING",
-        reason: "Wuse utilities above monthly cap",
+        reason: "Bodija utilities above monthly cap",
       },
       {
         type: "REFUND",
-        entityId: "RTN-LOS-077",
+        entityId: "RTN-IWO-077",
         entityType: "Return",
         requestedBy: cashier.id,
         status: "PENDING",
@@ -941,21 +943,21 @@ async function main() {
         userId: manager.id,
         type: "LOW_STOCK",
         title: "iPhone 15 Pro running low",
-        message: "Only 3 units left at Computer Village HQ.",
+        message: "Only 3 units left at Iwo Road.",
         actionUrl: "/inventory",
       },
       {
         userId: auditor.id,
         type: "SYSTEM",
         title: "Vault count variance",
-        message: "Lagos count shows ₦285,000 variance. Review before close.",
+        message: "Iwo Road count shows ₦285,000 variance. Review before close.",
         actionUrl: "/reconciliation",
       },
       {
         userId: accountant.id,
         type: "DUE_PAYMENT",
         title: "Emeka Wholesale overdue",
-        message: "Dealer balance ₦420,000. Last invoice INV-LOS-1003.",
+        message: "Dealer balance ₦420,000. Last invoice INV-IWO-1003.",
         actionUrl: "/customers",
       },
     ],
@@ -967,9 +969,9 @@ async function main() {
         userId: cashier.id,
         action: "CREATE",
         entityType: "Sale",
-        entityId: "INV-LOS-1004",
+        entityId: "INV-IWO-1004",
         newValue: JSON.stringify({ total: 255000, method: "CASH" }),
-        branchId: lagos.id,
+        branchId: iwoRoad.id,
         createdAt: daysAgo(3),
       },
       {
@@ -978,16 +980,16 @@ async function main() {
         entityType: "IMEIRecord",
         entityId: soldS24.imei1,
         newValue: JSON.stringify({ status: "RECEIVED" }),
-        branchId: lagos.id,
+        branchId: iwoRoad.id,
         createdAt: daysAgo(16),
       },
       {
         userId: manager.id,
         action: "APPROVE",
         entityType: "Swap",
-        entityId: "SWP-LOS-014",
+        entityId: "SWP-IWO-014",
         newValue: JSON.stringify({ tradeValue: 240000, balance: 380000 }),
-        branchId: lagos.id,
+        branchId: iwoRoad.id,
         createdAt: daysAgo(4),
       },
     ],
