@@ -1,12 +1,21 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { Camera, Check, Plus } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
 function cleanCode(raw: string) {
   return raw.replace(/[\s-]/g, "").trim()
+}
+
+/** Several numbers pasted at once: one per line, or split by commas or spaces. */
+function splitCodes(raw: string) {
+  return raw
+    .split(/[\n,;\t ]+/)
+    .map(cleanCode)
+    .filter(Boolean)
 }
 
 /**
@@ -39,18 +48,33 @@ export function ScanField({
   const streamRef = useRef<MediaStream | null>(null)
   const timerRef = useRef<number | null>(null)
 
-  function commit(raw: string) {
-    const code = cleanCode(raw)
-    if (!code) return
+  function check(code: string) {
     if (kind === "IMEI" && code.length < 14) {
       toast.error("That IMEI is too short. Scan the box again, or type every digit.")
-      return
+      return false
     }
     if (kind !== "IMEI" && code.length < 4) {
       toast.error(kind === "SERIAL" ? "That serial number is too short." : "That number is too short.")
-      return
+      return false
     }
+    return true
+  }
+
+  function commit(raw: string) {
+    const code = cleanCode(raw)
+    if (!code || !check(code)) return
     onScan(code)
+    setValue("")
+  }
+
+  /** A pasted list adds every number on it, not one long string. */
+  function onPaste(event: React.ClipboardEvent<HTMLInputElement>) {
+    const codes = splitCodes(event.clipboardData.getData("text"))
+    if (codes.length < 2) return
+    event.preventDefault()
+    const good = codes.filter(check)
+    for (const code of good) onScan(code)
+    if (good.length) toast.success(`${good.length} numbers added from what you pasted.`)
     setValue("")
   }
 
@@ -106,10 +130,11 @@ export function ScanField({
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-col gap-2 sm:flex-row">
+      <div className="flex gap-2">
         <Input
           value={value}
           onChange={(event) => setValue(event.target.value)}
+          onPaste={onPaste}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault()
@@ -120,17 +145,31 @@ export function ScanField({
           placeholder={
             placeholder ??
             (kind === "IMEI"
-              ? "Scan or type IMEI, then Enter"
+              ? "Type, paste or scan the IMEI"
               : kind === "SERIAL"
-                ? "Scan or type serial, then Enter"
-                : "Scan or type IMEI or serial, then Enter")
+                ? "Type, paste or scan the serial number"
+                : "Type, paste or scan an IMEI or serial number")
           }
           autoComplete="off"
-          inputMode="numeric"
-          className="min-h-12"
+          // Serial numbers carry letters, so only a pure IMEI box opens the number pad.
+          inputMode={kind === "IMEI" ? "numeric" : "text"}
+          autoCapitalize="characters"
+          className="min-h-12 min-w-0 flex-1"
         />
-        <Button type="button" className="min-h-12 shrink-0" onClick={scanning ? stopCamera : startCamera}>
-          {scanning ? "Stop camera" : "Scan with camera"}
+        <Button type="button" className="min-h-12 shrink-0" disabled={!cleanCode(value)} onClick={() => commit(value)}>
+          <Plus className="h-4 w-4 sm:mr-1.5" />
+          <span className="hidden sm:inline">Add</span>
+          <span className="sr-only sm:hidden">Add this number</span>
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className="min-h-12 shrink-0"
+          onClick={scanning ? stopCamera : startCamera}
+          aria-label={scanning ? "Stop the camera" : "Scan with the camera"}
+        >
+          <Camera className="h-4 w-4 sm:mr-1.5" />
+          <span className="hidden sm:inline">{scanning ? "Stop" : "Camera"}</span>
         </Button>
       </div>
       {scanning ? (
@@ -138,7 +177,7 @@ export function ScanField({
       ) : (
         <p className="text-xs text-muted-foreground">
           {hint ??
-            "A USB or Bluetooth scanner types the number and presses Enter. That only fills this box. It does not save. Fill the rest of the phone, then press the save button."}
+            "Type the number and press Add (or Enter), paste a whole list, or use a scanner or the camera. Adding a number does not save the form."}
         </p>
       )}
     </div>
@@ -182,8 +221,125 @@ export function ScanList({
           ))}
         </ul>
       ) : (
-        <p className="text-xs text-muted-foreground">No number yet. Scan the first box.</p>
+        <p className="text-xs text-muted-foreground">No number yet. Type, paste or scan the first one.</p>
       )}
+    </div>
+  )
+}
+
+export type ChecklistUnit = {
+  /** The number the server keeps for this unit (its first IMEI). */
+  key: string
+  title: string
+  /** Every number the unit can be found by: IMEI 1, IMEI 2, serial. */
+  codes: string[]
+  /** Why it cannot be ticked, when it cannot (sold at the sending shop, say). */
+  unavailable?: string
+}
+
+/**
+ * A known list of units to confirm, such as the phones on a transfer. Tick
+ * each one by hand, tick them all, or type, paste or scan any of a unit's
+ * numbers to tick it. No scanner is needed, and nothing has to be typed from
+ * memory. The ticked units go to the form under `name`, one per line.
+ */
+export function UnitChecklist({ name, units, noun = "phone" }: { name: string; units: ChecklistUnit[]; noun?: string }) {
+  const [ticked, setTicked] = useState<Set<string>>(() => new Set())
+  const byCode = useMemo(() => {
+    const map = new Map<string, ChecklistUnit>()
+    for (const unit of units) for (const code of [unit.key, ...unit.codes]) if (code) map.set(code.toUpperCase(), unit)
+    return map
+  }, [units])
+  const available = units.filter((unit) => !unit.unavailable)
+
+  function setOne(unit: ChecklistUnit, on: boolean) {
+    setTicked((current) => {
+      const next = new Set(current)
+      if (on) next.add(unit.key)
+      else next.delete(unit.key)
+      return next
+    })
+  }
+
+  function find(code: string) {
+    const unit = byCode.get(code.toUpperCase())
+    if (!unit) {
+      toast.error(`${code} is not on this list.`)
+      return
+    }
+    if (unit.unavailable) {
+      toast.error(`${unit.title} (${unit.key}): ${unit.unavailable}`)
+      return
+    }
+    if (ticked.has(unit.key)) {
+      toast.message(`${unit.title} is already ticked.`)
+      return
+    }
+    setOne(unit, true)
+    toast.success(`Ticked ${unit.title}`)
+  }
+
+  return (
+    <div className="space-y-3">
+      <ScanField
+        kind="ANY"
+        onScan={find}
+        placeholder={`Type, paste or scan a ${noun}'s IMEI or serial to tick it`}
+        hint={`Or tick each ${noun} below by hand. Anything left unticked stays at the sending shop.`}
+      />
+      <div className="flex items-center justify-between text-xs">
+        <span className="font-medium tabular-nums">
+          {ticked.size} of {available.length} {noun}
+          {available.length === 1 ? "" : "s"} ticked as arrived
+        </span>
+        <span className="flex gap-3">
+          <button
+            type="button"
+            className="font-medium text-primary hover:underline disabled:opacity-40"
+            disabled={ticked.size === available.length}
+            onClick={() => setTicked(new Set(available.map((unit) => unit.key)))}
+          >
+            Tick all
+          </button>
+          <button
+            type="button"
+            className="font-medium text-muted-foreground hover:underline disabled:opacity-40"
+            disabled={ticked.size === 0}
+            onClick={() => setTicked(new Set())}
+          >
+            Clear
+          </button>
+        </span>
+      </div>
+      <ul className="max-h-72 divide-y divide-border overflow-auto rounded-xl border border-border">
+        {units.map((unit) => {
+          const on = ticked.has(unit.key)
+          return (
+            <li key={unit.key}>
+              <label
+                className={`flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm ${unit.unavailable ? "cursor-not-allowed opacity-55" : on ? "bg-success-soft/60" : "hover:bg-muted/60"}`}
+              >
+                <input
+                  type="checkbox"
+                  className="h-5 w-5 shrink-0 accent-[hsl(var(--success))]"
+                  checked={on}
+                  disabled={Boolean(unit.unavailable)}
+                  onChange={(event) => setOne(unit, event.target.checked)}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block font-medium">{unit.title}</span>
+                  <span className="block break-all font-mono text-xs text-muted-foreground">
+                    {[unit.key, ...unit.codes.filter((code) => code && code !== unit.key)].join(" · ")}
+                  </span>
+                  {unit.unavailable ? <span className="block text-xs text-warning">{unit.unavailable}</span> : null}
+                </span>
+                {on ? <Check className="h-4 w-4 shrink-0 text-success" aria-hidden /> : null}
+              </label>
+            </li>
+          )
+        })}
+      </ul>
+      <textarea name={name} value={[...ticked].join("\n")} readOnly className="sr-only" tabIndex={-1} aria-hidden />
     </div>
   )
 }

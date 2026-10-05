@@ -15,15 +15,23 @@ export function formatCurrency(amount: number | string | null | undefined, curre
   }).format(Number.isFinite(value) ? value : 0)
 }
 
-/** Short naira for tight spaces: ₦2.47m, ₦405k, ₦950. The full figure goes in a title. */
+/**
+ * Short naira for tight spaces: ₦103.47m, ₦2.47m, ₦405k, ₦950. The full figure
+ * goes in a title.
+ *
+ * Millions always keep two decimals. Rounding ₦100m and up to the whole million
+ * froze the CEO's stock tile at "₦103m" for days: a day's sales took about
+ * ₦110,000 off the shelf and the tile could not show it.
+ */
 export function formatCurrencyShort(amount: number | string | null | undefined) {
   const value = Number(typeof amount === "string" ? Number(amount) : amount ?? 0)
   if (!Number.isFinite(value)) return "₦0"
   const sign = value < 0 ? "-" : ""
   const abs = Math.abs(value)
   const trim = (n: number) => String(Number(n.toFixed(n >= 100 ? 0 : n >= 10 ? 1 : 2)))
-  if (abs >= 1e9) return `${sign}₦${trim(abs / 1e9)}bn`
-  if (abs >= 1e6) return `${sign}₦${trim(abs / 1e6)}m`
+  const twoPlaces = (n: number) => n.toFixed(2)
+  if (abs >= 1e9) return `${sign}₦${twoPlaces(abs / 1e9)}bn`
+  if (abs >= 1e6) return `${sign}₦${twoPlaces(abs / 1e6)}m`
   if (abs >= 1e4) return `${sign}₦${trim(abs / 1e3)}k`
   return `${sign}₦${Math.round(abs).toLocaleString("en-NG")}`
 }

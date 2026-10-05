@@ -25,6 +25,8 @@ export default async function TransfersPage() {
     fromBranch: { code: transfer.fromBranch.code, name: transfer.fromBranch.name },
     toBranch: { code: transfer.toBranch.code, name: transfer.toBranch.name },
     items: transfer.items.map((item) => ({
+      id: item.id,
+      receivedQty: item.receivedQty,
       productId: item.productId,
       product: {
         name: item.product.name,
@@ -33,9 +35,20 @@ export default async function TransfersPage() {
       },
       quantity: item.quantity,
     })),
+    arrivedImeis: transfer.arrivedImeis,
     imeis: transfer.imeis.map((imei) => ({
       id: imei.id,
       imei1: imei.imei1,
+      imei2: imei.imei2,
+      serialNumber: imei.serialNumber,
+      // Still at the sending shop and sellable? A phone sold there meanwhile
+      // cannot be received, and the accept list says so.
+      available:
+        transfer.status === "PENDING"
+          ? imei.status === "IN_STOCK" && imei.branchId === transfer.fromBranchId
+          : transfer.status === "IN_TRANSIT"
+            ? imei.status === "TRANSFERRED"
+            : true,
       productId: imei.productId,
       name: imei.product.name,
       costPrice: money(atCost ? imei.product.costPrice : imei.product.sellingPrice),

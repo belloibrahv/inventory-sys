@@ -55,6 +55,12 @@ function parseScannedCodes(raw: string) {
   return [...new Set(raw.split(/[\s,;]+/).map((item) => item.trim()).filter((item) => item.length >= 4))]
 }
 
+/** The numbers on one labelled line of a transfer's notes, such as "Arrived: a,b". */
+function parseLabelledIds(raw: string, label: string) {
+  const line = raw.split("\n").find((row) => row.startsWith(`${label}:`))
+  return line ? parseScannedCodes(line.slice(label.length + 1)) : []
+}
+
 function parseTransferIds(raw: string) {
   const match = raw.match(/IMEIs:\s*(.+)/i)
   if (!match) return []
@@ -2235,12 +2241,17 @@ export async function getTransfers() {
         include: { product: true },
       })
     : []
-  return rows.map((row) => ({
-    ...row,
-    imeis: parseTransferIds(row.notes ?? "")
-      .map((code) => records.find((item) => item.imei1 === code || item.serialNumber === code))
-      .filter((item): item is (typeof records)[number] => Boolean(item)),
-  }))
+  return rows.map((row) => {
+    const arrived = parseLabelledIds(row.notes ?? "", "Arrived")
+    return {
+      ...row,
+      imeis: parseTransferIds(row.notes ?? "")
+        .map((code) => records.find((item) => item.imei1 === code || item.serialNumber === code))
+        .filter((item): item is (typeof records)[number] => Boolean(item)),
+      /** Phones accepted at the receiving shop, for a transfer that was accepted in part. */
+      arrivedImeis: row.status === "RECEIVED" && /\nArrived:|\nStayed at /.test(row.notes ?? "") ? arrived : null,
+    }
+  })
 }
 
 type TransferOutcome = { error?: string; errors?: string[]; success?: boolean }
@@ -2582,102 +2593,152 @@ export async function receiveTransfer(formData: FormData) {
     return { error: `Only ${transfer.toBranch.name} (or head office) can accept this.` }
   }
 
+  // What arrived. Phones: those ticked on the list, or typed / scanned by any
+  // of their numbers. Pieces: the quantity typed beside each line (all of it
+  // when the box is left alone). Anything not accepted stays with the sending
+  // shop, which may sell it on the receiving shop's behalf; a transfer no
+  // longer has to arrive whole to be accepted.
   const expected = parseTransferIds(transfer.notes ?? "")
-  if (expected.length) {
-    // A box is often scanned for its second IMEI or its serial number. Each
-    // scanned code counts as the phone it belongs to (by its first IMEI, the
-    // number the transfer was written with).
-    const scanned = parseScannedCodes(String(formData.get("imeis") || ""))
-    const units = await prisma.imeiRecord.findMany({
-      where: { imei1: { in: expected } },
-      select: { imei1: true, imei2: true, serialNumber: true },
-    })
-    const phoneByCode = new Map<string, string>()
-    for (const unit of units) {
-      for (const code of [unit.imei1, unit.imei2, unit.serialNumber]) if (code) phoneByCode.set(code, unit.imei1)
-    }
-    const arrived = new Set(scanned.map((code) => phoneByCode.get(code) ?? code))
-    const missing = expected.filter((imei) => !arrived.has(imei))
-    const strangers = scanned.filter((code) => !phoneByCode.has(code) && !expected.includes(code))
-    if (missing.length || strangers.length) {
-      return {
-        error: missing.length
-          ? `Scan or paste every IMEI on this transfer that actually arrived. Still missing: ${missing.slice(0, 5).join(", ")}${missing.length > 5 ? ` and ${missing.length - 5} more` : ""}.`
-          : `${strangers.slice(0, 5).join(", ")} ${strangers.length === 1 ? "is" : "are"} not on this transfer.`,
-      }
+  const units = expected.length
+    ? await prisma.imeiRecord.findMany({
+        where: { imei1: { in: expected } },
+        select: { imei1: true, imei2: true, serialNumber: true, status: true, branchId: true, productId: true },
+      })
+    : []
+  const phoneByCode = new Map<string, string>()
+  for (const unit of units) {
+    for (const code of [unit.imei1, unit.imei2, unit.serialNumber]) if (code) phoneByCode.set(code, unit.imei1)
+  }
+  const scanned = parseScannedCodes(String(formData.get("imeis") || ""))
+  const strangers = scanned.filter((code) => !phoneByCode.has(code) && !expected.includes(code))
+  if (strangers.length) {
+    return { error: `${strangers.slice(0, 5).join(", ")} ${strangers.length === 1 ? "is" : "are"} not on this transfer.` }
+  }
+  const arrivedSet = new Set(scanned.map((code) => phoneByCode.get(code) ?? code))
+  const arrived = expected.filter((imei) => arrivedSet.has(imei))
+  const leftBehind = expected.filter((imei) => !arrivedSet.has(imei))
+
+  const pendingStyle = transfer.status === "PENDING"
+  // A phone sold or moved at the sending shop since the transfer was made
+  // cannot be received. Say which, so it can be unticked.
+  const unitByImei = new Map(units.map((unit) => [unit.imei1, unit]))
+  const gone = arrived.filter((imei) => {
+    const unit = unitByImei.get(imei)
+    if (!unit) return true
+    return pendingStyle
+      ? unit.status !== "IN_STOCK" || unit.branchId !== transfer.fromBranchId
+      : unit.status !== "TRANSFERRED"
+  })
+  if (gone.length) {
+    return {
+      error: `${gone.slice(0, 5).join(", ")} ${gone.length === 1 ? "is" : "are"} no longer In shop at ${transfer.fromBranch.name} (sold or moved there). Untick ${gone.length === 1 ? "it" : "them"} and accept the rest.`,
     }
   }
 
-  const pendingStyle = transfer.status === "PENDING"
+  const phonesByProduct = new Map<string, number>()
+  for (const imei of arrived) {
+    const productId = unitByImei.get(imei)?.productId
+    if (productId) phonesByProduct.set(productId, (phonesByProduct.get(productId) ?? 0) + 1)
+  }
+  const phoneProducts = new Set(units.map((unit) => unit.productId))
+  const receivedByItem = new Map<string, number>()
+  for (const item of transfer.items) {
+    if (phoneProducts.has(item.productId)) {
+      receivedByItem.set(item.id, Math.min(item.quantity, phonesByProduct.get(item.productId) ?? 0))
+      continue
+    }
+    const typed = formData.get(`piece_${item.id}`)
+    const qty = typed == null || String(typed).trim() === "" ? item.quantity : Math.floor(Number(typed))
+    if (!Number.isFinite(qty) || qty < 0) return { error: `Type how many ${item.product.name} arrived, 0 or more.` }
+    if (qty > item.quantity) return { error: `Only ${item.quantity} ${item.product.name} were sent. Type ${item.quantity} or fewer.` }
+    receivedByItem.set(item.id, qty)
+  }
+  const anything = [...receivedByItem.values()].some((qty) => qty > 0)
+  if (!anything) {
+    return { error: "Nothing is marked as arrived. Tick what came, or reject the transfer if none of it did." }
+  }
 
   try {
     await prisma.$transaction(async (tx) => {
+      const lines = [
+        transfer.notes ?? "",
+        arrived.length ? `Arrived: ${arrived.join(",")}` : "",
+        leftBehind.length ? `Stayed at ${transfer.fromBranch.name}: ${leftBehind.join(",")}` : "",
+      ].filter(Boolean)
       const accepted = await tx.stockTransfer.updateMany({
         where: { id, status: { in: ["PENDING", "IN_TRANSIT"] } },
-        data: { status: "RECEIVED", receivedAt: new Date(), sentAt: transfer.sentAt ?? new Date() },
+        data: { status: "RECEIVED", receivedAt: new Date(), sentAt: transfer.sentAt ?? new Date(), notes: lines.join("\n") },
       })
       if (accepted.count !== 1) {
         throw new ConflictError(`${transfer.transferNumber} was already closed by someone else. Refresh to see it.`)
       }
 
-      if (expected.length) {
-        if (pendingStyle) {
-          await claimImeis(tx, {
-            imei1s: expected,
-            branchId: transfer.fromBranchId,
-            from: "IN_STOCK",
-            data: { status: "IN_STOCK", branchId: transfer.toBranchId },
-          })
-        } else {
-          const landed = await tx.imeiRecord.updateMany({
-            where: { imei1: { in: expected }, status: "TRANSFERRED" },
-            data: { status: "IN_STOCK", branchId: transfer.toBranchId },
-          })
-          if (landed.count !== expected.length) {
-            throw new ConflictError(
-              `${expected.length - landed.count} of these phones are not showing as sent. Check the list with the sending shop before accepting.`
-            )
-          }
-        }
-        for (const imei1 of expected) {
-          await tx.auditLog.create({
-            data: {
-              userId: user.id,
-              action: "UPDATE",
-              entityType: "IMEIRecord",
-              entityId: imei1,
-              oldValue: pendingStyle ? "IN_STOCK" : "TRANSFERRED",
-              newValue: JSON.stringify({
-                status: "IN_STOCK",
-                branchId: transfer.toBranchId,
-                transfer: transfer.transferNumber,
-              }),
-              branchId: transfer.toBranchId,
-            },
-          })
-        }
+      if (pendingStyle) {
+        await claimImeis(tx, {
+          imei1s: arrived,
+          branchId: transfer.fromBranchId,
+          from: "IN_STOCK",
+          data: { status: "IN_STOCK", branchId: transfer.toBranchId },
+        })
+      } else {
+        // Older sends had already left the sending shelf: what arrived lands,
+        // what did not goes back to the sending shop.
+        await claimImeis(tx, {
+          imei1s: arrived,
+          branchId: transfer.fromBranchId,
+          from: "TRANSFERRED",
+          data: { status: "IN_STOCK", branchId: transfer.toBranchId },
+        })
+        await claimImeis(tx, {
+          imei1s: leftBehind,
+          branchId: transfer.fromBranchId,
+          from: "TRANSFERRED",
+          data: { status: "IN_STOCK", branchId: transfer.fromBranchId },
+        })
+      }
+      for (const imei1 of arrived) {
+        await tx.auditLog.create({
+          data: {
+            userId: user.id,
+            action: "UPDATE",
+            entityType: "IMEIRecord",
+            entityId: imei1,
+            oldValue: pendingStyle ? "IN_STOCK" : "TRANSFERRED",
+            newValue: JSON.stringify({ status: "IN_STOCK", branchId: transfer.toBranchId, transfer: transfer.transferNumber }),
+            branchId: transfer.toBranchId,
+          },
+        })
       }
 
       for (const item of transfer.items) {
-        await tx.transferItem.update({
-          where: { id: item.id },
-          data: { receivedQty: item.quantity },
-        })
-        if (pendingStyle) {
-          await drawStock(tx, {
+        const received = receivedByItem.get(item.id) ?? 0
+        const notReceived = item.quantity - received
+        await tx.transferItem.update({ where: { id: item.id }, data: { receivedQty: received } })
+        if (received > 0) {
+          if (pendingStyle) {
+            await drawStock(tx, {
+              productId: item.productId,
+              branchId: transfer.fromBranchId,
+              quantity: received,
+              label: item.product.name,
+              move: { kind: "TRANSFER_OUT", reference: transfer.transferNumber, userId: user.id },
+            })
+          }
+          await returnStock(tx, {
             productId: item.productId,
-            branchId: transfer.fromBranchId,
-            quantity: item.quantity,
-            label: item.product.name,
-            move: { kind: "TRANSFER_OUT", reference: transfer.transferNumber, userId: user.id },
+            branchId: transfer.toBranchId,
+            quantity: received,
+            move: { kind: "TRANSFER_IN", reference: transfer.transferNumber, userId: user.id },
           })
         }
-        await returnStock(tx, {
-          productId: item.productId,
-          branchId: transfer.toBranchId,
-          quantity: item.quantity,
-          move: { kind: "TRANSFER_IN", reference: transfer.transferNumber, userId: user.id },
-        })
+        if (!pendingStyle && notReceived > 0) {
+          await returnStock(tx, {
+            productId: item.productId,
+            branchId: transfer.fromBranchId,
+            quantity: notReceived,
+            move: { kind: "TRANSFER_IN", reference: transfer.transferNumber, userId: user.id },
+          })
+        }
       }
 
       await tx.auditLog.create({
@@ -2686,7 +2747,14 @@ export async function receiveTransfer(formData: FormData) {
           action: "UPDATE",
           entityType: "StockTransfer",
           entityId: transfer.transferNumber,
-          newValue: JSON.stringify({ status: "RECEIVED", imeis: expected }),
+          newValue: JSON.stringify({
+            status: "RECEIVED",
+            arrived,
+            stayedAtSendingShop: leftBehind,
+            pieces: transfer.items
+              .filter((item) => !phoneProducts.has(item.productId))
+              .map((item) => ({ item: item.product.name, sent: item.quantity, arrived: receivedByItem.get(item.id) ?? 0 })),
+          }),
           branchId: transfer.toBranchId,
         },
       })

@@ -10,7 +10,8 @@ import { StatusBadge } from "@/components/shared"
 import { DataTable, type DataColumn } from "@/components/data-table"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { WorkflowSteps } from "@/components/workflow-steps"
-import { ScanList } from "@/components/scan-field"
+import { UnitChecklist } from "@/components/scan-field"
+import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { downloadTable } from "@/lib/download-table"
 import { formatShopWhen } from "@/lib/lagos-day"
@@ -26,11 +27,31 @@ type TransferRow = {
   fromBranch: { code: string; name: string }
   toBranch: { code: string; name: string }
   items: Array<{
+    id: string
+    receivedQty: number
     productId: string
     product: { name: string; sku: string; costPrice: number }
     quantity: number
   }>
-  imeis: Array<{ id: string; imei1: string; productId: string; name: string; costPrice: number }>
+  imeis: Array<{
+    id: string
+    imei1: string
+    imei2: string | null
+    serialNumber: string | null
+    available: boolean
+    productId: string
+    name: string
+    costPrice: number
+  }>
+  /** Phones that arrived, when only part of the transfer was accepted. */
+  arrivedImeis: string[] | null
+}
+
+/** Accepted, but not all of it arrived. */
+function isPartial(transfer: TransferRow) {
+  if (transfer.status !== "RECEIVED") return false
+  if (transfer.arrivedImeis && transfer.arrivedImeis.length < transfer.imeis.length) return true
+  return pieceLines(transfer).some((item) => item.receivedQty < item.quantity)
 }
 
 function pieceLines(transfer: TransferRow) {
@@ -182,7 +203,17 @@ export function TransfersList({ transfers, atCost = false }: { transfers: Transf
       sortValue: (row) => transferTotals(row).costValue,
       cell: (row) => formatCurrency(transferTotals(row).costValue),
     },
-    { id: "status", header: "Status", sortValue: (row) => row.status, cell: (row) => <StatusBadge value={row.status} /> },
+    {
+      id: "status",
+      header: "Status",
+      sortValue: (row) => row.status,
+      cell: (row) => (
+        <span className="inline-flex items-center gap-1.5">
+          <StatusBadge value={row.status} />
+          {isPartial(row) ? <span className="whitespace-nowrap text-[11px] font-medium text-warning">part</span> : null}
+        </span>
+      ),
+    },
     {
       id: "when",
       header: "When",
@@ -242,7 +273,11 @@ export function TransfersList({ transfers, atCost = false }: { transfers: Transf
             value: `${totals.qty} item${totals.qty === 1 ? "" : "s"}`,
             valueHint: <span className="text-muted-foreground">{formatCurrency(totals.costValue)}</span>,
             badge: <StatusBadge value={row.status} />,
-            meta: isOpenWork(row) ? <span className="font-medium text-warning">Accept or reject</span> : undefined,
+            meta: isOpenWork(row) ? (
+              <span className="font-medium text-warning">Accept or reject</span>
+            ) : isPartial(row) ? (
+              <span className="font-medium text-warning">Part arrived</span>
+            ) : undefined,
           }
         }}
         empty={transfers.length === 0 ? "No shop-to-shop transfers yet." : "Nothing in this stage. Tap another stage above."}
@@ -291,30 +326,41 @@ function TransferDetail({
         </div>
       </div>
 
+      {open ? null : (
       <ul className="divide-y divide-border rounded-xl border border-border">
-        {transfer.imeis.map((imei) => (
-          <li key={imei.id} className="flex items-start justify-between gap-3 px-3 py-2.5 text-sm">
-            <div className="min-w-0">
-              <p className="font-medium">{imei.name}</p>
-              <Link href={`/imei/${imei.id}`} className="font-mono text-xs text-primary hover:underline">
-                {imei.imei1}
-              </Link>
-            </div>
-            <span className="shrink-0 tabular-nums">{formatCurrency(money(imei.costPrice))}</span>
-          </li>
-        ))}
+        {transfer.imeis.map((imei) => {
+          const stayed = transfer.arrivedImeis ? !transfer.arrivedImeis.includes(imei.imei1) : false
+          return (
+            <li key={imei.id} className="flex items-start justify-between gap-3 px-3 py-2.5 text-sm">
+              <div className="min-w-0">
+                <p className="font-medium">{imei.name}</p>
+                <Link href={`/imei/${imei.id}`} className="font-mono text-xs text-primary hover:underline">
+                  {imei.imei1}
+                </Link>
+                {stayed ? <p className="text-xs text-warning">Did not arrive. Stayed at {transfer.fromBranch.name}.</p> : null}
+              </div>
+              <span className="shrink-0 tabular-nums">{formatCurrency(money(imei.costPrice))}</span>
+            </li>
+          )
+        })}
         {pieceLines(transfer).map((item) => (
-          <li key={`${item.productId}-${item.quantity}`} className="flex items-start justify-between gap-3 px-3 py-2.5 text-sm">
+          <li key={item.id} className="flex items-start justify-between gap-3 px-3 py-2.5 text-sm">
             <div className="min-w-0">
               <p className="font-medium">{item.product.name}</p>
               <p className="text-xs text-muted-foreground">
                 {item.quantity} × {formatCurrency(money(item.product.costPrice))} · <span className="font-mono">{item.product.sku}</span>
               </p>
+              {transfer.status === "RECEIVED" && item.receivedQty < item.quantity ? (
+                <p className="text-xs text-warning">
+                  {item.receivedQty} of {item.quantity} arrived. {item.quantity - item.receivedQty} stayed at {transfer.fromBranch.name}.
+                </p>
+              ) : null}
             </div>
             <span className="shrink-0 tabular-nums">{formatCurrency(item.quantity * money(item.product.costPrice))}</span>
           </li>
         ))}
       </ul>
+      )}
 
       {open ? (
         <div className="space-y-4 rounded-xl border border-warning/40 p-4">
@@ -327,24 +373,63 @@ function TransferDetail({
           )}
           <ActionForm
             action={receiveTransfer}
-            submit="Accept transfer"
-            successMessage="Transfer accepted. Stock is now In shop at the receiving branch."
+            submit="Accept what arrived"
+            successMessage="Accepted. What arrived is now In shop at the receiving branch."
             enterDoesNotSubmit
             className="space-y-2"
             onSuccess={onDone}
             confirmModal={{
-              title: "Accept this transfer?",
-              description: `Stock will leave ${transfer.fromBranch.name} and land In shop at ${transfer.toBranch.name}.`,
-              confirmLabel: "Accept transfer",
+              title: "Accept what arrived?",
+              description: `What you ticked or counted lands In shop at ${transfer.toBranch.name}. Anything else stays at ${transfer.fromBranch.name}.`,
+              confirmLabel: "Accept",
               tone: "warning",
             }}
           >
             <input type="hidden" name="id" value={transfer.id} />
             {transfer.imeis.length ? (
-              <ScanList name="imeis" />
-            ) : (
-              <p className="text-sm text-muted-foreground">No IMEI on this transfer. Confirm the pieces arrived.</p>
-            )}
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Phones that arrived</p>
+                <UnitChecklist
+                  name="imeis"
+                  units={transfer.imeis.map((imei) => ({
+                    key: imei.imei1,
+                    title: imei.name,
+                    codes: [imei.imei2, imei.serialNumber].filter((code): code is string => Boolean(code)),
+                    unavailable: imei.available ? undefined : `No longer In shop at ${transfer.fromBranch.name} (sold or moved there).`,
+                  }))}
+                />
+              </div>
+            ) : null}
+            {pieceLines(transfer).length ? (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Pieces that arrived</p>
+                <ul className="divide-y divide-border rounded-xl border border-border">
+                  {pieceLines(transfer).map((item) => (
+                    <li key={item.id} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
+                      <label htmlFor={`piece-${item.id}`} className="min-w-0">
+                        <span className="block font-medium">{item.product.name}</span>
+                        <span className="block text-xs text-muted-foreground">
+                          {item.quantity} sent · <span className="font-mono">{item.product.sku}</span>
+                        </span>
+                      </label>
+                      <Input
+                        id={`piece-${item.id}`}
+                        name={`piece_${item.id}`}
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        max={item.quantity}
+                        step={1}
+                        defaultValue={item.quantity}
+                        className="h-10 w-20 shrink-0 text-center font-semibold tabular-nums"
+                        aria-label={`How many ${item.product.name} arrived`}
+                      />
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-muted-foreground">Lower a number if fewer came. The rest stays at {transfer.fromBranch.name}.</p>
+              </div>
+            ) : null}
           </ActionForm>
           <ActionForm
             action={rejectTransfer}
@@ -367,7 +452,11 @@ function TransferDetail({
           </ActionForm>
         </div>
       ) : transfer.status === "RECEIVED" ? (
-        <p className="text-sm text-success">In shop at {transfer.toBranch.name}.</p>
+        <p className={`text-sm ${isPartial(transfer) ? "text-warning" : "text-success"}`}>
+          {isPartial(transfer)
+            ? `Part arrived. What arrived is In shop at ${transfer.toBranch.name}; the rest stayed at ${transfer.fromBranch.name}.`
+            : `In shop at ${transfer.toBranch.name}.`}
+        </p>
       ) : (
         <p className="text-sm text-muted-foreground">Rejected. Stock stayed at {transfer.fromBranch.name}.</p>
       )}
