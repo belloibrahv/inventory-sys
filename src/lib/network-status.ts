@@ -26,6 +26,8 @@ class NetworkMonitor {
   private listeners = new Set<() => void>()
   private checkTimer: number | null = null
   private isChecking = false
+  /** Failed heartbeats in a row. One slow answer on a shop line is not an outage. */
+  private misses = 0
   private currentSnapshot: NetworkInfo
 
   constructor() {
@@ -117,6 +119,7 @@ class NetworkMonitor {
       window.clearTimeout(timeoutId)
 
       if (response.ok) {
+        this.misses = 0
         const roundTrip = Math.round(performance.now() - start)
         this.latencyMs = roundTrip
         this.lastOnlineAt = new Date()
@@ -131,7 +134,11 @@ class NetworkMonitor {
         throw new Error(`Health ping returned ${response.status}`)
       }
     } catch {
-      // Failed to reach the server despite navigator.onLine
+      // Failed to reach the server despite navigator.onLine. Only the second
+      // miss in a row counts as down; the next heartbeat comes in 30 seconds.
+      this.misses += 1
+      this.isChecking = false
+      if (this.misses < 2 && this.state !== "offline") return true
       this.latencyMs = null
       this.state = "offline"
       if (!this.offlineSince) {

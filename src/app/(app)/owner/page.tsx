@@ -9,6 +9,7 @@ import { PricesPanel } from "./prices-panel"
 import { canChangeCost } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { formatCurrency, money } from "@/lib/utils"
+import { UpdatedStamp } from "@/components/updated-stamp"
 
 export const dynamic = "force-dynamic"
 
@@ -150,6 +151,7 @@ export default async function OwnerBoardPage() {
       <PageHeader
         title="Business today"
         description={`${formatWatLong(board.day)} · ${board.allShops ? "every shop" : board.shops[0]?.shop ?? "this shop"}`}
+        actions={<UpdatedStamp at={new Date().toISOString()} />}
       />
 
       {/* What the owner asks first: what is in the shop, what left today. */}

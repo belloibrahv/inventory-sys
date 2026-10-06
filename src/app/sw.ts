@@ -43,9 +43,14 @@ const appPages: RuntimeCaching = {
     const accept = request.headers.get("accept") || ""
     return request.method === "GET" && accept.includes("text/html")
   },
+  // The live server always wins while it answers at all. A 3-second limit
+  // served the saved copy whenever a busy screen (Home runs dozens of queries)
+  // took longer, so figures sat a refresh or more behind on a slow line, and a
+  // shared phone could show the last person's page. The saved copy is for a
+  // line that is down or hung, not one that is slow.
   handler: new NetworkFirst({
     cacheName: "app-pages",
-    networkTimeoutSeconds: 3,
+    networkTimeoutSeconds: 20,
     plugins: [pageExpiry],
   }),
 }
@@ -59,7 +64,7 @@ const rscPages: RuntimeCaching = {
     (url.searchParams.has("_rsc") || request.headers.get("RSC") === "1"),
   handler: new NetworkFirst({
     cacheName: "app-rsc",
-    networkTimeoutSeconds: 3,
+    networkTimeoutSeconds: 20,
     plugins: [
       new ExpirationPlugin({
         maxEntries: 80,

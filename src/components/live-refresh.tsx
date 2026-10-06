@@ -46,7 +46,10 @@ export function LiveRefresh({ seconds = 45 }: { seconds?: number }) {
     const tick = () => {
       if (running.current) return
       if (document.visibilityState !== "visible") return
-      if (getNetworkMonitor().getSnapshot().state !== "online") return
+      // Only a line that is down holds the refresh back. "Reconnecting" and
+      // "syncing" used to hold it too, which could leave a screen still for
+      // minutes on a line that was working.
+      if (getNetworkMonitor().getSnapshot().state === "offline") return
       if (busyTyping()) return
       running.current = true
       router.refresh()
@@ -64,9 +67,18 @@ export function LiveRefresh({ seconds = 45 }: { seconds?: number }) {
       if (document.visibilityState === "visible") tick()
     }
     document.addEventListener("visibilitychange", onVisible)
+    // The line coming back should bring the screen up to date at once.
+    const monitor = getNetworkMonitor()
+    let last = monitor.getSnapshot().state
+    const unsubscribe = monitor.subscribe(() => {
+      const now = monitor.getSnapshot().state
+      if (last === "offline" && now !== "offline") tick()
+      last = now
+    })
     return () => {
       window.clearInterval(timer)
       document.removeEventListener("visibilitychange", onVisible)
+      unsubscribe()
     }
   }, [router, seconds])
 

@@ -34,6 +34,7 @@ import { formatShopWhen, formatWatLong, watDayKey } from "@/lib/lagos-day"
 import { getAllowedKeys, hrefsForKeys } from "@/lib/permissions"
 import { getAppSettings, lowStockLimit } from "@/lib/settings"
 import { InstallAppBanner } from "@/components/install-app"
+import { UpdatedStamp } from "@/components/updated-stamp"
 import { HomeShortcuts } from "./home-shortcuts"
 import { formatCurrency, money } from "@/lib/utils"
 
@@ -153,6 +154,7 @@ export default async function DashboardPage() {
             {firstName ? `, ${firstName}` : ""}
           </h2>
         </div>
+        <UpdatedStamp at={new Date().toISOString()} />
       </div>
 
       {actions.length ? (
