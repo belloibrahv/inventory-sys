@@ -645,6 +645,12 @@ function ImeiReturnForm({
           {selected.customer && (
             <p className="text-xs text-muted-foreground">Buyer: {selected.customer.name}</p>
           )}
+          {!selected.sale ? (
+            <p className="rounded-lg bg-info-soft px-2.5 py-1.5 text-xs text-info">
+              Given out on a Swap Deal that was not settled yet. Saving this return settles that swap first (writes its
+              invoice; anything the customer still owed on it goes on their account), then takes the phone back.
+            </p>
+          ) : null}
           {warranty && (
             <p className={cn(
               "text-xs font-medium",

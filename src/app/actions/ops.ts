@@ -665,11 +665,20 @@ export async function getReturns() {
   }))
 }
 
+/**
+ * Phones a customer can bring back: sold ones, and ones handed out on a Swap
+ * Deal that was approved but never settled (those carry no invoice yet).
+ */
+const RETURNABLE_UNIT: Prisma.ImeiRecordWhereInput = {
+  customerId: { not: null },
+  OR: [{ status: "SOLD" }, { status: "SWAPPED", swapsNew: { some: { status: "APPROVED" } } }],
+}
+
 export async function getSoldImeis() {
   const user = await requireUser()
   const branchId = await scopedBranchId(user.role, user.branchId)
   return prisma.imeiRecord.findMany({
-    where: { status: "SOLD", customerId: { not: null }, ...(branchId ? { branchId } : {}) },
+    where: { ...RETURNABLE_UNIT, ...(branchId ? { branchId } : {}) },
     include: {
       product: true,
       customer: true,
@@ -692,10 +701,11 @@ export async function findSoldImei(code: string) {
   const branchId = await scopedBranchId(user.role, user.branchId)
   const row = await prisma.imeiRecord.findFirst({
     where: {
-      status: "SOLD",
-      customerId: { not: null },
+      AND: [
+        RETURNABLE_UNIT,
+        { OR: [{ imei1: cleaned }, { imei2: cleaned }, { serialNumber: cleaned }, { imei1: { endsWith: cleaned } }] },
+      ],
       ...(branchId ? { branchId } : {}),
-      OR: [{ imei1: cleaned }, { serialNumber: cleaned }, { imei1: { endsWith: cleaned } }],
     },
     include: {
       product: true,
@@ -954,10 +964,39 @@ export async function createReturn(formData: FormData) {
 
   // ── IMEI PATH (phones, laptops, serial items) ─────────────────────────────
   const imei1 = String(formData.get("imei1") ?? "").trim()
-  const imei = await prisma.imeiRecord.findUnique({
+  let imei = await prisma.imeiRecord.findUnique({
     where: { imei1 },
     include: { sale: { include: { items: true } }, customer: true, product: true },
   })
+  // A phone we gave out on a Swap Deal that was approved but never settled is
+  // "swapped", not sold: it has no invoice, so the return could not find a
+  // sale for it. Settle that swap first, which writes its invoice (anything
+  // the customer still owed on it goes on their account), then return it.
+  if (imei && imei.status === "SWAPPED") {
+    const swap = await prisma.swap.findFirst({
+      where: { newImeiId: imei.id, status: "APPROVED" },
+      select: { id: true, swapNumber: true, balanceAmount: true },
+    })
+    if (!swap) return { error: `${imei1} went out on a Swap Deal that is not open any more. Check it on Swap Deals.` }
+    const owedToCustomer = Math.max(0, -money(swap.balanceAmount))
+    if (owedToCustomer > 0) {
+      return {
+        error: `${imei1} went out on Swap Deal ${swap.swapNumber}, which still owes the customer ${owedToCustomer.toLocaleString("en-NG")} naira. Settle and invoice it on Swap Deals first (say how that money was paid), then log the return.`,
+      }
+    }
+    const settle = new FormData()
+    settle.set("id", swap.id)
+    settle.set("method", "CASH")
+    settle.set("paidAmount", "0")
+    const settled = await finishSwap(user, settle)
+    if (settled && "error" in settled && settled.error) {
+      return { error: `Swap Deal ${swap.swapNumber} could not be settled first: ${settled.error}` }
+    }
+    imei = await prisma.imeiRecord.findUnique({
+      where: { imei1 },
+      include: { sale: { include: { items: true } }, customer: true, product: true },
+    })
+  }
   if (!imei || imei.status !== "SOLD") return { error: "That IMEI was never sold, so it cannot be returned." }
   if (!imei.customerId) return { error: "This sale has no buyer name. Add the buyer before you start the return." }
   const open = await prisma.stockReturn.findFirst({
@@ -1925,6 +1964,11 @@ export async function applySwapApprovalDecision(
 
 export async function completeSwap(formData: FormData) {
   const user = await requireUser()
+  return finishSwap(user, formData)
+}
+
+/** Write a Swap Deal's invoice and money. Used by Settle and invoice, and by a return of its phone. */
+async function finishSwap(user: Awaited<ReturnType<typeof requireUser>>, formData: FormData) {
   const id = String(formData.get("id"))
   const paid = Number(formData.get("paidAmount") || 0)
   // A Swap Deal is settled in cash or by bank transfer. By transfer, the named
