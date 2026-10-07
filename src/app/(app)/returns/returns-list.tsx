@@ -529,8 +529,8 @@ export function ReturnsList({
         onSelect={setStatus}
         steps={[
           { key: "all",       label: "All returns", count: counts.all,              hint: "Every item brought back" },
-          { key: "PENDING",   label: "Waiting",     count: counts.PENDING   ?? 0,   hint: "Waiting for approval" },
-          { key: "APPROVED",  label: "Approved",    count: counts.APPROVED  ?? 0,   hint: "Ready to finish" },
+          { key: "PENDING",   label: "Waiting",     count: counts.PENDING   ?? 0,   hint: "From before: finish it" },
+          { key: "APPROVED",  label: "Approved",    count: counts.APPROVED  ?? 0,   hint: "From before: finish it" },
           { key: "COMPLETED", label: "Done",        count: counts.COMPLETED ?? 0,   hint: "Refund or replace applied" },
         ]}
       />
@@ -643,10 +643,12 @@ function ReturnDetail({
       {row.notes ? <p className="rounded-lg bg-muted/60 px-3 py-2 text-sm text-muted-foreground">{row.notes}</p> : null}
       {row.status === "PENDING" ? (
         <p className="rounded-lg border border-warning/20 bg-warning/10 px-3 py-2 text-sm text-warning">
-          Waiting for approval. Stock and money do not move until Needs approval says yes.
+          Logged before returns took effect on their own. Apply it below to bring the item back into stock and settle the money.
         </p>
       ) : null}
-      {row.status === "APPROVED" ? <ApplyForm row={row} stock={stock} banks={banks} canReconfirm={canReconfirm} onDone={onDone} /> : null}
+      {row.status === "APPROVED" || row.status === "PENDING" ? (
+        <ApplyForm row={row} stock={stock} banks={banks} canReconfirm={canReconfirm} onDone={onDone} />
+      ) : null}
     </div>
   )
 }

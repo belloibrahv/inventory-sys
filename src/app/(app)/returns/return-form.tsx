@@ -55,6 +55,33 @@ type FoundSale = {
   items: SaleLineItem[]
 }
 
+export type ReturnBank = { id: string; label: string; branchId: string }
+
+/** Money goes back by bank from a named account; this shop's accounts first. */
+function BankSelect({ banks, branchId, label, required }: { banks: ReturnBank[]; branchId: string | null; label: string; required: boolean }) {
+  const ordered = [...banks].sort((a, b) => Number(b.branchId === branchId) - Number(a.branchId === branchId))
+  if (!banks.length) {
+    return (
+      <p className="rounded-lg border border-warning/30 bg-warning-soft px-3 py-2 text-sm text-warning">
+        No bank account is listed yet. Add one under Money in &amp; out before paying money back.
+      </p>
+    )
+  }
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor="return-bank-select">{label}</Label>
+      <Select id="return-bank-select" name="bankAccountId" required={required} defaultValue="">
+        <option value="">{required ? "Pick the bank account" : "Pick the bank account (when money goes back)"}</option>
+        {ordered.map((bank) => (
+          <option key={bank.id} value={bank.id}>
+            {bank.label}
+          </option>
+        ))}
+      </Select>
+    </div>
+  )
+}
+
 type StockUnit = {
   id: string
   imei1: string
@@ -237,7 +264,9 @@ function OutcomeFields({
   branchId,
   isInvoicePath,
   fullControl,
+  banks,
 }: {
+  banks: ReturnBank[]
   outcome: string
   onOutcomeChange: (v: string) => void
   returnValue: string
@@ -252,6 +281,7 @@ function OutcomeFields({
   const [replacementId, setReplacementId] = useState("")
   const [reason, setReason] = useState("FAULTY")
   const [replacementValue, setReplacementValue] = useState("")
+  const [payMethod, setPayMethod] = useState("CASH")
 
   const filteredStock = branchId ? shopStock.filter((r) => r.branchId === branchId) : shopStock
   const pickedReplacement = filteredStock.find((r) => r.id === replacementId)
@@ -431,17 +461,59 @@ function OutcomeFields({
                   ? `Payable — we refund the customer ${formatCurrency(Math.abs(balance))}`
                   : "Balance is even — no money either way."}
           </div>
+          {replacementId && Number.isFinite(returnAmount) && balance !== 0 ? (
+            <div className="space-y-3 border-t border-border pt-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="settle-amount-input">
+                  {balance > 0 ? "Amount received from the customer now (₦)" : "Amount paid back to the customer (₦)"}
+                </Label>
+                <Input
+                  id="settle-amount-input"
+                  name="paidAmount"
+                  type="number"
+                  min={0}
+                  step={1}
+                  key={`${replacementId}-${balance}`}
+                  defaultValue={Math.abs(balance)}
+                />
+                {balance > 0 ? (
+                  <p className="text-xs text-muted-foreground">Anything not paid now is added to what the customer owes.</p>
+                ) : null}
+              </div>
+              {balance > 0 ? (
+                <>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="settle-method-select">How they paid</Label>
+                    <Select id="settle-method-select" name="method" value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>
+                      <option value="CASH">Cash</option>
+                      <option value="TRANSFER">Bank transfer</option>
+                      <option value="POS">POS</option>
+                    </Select>
+                  </div>
+                  {payMethod !== "CASH" ? <BankSelect banks={banks} branchId={branchId} label="Bank that received it" required={false} /> : null}
+                </>
+              ) : (
+                <>
+                  <input type="hidden" name="method" value="TRANSFER" />
+                  <BankSelect banks={banks} branchId={branchId} label="Pay the difference back from" required />
+                </>
+              )}
+            </div>
+          ) : null}
         </div>
       )}
 
       {(outcome === "REFUND" || outcome === "CREDIT_NOTE") && !isReplace && (
         <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
           {outcome === "REFUND"
-            ? "The refund uses the return item value above and is paid by bank, from a named account, once a manager approves."
+            ? "The refund uses the return item value above. Anything the customer still owed on the invoice is cleared first; only what they paid comes back, by bank."
             : "Credit note will use the return item value above."}{" "}
           The original invoice stays on the books.
         </p>
       )}
+      {outcome === "REFUND" && !isReplace ? (
+        <BankSelect banks={banks} branchId={branchId} label="Pay the refund from" required={false} />
+      ) : null}
 
       {/* Notes */}
       <div className="space-y-1.5">
@@ -459,11 +531,13 @@ function ImeiReturnForm({
   stock,
   successHref,
   fullControl,
+  banks,
 }: {
   sold: Sold[]
   stock: StockUnit[]
   successHref?: string
   fullControl: boolean
+  banks: ReturnBank[]
 }) {
   const [extraSold, setExtraSold] = useState<Sold[]>([])
   const [findCode, setFindCode] = useState("")
@@ -510,12 +584,12 @@ function ImeiReturnForm({
     <ActionForm
       action={createReturn}
       successHref={successHref}
-      submit="Save return for approval"
-      successMessage="Return saved. Waiting for approval."
+      submit="Save return"
+      successMessage="Return saved. The item is back in this shop's stock."
       confirmModal={{
-        title: "Send this return for approval?",
-        description: "A manager must say yes before stock or money moves.",
-        confirmLabel: "Send for approval",
+        title: "Save this return?",
+        description: "It takes effect now: the item comes back into this shop's stock, and the refund or replacement is settled. No approval is needed.",
+        confirmLabel: "Save return",
         tone: "warning",
       }}
       className="space-y-4"
@@ -602,6 +676,7 @@ function ImeiReturnForm({
         branchId={selected?.branchId ?? null}
         isInvoicePath={false}
         fullControl={fullControl}
+        banks={banks}
       />
     </ActionForm>
   )
@@ -609,7 +684,17 @@ function ImeiReturnForm({
 
 // ─── Invoice path sub-form ────────────────────────────────────────────────────
 
-function InvoiceReturnForm({ stock, successHref, fullControl }: { stock: StockUnit[]; successHref?: string; fullControl: boolean }) {
+function InvoiceReturnForm({
+  stock,
+  successHref,
+  fullControl,
+  banks,
+}: {
+  stock: StockUnit[]
+  successHref?: string
+  fullControl: boolean
+  banks: ReturnBank[]
+}) {
   const [invoiceInput, setInvoiceInput] = useState("")
   const [finding, setFinding] = useState(false)
   const [foundSale, setFoundSale] = useState<FoundSale | null>(null)
@@ -670,12 +755,12 @@ function InvoiceReturnForm({ stock, successHref, fullControl }: { stock: StockUn
     <ActionForm
       action={createReturn}
       successHref={successHref}
-      submit="Save return for approval"
-      successMessage="Return saved. Waiting for approval."
+      submit="Save return"
+      successMessage="Return saved. The item is back in this shop's stock."
       confirmModal={{
-        title: "Send this return for approval?",
-        description: "A manager must say yes before stock or money moves.",
-        confirmLabel: "Send for approval",
+        title: "Save this return?",
+        description: "It takes effect now: the item comes back into this shop's stock, and the refund or replacement is settled. No approval is needed.",
+        confirmLabel: "Save return",
         tone: "warning",
       }}
       className="space-y-4"
@@ -791,6 +876,7 @@ function InvoiceReturnForm({ stock, successHref, fullControl }: { stock: StockUn
           branchId={foundSale?.branchId ?? null}
           isInvoicePath={true}
           fullControl={fullControl}
+          banks={banks}
         />
       )}
     </ActionForm>
@@ -804,7 +890,9 @@ export function ReturnForm({
   stock,
   successHref,
   fullControl = false,
+  banks = [],
 }: {
+  banks?: ReturnBank[]
   sold: Sold[]
   stock: StockUnit[]
   successHref?: string
@@ -817,9 +905,9 @@ export function ReturnForm({
     <div className="space-y-4">
       <TabBar active={tab} onChange={setTab} />
       {tab === "imei" ? (
-        <ImeiReturnForm sold={sold} stock={stock} successHref={successHref} fullControl={fullControl} />
+        <ImeiReturnForm sold={sold} stock={stock} successHref={successHref} fullControl={fullControl} banks={banks} />
       ) : (
-        <InvoiceReturnForm stock={stock} successHref={successHref} fullControl={fullControl} />
+        <InvoiceReturnForm stock={stock} successHref={successHref} fullControl={fullControl} banks={banks} />
       )}
     </div>
   )

@@ -1,4 +1,5 @@
 import { getInStockForReplace, getSoldImeis } from "@/app/actions/ops"
+import { prisma } from "@/lib/prisma"
 import { FormScreen } from "@/components/shared"
 import { money } from "@/lib/utils"
 import { requireUser } from "@/lib/session"
@@ -6,20 +7,35 @@ import { canSendToSupplier } from "@/lib/rbac"
 import { ReturnForm } from "../return-form"
 
 export default async function LogReturnPage() {
-  const [sold, stock, me] = await Promise.all([getSoldImeis(), getInStockForReplace(), requireUser()])
+  const [sold, stock, me, bankAccounts] = await Promise.all([
+    getSoldImeis(),
+    getInStockForReplace(),
+    requireUser(),
+    // A refund or a replacement difference is paid by bank from a named account.
+    prisma.bankAccount.findMany({
+      where: { isActive: true },
+      include: { branch: { select: { name: true } } },
+      orderBy: [{ bankName: "asc" }, { accountNumber: "asc" }],
+    }),
+  ])
   const fullControl = canSendToSupplier(me.role)
   return (
     <FormScreen
       title="Log a return"
       description={
         fullControl
-          ? "Phones and laptops: pick by IMEI. Accessories, cords and other items: look up the invoice number. It waits for approval before stock or money moves."
-          : "A return comes back into this shop, as a replacement from our stock or a refund by bank. Phones and laptops by IMEI, other items by invoice. It waits for a manager's approval."
+          ? "Phones and laptops: pick by IMEI. Accessories, cords and other items: look up the invoice number. It takes effect as soon as you save it."
+          : "A return comes back into this shop, as a replacement from our stock or a refund by bank. Phones and laptops by IMEI, other items by invoice. It takes effect as soon as you save it."
       }
       backHref="/returns"
     >
       <ReturnForm
         fullControl={fullControl}
+        banks={bankAccounts.map((bank) => ({
+          id: bank.id,
+          branchId: bank.branchId,
+          label: `${bank.bankName} ${bank.accountNumber}${bank.accountName ? ` · ${bank.accountName}` : ""} (${bank.branch.name})`,
+        }))}
         successHref="/returns"
         sold={sold.map((row) => ({
           id: row.id,

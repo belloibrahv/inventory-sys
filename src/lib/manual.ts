@@ -58,7 +58,7 @@ const ROLE_JOB: Record<UserRole, { job: string; shops: string }> = {
     shops: "You work in the shop the main admin set on your login.",
   },
   SALES_EXECUTIVE: {
-    job: "You sell, close the day, and record a return for a phone this shop sold. You can see customers, who still owes us, shop expenses, and items. A manager must still say yes before stock or money moves on a return.",
+    job: "You sell, close the day, and record a return for a phone this shop sold. You can see customers, who still owes us, shop expenses, and items. A return takes effect as soon as you save it: the item comes back into stock with no approval.",
     shops: "You work in the shop the main admin set on your login.",
   },
   ENGINEER: {
@@ -360,15 +360,15 @@ const PAGES: Array<
     href: "/returns",
     title: "Returns",
     needAction: "action.return",
-    what: "A buyer brings something back. Phones and laptops use the Phone or laptop tab — pick the sold device by IMEI. Accessories, cords, pouches, and other items without an IMEI number use the Other item by invoice tab — type the invoice number, pick the line, and say how many are coming back. Both paths ask for a return value, an outcome, and the condition of what came back. After Needs approval says yes, Apply moves stock and settles the money. The original invoice stays.",
+    what: "A buyer brings something back. Phones and laptops use the Phone or laptop tab — pick the sold device by IMEI. Accessories, cords, pouches, and other items without an IMEI number use the Other item by invoice tab — type the invoice number, pick the line, and say how many are coming back. Both paths ask for a return value, an outcome, and the condition of what came back. It takes effect the moment you save it: the item is back in this shop's stock (a faulty one on the damaged list) and the refund or replacement is settled. No approval is needed.",
     doThis: [
       "For a phone or laptop: open the Phone or laptop tab. Pick the sold device from the list, or use Find sold IMEI if it is not there. Confirm the return item value.",
       "For a cord, pouch, or accessory: open the Other item by invoice tab. Type the invoice number and press Find. Pick the item line. If more than one piece is coming back, type how many.",
       "Pick why it is coming back: Faulty, Dissatisfaction / change of mind, or Replacement (wants another item).",
       "Pick what happens next: Replacement from our stock, or Refund. The Vault Manager, the shop Manager, the CEO and the main admin also see Repair, Credit note and Send back to the supplier.",
       "On Replace, pick the shop item going out and confirm its value. Read Receivable or Payable.",
-      "Save for approval. Wait on Needs approval.",
-      "After yes, Apply outcome. A refund, or the difference we pay back on a Replace, is paid by bank: pick the bank account it leaves from.",
+      "If money goes back (a refund, or the difference we pay on a Replace), pick the bank account it leaves from.",
+      "Save return. The item is back in stock straight away and the money is settled.",
     ],
     watch: [
       "Stock and money do not move while the return is Waiting.",

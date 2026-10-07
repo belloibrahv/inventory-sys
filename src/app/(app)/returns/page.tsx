@@ -26,7 +26,7 @@ export default async function ReturnsPage() {
       <div className="space-y-5">
         <PageHeader
           title="Returns"
-          description="Return value, replacement value, and the balance. Stock and money move after approval."
+          description="Return value, replacement value, and the balance. A return takes effect as soon as it is saved: the item is back in stock and the money is settled."
           actions={
             <Button asChild>
               <Link href="/returns/new">

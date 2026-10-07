@@ -876,7 +876,7 @@ export async function createReturn(formData: FormData) {
       where: { saleItemId, status: { in: ["PENDING", "APPROVED"] } },
     })
     if (openItemReturn) {
-      return { error: `${saleItem.product.name} from that invoice already has an open return waiting for approval.` }
+      return { error: `${saleItem.product.name} from that invoice already has a return that is not finished. Open it on Returns and finish it.` }
     }
 
     // Validate quantity
@@ -919,6 +919,9 @@ export async function createReturn(formData: FormData) {
     const record = await prisma.stockReturn.create({
       data: {
         returnNumber: generateDocNumber("RTN"),
+        status: "APPROVED",
+        approvedBy: user.id,
+        approvedAt: new Date(),
         customerId: saleItem.sale.customerId,
         saleId: saleItem.saleId,
         saleItemId: saleItem.id,
@@ -940,36 +943,7 @@ export async function createReturn(formData: FormData) {
       },
     })
 
-    await prisma.approval.create({
-      data: {
-        type: "RETURN",
-        entityId: record.id,
-        entityType: "Return",
-        requestedBy: user.id,
-        reason:
-          outcome === "REPLACEMENT" && balanceAmount != null
-            ? `${record.returnNumber}: replace · return ₦${returnValue} · given ₦${replacementValue} · ${
-                balanceAmount > 0 ? `Receivable ₦${balanceAmount}` : balanceAmount < 0 ? `Payable ₦${Math.abs(balanceAmount)}` : "Even"
-              }`
-            : `${record.returnNumber}: ${saleItem.product.name} · ${reason} · return value ₦${returnValue}`,
-      },
-    })
-
-    const managers = await prisma.user.findMany({
-      where: { role: { in: ["CEO", "BRANCH_MANAGER", "AUDITOR", "ACCOUNTANT", "SUPER_ADMIN"] }, isActive: true },
-    })
-    const invoiceNum = (await prisma.sale.findUnique({ where: { id: saleItem.saleId }, select: { invoiceNumber: true } }))?.invoiceNumber ?? ""
-    for (const manager of managers) {
-      await notify(
-        manager.id,
-        "A return is waiting for you to say yes",
-        `${record.returnNumber} · ${saleItem.product.name} · invoice ${invoiceNum}`,
-        "/approvals",
-        "APPROVAL_REQUEST"
-      )
-    }
-    refreshOps()
-    return { success: true }
+    return settleNewReturn(user, record.id, formData)
   }
 
   // ── IMEI PATH (phones, laptops, serial items) ─────────────────────────────
@@ -1024,6 +998,9 @@ export async function createReturn(formData: FormData) {
   const record = await prisma.stockReturn.create({
     data: {
       returnNumber: generateDocNumber("RTN"),
+      status: "APPROVED",
+      approvedBy: user.id,
+      approvedAt: new Date(),
       customerId: imei.customerId!,
       saleId: imei.saleId,
       imeiId: imei.id,
@@ -1041,33 +1018,42 @@ export async function createReturn(formData: FormData) {
       balanceAmount: balanceAmount != null ? balanceAmount.toFixed(2) : null,
     },
   })
-  await prisma.imeiRecord.update({ where: { id: imei.id }, data: { status: "RETURNED" } })
-  await prisma.approval.create({
-    data: {
-      type: "RETURN",
-      entityId: record.id,
-      entityType: "Return",
-      requestedBy: user.id,
-      reason:
-        outcome === "REPLACEMENT" && balanceAmount != null
-          ? `${record.returnNumber}: replace · return ₦${returnValue} · given ₦${replacementValue} · ${
-              balanceAmount > 0 ? `Receivable ₦${balanceAmount}` : balanceAmount < 0 ? `Payable ₦${Math.abs(balanceAmount)}` : "Even"
-            }`
-          : `${record.returnNumber}: ${record.reason} · return value ₦${returnValue}`,
-    },
-  })
-  const managers = await prisma.user.findMany({
-    where: { role: { in: ["CEO", "BRANCH_MANAGER", "AUDITOR", "ACCOUNTANT", "SUPER_ADMIN"] }, isActive: true },
-  })
-  for (const manager of managers) {
-    await notify(manager.id, "A return is waiting for you to say yes", `${record.returnNumber} for IMEI ${imei1}`, "/approvals", "APPROVAL_REQUEST")
+  return settleNewReturn(user, record.id, formData)
+}
+
+/**
+ * A return takes effect the moment it is logged: no approval, no waiting.
+ * What came back goes onto the shop's stock (or the damaged list when it is
+ * faulty), and the refund, credit note or replacement is settled in the same
+ * step, from the details on the form. If that cannot be done (no bank picked
+ * for a refund, say), the return is taken off again so nothing is half-done.
+ */
+async function settleNewReturn(user: Awaited<ReturnType<typeof requireUser>>, returnId: string, formData: FormData) {
+  const settle = new FormData()
+  settle.set("id", returnId)
+  for (const key of ["method", "paidAmount", "bankAccountId", "replacementImeiId"]) {
+    const value = formData.get(key)
+    if (value != null && String(value).trim() !== "") settle.set(key, String(value))
   }
-  refreshOps()
+  const applied = await applyReturn(user, settle)
+  if (applied && "error" in applied && applied.error) {
+    await prisma.stockReturn.deleteMany({ where: { id: returnId, status: { not: "COMPLETED" } } })
+    return { error: applied.error }
+  }
   return { success: true }
 }
 
+/** Apply a return that was logged and approved before returns applied themselves. */
 export async function completeReturn(formData: FormData) {
   const user = await requireUser()
+  return applyReturn(user, formData)
+}
+
+/**
+ * The money and the stock behind one return. Run straight away when a return
+ * is logged, and by Apply for a return still waiting from before.
+ */
+async function applyReturn(user: Awaited<ReturnType<typeof requireUser>>, formData: FormData) {
   const id = String(formData.get("id"))
   const record = await prisma.stockReturn.findUnique({
     where: { id },
@@ -1090,9 +1076,10 @@ export async function completeReturn(formData: FormData) {
   // return's shop may apply it (and pay its refund).
   if (!(await canReachBranch(user, record.branchId))) return { error: OTHER_SHOP }
   if (record.status === "COMPLETED") return { error: "That return is already finished." }
-  if (record.status !== "APPROVED" && !(await canApprove(user.role))) {
-    return { error: "Management has not approved this return yet." }
-  }
+  if (record.status === "REJECTED") return { error: "That return was declined. Log it again if it is coming back." }
+  // Returns no longer wait for approval, so one still waiting from before can
+  // be applied by anyone who records returns.
+  if (!(await can(user.role, "action.return"))) return { error: "You are not allowed to finish a return. Ask the main admin." }
   const sale = record.saleId
     ? await prisma.sale.findUnique({ where: { id: record.saleId } })
     : null
@@ -1458,6 +1445,12 @@ export async function completeReturn(formData: FormData) {
     return { error: shopError(error, "Could not complete return.") }
   }
 
+  // A return logged before approvals were dropped still has its request on
+  // Needs approval. Applying it settles that request too.
+  await prisma.approval.updateMany({
+    where: { entityType: "Return", entityId: record.id, status: "PENDING" },
+    data: { status: "APPROVED", approvedBy: user.id, approvedAt: new Date() },
+  })
   refreshOps()
   return { success: true }
 }
