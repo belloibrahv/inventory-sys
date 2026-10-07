@@ -24,6 +24,7 @@ import {
   Scale,
   ScanLine,
   ScrollText,
+  History,
   Settings,
   Shield,
   ShieldCheck,
@@ -138,6 +139,7 @@ export const navGroups: NavGroup[] = [
         icon: Smartphone,
         children: [
           { name: "Price list", href: "/products", icon: Tags, hint: "Names, cost, lowest price, and selling price" },
+          { name: "Item activity", href: "/products/activity", icon: History, hint: "One item's whole life: booked in, sold, moved, returned" },
           { name: "Brands", href: "/products/brands", icon: Factory, hint: "Samsung, Tecno, Apple and the rest" },
           { name: "Categories", href: "/products/categories", icon: FolderTree, hint: "Kinds of items and the reseller markup" },
           { name: "Add one item", href: "/products/new", icon: PlusCircle, hint: "Register one product name and brand" },

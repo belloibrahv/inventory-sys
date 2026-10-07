@@ -10,10 +10,14 @@ import { statusLabel } from "@/lib/status"
 import { phoneLookLabel } from "@/lib/phone-look"
 import { formatRecordChange } from "@/lib/shop-speak"
 import { warrantyState } from "@/lib/warranty"
-import { canManageCatalog } from "@/lib/rbac"
+import { canManageCatalog, canSeeCost } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { unitIdentityKind, unitIdentityLabel } from "@/lib/unit-identity"
 import { UnitIdentityForm } from "@/app/(app)/imei/identity-form"
+import { productSpecLine } from "@/lib/product-specs"
+import { shopConditionLabel } from "@/lib/conditions"
+import { normalizeStorage } from "@/lib/item-specs"
+import { formatShopWhen } from "@/lib/lagos-day"
 
 const lifecycle = ["RECEIVED", "IN_STOCK", "TRANSFERRED", "SOLD", "RETURNED", "FAULTY", "RETURNED_TO_SUPPLIER", "REPAIRED", "SWAPPED", "DISPOSED"]
 
@@ -23,6 +27,28 @@ export default async function ImeiDetailPage({ params }: { params: Promise<{ id:
   if (!data) notFound()
   const { record, logs } = data
   const canCorrectNumber = await canManageCatalog(me.role)
+  const showCost = canSeeCost(me.role)
+  const specs = productSpecLine(record.product)
+  // Everything booked in about this phone, in one place, so an audit never
+  // needs a second click to tell one iPhone 11 Pro from another.
+  const details: Array<[string, string]> = [
+    ["Item", record.product.name],
+    ["Item code", record.product.sku],
+    ["Brand", record.product.brand?.name ?? "-"],
+    ["Category", record.product.category?.name ?? "-"],
+    ["Storage", normalizeStorage(record.product.storage) || "-"],
+    ["RAM", record.product.ram || "-"],
+    ["Colour", record.product.color || "-"],
+    ["Condition", shopConditionLabel(record.product.condition) || phoneLookLabel(record.product.condition) || "-"],
+    ["How this phone looks", phoneLookLabel(record.cosmeticGrade) || "Not set yet"],
+    ["Battery health", record.batteryHealth != null ? `${record.batteryHealth}%` : "-"],
+    ["Shop", record.branch.name],
+    ["Supplier", record.supplier?.name ?? "-"],
+    ["Booked in", formatShopWhen(record.createdAt)],
+    ["Selling price", formatCurrency(money(record.product.sellingPrice))],
+    ...(showCost ? ([["Cost", formatCurrency(money(record.product.costPrice))]] as Array<[string, string]>) : []),
+    ["Warranty", record.product.warrantyDays ? `${record.product.warrantyDays} days` : "None"],
+  ]
   const identityKind = unitIdentityKind(record)
   const current = Math.max(0, lifecycle.indexOf(record.status))
   const swaps = [...record.swapsOld, ...record.swapsNew]
@@ -34,8 +60,25 @@ export default async function ImeiDetailPage({ params }: { params: Promise<{ id:
     <div className="space-y-6">
       <PageHeader
         title={record.imei1}
-        description={`${unitIdentityLabel(identityKind)} · ${record.product.name} · ${record.branch.name}`}
+        description={`${unitIdentityLabel(identityKind)} · ${record.product.name}${specs ? ` · ${specs}` : ""} · ${record.branch.name}`}
       />
+      <div className="surface-card p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-semibold">Phone details</h3>
+          <Link href={`/products/activity/${record.productId}`} className="text-sm font-medium text-primary hover:underline">
+            See everything that happened to this item
+          </Link>
+        </div>
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3 lg:grid-cols-4">
+          {details.map(([label, value]) => (
+            <div key={label} className="min-w-0">
+              <dt className="text-xs text-muted-foreground">{label}</dt>
+              <dd className="break-words font-medium">{value}</dd>
+            </div>
+          ))}
+        </dl>
+        {record.conditionNotes ? <p className="mt-3 text-sm text-muted-foreground">{record.conditionNotes}</p> : null}
+      </div>
       <WorkflowSteps steps={lifecycle.map(statusLabel)} current={current} />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <div className="surface-card p-5">

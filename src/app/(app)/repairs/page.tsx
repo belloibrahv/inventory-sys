@@ -1,4 +1,5 @@
 import { money } from "@/lib/utils"
+import { productSpecLine } from "@/lib/product-specs"
 import Link from "next/link"
 import { Plus } from "lucide-react"
 import { getRepairs } from "@/app/actions/ops"
@@ -39,7 +40,7 @@ export default async function RepairsPage() {
             repairCost: row.repairCost != null ? money(row.repairCost) : null,
             createdAt: row.createdAt,
             completedAt: row.completedAt,
-            imei: { id: row.imei.id, imei1: row.imei.imei1, product: { name: row.imei.product.name } },
+            imei: { id: row.imei.id, imei1: row.imei.imei1, product: { name: row.imei.product.name, specs: productSpecLine(row.imei.product) } },
             customer: row.customer ? { name: row.customer.name } : null,
           }))}
         />

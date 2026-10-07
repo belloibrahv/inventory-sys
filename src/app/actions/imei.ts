@@ -1,6 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { PRODUCT_SPEC_SELECT } from "@/lib/product-specs"
 import { IMEIStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { recordMovement } from "@/lib/concurrency"
@@ -90,7 +91,10 @@ export async function getImeiRecords(search?: string, status?: string, life?: st
               { imei1: { contains: search } },
               { imei2: { contains: search } },
               { serialNumber: { contains: search } },
-              { product: { name: { contains: search } } },
+              { product: { name: { contains: search, mode: "insensitive" } } },
+              // "256GB", "Blue" and the like find the phones that carry them.
+              { product: { storage: { contains: search, mode: "insensitive" } } },
+              { product: { color: { contains: search, mode: "insensitive" } } },
             ],
           }
         : {}),
@@ -102,7 +106,9 @@ export async function getImeiRecords(search?: string, status?: string, life?: st
       status: true,
       createdAt: true,
       updatedAt: true,
-      product: { select: { name: true, warrantyDays: true } },
+      cosmeticGrade: true,
+      batteryHealth: true,
+      product: { select: { name: true, warrantyDays: true, ...PRODUCT_SPEC_SELECT } },
       branch: { select: { code: true } },
       customer: { select: { name: true } },
       supplier: { select: { name: true } },
@@ -120,7 +126,16 @@ export async function getImeiRecords(search?: string, status?: string, life?: st
     status: row.status,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
-    product: { name: row.product.name, warrantyDays: row.product.warrantyDays },
+    cosmeticGrade: row.cosmeticGrade,
+    batteryHealth: row.batteryHealth,
+    product: {
+      name: row.product.name,
+      warrantyDays: row.product.warrantyDays,
+      storage: row.product.storage,
+      ram: row.product.ram,
+      color: row.product.color,
+      condition: row.product.condition,
+    },
     branch: { code: row.branch.code },
     customer: row.customer ? { name: row.customer.name } : null,
     supplier: row.supplier ? { name: row.supplier.name } : null,

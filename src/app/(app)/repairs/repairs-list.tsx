@@ -26,7 +26,7 @@ type RepairRow = {
   repairCost: number | null
   createdAt: Date
   completedAt: Date | null
-  imei: { id: string; imei1: string; product: { name: string } }
+  imei: { id: string; imei1: string; product: { name: string; specs: string } }
   customer: { name: string } | null
 }
 
@@ -59,6 +59,7 @@ export function RepairsList({ rows }: { rows: RepairRow[] }) {
       cell: (row) => (
         <div>
           <p className="font-medium">{row.imei.product.name}</p>
+          {row.imei.product.specs ? <p className="text-xs text-muted-foreground">{row.imei.product.specs}</p> : null}
           <p className="font-mono text-xs text-muted-foreground">{row.imei.imei1}</p>
         </div>
       ),
@@ -98,7 +99,7 @@ export function RepairsList({ rows }: { rows: RepairRow[] }) {
         noun="repairs"
         filterKey={status}
         onRowClick={setOpen}
-        searchText={(row) => [row.repairNumber, row.imei.imei1, row.imei.product.name, row.issue, row.customer?.name].filter(Boolean).join(" ")}
+        searchText={(row) => [row.repairNumber, row.imei.imei1, row.imei.product.name, row.imei.product.specs, row.issue, row.customer?.name].filter(Boolean).join(" ")}
         searchPlaceholder="Search repair, IMEI, phone, issue or owner"
         card={(row) => ({
           title: row.imei.product.name,

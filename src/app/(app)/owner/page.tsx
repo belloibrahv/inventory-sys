@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation"
+import { MOVE_WORDS } from "@/lib/stock-moves"
 import { getOwnerBoard } from "@/app/actions/owner-board"
 import { DaysOfCover, SalesTrend, StockValueByCategory, TopSellers } from "@/components/owner-charts"
 import { ExportCsv } from "@/components/export-csv"
@@ -21,24 +22,6 @@ export const dynamic = "force-dynamic"
 const ORDER_TODAY_DAYS = 3
 const ORDER_SOON_DAYS = 10
 
-/** The shop's words for why stock moved, for the movement line. */
-const MOVE_WORDS: Record<string, string> = {
-  OPENING: "Opening stock",
-  RECEIVED: "Received",
-  SALE: "Sold",
-  SALE_REVERSED: "Sale undone",
-  TRANSFER_OUT: "Sent to another shop",
-  TRANSFER_IN: "Came from another shop",
-  RETURN_IN: "Returned by a buyer",
-  REPLACEMENT_OUT: "Given as a replacement",
-  RETURN_TO_SUPPLIER: "Sent back to supplier",
-  SWAP_OUT: "Given on a swap",
-  SWAP_IN: "Taken in on a swap",
-  REPAIR_OUT: "Went to the bench",
-  REPAIR_IN: "Back from the bench",
-  COUNT_ADJUST: "Stock count",
-  HAND_CORRECTION: "Corrected by hand",
-}
 
 /** The owner's figures, on the same tile as every other screen: ink, one lead. */
 function Figure({

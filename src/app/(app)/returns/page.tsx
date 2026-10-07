@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { productFullName } from "@/lib/product-specs"
 import { Plus } from "lucide-react"
 import { getInStockForReplace, getReturns } from "@/app/actions/ops"
 import { PageHeader } from "@/components/shared"
@@ -68,7 +69,7 @@ export default async function ReturnsPage() {
                   id: row.imei.id,
                   imei1: row.imei.imei1,
                   serialNumber: row.imei.serialNumber,
-                  productName: row.imei.product.name,
+                  productName: productFullName(row.imei.product),
                 }
               : null,
             replacementImei: row.replacementImei
@@ -76,13 +77,13 @@ export default async function ReturnsPage() {
                   id: row.replacementImei.id,
                   imei1: row.replacementImei.imei1,
                   serialNumber: row.replacementImei.serialNumber,
-                  productName: row.replacementImei.product.name,
+                  productName: productFullName(row.replacementImei.product),
                 }
               : null,
             saleItem: row.saleItem
               ? {
                   id: row.saleItem.id,
-                  productName: row.saleItem.product.name,
+                  productName: productFullName(row.saleItem.product),
                   quantity: row.saleItem.quantity,
                 }
               : null,
@@ -99,7 +100,7 @@ export default async function ReturnsPage() {
             imei1: row.imei1,
             serialNumber: row.serialNumber,
             branchId: row.branchId,
-            product: { name: row.product.name, sellingPrice: money(row.product.sellingPrice) },
+            product: { name: productFullName(row.product), sellingPrice: money(row.product.sellingPrice) },
           }))}
         />
       </div>

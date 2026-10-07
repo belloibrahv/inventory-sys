@@ -11,6 +11,9 @@ import { Button } from "@/components/ui/button"
 import { formatShopWhen } from "@/lib/lagos-day"
 import { warrantyState } from "@/lib/warranty"
 import { unitIdentityKind } from "@/lib/unit-identity"
+import { ProductLabel } from "@/components/product-label"
+import { productSpecLine } from "@/lib/product-specs"
+import { phoneLookLabel } from "@/lib/phone-look"
 
 type ImeiRow = {
   id: string
@@ -19,11 +22,20 @@ type ImeiRow = {
   status: string
   createdAt: Date
   updatedAt: Date
-  product: { name: string; warrantyDays: number }
+  cosmeticGrade: string | null
+  batteryHealth: number | null
+  product: { name: string; warrantyDays: number; storage: string | null; ram: string | null; color: string | null; condition: string }
   branch: { code: string }
   customer: { name: string } | null
   supplier: { name: string } | null
   sale: { saleDate: Date } | null
+}
+
+/** What is particular to this one phone: how it looks and its battery. */
+function unitExtra(row: { cosmeticGrade: string | null; batteryHealth: number | null; product: { condition: string } }) {
+  const look = row.cosmeticGrade && row.cosmeticGrade !== row.product.condition ? `Looks ${phoneLookLabel(row.cosmeticGrade)}` : ""
+  const battery = row.batteryHealth != null ? `Battery ${row.batteryHealth}%` : ""
+  return [look, battery].filter(Boolean).join(" · ") || null
 }
 
 function ShelfToggle({ id, status }: { id: string; status: string }) {
@@ -88,7 +100,12 @@ export function ImeiTable({
         </div>
       ),
     },
-    { id: "item", header: "Item", sortValue: (row) => row.product.name, cell: (row) => <span className="font-medium">{row.product.name}</span> },
+    {
+      id: "item",
+      header: "Item",
+      sortValue: (row) => `${row.product.name} ${productSpecLine(row.product)}`,
+      cell: (row) => <ProductLabel product={row.product} extra={unitExtra(row)} />,
+    },
     { id: "shop", header: "Shop", sortValue: (row) => row.branch.code, cell: (row) => row.branch.code },
     { id: "owner", header: "Owner", hideBelow: "lg", sortValue: owner, cell: owner },
     {
@@ -131,7 +148,16 @@ export function ImeiTable({
       onRowClick={(row) => router.push(`/imei/${row.id}`)}
       card={(row) => ({
         title: <span className="font-mono">{row.imei1}</span>,
-        subtitle: `${row.product.name} · ${row.branch.code}`,
+        subtitle: (
+          <>
+            <span className="block">{row.product.name} · {row.branch.code}</span>
+            {productSpecLine(row.product) || unitExtra(row) ? (
+              <span className="block text-xs text-muted-foreground">
+                {[productSpecLine(row.product), unitExtra(row)].filter(Boolean).join(" · ")}
+              </span>
+            ) : null}
+          </>
+        ),
         badge: <StatusBadge value={row.status} />,
         meta: (
           <>

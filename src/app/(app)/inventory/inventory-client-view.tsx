@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { productSpecLine } from "@/lib/product-specs"
 import Link from "next/link"
 import { AlertTriangle, Coins, FileSpreadsheet, Layers, Printer, TrendingUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -30,6 +31,9 @@ type InventoryRow = {
     name: string
     sku: string
     condition: string
+    storage?: string | null
+    ram?: string | null
+    color?: string | null
     costPrice: number
     sellingPrice: number
     minimumPrice: number
@@ -77,6 +81,7 @@ export function InventoryClientView({
       if (!query) return true
       return (
         row.product.name.toLowerCase().includes(query) ||
+        productSpecLine(row.product).toLowerCase().includes(query) ||
         row.product.sku.toLowerCase().includes(query) ||
         row.product.brand.name.toLowerCase().includes(query) ||
         row.product.category.name.toLowerCase().includes(query)
@@ -199,6 +204,14 @@ export function InventoryClientView({
       cell: (row) => (
         <div>
           <p className="font-medium">{row.product.name}</p>
+          {productSpecLine(row.product) ? <p className="text-xs text-muted-foreground">{productSpecLine(row.product)}</p> : null}
+          <Link
+            href={`/products/activity/${row.product.id}`}
+            onClick={(event) => event.stopPropagation()}
+            className="text-xs font-medium text-primary hover:underline"
+          >
+            Item activity
+          </Link>
           <p className="text-xs text-muted-foreground">
             {row.product.brand.name} · {formatCondition(row.product.condition)} · <span className="font-mono">{row.product.sku}</span>
           </p>
@@ -385,7 +398,7 @@ export function InventoryClientView({
         filterKey={`${selectedBranch}|${conditionFilter}|${categoryFilter}|${stockFilter}`}
         query={search}
         onQueryChange={setSearch}
-        searchText={(row) => [row.product.name, row.product.sku, row.product.brand.name, row.product.category.name].join(" ")}
+        searchText={(row) => [row.product.name, productSpecLine(row.product), row.product.sku, row.product.brand.name, row.product.category.name].join(" ")}
         searchPlaceholder="Find item code, name or brand"
         actions={
           <>
@@ -453,7 +466,7 @@ export function InventoryClientView({
           const margin = marginPct(cost, selling)
           return {
             title: row.product.name,
-            subtitle: `${row.product.brand.name} · ${formatCondition(row.product.condition)} · ${row.branch.name}`,
+            subtitle: `${[productSpecLine(row.product), row.product.brand.name].filter(Boolean).join(" · ")} · ${row.branch.name}`,
             value: formatCurrency(selling),
             valueHint: showCost ? (
               <span className={margin >= 20 ? "text-success" : margin > 0 ? "text-warning" : "text-danger"}>

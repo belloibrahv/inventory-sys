@@ -34,7 +34,7 @@ export type SaleRow = {
   paymentRef: string | null
   /** Bank name and account number that received a non-cash payment. */
   paymentBank: string | null
-  items: Array<{ id: string; name: string; imei: string | null; quantity: number; unitPrice: number; totalPrice: number }>
+  items: Array<{ id: string; name: string; specs: string; imei: string | null; quantity: number; unitPrice: number; totalPrice: number }>
 }
 
 type PayFilter = "all" | "paid" | "part" | "unpaid"
@@ -82,7 +82,7 @@ function searchText(sale: SaleRow) {
     sale.branch.name,
     sale.branch.code,
     sale.soldBy,
-    ...sale.items.flatMap((item) => [item.name, item.imei]),
+    ...sale.items.flatMap((item) => [item.name, item.specs, item.imei]),
   ]
     .filter(Boolean)
     .join(" ")
@@ -97,7 +97,7 @@ function exportRows(rows: SaleRow[]) {
       sale.branch.name,
       sale.customer?.name ?? "Walk-in",
       sale.soldBy ?? "",
-      sale.items.map((item) => `${item.quantity} × ${item.name}${item.imei ? ` (${item.imei})` : ""}`).join("; "),
+      sale.items.map((item) => `${item.quantity} × ${item.name}${item.specs ? ` [${item.specs}]` : ""}${item.imei ? ` (${item.imei})` : ""}`).join("; "),
       sale.totalAmount,
       sale.paidAmount,
       sale.returned,
@@ -518,6 +518,7 @@ function SaleQuickLook({ sale }: { sale: SaleRow }) {
             <li key={item.id} className="flex items-start justify-between gap-3 px-3 py-2.5 text-sm">
               <div className="min-w-0">
                 <p className="font-medium">{item.name}</p>
+                {item.specs ? <p className="text-xs text-muted-foreground">{item.specs}</p> : null}
                 <p className="text-xs text-muted-foreground">
                   {item.imei ? <span className="font-mono">{item.imei}</span> : `${item.quantity} × ${formatCurrency(item.unitPrice)}`}
                 </p>

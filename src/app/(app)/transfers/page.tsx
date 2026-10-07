@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { productSpecLine } from "@/lib/product-specs"
 import { Plus } from "lucide-react"
 import { getTransfers } from "@/app/actions/ops"
 import { PageHeader } from "@/components/shared"
@@ -30,6 +31,7 @@ export default async function TransfersPage() {
       productId: item.productId,
       product: {
         name: item.product.name,
+        specs: productSpecLine(item.product),
         sku: item.product.sku,
         costPrice: money(atCost ? item.product.costPrice : item.product.sellingPrice),
       },
@@ -51,6 +53,7 @@ export default async function TransfersPage() {
             : true,
       productId: imei.productId,
       name: imei.product.name,
+      specs: productSpecLine(imei.product),
       costPrice: money(atCost ? imei.product.costPrice : imei.product.sellingPrice),
     })),
   }))

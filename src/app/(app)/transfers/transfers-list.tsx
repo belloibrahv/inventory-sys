@@ -30,7 +30,7 @@ type TransferRow = {
     id: string
     receivedQty: number
     productId: string
-    product: { name: string; sku: string; costPrice: number }
+    product: { name: string; specs: string; sku: string; costPrice: number }
     quantity: number
   }>
   imeis: Array<{
@@ -41,6 +41,7 @@ type TransferRow = {
     available: boolean
     productId: string
     name: string
+    specs: string
     costPrice: number
   }>
   /** Phones that arrived, when only part of the transfer was accepted. */
@@ -249,8 +250,8 @@ export function TransfersList({ transfers, atCost = false }: { transfers: Transf
             row.transferNumber,
             row.fromBranch.name,
             row.toBranch.name,
-            ...row.imeis.flatMap((imei) => [imei.imei1, imei.name]),
-            ...row.items.map((item) => item.product.name),
+            ...row.imeis.flatMap((imei) => [imei.imei1, imei.name, imei.specs]),
+            ...row.items.map((item) => `${item.product.name} ${item.product.specs}`),
           ].join(" ")
         }
         searchPlaceholder="Search transfer number, shop, IMEI or item"
@@ -334,6 +335,7 @@ function TransferDetail({
             <li key={imei.id} className="flex items-start justify-between gap-3 px-3 py-2.5 text-sm">
               <div className="min-w-0">
                 <p className="font-medium">{imei.name}</p>
+                {imei.specs ? <p className="text-xs text-muted-foreground">{imei.specs}</p> : null}
                 <Link href={`/imei/${imei.id}`} className="font-mono text-xs text-primary hover:underline">
                   {imei.imei1}
                 </Link>
@@ -347,6 +349,7 @@ function TransferDetail({
           <li key={item.id} className="flex items-start justify-between gap-3 px-3 py-2.5 text-sm">
             <div className="min-w-0">
               <p className="font-medium">{item.product.name}</p>
+              {item.product.specs ? <p className="text-xs text-muted-foreground">{item.product.specs}</p> : null}
               <p className="text-xs text-muted-foreground">
                 {item.quantity} × {formatCurrency(money(item.product.costPrice))} · <span className="font-mono">{item.product.sku}</span>
               </p>
@@ -393,7 +396,7 @@ function TransferDetail({
                   name="imeis"
                   units={transfer.imeis.map((imei) => ({
                     key: imei.imei1,
-                    title: imei.name,
+                    title: imei.specs ? `${imei.name} · ${imei.specs}` : imei.name,
                     codes: [imei.imei2, imei.serialNumber].filter((code): code is string => Boolean(code)),
                     unavailable: imei.available ? undefined : `No longer In shop at ${transfer.fromBranch.name} (sold or moved there).`,
                   }))}
@@ -408,6 +411,7 @@ function TransferDetail({
                     <li key={item.id} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
                       <label htmlFor={`piece-${item.id}`} className="min-w-0">
                         <span className="block font-medium">{item.product.name}</span>
+                        {item.product.specs ? <span className="block text-xs text-muted-foreground">{item.product.specs}</span> : null}
                         <span className="block text-xs text-muted-foreground">
                           {item.quantity} sent · <span className="font-mono">{item.product.sku}</span>
                         </span>

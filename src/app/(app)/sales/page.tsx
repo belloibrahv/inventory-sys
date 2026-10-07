@@ -1,4 +1,5 @@
 import { ReceiptBatchButton } from "@/components/receipt-batch-button"
+import { productSpecLine } from "@/lib/product-specs"
 import Link from "next/link"
 import { getSales } from "@/app/actions/sales"
 import { PageHeader } from "@/components/shared"
@@ -39,6 +40,8 @@ export default async function SalesPage() {
     items: sale.items.map((item) => ({
       id: item.id,
       name: item.product.name,
+      // Storage, condition and colour, faint under the name.
+      specs: productSpecLine(item.product),
       imei: item.imei?.imei1 ?? null,
       quantity: item.quantity,
       unitPrice: money(item.unitPrice),

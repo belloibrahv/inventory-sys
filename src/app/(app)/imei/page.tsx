@@ -101,7 +101,7 @@ export default async function ImeiPage({
 
       <div className="space-y-3">
         <form className="surface-card grid grid-cols-[1fr_auto] gap-2 p-3">
-          <Input name="q" defaultValue={q} placeholder="Search IMEI, serial, or item name" />
+          <Input name="q" defaultValue={q} placeholder="Search IMEI, serial, item name, storage or colour" />
           {status ? <input type="hidden" name="status" value={status} /> : null}
           {life && !status ? <input type="hidden" name="life" value={life} /> : null}
           {when ? <input type="hidden" name="when" value={when} /> : null}
