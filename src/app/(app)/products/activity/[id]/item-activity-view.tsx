@@ -28,6 +28,26 @@ type Sale = {
   imei: { id: string; imei1: string } | null
 }
 type Price = { id: string; type: string; from: number; to: number; reason: string | null; by: string; when: Date }
+type ReturnRow = {
+  id: string
+  number: string
+  when: Date
+  status: string
+  reason: string
+  outcome: string
+  backOnShelf: boolean
+  faultClass: string
+  value: number
+  shop: string
+  customer: string
+  imei: { id: string; imei1: string } | null
+}
+const SHELF_WORDS: Record<string, string> = {
+  GOOD_STOCK: "Back on the shelf",
+  FAULTY_STOCK: "Damaged list",
+  REPAIR_STOCK: "Needs repair",
+  SCRAP_STOCK: "Written off",
+}
 type Unit = { id: string; imei1: string; serial: string | null; status: string; shop: string; booked: Date; changed: Date }
 
 const PRICE_WORDS: Record<string, string> = {
@@ -36,7 +56,7 @@ const PRICE_WORDS: Record<string, string> = {
   MINIMUM_PRICE: "Lowest allowed price",
 }
 
-type Tab = "moves" | "bills" | "sales" | "units" | "prices"
+type Tab = "moves" | "bills" | "sales" | "returns" | "units" | "prices"
 
 /** Where a paper reference leads, when it is one the app can open. */
 function referenceHref(reference: string | null) {
@@ -58,6 +78,7 @@ export function ItemActivityView({
   sales,
   prices,
   units,
+  returns,
 }: {
   itemName: string
   sku: string
@@ -67,6 +88,7 @@ export function ItemActivityView({
   sales: Sale[]
   prices: Price[]
   units: Unit[]
+  returns: ReturnRow[]
 }) {
   const [tab, setTab] = useState<Tab>("moves")
   const [query, setQuery] = useState("")
@@ -76,6 +98,7 @@ export function ItemActivityView({
     { key: "moves", label: "Every stock movement", count: moves.length },
     { key: "bills", label: "Booked in", count: bills.length },
     { key: "sales", label: "Sales", count: sales.length },
+    { key: "returns", label: "Returns", count: returns.length },
     ...(units.length ? [{ key: "units" as Tab, label: "Phones", count: units.length }] : []),
     { key: "prices", label: "Price changes", count: prices.length },
   ]
@@ -88,9 +111,10 @@ export function ItemActivityView({
       bills: bills.filter((row) => has(row.invoice, row.supplier, row.shop)),
       sales: sales.filter((row) => has(row.invoice, row.customer, row.shop, row.seller, row.imei?.imei1)),
       units: units.filter((row) => has(row.imei1, row.serial, row.status, row.shop)),
+      returns: returns.filter((row) => has(row.number, row.customer, row.shop, row.reason, row.outcome, row.imei?.imei1)),
       prices: prices.filter((row) => has(PRICE_WORDS[row.type] ?? row.type, row.reason, row.by)),
     }
-  }, [moves, bills, sales, units, prices, needle])
+  }, [moves, bills, sales, units, prices, returns, needle])
 
   function download(format: "csv" | "xlsx") {
     const when = (date: Date) => formatShopWhen(date)
@@ -114,6 +138,21 @@ export function ItemActivityView({
       sales: [
         ["When", "Invoice", "Shop", "Customer", "Sold by", "IMEI", "Qty", "Unit price", "Line total"],
         ...shown.sales.map((row) => [when(row.when), row.invoice, row.shop, row.customer, row.seller, row.imei?.imei1 ?? "", row.quantity, row.unitPrice, row.total]),
+      ],
+      returns: [
+        ["When", "Return", "Shop", "Customer", "IMEI", "Reason", "Outcome", "Where it went", "Status", "Value"],
+        ...shown.returns.map((row) => [
+          when(row.when),
+          row.number,
+          row.shop,
+          row.customer,
+          row.imei?.imei1 ?? "",
+          row.reason.replace(/_/g, " ").toLowerCase(),
+          row.outcome.replace(/_/g, " ").toLowerCase(),
+          row.status === "COMPLETED" ? SHELF_WORDS[row.faultClass] ?? row.faultClass : "Not applied yet",
+          row.status,
+          row.value,
+        ]),
       ],
       units: [
         ["IMEI", "Serial", "Status", "Shop", "Booked in", "Last change"],
@@ -295,6 +334,56 @@ export function ItemActivityView({
             </table>
           ) : (
             empty("This item has not been sold yet.")
+          )
+        ) : null}
+
+        {tab === "returns" ? (
+          shown.returns.length ? (
+            <table className="w-full text-sm">
+              <thead className="bg-muted/60">
+                <tr>
+                  <th className={th}>When</th>
+                  <th className={th}>Return</th>
+                  <th className={th}>Shop</th>
+                  <th className={th}>Customer</th>
+                  <th className={th}>IMEI</th>
+                  <th className={th}>Outcome</th>
+                  <th className={th}>Where it went</th>
+                  <th className={cn(th, "text-right")}>Value</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {shown.returns.map((row) => (
+                  <tr key={row.id}>
+                    <td className={cn(td, "whitespace-nowrap tabular-nums")}>{formatShopWhen(row.when)}</td>
+                    <td className={td}>
+                      <Link href="/returns" className="font-mono text-xs text-primary hover:underline">
+                        {row.number}
+                      </Link>
+                      <span className="block text-xs text-muted-foreground">{row.reason.replace(/_/g, " ").toLowerCase()}</span>
+                    </td>
+                    <td className={td}>{row.shop}</td>
+                    <td className={td}>{row.customer || "-"}</td>
+                    <td className={cn(td, "font-mono text-xs")}>
+                      {row.imei ? (
+                        <Link href={`/imei/${row.imei.id}`} className="text-primary hover:underline">
+                          {row.imei.imei1}
+                        </Link>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                    <td className={td}>{row.outcome.replace(/_/g, " ").toLowerCase()}</td>
+                    <td className={cn(td, row.status !== "COMPLETED" ? "text-warning" : row.backOnShelf ? "text-success" : "text-warning")}>
+                      {row.status !== "COMPLETED" ? "Not applied yet: finish it on Returns" : SHELF_WORDS[row.faultClass] ?? row.faultClass}
+                    </td>
+                    <td className={cn(td, "text-right tabular-nums")}>{formatCurrency(row.value)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            empty("This item has not been returned.")
           )
         ) : null}
 

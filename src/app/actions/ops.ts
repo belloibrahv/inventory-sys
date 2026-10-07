@@ -820,7 +820,12 @@ export async function createReturn(formData: FormData) {
 
   const reason = String(formData.get("reason")) as ReturnReason
   const outcome = String(formData.get("outcome")) as ReturnOutcome
-  let faultClass = String(formData.get("faultClass") || "FAULTY_STOCK") as FaultClass
+  // A return goes back into the shop's sellable stock unless someone with full
+  // control says otherwise. Defaulting to faulty kept returned phones (and every
+  // accessory refunded by a manager, whose form has no condition box) off the
+  // shelf, so returns never showed in Shop stock or on Sell now.
+  let faultClass = String(formData.get("faultClass") || "GOOD_STOCK") as FaultClass
+  if (!(Object.values(FaultClass) as string[]).includes(faultClass)) faultClass = "GOOD_STOCK"
   const notesRaw = String(formData.get("notes") || "").trim()
   if (!(Object.values(ReturnReason) as string[]).includes(reason)) return { error: "Pick why it is coming back." }
   if (!(Object.values(ReturnOutcome) as string[]).includes(outcome)) return { error: "Pick what happens next." }
@@ -836,9 +841,10 @@ export async function createReturn(formData: FormData) {
     if (outcome !== "REPLACEMENT" && outcome !== "REFUND") {
       return { error: "A return from the shop floor is a replacement from our stock or a refund. A manager decides anything else." }
     }
-    // A faulty item stays in the shop as faulty for a manager to decide on;
-    // anything else goes back on the shelf.
-    faultClass = reason === "FAULTY" ? "FAULTY_STOCK" : "GOOD_STOCK"
+    // From the shop floor every return goes straight back on the shelf, ready
+    // to sell, as the owners asked. A manager can mark a broken one Damaged on
+    // its phone page in one tap.
+    faultClass = "GOOD_STOCK"
   }
   const returnRaw = formData.get("returnValue") ?? formData.get("refundAmount")
   const returnMode = String(formData.get("returnMode") || "imei") // "imei" | "invoice"
@@ -1410,7 +1416,9 @@ async function applyReturn(user: Awaited<ReturnType<typeof requireUser>>, formDa
     // ── Invoice-item (non-IMEI) stock adjustment on Apply ─────────────────
     // When the return was logged from an invoice line (accessories, cords, etc.)
     // and the item is going back onto the shelf, add its pieces back to stock.
-    if (record.saleItemId && record.saleItem && record.outcome !== "REPLACEMENT") {
+    // Replacements included: the replacement step above puts back a returned
+    // phone only, so a returned accessory swapped for another was lost.
+    if (record.saleItemId && record.saleItem && !record.imeiId) {
       if (record.faultClass === "GOOD_STOCK") {
         // Parse quantity from notes: "Item: X · Qty: N · ..." or default 1
         const qtyMatch = record.notes?.match(/Qty:\s*(\d+)/)
@@ -1451,6 +1459,75 @@ async function applyReturn(user: Awaited<ReturnType<typeof requireUser>>, formDa
     where: { entityType: "Return", entityId: record.id, status: "PENDING" },
     data: { status: "APPROVED", approvedBy: user.id, approvedAt: new Date() },
   })
+  refreshOps()
+  return { success: true }
+}
+
+/**
+ * Put a finished return's item back on the shelf, ready to sell.
+ *
+ * Returns used to be logged as faulty unless someone changed the condition
+ * box, and an accessory refunded by a manager had no box at all, so returned
+ * items sat on the damaged list or vanished from the count and never showed
+ * in Shop stock. This puts one such return right, once.
+ */
+export async function restockReturn(formData: FormData) {
+  const user = await requireUser()
+  if (!(await can(user.role, "action.return"))) return { error: "You are not allowed to change a return. Ask the main admin." }
+  const id = String(formData.get("id") || "")
+  const record = await prisma.stockReturn.findUnique({
+    where: { id },
+    include: { imei: { include: { product: true } }, saleItem: { include: { product: true } } },
+  })
+  if (!record) return { error: "We could not find that return." }
+  if (!(await canReachBranch(user, record.branchId))) return { error: OTHER_SHOP }
+  if (record.status !== "COMPLETED") return { error: "Finish this return first (Apply); that puts it back in stock." }
+  if (record.faultClass === "GOOD_STOCK") return { error: "This return is already back on the shelf." }
+  if (record.outcome === "REPAIR" || record.outcome === "SEND_TO_SUPPLIER") {
+    return { error: "This item went to repair or back to the supplier, so it is not in the shop to put on the shelf." }
+  }
+  if (record.imei && !["FAULTY", "DISPOSED", "RETURNED"].includes(record.imei.status)) {
+    return { error: `${record.imei.imei1} is ${record.imei.status.replace(/_/g, " ").toLowerCase()} now, so it cannot be put back from this return.` }
+  }
+  const qtyMatch = record.notes?.match(/Qty:\s*(\d+)/)
+  const pieces = record.saleItem && !record.imeiId ? (qtyMatch ? Number(qtyMatch[1]) : 1) : 0
+  const productId = record.imei?.productId ?? record.saleItem?.productId
+  if (!productId) return { error: "This return has no item to put back." }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const sealed = await tx.stockReturn.updateMany({
+        where: { id, faultClass: { not: "GOOD_STOCK" } },
+        data: { faultClass: "GOOD_STOCK" },
+      })
+      if (sealed.count !== 1) throw new ConflictError("Someone already put this return back on the shelf.")
+      if (record.imeiId) {
+        await tx.imeiRecord.update({
+          where: { id: record.imeiId },
+          data: { status: "IN_STOCK", customerId: null, cosmeticGrade: record.imei?.cosmeticGrade === "FAULTY" ? null : record.imei?.cosmeticGrade },
+        })
+      }
+      await returnStock(tx, {
+        productId,
+        branchId: record.branchId,
+        quantity: record.imeiId ? 1 : pieces,
+        move: { kind: "RETURN_IN", reference: record.returnNumber, userId: user.id },
+      })
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "UPDATE",
+          entityType: "Return",
+          entityId: record.returnNumber,
+          oldValue: JSON.stringify({ faultClass: record.faultClass }),
+          newValue: JSON.stringify({ faultClass: "GOOD_STOCK", backOnShelf: record.imeiId ? record.imei?.imei1 : `${pieces} piece(s)` }),
+          branchId: record.branchId,
+        },
+      })
+    })
+  } catch (error) {
+    return { error: shopError(error, "Could not put this return back on the shelf.") }
+  }
   refreshOps()
   return { success: true }
 }

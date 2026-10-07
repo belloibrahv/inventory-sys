@@ -82,7 +82,7 @@ export async function getItemActivity(productId: string) {
   })
   if (!product) return null
 
-  const [stock, moves, bills, sold, prices, units] = await Promise.all([
+  const [stock, moves, bills, sold, prices, units, returns] = await Promise.all([
     prisma.inventory.findMany({
       where: { productId, ...shop },
       select: { quantity: true, branch: { select: { name: true, code: true } } },
@@ -166,6 +166,27 @@ export async function getItemActivity(productId: string) {
       },
       orderBy: { updatedAt: "desc" },
       take: 600,
+    }),
+    // Every return of this item, by phone or by invoice line, whether or not
+    // it went back on the shelf.
+    prisma.stockReturn.findMany({
+      where: { ...shop, OR: [{ imei: { productId } }, { saleItem: { productId } }] },
+      select: {
+        id: true,
+        returnNumber: true,
+        createdAt: true,
+        completedAt: true,
+        status: true,
+        reason: true,
+        outcome: true,
+        faultClass: true,
+        returnValue: true,
+        branch: { select: { code: true } },
+        customer: { select: { name: true } },
+        imei: { select: { id: true, imei1: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 300,
     }),
   ])
 
@@ -252,6 +273,20 @@ export async function getItemActivity(productId: string) {
       reason: row.reason,
       by: changerName.get(row.changedBy) ?? "",
       when: row.changedAt,
+    })),
+    returns: returns.map((row) => ({
+      id: row.id,
+      number: row.returnNumber,
+      when: row.completedAt ?? row.createdAt,
+      status: row.status,
+      reason: row.reason,
+      outcome: row.outcome,
+      backOnShelf: row.faultClass === "GOOD_STOCK" && row.status === "COMPLETED" && row.outcome !== "SEND_TO_SUPPLIER" && row.outcome !== "REPAIR",
+      faultClass: row.faultClass,
+      value: money(row.returnValue),
+      shop: row.branch.code,
+      customer: row.customer?.name ?? "",
+      imei: row.imei ? { id: row.imei.id, imei1: row.imei.imei1 } : null,
     })),
     units: units.map((row) => ({
       id: row.id,

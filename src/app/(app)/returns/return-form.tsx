@@ -354,9 +354,7 @@ function OutcomeFields({
       {!fullControl ? (
         <p className="flex items-start gap-1.5 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
           <Info className="mt-0.5 h-4 w-4 shrink-0" />
-          {reason === "FAULTY"
-            ? "It comes back into this shop as faulty, not for sale. A manager decides what happens next (repair or back to the supplier)."
-            : "It comes back into this shop and goes back on the shelf."}
+          It comes back into this shop&apos;s stock, ready to sell. If it is broken, a manager can mark it Damaged on its phone page.
         </p>
       ) : null}
 
@@ -364,7 +362,7 @@ function OutcomeFields({
       {fullControl && (!isInvoicePath || (outcome !== "REFUND" && outcome !== "CREDIT_NOTE")) && (
         <div className="space-y-1.5">
           <Label htmlFor="fault-select">Condition of the returned item</Label>
-          <Select id="fault-select" name="faultClass" defaultValue="FAULTY_STOCK">
+          <Select id="fault-select" name="faultClass" defaultValue="GOOD_STOCK">
             {FAULTS.map((item) => (
               <option key={item.value} value={item.value}>
                 {item.label}

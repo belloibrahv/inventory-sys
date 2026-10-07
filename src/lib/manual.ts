@@ -360,7 +360,7 @@ const PAGES: Array<
     href: "/returns",
     title: "Returns",
     needAction: "action.return",
-    what: "A buyer brings something back. Phones and laptops use the Phone or laptop tab — pick the sold device by IMEI. Accessories, cords, pouches, and other items without an IMEI number use the Other item by invoice tab — type the invoice number, pick the line, and say how many are coming back. Both paths ask for a return value, an outcome, and the condition of what came back. It takes effect the moment you save it: the item is back in this shop's stock (a faulty one on the damaged list) and the refund or replacement is settled. No approval is needed.",
+    what: "A buyer brings something back. Phones and laptops use the Phone or laptop tab — pick the sold device by IMEI. Accessories, cords, pouches, and other items without an IMEI number use the Other item by invoice tab — type the invoice number, pick the line, and say how many are coming back. Both paths ask for a return value, an outcome, and the condition of what came back. It takes effect the moment you save it: the item is back in this shop's stock, ready to sell, and the refund or replacement is settled. A manager can mark a broken one Damaged on its phone page, or pick another condition when logging it. No approval is needed.",
     doThis: [
       "For a phone or laptop: open the Phone or laptop tab. Pick the sold device from the list, or use Find sold IMEI if it is not there. Confirm the return item value.",
       "For a cord, pouch, or accessory: open the Other item by invoice tab. Type the invoice number and press Find. Pick the item line. If more than one piece is coming back, type how many.",

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react"
 import Link from "next/link"
 import { Package, Smartphone } from "lucide-react"
-import { completeReturn } from "@/app/actions/ops"
+import { completeReturn, restockReturn } from "@/app/actions/ops"
 import { ActionForm } from "@/components/action-form"
 import { StatusBadge } from "@/components/shared"
 import { DataTable, type DataColumn } from "@/components/data-table"
@@ -198,6 +198,16 @@ function BalanceFigure({ balance }: { balance: number }) {
           ? `Payable (we refund the customer): ${formatCurrency(payable)}`
           : "Balance: even"}
     </p>
+  )
+}
+
+/** A finished return whose item never went back on the sellable shelf. */
+function offShelf(row: { status: string; faultClass: string; outcome: string }) {
+  return (
+    row.status === "COMPLETED" &&
+    row.faultClass !== "GOOD_STOCK" &&
+    row.outcome !== "REPAIR" &&
+    row.outcome !== "SEND_TO_SUPPLIER"
   )
 }
 
@@ -509,7 +519,8 @@ export function ReturnsList({
       cell: (row) => (
         <div className="whitespace-nowrap">
           <StatusBadge value={row.status} />
-          {row.status === "APPROVED" ? <p className="mt-1 text-[11px] font-medium text-warning">Apply the outcome</p> : null}
+          {row.status === "APPROVED" || row.status === "PENDING" ? <p className="mt-1 text-[11px] font-medium text-warning">Apply the outcome</p> : null}
+          {offShelf(row) ? <p className="mt-1 text-[11px] font-medium text-warning">Not on the shelf</p> : null}
         </div>
       ),
     },
@@ -557,7 +568,8 @@ export function ReturnsList({
             <>
               <span>{outcomeLabel(row.outcome)}</span>
               <span>· {formatShopWhen(whenOf(row))}</span>
-              {row.status === "APPROVED" ? <span className="font-medium text-warning">· Apply the outcome</span> : null}
+              {row.status === "APPROVED" || row.status === "PENDING" ? <span className="font-medium text-warning">· Apply the outcome</span> : null}
+              {offShelf(row) ? <span className="font-medium text-warning">· Not on the shelf</span> : null}
             </>
           ),
         })}
@@ -648,6 +660,23 @@ function ReturnDetail({
       ) : null}
       {row.status === "APPROVED" || row.status === "PENDING" ? (
         <ApplyForm row={row} stock={stock} banks={banks} canReconfirm={canReconfirm} onDone={onDone} />
+      ) : null}
+      {offShelf(row) ? (
+        <div className="space-y-2 rounded-xl border border-warning/30 bg-warning-soft/50 p-3">
+          <p className="text-sm">
+            This return was finished as <span className="font-semibold">{row.faultClass === "SCRAP_STOCK" ? "written off" : "not for sale"}</span>, so
+            the item is not in Shop stock. If it is fine to sell, put it back on the shelf.
+          </p>
+          <ActionForm
+            action={restockReturn}
+            submit="Put back on the shelf"
+            successMessage="Back on the shelf. It shows in Shop stock and on Sell now."
+            size="sm"
+            onSuccess={onDone}
+          >
+            <input type="hidden" name="id" value={row.id} />
+          </ActionForm>
+        </div>
       ) : null}
     </div>
   )

@@ -97,6 +97,7 @@ export default async function ItemActivityPage({ params }: { params: Promise<{ i
         sales={data.sales}
         prices={data.prices}
         units={data.units}
+        returns={data.returns}
       />
     </div>
   )
