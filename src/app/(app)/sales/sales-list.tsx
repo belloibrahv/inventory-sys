@@ -82,6 +82,8 @@ function searchText(sale: SaleRow) {
     sale.branch.name,
     sale.branch.code,
     sale.soldBy,
+    sale.paymentBank,
+    sale.paymentRef,
     ...sale.items.flatMap((item) => [item.name, item.specs, item.imei]),
   ]
     .filter(Boolean)
@@ -245,7 +247,12 @@ export function SalesList({ sales }: { sales: SaleRow[] }) {
       header: "Payment",
       hideBelow: "lg",
       sortValue: (sale) => statusLabel(sale.paymentMethod),
-      cell: (sale) => <span className="whitespace-nowrap">{statusLabel(sale.paymentMethod)}</span>,
+      cell: (sale) => (
+        <div className="min-w-0">
+          <p className="whitespace-nowrap">{statusLabel(sale.paymentMethod)}</p>
+          {sale.paymentBank ? <p className="text-xs text-muted-foreground">{sale.paymentBank}</p> : null}
+        </div>
+      ),
     },
     {
       id: "ref",
@@ -355,6 +362,7 @@ export function SalesList({ sales }: { sales: SaleRow[] }) {
               <>
                 <span>{sale.branch.name}</span>
                 <span>· {statusLabel(sale.paymentMethod)}</span>
+                {sale.paymentBank ? <span className="text-muted-foreground">· {sale.paymentBank}</span> : null}
                 <span>· {sale.items.length} item{sale.items.length === 1 ? "" : "s"}</span>
               </>
             ),

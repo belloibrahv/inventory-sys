@@ -32,10 +32,17 @@ export default async function SalesPage() {
     soldBy: sale.user?.name ?? null,
     returned: returned.get(sale.id) ?? 0,
     paymentRef: sale.payments.find((p) => p.reference)?.reference ?? null,
+    // Every bank the money went into, so a sale split across two accounts
+    // shows both on the list without opening it.
     paymentBank: (() => {
-      const bankPayment = sale.payments.find((p) => p.method !== "CASH" && p.bankAccount)
-      if (!bankPayment?.bankAccount) return null
-      return `${bankPayment.bankAccount.bankName} · ${bankPayment.bankAccount.accountNumber}`
+      const banks = [
+        ...new Set(
+          sale.payments
+            .filter((p) => p.method !== "CASH" && p.bankAccount)
+            .map((p) => `${p.bankAccount!.bankName} · ${p.bankAccount!.accountNumber}`)
+        ),
+      ]
+      return banks.length ? banks.join(" + ") : null
     })(),
     items: sale.items.map((item) => ({
       id: item.id,
