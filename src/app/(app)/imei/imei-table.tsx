@@ -2,9 +2,11 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useState, useTransition } from "react"
+import { Download, FileSpreadsheet, Loader2 } from "lucide-react"
 import { toast } from "sonner"
-import { setImeiShelfState } from "@/app/actions/imei"
+import { exportImeiRecords, setImeiShelfState } from "@/app/actions/imei"
+import { downloadTable } from "@/lib/download-table"
 import { StatusBadge } from "@/components/shared"
 import { DataTable, type DataColumn } from "@/components/data-table"
 import { Button } from "@/components/ui/button"
@@ -73,12 +75,64 @@ function ShelfToggle({ id, status }: { id: string; status: string }) {
   )
 }
 
+export type ImeiFilters = { q?: string; status?: string; life?: string; when?: string }
+
+/**
+ * Download every phone under the current search and filters, with all its
+ * details, for reconciling in Excel. Not limited to the rows on screen.
+ */
+function ExtractButtons({ filters }: { filters: ImeiFilters }) {
+  const [busy, setBusy] = useState<"xlsx" | "csv" | null>(null)
+  async function extract(format: "xlsx" | "csv") {
+    setBusy(format)
+    try {
+      const result = await exportImeiRecords(filters.q, filters.status, filters.life, filters.when)
+      if ("error" in result && result.error) {
+        toast.error(result.error)
+        return
+      }
+      const rows = "rows" in result ? result.rows : undefined
+      if (!rows) return
+      const count = rows.length - 1
+      if (count <= 0) {
+        toast.error("No phone matches these filters, so there is nothing to download.")
+        return
+      }
+      const stamp = new Date().toISOString().slice(0, 10)
+      const scope = [filters.status ?? filters.life, filters.when, filters.q].filter(Boolean).join("-").replace(/[^a-z0-9-]+/gi, "_")
+      await downloadTable(rows, `all-phones${scope ? `-${scope}` : ""}-${stamp}.${format}`, format)
+      toast.success(
+        `${count.toLocaleString("en-NG")} phone${count === 1 ? "" : "s"} downloaded${result.truncated ? " (the first 50,000; narrow the filters for the rest)" : ""}.`
+      )
+    } catch {
+      toast.error("The download did not finish. Check the line and try again.")
+    } finally {
+      setBusy(null)
+    }
+  }
+  return (
+    <>
+      <Button type="button" variant="outline" size="sm" className="h-10" disabled={busy !== null} onClick={() => extract("xlsx")} aria-label="Download these phones as Excel">
+        {busy === "xlsx" ? <Loader2 className="h-4 w-4 animate-spin sm:mr-1.5" /> : <FileSpreadsheet className="h-4 w-4 sm:mr-1.5" />}
+        <span className="hidden sm:inline">Excel</span>
+      </Button>
+      <Button type="button" variant="outline" size="sm" className="h-10" disabled={busy !== null} onClick={() => extract("csv")} aria-label="Download these phones as CSV">
+        {busy === "csv" ? <Loader2 className="h-4 w-4 animate-spin sm:mr-1.5" /> : <Download className="h-4 w-4 sm:mr-1.5" />}
+        <span className="hidden sm:inline">CSV</span>
+      </Button>
+    </>
+  )
+}
+
 export function ImeiTable({
   records,
   resetKey,
+  filters,
 }: {
   records: ImeiRow[]
   resetKey: string
+  /** The page's search and filters. Without them (the offline copy) there is no download. */
+  filters?: ImeiFilters
 }) {
   const router = useRouter()
   const owner = (row: ImeiRow) => row.customer?.name ?? row.supplier?.name ?? "Vault"
@@ -146,6 +200,7 @@ export function ImeiTable({
       noun="phones"
       filterKey={resetKey}
       onRowClick={(row) => router.push(`/imei/${row.id}`)}
+      actions={filters ? <ExtractButtons filters={filters} /> : undefined}
       card={(row) => ({
         title: <span className="font-mono">{row.imei1}</span>,
         subtitle: (

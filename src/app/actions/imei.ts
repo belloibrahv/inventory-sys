@@ -2,18 +2,22 @@
 
 import { revalidatePath } from "next/cache"
 import { PRODUCT_SPEC_SELECT } from "@/lib/product-specs"
-import { IMEIStatus } from "@prisma/client"
+import { IMEIStatus, type Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { recordMovement } from "@/lib/concurrency"
 import { canReachBranch, viewBranchFilter } from "@/lib/branch-scope"
 import { requireUser } from "@/lib/session"
-import { canChangeCost, canManageCatalog } from "@/lib/rbac"
+import { canChangeCost, canManageCatalog, canSeeCost } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
 import { recentWatDays, watBounds } from "@/lib/lagos-day"
 import { IMEI_LIFE } from "@/lib/imei-life"
 import { displayPartyName } from "@/lib/party-key"
 import { findDuplicateSupplier } from "@/lib/supplier-identity"
-import { money } from "@/lib/utils"
+import { formatDateTime, money } from "@/lib/utils"
+import { normalizeStorage } from "@/lib/item-specs"
+import { shopConditionLabel } from "@/lib/conditions"
+import { phoneLookLabel } from "@/lib/phone-look"
+import { statusLabel } from "@/lib/status"
 import {
   cleanUnitCode,
   defaultIdentityFor,
@@ -70,14 +74,11 @@ export async function getImeiStatusCounts() {
   return { total, byStatus, byLife }
 }
 
-export async function getImeiRecords(search?: string, status?: string, life?: string, when?: string) {
-  const user = await requireUser()
-  const branchId = await viewBranchFilter(user)
+/** The All phones filters, shared by the list and its download so both show the same phones. */
+function imeiListWhere(branchId: string | null | undefined, search?: string, status?: string, life?: string, when?: string): Prisma.ImeiRecordWhereInput {
   const lifeBucket = IMEI_LIFE.find((row) => row.key === life)
   const range = whenBounds(when)
-
-  const rows = await prisma.imeiRecord.findMany({
-    where: {
+  return {
       ...(branchId ? { branchId } : {}),
       ...(status
         ? { status: status as IMEIStatus }
@@ -98,7 +99,15 @@ export async function getImeiRecords(search?: string, status?: string, life?: st
             ],
           }
         : {}),
-    },
+  }
+}
+
+export async function getImeiRecords(search?: string, status?: string, life?: string, when?: string) {
+  const user = await requireUser()
+  const branchId = await viewBranchFilter(user)
+
+  const rows = await prisma.imeiRecord.findMany({
+    where: imeiListWhere(branchId, search, status, life, when),
     select: {
       id: true,
       imei1: true,
@@ -680,4 +689,114 @@ export async function getSerializedProductIds() {
     select: { id: true },
   })
   return rows.map((row) => row.id)
+}
+
+/**
+ * Every phone on All phones under the current search and filters, with all
+ * its details, for reconciling against a count or a supplier list in Excel.
+ * Not capped at the 500 the screen shows. Cost is included only for those
+ * who may see it.
+ */
+export async function exportImeiRecords(search?: string, status?: string, life?: string, when?: string) {
+  const user = await requireUser()
+  if (!(await can(user.role, "view.imei"))) return { error: "You are not allowed to download the phone list." }
+  const branchId = await viewBranchFilter(user)
+  const showCost = canSeeCost(user.role)
+  const rows = await prisma.imeiRecord.findMany({
+    where: imeiListWhere(branchId, search, status, life, when),
+    select: {
+      imei1: true,
+      imei2: true,
+      serialNumber: true,
+      status: true,
+      cosmeticGrade: true,
+      batteryHealth: true,
+      conditionNotes: true,
+      createdAt: true,
+      updatedAt: true,
+      product: {
+        select: {
+          name: true,
+          sku: true,
+          ...PRODUCT_SPEC_SELECT,
+          costPrice: true,
+          sellingPrice: true,
+          brand: { select: { name: true } },
+          category: { select: { name: true } },
+        },
+      },
+      branch: { select: { name: true, code: true } },
+      customer: { select: { name: true, phone: true } },
+      supplier: { select: { name: true } },
+      purchase: { select: { invoiceNumber: true } },
+      sale: { select: { invoiceNumber: true, saleDate: true } },
+    },
+    orderBy: [{ product: { name: "asc" } }, { imei1: "asc" }],
+    take: 50_000,
+  })
+  const header = [
+    "IMEI 1",
+    "IMEI 2",
+    "Serial",
+    "Item",
+    "Item code",
+    "Brand",
+    "Category",
+    "Storage",
+    "RAM",
+    "Colour",
+    "Condition",
+    "How it looks",
+    "Battery %",
+    "Status",
+    "Shop",
+    "Shop code",
+    "Customer",
+    "Customer phone",
+    "Supplier",
+    "Supplier bill",
+    "Invoice",
+    "Sold on",
+    "Booked in",
+    "Last change",
+    "Selling price",
+    ...(showCost ? ["Cost"] : []),
+    "Notes",
+  ]
+  const day = (date: Date | null | undefined) => (date ? formatDateTime(date) : "")
+  return {
+    truncated: rows.length === 50_000,
+    rows: [
+      header,
+      ...rows.map((row) => [
+        row.imei1,
+        row.imei2 ?? "",
+        row.serialNumber ?? "",
+        row.product.name,
+        row.product.sku,
+        row.product.brand?.name ?? "",
+        row.product.category?.name ?? "",
+        normalizeStorage(row.product.storage),
+        row.product.ram ?? "",
+        row.product.color ?? "",
+        shopConditionLabel(row.product.condition) || row.product.condition,
+        row.cosmeticGrade ? phoneLookLabel(row.cosmeticGrade) : "",
+        row.batteryHealth ?? "",
+        statusLabel(row.status),
+        row.branch.name,
+        row.branch.code,
+        row.customer?.name ?? "",
+        row.customer?.phone ?? "",
+        row.supplier?.name ?? "",
+        row.purchase?.invoiceNumber ?? "",
+        row.sale?.invoiceNumber ?? "",
+        day(row.sale?.saleDate),
+        day(row.createdAt),
+        day(row.updatedAt),
+        money(row.product.sellingPrice),
+        ...(showCost ? [money(row.product.costPrice)] : []),
+        row.conditionNotes ?? "",
+      ]),
+    ] as Array<Array<string | number>>,
+  }
 }

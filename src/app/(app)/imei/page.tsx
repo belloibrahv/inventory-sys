@@ -107,7 +107,11 @@ export default async function ImeiPage({
           {when ? <input type="hidden" name="when" value={when} /> : null}
           <Button type="submit">Search</Button>
         </form>
-        <ImeiTable records={records} resetKey={`${q ?? ""}|${status ?? ""}|${life ?? ""}|${when ?? ""}`} />
+        <ImeiTable
+          records={records}
+          resetKey={`${q ?? ""}|${status ?? ""}|${life ?? ""}|${when ?? ""}`}
+          filters={{ q, status, life: status ? undefined : life, when }}
+        />
       </div>
     </div>
   )
