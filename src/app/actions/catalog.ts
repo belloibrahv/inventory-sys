@@ -1390,3 +1390,186 @@ export async function resetAllProductWarrantiesToZero() {
   revalidatePath("/pos")
   return { success: true }
 }
+
+/** Statuses a phone can be moved to another item from. A sold phone stays on its invoice's item. */
+const MOVABLE_UNIT_STATUSES = ["IN_STOCK", "FAULTY", "DISPOSED", "RECEIVED"] as const
+
+/**
+ * Put phones under the item they really are.
+ *
+ * Booking a phone under the wrong item (the wrong storage, say) left no way
+ * out: Reduce stock wrote it off but kept its IMEI, so loading it again under
+ * the right item was refused as "already on the system", and removing the
+ * item only hid it. This moves the phones themselves, by IMEI or serial, to
+ * an existing item or to a corrected copy of the item made on the spot. Shelf
+ * counts follow phones that are in the shop, every move is on the stock ledger
+ * and Who did what, and phones written off by mistake can be put back in the
+ * shop on the way. A sold phone is left alone so its invoice does not change.
+ */
+export async function moveUnitsToItem(formData: FormData) {
+  const user = await requireUser()
+  if (!(await canManageCatalog(user.role))) return { error: "You are not allowed to move phones between items. Ask the main admin." }
+
+  const codes = [
+    ...new Set(
+      String(formData.get("codes") || "")
+        .split(/[\s,;]+/)
+        .map((code) => code.replace(/-/g, "").trim())
+        .filter(Boolean)
+    ),
+  ]
+  if (!codes.length) return { error: "Type, paste or scan the IMEI or serial of each phone to move." }
+  if (codes.length > 300) return { error: "Move up to 300 phones at a time." }
+  const restore = formData.get("restoreWrittenOff") === "on" || formData.get("restoreWrittenOff") === "true"
+  const note = String(formData.get("reason") || "").trim()
+
+  const units = await prisma.imeiRecord.findMany({
+    where: { OR: [{ imei1: { in: codes } }, { imei2: { in: codes } }, { serialNumber: { in: codes } }] },
+    include: { product: { select: { id: true, name: true } }, branch: { select: { name: true } } },
+  })
+  const byCode = new Map<string, (typeof units)[number]>()
+  for (const unit of units) for (const code of [unit.imei1, unit.imei2, unit.serialNumber]) if (code) byCode.set(code, unit)
+  const missing = codes.filter((code) => !byCode.has(code))
+  if (missing.length) return { error: `Not on the system: ${missing.slice(0, 8).join(", ")}${missing.length > 8 ? ` and ${missing.length - 8} more` : ""}.` }
+  const picked = [...new Map(codes.map((code) => [byCode.get(code)!.id, byCode.get(code)!])).values()]
+
+  const stuck = picked.filter((unit) => !(MOVABLE_UNIT_STATUSES as readonly string[]).includes(unit.status))
+  if (stuck.length) {
+    return {
+      error: `${stuck
+        .slice(0, 5)
+        .map((unit) => `${unit.imei1} (${unit.status.replace(/_/g, " ").toLowerCase()})`)
+        .join(", ")} cannot be moved. Only phones in the shop, damaged or written off can; a sold one stays on its invoice's item.`,
+    }
+  }
+  const pendingTransfers = await prisma.stockTransfer.findMany({ where: { status: "PENDING" }, select: { notes: true, transferNumber: true } })
+  const onTransfer = picked.filter((unit) => pendingTransfers.some((row) => (row.notes ?? "").includes(unit.imei1)))
+  if (onTransfer.length) return { error: `${onTransfer.map((unit) => unit.imei1).join(", ")} is on a shop-to-shop transfer waiting to be accepted. Settle that first.` }
+
+  // Where they go: an item already on the list, or a corrected copy of the item they are on now.
+  let target: { id: string; name: string; tracking: ProductTracking } | null = null
+  const targetId = String(formData.get("targetProductId") || "").trim()
+  if (targetId) {
+    target = await prisma.product.findUnique({ where: { id: targetId }, select: { id: true, name: true, tracking: true } })
+    if (!target) return { error: "That item is not on the list any more. Pick another." }
+  } else {
+    const sourceId = String(formData.get("copyFromProductId") || picked[0].productId)
+    const source = await prisma.product.findUnique({ where: { id: sourceId }, include: { brand: true } })
+    if (!source) return { error: "Pick the item to move them to." }
+    const conditionRaw = String(formData.get("condition") || "").trim()
+    const condition = conditionRaw ? parseShopCondition(conditionRaw) : source.condition
+    if (!condition) return { error: "Pick the condition from the list." }
+    const name = String(formData.get("name") || "").trim() || source.name
+    const field = (key: string, fallback: string | null) => {
+      const raw = formData.get(key)
+      return raw == null ? fallback : String(raw).trim() || null
+    }
+    const storage = field("storage", source.storage)
+    const ram = field("ram", source.ram)
+    const color = field("color", source.color)
+    const same = name === source.name && storage === source.storage && ram === source.ram && color === source.color && condition === source.condition
+    if (same) return { error: "Change the storage, RAM, colour, condition or name for the corrected item, or pick an item already on the list." }
+    const twin = await prisma.product.findFirst({
+      where: { name, storage, ram, color, condition, brandId: source.brandId, isActive: true },
+      select: { id: true, name: true, tracking: true },
+    })
+    target =
+      twin ??
+      (await prisma.product.create({
+        data: {
+          sku: await uniqueSku(makeOpeningSku({ brand: source.brand.name, name, storage: storage ?? "", condition })),
+          name,
+          description: source.description,
+          brandId: source.brandId,
+          categoryId: source.categoryId,
+          condition,
+          storage,
+          ram,
+          color,
+          costPrice: source.costPrice,
+          minimumPrice: source.minimumPrice,
+          sellingPrice: source.sellingPrice,
+          marketPrice: source.marketPrice,
+          warrantyDays: source.warrantyDays,
+          tracking: source.tracking,
+        },
+        select: { id: true, name: true, tracking: true },
+      }))
+  }
+  if (target.tracking === "NONE") return { error: `${target.name} is counted without numbers. Phones can only go to an item that tracks an IMEI or serial.` }
+  const already = picked.filter((unit) => unit.productId === target!.id)
+  if (already.length === picked.length) return { error: `These phones are already under ${target.name}.` }
+  const moving = picked.filter((unit) => unit.productId !== target!.id)
+
+  const day = watDayKey()
+  try {
+    await prisma.$transaction(async (tx) => {
+      for (const unit of moving) {
+        const backInShop = restore && unit.status === "DISPOSED"
+        const onShelf = unit.status === "IN_STOCK"
+        const reference = `Moved ${unit.imei1} to ${target!.name}`
+        if (onShelf) {
+          // Off the old item's shelf. A count already short (an earlier
+          // correction took it off without the phone) is not taken below zero.
+          const off = await tx.inventory.updateMany({
+            where: { productId: unit.productId, branchId: unit.branchId, quantity: { gt: 0 } },
+            data: { quantity: { decrement: 1 } },
+          })
+          if (off.count) {
+            await tx.stockMovement.create({
+              data: { productId: unit.productId, branchId: unit.branchId, quantity: -1, kind: "HAND_CORRECTION", reference, userId: user.id, businessDate: day },
+            })
+          }
+        }
+        if (onShelf || backInShop) {
+          await tx.inventory.upsert({
+            where: { productId_branchId: { productId: target!.id, branchId: unit.branchId } },
+            update: { quantity: { increment: 1 } },
+            create: { productId: target!.id, branchId: unit.branchId, quantity: 1 },
+          })
+          await tx.stockMovement.create({
+            data: {
+              productId: target!.id,
+              branchId: unit.branchId,
+              quantity: 1,
+              kind: "HAND_CORRECTION",
+              reference: backInShop ? `Written off by mistake; ${unit.imei1} back in shop` : reference,
+              userId: user.id,
+              businessDate: day,
+            },
+          })
+        }
+        await tx.imeiRecord.update({
+          where: { id: unit.id },
+          data: {
+            productId: target!.id,
+            ...(backInShop ? { status: "IN_STOCK" } : {}),
+            notes: [unit.notes, `Moved from ${unit.product.name} to ${target!.name}${note ? ` (${note})` : ""}`].filter(Boolean).join(" · ").slice(0, 1000),
+          },
+        })
+        await tx.auditLog.create({
+          data: {
+            userId: user.id,
+            action: "UPDATE",
+            entityType: "IMEIRecord",
+            entityId: unit.imei1,
+            oldValue: JSON.stringify({ item: unit.product.name, status: unit.status }),
+            newValue: JSON.stringify({ item: target!.name, status: backInShop ? "IN_STOCK" : unit.status, shop: unit.branch.name, reason: note || null }),
+            branchId: unit.branchId,
+            risk: "HIGH",
+          },
+        })
+      }
+    }, { timeout: 60_000 })
+  } catch (error) {
+    return { error: shopError(error, "The phones were not moved. Nothing changed.") }
+  }
+
+  for (const path of ["/products", "/inventory", "/imei", "/pos", "/products/activity"]) revalidatePath(path)
+  const restored = moving.filter((unit) => restore && unit.status === "DISPOSED").length
+  return {
+    success: true,
+    targetId: target.id,
+    message: `${moving.length} phone${moving.length === 1 ? "" : "s"} now under ${target.name}${restored ? `, ${restored} back in the shop` : ""}.`,
+  }
+}

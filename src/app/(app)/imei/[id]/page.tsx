@@ -14,6 +14,7 @@ import { canManageCatalog, canSeeCost } from "@/lib/rbac"
 import { requireUser } from "@/lib/session"
 import { unitIdentityKind, unitIdentityLabel } from "@/lib/unit-identity"
 import { UnitIdentityForm } from "@/app/(app)/imei/identity-form"
+import { MoveUnitsForm } from "@/components/move-units-form"
 import { productSpecLine } from "@/lib/product-specs"
 import { shopConditionLabel } from "@/lib/conditions"
 import { normalizeStorage } from "@/lib/item-specs"
@@ -195,6 +196,26 @@ export default async function ImeiDetailPage({ params }: { params: Promise<{ id:
             imei1={record.imei1}
             imei2={record.imei2}
             serialNumber={record.serialNumber}
+          />
+        </div>
+      ) : null}
+      {canCorrectNumber && ["IN_STOCK", "FAULTY", "DISPOSED", "RECEIVED"].includes(record.status) ? (
+        <div className="surface-card p-5">
+          <h3 className="mb-1 font-semibold">Booked under the wrong item?</h3>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Move this phone to the item it really is (the right storage, colour or condition). It keeps its IMEI, and the
+            shelf counts follow it. {record.status === "DISPOSED" ? "It was written off: tick the box to put it back in the shop." : ""}
+          </p>
+          <MoveUnitsForm
+            presetCodes={[record.imei1]}
+            source={{
+              id: record.product.id,
+              name: record.product.name,
+              storage: record.product.storage,
+              ram: record.product.ram,
+              color: record.product.color,
+              condition: record.product.condition,
+            }}
           />
         </div>
       ) : null}

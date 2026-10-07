@@ -18,7 +18,8 @@ import { SHOP_CONDITION_OPTIONS } from "@/lib/conditions"
 import { TRACKING_OPTIONS, trackingLabel } from "@/lib/unit-identity"
 import { formatCurrency } from "@/lib/utils"
 import type { PriceRow } from "./price-list"
-import { AlertTriangle, Edit3, MinusCircle, Trash2 } from "lucide-react"
+import { AlertTriangle, ArrowRightLeft, Edit3, MinusCircle, Trash2 } from "lucide-react"
+import { MoveUnitsForm } from "@/components/move-units-form"
 
 export function ProductManageDialog({
   product,
@@ -41,7 +42,7 @@ export function ProductManageDialog({
   categoryNames?: string[]
 }) {
   const router = useRouter()
-  const [tab, setTab] = useState<"edit" | "stock" | "delete">("edit")
+  const [tab, setTab] = useState<"edit" | "stock" | "move" | "delete">("edit")
   const [tracking, setTracking] = useState(product?.tracking ?? "IMEI")
   const [shownFor, setShownFor] = useState(product?.id)
 
@@ -94,6 +95,20 @@ export function ProductManageDialog({
             <MinusCircle className="h-3.5 w-3.5" />
             <span>Reduce stock</span>
           </button>
+          {tracked ? (
+            <button
+              type="button"
+              onClick={() => setTab("move")}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-all ${
+                tab === "move"
+                  ? "bg-primary text-primary-foreground shadow-xs"
+                  : "text-muted-foreground hover:bg-card hover:text-foreground"
+              }`}
+            >
+              <ArrowRightLeft className="h-3.5 w-3.5" />
+              <span>Move phones</span>
+            </button>
+          ) : null}
           {canRemove ? (
           <button
             type="button"
@@ -247,8 +262,33 @@ export function ProductManageDialog({
           </ActionForm>
         ) : null}
 
+        {tab === "move" && tracked ? (
+          <div className="space-y-3 pt-2">
+            <p className="text-sm text-muted-foreground">
+              Phones booked under {product.name} by mistake (the wrong storage, colour or condition)? Move them to the item
+              they really are. Their IMEIs stay the same, the shelf counts follow them, and it is all kept on Who did what.
+            </p>
+            <MoveUnitsForm
+              source={{
+                id: product.id,
+                name: product.name,
+                storage: product.storage,
+                ram: product.ram ?? null,
+                color: product.color,
+                condition: product.condition,
+              }}
+              onDone={() => onOpenChange(false)}
+            />
+          </div>
+        ) : null}
+
         {tab === "stock" ? (
           <div className="space-y-4 pt-2">
+            {tracked ? (
+              <p className="rounded-xl border border-info/30 bg-info-soft px-3 py-2 text-xs text-info">
+                Booked under the wrong item? Do not write it off here: use <button type="button" className="font-semibold underline" onClick={() => setTab("move")}>Move phones</button> so the phone keeps its IMEI and goes to the right item.
+              </p>
+            ) : null}
             <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs">
               <p className="font-semibold text-foreground mb-1.5">On the shelf now</p>
               {branches.length ? (

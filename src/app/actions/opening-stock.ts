@@ -265,9 +265,23 @@ async function databaseProblems(plan: CorrectionPlan, lines: BookLine[], purchas
       select: {
         imei1: true,
         serialNumber: true,
+        status: true,
         _count: { select: { saleItems: true, returns: true, repairs: true, swapsOld: true, swapsNew: true } },
       },
     })
+    // Only phones booked on this opening stock, and still in the shop, can be
+    // taken off it. Taking off any other number used to lower the shelf while
+    // the phone stayed on the system, so loading it again under the right item
+    // was refused as "already on the system".
+    const onThisSheet = new Set(rows.flatMap((row) => [row.imei1, row.serialNumber].filter(Boolean) as string[]))
+    for (const code of removing.filter((code) => !onThisSheet.has(code)).slice(0, 20)) {
+      problems.push(
+        `${code} was not booked on this opening stock, so it cannot be taken off here. To put a phone under the right item, open the item on Price list and use Move phones.`
+      )
+    }
+    for (const row of rows.filter((row) => row.status !== "IN_STOCK")) {
+      problems.push(`${identityOf(row)} is not in the shop (${row.status.replace(/_/g, " ").toLowerCase()}), so it cannot be taken off the opening stock.`)
+    }
     for (const row of rows) {
       const used = Object.values(row._count).some((n) => n > 0)
       if (used) problems.push(`${identityOf(row)} already has a sale, return, repair or swap on it, so it cannot be taken off.`)    }
@@ -447,16 +461,20 @@ async function applyPlan(
             })
           }
           const removing = change.removeIdentities ?? []
+          let removed = 0
           if (removing.length) {
-            await tx.imeiRecord.deleteMany({
-              where: {
-                purchaseId: record.purchaseId,
-                status: "IN_STOCK",
-                OR: [{ imei1: { in: removing } }, { serialNumber: { in: removing } }],
-              },
-            })
+            removed = (
+              await tx.imeiRecord.deleteMany({
+                where: {
+                  purchaseId: record.purchaseId,
+                  status: "IN_STOCK",
+                  OR: [{ imei1: { in: removing } }, { serialNumber: { in: removing } }],
+                },
+              })
+            ).count
           }
-          const delta = (change.addIdentities?.length ?? 0) - removing.length
+          // The shelf drops only by the phones actually taken off.
+          const delta = (change.addIdentities?.length ?? 0) - removed
           await moveShelf(tx, line.productId, record.branchId, delta)
           qty = line.openingQty + delta
         }
