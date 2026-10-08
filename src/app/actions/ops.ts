@@ -2461,6 +2461,10 @@ export async function getTransfers() {
         .filter((item): item is (typeof records)[number] => Boolean(item)),
       /** Phones accepted at the receiving shop, for a transfer that was accepted in part. */
       arrivedImeis: row.status === "RECEIVED" && /\nArrived:|\nStayed at /.test(row.notes ?? "") ? arrived : null,
+      /** Why it was turned back, written by whoever rejected it. */
+      rejectedBecause: (row.notes ?? "").split("\n").find((line) => line.startsWith("Rejected: "))?.slice("Rejected: ".length) ?? null,
+      /** Who sent it. */
+      sentBy: row.user?.name ?? null,
     }
   })
 }
@@ -2789,6 +2793,27 @@ async function submitTransfer(formData: FormData): Promise<TransferOutcome> {
   return { success: true }
 }
 
+/**
+ * Who may accept or reject a shop-to-shop transfer: the CEO and the main admin
+ * for any shop, and the receiving shop's own manager for that shop only. The
+ * vault manager and whoever sent it may only look; the sender used to be able
+ * to accept on the other shop's behalf.
+ */
+function mayDecideTransfer(user: { role: string; branchId: string | null }, toBranchId: string) {
+  return isShopOwner(user.role as Parameters<typeof isShopOwner>[0]) || (user.role === "BRANCH_MANAGER" && user.branchId === toBranchId)
+}
+
+/** Tell the person who sent a transfer, and their shop's manager, what became of it. */
+async function tellSender(transfer: { userId: string; fromBranchId: string; transferNumber: string; toBranch: { name: string } }, title: string, message: string) {
+  const managers = await prisma.user.findMany({
+    where: { isActive: true, role: "BRANCH_MANAGER", branchId: transfer.fromBranchId },
+    select: { id: true },
+  })
+  for (const id of new Set([transfer.userId, ...managers.map((row) => row.id)])) {
+    await notify(id, title, message, "/transfers", "TRANSFER")
+  }
+}
+
 export async function receiveTransfer(formData: FormData) {
   const user = await requireUser()
   if (!(await can(user.role, "action.transfer"))) return { error: "You are not allowed to receive goods from another shop. Ask the main admin." }
@@ -2800,8 +2825,8 @@ export async function receiveTransfer(formData: FormData) {
   if (!transfer) return { error: "We could not find that send." }
   if (transfer.status === "RECEIVED") return { error: "This transfer has already been accepted." }
   if (transfer.status === "CANCELLED") return { error: "This transfer was rejected. Nothing to accept." }
-  if (!(await canSeeAllBranches(user.role)) && user.branchId && user.branchId !== transfer.toBranchId) {
-    return { error: `Only ${transfer.toBranch.name} (or head office) can accept this.` }
+  if (!mayDecideTransfer(user, transfer.toBranchId)) {
+    return { error: `Only the manager of ${transfer.toBranch.name}, the CEO or the main admin can accept this transfer.` }
   }
 
   // What arrived. Phones: those ticked on the list, or typed / scanned by any
@@ -2973,6 +2998,13 @@ export async function receiveTransfer(formData: FormData) {
   } catch (error) {
     return { error: shopError(error, "Could not accept this transfer.") }
   }
+  await tellSender(
+    transfer,
+    leftBehind.length || [...receivedByItem.values()].some((qty, index) => qty < transfer.items[index]?.quantity)
+      ? "Transfer accepted in part"
+      : "Transfer accepted",
+    `${transfer.transferNumber} was accepted at ${transfer.toBranch.name} by ${user.name || "the receiving shop"}.${leftBehind.length ? ` ${leftBehind.length} phone(s) stayed with you.` : ""}`
+  ).catch(() => {})
   refreshOps()
   return { success: true }
 }
@@ -2990,14 +3022,12 @@ export async function rejectTransfer(formData: FormData) {
   if (!transfer) return { error: "We could not find that transfer." }
   if (transfer.status === "RECEIVED") return { error: "This transfer was already accepted." }
   if (transfer.status === "CANCELLED") return { error: "This transfer was already rejected." }
-  if (
-    !(await canSeeAllBranches(user.role)) &&
-    user.branchId &&
-    user.branchId !== transfer.toBranchId &&
-    user.branchId !== transfer.fromBranchId
-  ) {
-    return { error: "Only the sending shop, the receiving shop, or head office can reject this." }
+  if (!mayDecideTransfer(user, transfer.toBranchId)) {
+    return { error: `Only the manager of ${transfer.toBranch.name}, the CEO or the main admin can reject this transfer.` }
   }
+  // Why it was turned back is required, so the sending shop knows.
+  const why = String(formData.get("reason") || "").trim()
+  if (why.length < 3) return { error: "Write why you are rejecting this transfer." }
 
   const expected = parseTransferIds(transfer.notes ?? "")
   const wasInTransit = transfer.status === "IN_TRANSIT"
@@ -3006,7 +3036,7 @@ export async function rejectTransfer(formData: FormData) {
     await prisma.$transaction(async (tx) => {
       const closed = await tx.stockTransfer.updateMany({
         where: { id, status: { in: ["PENDING", "IN_TRANSIT"] } },
-        data: { status: "CANCELLED" },
+        data: { status: "CANCELLED", notes: [transfer.notes, `Rejected: ${why.slice(0, 500)}`].filter(Boolean).join("\n") },
       })
       if (closed.count !== 1) {
         throw new ConflictError(`${transfer.transferNumber} was already closed. Refresh to see it.`)
@@ -3040,6 +3070,7 @@ export async function rejectTransfer(formData: FormData) {
           entityId: transfer.transferNumber,
           newValue: JSON.stringify({
             status: "CANCELLED",
+            reason: why,
             note: wasInTransit
               ? "Rejected. Stock returned to the sending shop."
               : "Rejected. Stock never left the sending shop In shop record.",
@@ -3051,6 +3082,11 @@ export async function rejectTransfer(formData: FormData) {
   } catch (error) {
     return { error: shopError(error, "Could not reject this transfer.") }
   }
+  await tellSender(
+    transfer,
+    "Transfer rejected",
+    `${transfer.transferNumber} was rejected at ${transfer.toBranch.name} by ${user.name || "the receiving shop"}: ${why}. The stock stays with you.`
+  ).catch(() => {})
   refreshOps()
   return { success: true }
 }

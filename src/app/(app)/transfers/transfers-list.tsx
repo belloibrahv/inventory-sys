@@ -12,6 +12,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { WorkflowSteps } from "@/components/workflow-steps"
 import { UnitChecklist } from "@/components/scan-field"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { downloadTable } from "@/lib/download-table"
 import { formatShopWhen } from "@/lib/lagos-day"
@@ -46,6 +47,11 @@ type TransferRow = {
   }>
   /** Phones that arrived, when only part of the transfer was accepted. */
   arrivedImeis: string[] | null
+  /** Why it was rejected, when it was. */
+  rejectedBecause: string | null
+  sentBy: string | null
+  /** May this person accept or reject it (receiving shop's manager, CEO, main admin)? */
+  canDecide: boolean
 }
 
 /** Accepted, but not all of it arrived. */
@@ -179,7 +185,7 @@ export function TransfersList({ transfers, atCost = false }: { transfers: Transf
           <span className="whitespace-nowrap font-medium text-primary">{row.transferNumber}</span>
           {isOpenWork(row) ? (
             <span className="whitespace-nowrap rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-semibold text-warning">
-              Accept or reject
+              {row.canDecide ? "Accept or reject" : "Waiting for the other shop"}
             </span>
           ) : null}
         </div>
@@ -275,7 +281,9 @@ export function TransfersList({ transfers, atCost = false }: { transfers: Transf
             valueHint: <span className="text-muted-foreground">{formatCurrency(totals.costValue)}</span>,
             badge: <StatusBadge value={row.status} />,
             meta: isOpenWork(row) ? (
-              <span className="font-medium text-warning">Accept or reject</span>
+              <span className="font-medium text-warning">{row.canDecide ? "Accept or reject" : "Waiting for the other shop"}</span>
+            ) : row.status === "CANCELLED" && row.rejectedBecause ? (
+              <span className="text-warning">Rejected: {row.rejectedBecause}</span>
             ) : isPartial(row) ? (
               <span className="font-medium text-warning">Part arrived</span>
             ) : undefined,
@@ -365,7 +373,16 @@ function TransferDetail({
       </ul>
       )}
 
-      {open ? (
+      {transfer.sentBy ? (
+        <p className="text-xs text-muted-foreground">Sent by {transfer.sentBy}</p>
+      ) : null}
+      {open && !transfer.canDecide ? (
+        <p className="rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground">
+          Waiting for the manager of {transfer.toBranch.name}, the CEO or the main admin to accept or reject it. Stock
+          stays In shop at {transfer.fromBranch.name} until then, and the sender gets an alert when it is decided.
+        </p>
+      ) : null}
+      {open && transfer.canDecide ? (
         <div className="space-y-4 rounded-xl border border-warning/40 p-4">
           {transfer.status === "PENDING" ? (
             <p className="text-sm text-muted-foreground">
@@ -453,6 +470,17 @@ function TransferDetail({
             }}
           >
             <input type="hidden" name="id" value={transfer.id} />
+            <label className="block space-y-1.5 text-sm">
+              <span className="font-medium">Why are you rejecting it? (required)</span>
+              <Textarea
+                name="reason"
+                required
+                minLength={3}
+                rows={2}
+                placeholder="e.g. Wrong phones sent; two IMEIs do not match the boxes"
+              />
+              <span className="block text-xs text-muted-foreground">The sending shop sees this, with your name.</span>
+            </label>
           </ActionForm>
         </div>
       ) : transfer.status === "RECEIVED" ? (
@@ -461,8 +489,13 @@ function TransferDetail({
             ? `Part arrived. What arrived is In shop at ${transfer.toBranch.name}; the rest stayed at ${transfer.fromBranch.name}.`
             : `In shop at ${transfer.toBranch.name}.`}
         </p>
-      ) : (
-        <p className="text-sm text-muted-foreground">Rejected. Stock stayed at {transfer.fromBranch.name}.</p>
+      ) : open ? null : (
+        <div className="space-y-1">
+          <p className="text-sm text-muted-foreground">Rejected. Stock stayed at {transfer.fromBranch.name}.</p>
+          {transfer.rejectedBecause ? (
+            <p className="rounded-lg bg-warning-soft px-3 py-2 text-sm text-warning">Why: {transfer.rejectedBecause}</p>
+          ) : null}
+        </div>
       )}
     </div>
   )
