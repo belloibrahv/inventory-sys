@@ -60,6 +60,7 @@ export function TransferForm({
   const receivers = destinations?.length ? destinations : branches
   const [toId, setToId] = useState(() => receivers.find((row) => row.id !== (defaultFromId || branches[0]?.id))?.id || "")
   const [busy, setBusy] = useState(false)
+  const [confirming, setConfirming] = useState(false)
   const [errors, setErrors] = useState<string[]>([])
   const [phones, setPhones] = useState<PhonePick[]>([])
   const [phonesBusy, setPhonesBusy] = useState(false)
@@ -287,6 +288,15 @@ export function TransferForm({
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    // Only the "Yes, send it" button sends. Enter in a box, or a scanner's
+    // Enter after a number, used to send the transfer with whatever was picked
+    // so far, so a third item could never be added.
+    const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null
+    if (!confirming || submitter?.dataset.confirm !== "yes") {
+      if (totalQty > 0) setConfirming(true)
+      return
+    }
+    setConfirming(false)
     const form = event.currentTarget
     const data = new FormData(form)
     const imeis = Object.entries(pickedImeis)
@@ -321,8 +331,39 @@ export function TransferForm({
     router.refresh()
   }
 
+  /** Enter in the find box (or a scan) ticks the phone with that exact number. */
+  function pickByCode(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Enter") return
+    event.preventDefault()
+    const code = query.replace(/[\s-]/g, "").trim()
+    if (!code) return
+    const hit = phones.find((row) => row.imei === code)
+    if (!hit) {
+      toast.error(`${code} is not a phone In shop at ${fromShop?.name ?? "this shop"}.`)
+      return
+    }
+    setPickedImeis((current) => ({ ...current, [hit.imei]: true }))
+    setQuery("")
+    toast.success(`Picked ${hit.name}`)
+  }
+
   return (
-    <form onSubmit={onSubmit} className="space-y-5">
+    <form
+      onSubmit={onSubmit}
+      onKeyDown={(event) => {
+        // Prevent Enter from triggering form submission anywhere except the
+        // explicit "Yes, send it" confirm button. Scanners press Enter after
+        // a number; that Enter must tick the phone, not send the transfer.
+        if (event.key !== "Enter") return
+        const target = event.target as HTMLElement
+        const isConfirmButton =
+          target instanceof HTMLButtonElement &&
+          target.type === "submit" &&
+          target.dataset.confirm === "yes"
+        if (!isConfirmButton) event.preventDefault()
+      }}
+      className="space-y-5"
+    >
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block space-y-2 text-sm">
           <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">From (Branch)</span>
@@ -373,7 +414,8 @@ export function TransferForm({
         <Input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Find IMEI, item code, name, brand, or category"
+          onKeyDown={pickByCode}
+          placeholder="Find IMEI, item code, name, brand, or category. Scan an IMEI to pick it."
           aria-label="Find items to send"
         />
 
@@ -544,9 +586,27 @@ export function TransferForm({
         After you submit, wait for the receiving branch to accept or reject. Stock stays on the sending branch In shop record until they accept. Accept and Reject stay the same.
       </div>
 
-      <Button type="submit" disabled={busy || totalQty < 1} className="w-full sm:w-auto">
-        {busy ? "Submitting this transfer" : "Submit the transfer"}
-      </Button>
+      {confirming ? (
+        <div className="space-y-3 rounded-xl border border-primary/40 bg-primary-soft p-4">
+          <p className="text-sm">
+            Send <span className="font-semibold">{totalQty}</span> item{totalQty === 1 ? "" : "s"} from{" "}
+            <span className="font-semibold">{fromShop?.name}</span> to <span className="font-semibold">{toShop?.name}</span>
+            {totalCost > 0 ? <> · {valueWord.toLowerCase()} {formatCurrency(totalCost)}</> : null}?
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" data-confirm="yes" disabled={busy}>
+              {busy ? "Sending" : "Yes, send it"}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setConfirming(false)} disabled={busy}>
+              Keep picking
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button type="submit" disabled={busy || totalQty < 1} className="w-full sm:w-auto">
+          Send transfer ({totalQty} item{totalQty === 1 ? "" : "s"})
+        </Button>
+      )}
 
       {errors.length ? (
         <ul className="list-disc pl-5 text-sm text-warning">
