@@ -2777,8 +2777,9 @@ async function submitTransfer(formData: FormData): Promise<TransferOutcome> {
     return { error: shopError(error, "Could not submit this transfer. Nothing left the shop.") }
   }
 
+  // The receiving shop, and the CEO and main admin who may also accept it.
   const destStaff = await prisma.user.findMany({
-    where: { branchId: toBranchId, isActive: true },
+    where: { isActive: true, OR: [{ branchId: toBranchId }, { role: { in: ["CEO", "SUPER_ADMIN"] } }] },
   })
   for (const staff of destStaff) {
     await notify(
