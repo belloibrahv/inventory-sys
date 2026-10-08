@@ -341,6 +341,49 @@ async function main() {
     { warnOnly: true }
   )
 
+  // A "Refund" line on a statement must have money behind it. Returns on
+  // unpaid sales were written as refunds when they only cleared the debt.
+  const refundLines = await prisma.ledgerEntry.findMany({
+    where: { type: "REFUND", reference: { startsWith: "RTN-" }, customer: { branchId: { in: ids } } },
+    select: { reference: true, amount: true, customer: { select: { name: true } } },
+  })
+  const paidOutRefs = new Set(
+    (
+      await prisma.financeEntry.findMany({
+        where: { type: "EXPENSE", reference: { in: refundLines.map((row) => row.reference!) } },
+        select: { reference: true },
+      })
+    ).map((row) => row.reference)
+  )
+  verdict(
+    "every Refund on a customer statement had money paid out",
+    refundLines
+      .filter((row) => !paidOutRefs.has(row.reference))
+      .map((row) => `${row.customer.name} · ${row.reference}: ${naira(Math.abs(n(row.amount)))} shows as a refund, but no money left (it cleared a debt). The customer page now labels it Returned · debt cleared.`),
+    { warnOnly: true }
+  )
+
+  // Money taken after a sale's goods all came back belongs on another invoice.
+  const fullyBack = await prisma.stockReturn.groupBy({
+    by: ["saleId"],
+    where: { status: "COMPLETED", outcome: { in: ["REFUND", "CREDIT_NOTE"] }, saleId: { not: null }, branchId: { in: ids } },
+    _sum: { returnValue: true },
+    _max: { completedAt: true },
+  })
+  const lateOnReturned: string[] = []
+  for (const row of fullyBack) {
+    const sale = await prisma.sale.findUnique({
+      where: { id: row.saleId! },
+      select: { invoiceNumber: true, totalAmount: true, payments: { select: { amount: true, paidAt: true } } },
+    })
+    if (!sale || n(row._sum.returnValue) < n(sale.totalAmount) - EPSILON) continue
+    const after = sale.payments.filter((pay) => row._max.completedAt && pay.paidAt > row._max.completedAt)
+    if (after.length) {
+      lateOnReturned.push(`${sale.invoiceNumber}: ${naira(after.reduce((sum, pay) => sum + n(pay.amount), 0))} taken after its goods all came back`)
+    }
+  }
+  verdict("no money was put on an invoice after its goods all came back", lateOnReturned, { warnOnly: true })
+
   // A refund pays back money, never more than the customer paid on that sale.
   const refunds = await prisma.stockReturn.findMany({
     where: { branchId: { in: ids }, status: "COMPLETED", outcome: "REFUND", saleId: { not: null } },

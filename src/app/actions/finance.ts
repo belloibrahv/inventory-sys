@@ -22,7 +22,7 @@ import {
   listedBankClash,
 } from "@/lib/opening-money"
 import { assertCashAvailable, isUndoneCollection } from "@/lib/shop-cash"
-import { returnedSaleLineIds } from "@/lib/returned-value"
+import { dueAfterReturns, returnedSaleLineIds, returnedValueBySale } from "@/lib/returned-value"
 import { receiptsInWindow } from "@/lib/receipts"
 import { customersOwing } from "@/lib/owed"
 
@@ -1761,7 +1761,10 @@ export async function getReportData(
       where: { ...shopWhere, status: { in: ["PENDING", "APPROVED"] }, outcome: { in: ["REFUND", "CREDIT_NOTE"] } },
       select: { returnValue: true, refundAmount: true },
     }),
-    Promise.resolve(sales.reduce((sum, sale) => sum + Math.max(0, money(sale.totalAmount) - money(sale.paidAmount)), 0)),
+    // Still unpaid on the period's sales, after what returns already cleared.
+    returnedValueBySale(prisma, sales.map((sale) => sale.id)).then((back) =>
+      sales.reduce((sum, sale) => sum + dueAfterReturns(sale, back.get(sale.id) ?? 0), 0)
+    ),
   ])
   // Customers owe: the shared rule (see customersOwing), so Home, Reports and
   // Check the books agree for every shop.

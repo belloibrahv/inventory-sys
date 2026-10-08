@@ -8,6 +8,8 @@ import { formatCurrency, formatDate, money } from "@/lib/utils"
 import { warrantyState } from "@/lib/warranty"
 import { statusLabel } from "@/lib/status"
 import { prisma } from "@/lib/prisma"
+import { dueAfterReturns, returnedValueBySale } from "@/lib/returned-value"
+import { cn } from "@/lib/utils"
 
 export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -18,6 +20,36 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
     orderBy: [{ bankName: "asc" }, { accountNumber: "asc" }],
     select: { id: true, bankName: true, accountNumber: true, accountName: true },
   })
+  // What returns took off each invoice, so a returned sale reads as returned,
+  // not as still owing.
+  const returned = await returnedValueBySale(prisma, customer.sales.map((sale) => sale.id))
+  // Return lines written before they were split read "Refund" even when nothing
+  // was paid back. Money only left if the ledger has a pay-out for that return.
+  const returnRefs = customer.ledgerEntries
+    .filter((entry) => entry.type === "REFUND" && entry.reference?.startsWith("RTN-"))
+    .map((entry) => entry.reference!)
+  const paidBack = new Set(
+    (
+      await prisma.financeEntry.findMany({
+        where: { reference: { in: returnRefs }, type: "EXPENSE" },
+        select: { reference: true },
+      })
+    ).map((row) => row.reference)
+  )
+  const lineLabel = (entry: { type: string; reference: string | null; description: string | null }) => {
+    if (entry.type === "REFUND" && entry.reference?.startsWith("RTN-") && !paidBack.has(entry.reference)) {
+      return { tag: "Returned · debt cleared", tone: "text-success", note: "No money was paid out on this return." }
+    }
+    const tags: Record<string, { tag: string; tone: string }> = {
+      SALE: { tag: "Bought on credit", tone: "text-warning" },
+      PAYMENT: { tag: "Paid us", tone: "text-success" },
+      REFUND: { tag: "Refund paid out", tone: "text-danger" },
+      ADJUSTMENT: { tag: entry.reference?.startsWith("RTN-") ? "Returned" : "Adjustment", tone: "text-success" },
+      CREDIT_NOTE: { tag: "Credit note", tone: "text-info" },
+      DISCOUNT: { tag: "Discount", tone: "text-success" },
+    }
+    return { ...(tags[entry.type] ?? { tag: entry.type, tone: "text-muted-foreground" }), note: null as string | null }
+  }
 
   return (
     <div className="space-y-6">
@@ -40,41 +72,54 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         <div className="surface-card p-5">
           <h3 className="mb-4 font-semibold">Money history</h3>
           <div className="space-y-3 text-sm">
-            {customer.ledgerEntries.map((entry) => (
-              <div key={entry.id} className="flex justify-between border-b border-border/70 pb-2">
-                <div>
+            {customer.ledgerEntries.map((entry) => {
+              const label = lineLabel(entry)
+              return (
+              <div key={entry.id} className="flex justify-between gap-3 border-b border-border/70 pb-2">
+                <div className="min-w-0">
+                  <p className={cn("text-[11px] font-semibold uppercase tracking-wide", label.tone)}>{label.tag}</p>
                   <p className="font-medium">{entry.description}</p>
+                  {label.note ? <p className="text-xs text-success">{label.note}</p> : null}
                   <p className="text-xs text-muted-foreground">{entry.reference} · {formatDate(entry.createdAt)}</p>
                 </div>
-                <div className="text-right">
+                <div className="shrink-0 text-right">
                   <p>{formatCurrency(money(entry.amount))}</p>
                   <p className="text-xs text-muted-foreground">Bal {formatCurrency(money(entry.balance))}</p>
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
         </div>
         <div className="surface-card p-5">
           <h3 className="mb-4 font-semibold">Purchases</h3>
           <div className="space-y-3 text-sm">
-            {customer.sales.map((sale) => (
+            {customer.sales.map((sale) => {
+              const back = returned.get(sale.id) ?? 0
+              const due = dueAfterReturns(sale, back)
+              const fullyReturned = back > 0 && back >= money(sale.totalAmount) - 0.005
+              return (
               <div key={sale.id} className="flex items-start justify-between gap-3 border-b border-border/70 pb-3 last:border-0 last:pb-0">
                 <div className="min-w-0">
                   <a href={`/sales/${sale.id}`} className="whitespace-nowrap font-medium text-primary hover:underline">{sale.invoiceNumber}</a>
                   <div className="mt-1">
-                    <StatusBadge value={money(sale.paidAmount) >= money(sale.totalAmount) ? "SETTLED" : "DUE"} />
+                    <StatusBadge value={fullyReturned ? "RETURNED" : due > 0.005 ? "DUE" : "SETTLED"} />
                   </div>
                 </div>
                 <div className="shrink-0 text-right tabular-nums">
                   <p className="font-medium">{formatCurrency(money(sale.totalAmount))}</p>
-                  {money(sale.totalAmount) - money(sale.paidAmount) > 0 ? (
-                    <p className="text-xs text-warning">Still {formatCurrency(money(sale.totalAmount) - money(sale.paidAmount))}</p>
+                  {back > 0 ? <p className="text-xs text-muted-foreground">Returned {formatCurrency(back)}</p> : null}
+                  {due > 0.005 ? (
+                    <p className="text-xs text-warning">Still {formatCurrency(due)}</p>
+                  ) : fullyReturned && money(sale.paidAmount) <= 0 ? (
+                    <p className="text-xs text-success">Nothing owed</p>
                   ) : (
                     <p className="text-xs text-success">Paid</p>
                   )}
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       </div>

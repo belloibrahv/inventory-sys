@@ -1,4 +1,6 @@
 import { getReportData } from "@/app/actions/finance"
+import { prisma } from "@/lib/prisma"
+import { returnedValueBySale } from "@/lib/returned-value"
 import { getOpeningReport } from "@/app/actions/opening-stock"
 import { getBranches } from "@/app/actions/parties"
 import { PageHeader } from "@/components/shared"
@@ -49,6 +51,8 @@ export default async function ReportsPage({
   ])
 
   const revenue = data.sales.reduce((sum, sale) => sum + money(sale.totalAmount), 0)
+  // What returns already cleared on each invoice, so its balance reads true.
+  const returnedOnSales = await returnedValueBySale(prisma, data.sales.map((sale) => sale.id))
   // Money in by the day it arrived (see receiptsInWindow), matching the till.
   const collected = data.receipts.total
   const expense = data.expenses.reduce((sum, row) => sum + money(row.amount), 0)
@@ -188,6 +192,7 @@ export default async function ReportsPage({
           invoiceNumber: row.invoiceNumber,
           totalAmount: money(row.totalAmount),
           paidAmount: money(row.paidAmount),
+          returned: returnedOnSales.get(row.id) ?? 0,
           saleDate: row.saleDate,
           customer: row.customer ? { name: row.customer.name } : null,
           branch: shopOf(row.branch),

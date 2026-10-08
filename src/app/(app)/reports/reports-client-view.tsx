@@ -33,6 +33,8 @@ type RawSale = {
   invoiceNumber: string
   totalAmount: unknown
   paidAmount: unknown
+  /** Refunds and credit notes finished against this invoice. */
+  returned?: number
   saleDate: Date
   customer: { name: string } | null
   branch: { name: string; code: string }
@@ -111,6 +113,11 @@ const DRILLDOWN_TITLE: Record<Drilldown, string> = {
 }
 
 const day = (value: Date | string) => new Date(value).toISOString().slice(0, 10)
+
+/** Still owed on one invoice, after what returns already cleared on it. */
+function saleStillOwed(sale: { totalAmount: unknown; paidAmount: unknown; returned?: number }) {
+  return Math.max(0, money(sale.totalAmount) - money(sale.paidAmount) - (sale.returned ?? 0))
+}
 
 export function ReportsClientView({
   pack,
@@ -208,7 +215,7 @@ export function ReportsClientView({
         day(sale.saleDate),
         money(sale.totalAmount),
         money(sale.paidAmount),
-        money(sale.totalAmount) - money(sale.paidAmount),
+        saleStillOwed(sale),
       ]),
       [],
       ["Total", "", "", "", pack.totals.revenue],
@@ -417,7 +424,7 @@ export function ReportsClientView({
                   sale.branch.code,
                   String(money(sale.totalAmount)),
                   String(money(sale.paidAmount)),
-                  String(money(sale.totalAmount) - money(sale.paidAmount)),
+                  String(saleStillOwed(sale)),
                   new Date(sale.saleDate).toISOString().slice(0, 10),
                 ]),
               ]}
@@ -948,7 +955,7 @@ export function ReportsClientView({
                     <td className="text-right num font-semibold">{formatCurrency(money(sale.totalAmount))}</td>
                     <td className="text-right num text-success">{formatCurrency(money(sale.paidAmount))}</td>
                     <td className="text-right num text-warning">
-                      {formatCurrency(money(sale.totalAmount) - money(sale.paidAmount))}
+                      {formatCurrency(saleStillOwed(sale))}
                     </td>
                   </tr>
                 ))}

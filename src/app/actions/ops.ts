@@ -15,7 +15,7 @@ import { requireUser } from "@/lib/session"
 import { writeAudit } from "@/lib/audit"
 import { canApprove, canManageFinance, canSeeAllBranches, canSendToSupplier, isShopOwner, scopedBranchId } from "@/lib/rbac"
 import { can } from "@/lib/permissions"
-import { generateDocNumber, money } from "@/lib/utils"
+import { formatCurrency, generateDocNumber, money } from "@/lib/utils"
 import { shopError } from "@/lib/shop-speak"
 import { canReachBranch, OTHER_SHOP, resolveWritableShopId, viewBranchFilter } from "@/lib/branch-scope"
 import { ConflictError, claimImei, claimImeis, drawStock, recordMovement, returnStock, shiftCustomerBalance } from "@/lib/concurrency"
@@ -1268,16 +1268,59 @@ async function applyReturn(user: Awaited<ReturnType<typeof requireUser>>, formDa
       const cashOut = record.outcome === "REFUND" ? Math.min(asked - debtRelief, salePaid) : 0
       const after = await shiftCustomerBalance(tx, record.customerId, -debtRelief)
       const next = Math.max(0, money(after.currentBalance))
-      await tx.ledgerEntry.create({
-        data: {
-          customerId: record.customerId,
-          type: record.outcome === "REFUND" ? "REFUND" : "CREDIT_NOTE",
-          amount: (-(cashOut || debtRelief || asked)).toFixed(2),
-          balance: next.toFixed(2),
-          reference: record.returnNumber,
-          description: `${record.outcome}. Original sale ${sale?.invoiceNumber ?? ""} was not edited`,
-        },
-      })
+      const invoiceRef = sale?.invoiceNumber ? ` on ${sale.invoiceNumber}` : ""
+      // Each line says what really happened. A return on a sale nobody paid for
+      // only clears the debt; it used to be written as a "Refund", which read as
+      // money paid out to a customer who never paid.
+      if (debtRelief > 0) {
+        await tx.ledgerEntry.create({
+          data: {
+            customerId: record.customerId,
+            type: "ADJUSTMENT",
+            amount: (-debtRelief).toFixed(2),
+            balance: next.toFixed(2),
+            reference: record.returnNumber,
+            description: `Returned: ${formatCurrency(debtRelief)} still owed${invoiceRef} cleared. No money paid out`,
+          },
+        })
+      }
+      if (cashOut > 0) {
+        await tx.ledgerEntry.create({
+          data: {
+            customerId: record.customerId,
+            type: "REFUND",
+            amount: (-cashOut).toFixed(2),
+            balance: next.toFixed(2),
+            reference: record.returnNumber,
+            description: `Refund paid to the customer by bank${invoiceRef}. Does not change what they owe`,
+          },
+        })
+      }
+      const creditLeft = record.outcome === "CREDIT_NOTE" ? Math.max(0, asked - debtRelief) : 0
+      if (creditLeft > 0) {
+        await tx.ledgerEntry.create({
+          data: {
+            customerId: record.customerId,
+            type: "CREDIT_NOTE",
+            amount: "0.00",
+            balance: next.toFixed(2),
+            reference: record.returnNumber,
+            description: `Credit note for ${formatCurrency(creditLeft)}${invoiceRef}, to use on a later purchase`,
+          },
+        })
+      }
+      if (debtRelief <= 0 && cashOut <= 0 && creditLeft <= 0) {
+        await tx.ledgerEntry.create({
+          data: {
+            customerId: record.customerId,
+            type: "ADJUSTMENT",
+            amount: "0.00",
+            balance: next.toFixed(2),
+            reference: record.returnNumber,
+            description: `Returned${invoiceRef}. Nothing was owed and nothing was paid out`,
+          },
+        })
+      }
       if (cashOut > 0) {
         await tx.financeEntry.create({
           data: {

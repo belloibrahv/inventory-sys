@@ -1231,8 +1231,12 @@ export async function collectPayment(formData: FormData) {
         orderBy: { saleDate: "asc" },
         select: { id: true, totalAmount: true, paidAmount: true, paymentMethod: true },
       })
+      // What a return already took off each invoice. Without this a payment was
+      // spread onto an invoice whose goods had come back, and that invoice
+      // read as paid while a still-open one stayed owing.
+      const returnedOn = await returnedValueBySale(tx, openSales.map((sale) => sale.id))
       for (const sale of openSales) {
-        let due = money(sale.totalAmount) - money(sale.paidAmount)
+        let due = dueAfterReturns(sale, returnedOn.get(sale.id) ?? 0)
         if (due <= 0) continue
         let appliedHere = 0
         for (const row of pool) {
