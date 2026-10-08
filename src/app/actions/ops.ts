@@ -11,6 +11,7 @@ import {
   type Prisma,
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
+import { mayDecideTransfer, transferDeciders } from "@/lib/transfer-rights"
 import { requireUser } from "@/lib/session"
 import { writeAudit } from "@/lib/audit"
 import { canApprove, canManageFinance, canSeeAllBranches, canSendToSupplier, isShopOwner, scopedBranchId } from "@/lib/rbac"
@@ -2794,15 +2795,6 @@ async function submitTransfer(formData: FormData): Promise<TransferOutcome> {
   return { success: true }
 }
 
-/**
- * Who may accept or reject a shop-to-shop transfer: the CEO and the main admin
- * for any shop, and the receiving shop's own manager for that shop only. The
- * vault manager and whoever sent it may only look; the sender used to be able
- * to accept on the other shop's behalf.
- */
-function mayDecideTransfer(user: { role: string; branchId: string | null }, toBranchId: string) {
-  return isShopOwner(user.role as Parameters<typeof isShopOwner>[0]) || (user.role === "BRANCH_MANAGER" && user.branchId === toBranchId)
-}
 
 /** Tell the person who sent a transfer, and their shop's manager, what became of it. */
 async function tellSender(transfer: { userId: string; fromBranchId: string; transferNumber: string; toBranch: { name: string } }, title: string, message: string) {
@@ -2827,7 +2819,7 @@ export async function receiveTransfer(formData: FormData) {
   if (transfer.status === "RECEIVED") return { error: "This transfer has already been accepted." }
   if (transfer.status === "CANCELLED") return { error: "This transfer was rejected. Nothing to accept." }
   if (!mayDecideTransfer(user, transfer.toBranchId)) {
-    return { error: `Only the manager of ${transfer.toBranch.name}, the CEO or the main admin can accept this transfer.` }
+    return { error: `Only ${transferDeciders(transfer.toBranch.name)} can accept this transfer.` }
   }
 
   // What arrived. Phones: those ticked on the list, or typed / scanned by any
@@ -3024,7 +3016,7 @@ export async function rejectTransfer(formData: FormData) {
   if (transfer.status === "RECEIVED") return { error: "This transfer was already accepted." }
   if (transfer.status === "CANCELLED") return { error: "This transfer was already rejected." }
   if (!mayDecideTransfer(user, transfer.toBranchId)) {
-    return { error: `Only the manager of ${transfer.toBranch.name}, the CEO or the main admin can reject this transfer.` }
+    return { error: `Only ${transferDeciders(transfer.toBranch.name)} can reject this transfer.` }
   }
   // Why it was turned back is required, so the sending shop knows.
   const why = String(formData.get("reason") || "").trim()

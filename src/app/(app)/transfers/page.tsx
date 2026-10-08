@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { isShopOwner } from "@/lib/roles"
+import { mayDecideTransfer } from "@/lib/transfer-rights"
 import { productSpecLine } from "@/lib/product-specs"
 import { Plus } from "lucide-react"
 import { getTransfers } from "@/app/actions/ops"
@@ -42,8 +42,8 @@ export default async function TransfersPage() {
     rejectedBecause: transfer.rejectedBecause,
     sentBy: transfer.sentBy,
     // Accept and reject: the CEO and the main admin for any shop, the receiving
-    // shop's manager for their own. Everyone else, the sender included, looks.
-    canDecide: isShopOwner(me.role) || (me.role === "BRANCH_MANAGER" && me.branchId === transfer.toBranchId),
+    // shop's manager or vault manager for their own. Everyone else looks.
+    canDecide: mayDecideTransfer(me, transfer.toBranchId),
     imeis: transfer.imeis.map((imei) => ({
       id: imei.id,
       imei1: imei.imei1,
