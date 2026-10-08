@@ -15,6 +15,22 @@ export default async function SalesPage() {
   // Refunds and credit notes already finished against each sale, so the
   // figures show the real sales value and what is really still owed.
   const returned = await returnedValueBySale(prisma, raw.map((sale) => sale.id))
+  // Money paid out to a customer on a Swap Deal is not a payment on the
+  // invoice; it sits in the money ledger under the invoice number. Read it so
+  // a swap invoice still shows which bank the money left from.
+  const swapInvoices = raw.filter((sale) => sale.notes?.startsWith("Swap ")).map((sale) => sale.invoiceNumber)
+  const payouts = swapInvoices.length
+    ? await prisma.financeEntry.findMany({
+        where: { reference: { in: swapInvoices }, type: "EXPENSE" },
+        select: { reference: true, account: true, bankAccount: { select: { bankName: true, accountNumber: true } } },
+      })
+    : []
+  const payoutWords = new Map(
+    payouts.map((row) => [
+      row.reference ?? "",
+      row.bankAccount ? `Paid out · ${row.bankAccount.bankName} · ${row.bankAccount.accountNumber}` : row.account === "CASH" ? "Paid out in cash" : "Paid out by bank",
+    ])
+  )
   // Plain numbers and strings only. Database money values are not plain
   // objects, and handing them to the browser raised a warning per figure.
   const sales: SaleRow[] = raw.map((sale) => ({
@@ -42,6 +58,8 @@ export default async function SalesPage() {
             .map((p) => `${p.bankAccount!.bankName} · ${p.bankAccount!.accountNumber}`)
         ),
       ]
+      const out = payoutWords.get(sale.invoiceNumber)
+      if (out) banks.push(out)
       return banks.length ? banks.join(" + ") : null
     })(),
     items: sale.items.map((item) => ({

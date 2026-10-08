@@ -1582,17 +1582,65 @@ export async function getSwaps() {
       newImei: { include: { product: true } },
       newProduct: true,
       branch: true,
+      user: { select: { name: true } },
     },
     orderBy: { createdAt: "desc" },
   })
   const invoices = await prisma.sale.findMany({
     where: { notes: { contains: "Swap " } },
-    select: { id: true, invoiceNumber: true, notes: true },
+    select: {
+      id: true,
+      invoiceNumber: true,
+      notes: true,
+      user: { select: { name: true } },
+      payments: {
+        select: { amount: true, method: true, reference: true, bankAccount: { select: { bankName: true, accountNumber: true } } },
+      },
+    },
   })
-  return rows.map((row) => ({
-    ...row,
-    invoice: invoices.find((sale) => sale.notes?.includes(row.swapNumber)) ?? null,
-  }))
+  // Money paid out to a customer on a swap is not a payment on the invoice; it
+  // is written to the money ledger under the invoice number.
+  const payouts = await prisma.financeEntry.findMany({
+    where: { reference: { in: invoices.map((sale) => sale.invoiceNumber) }, type: "EXPENSE" },
+    select: { reference: true, amount: true, account: true, bankAccount: { select: { bankName: true, accountNumber: true } } },
+  })
+  const approvers = await prisma.user.findMany({
+    where: { id: { in: [...new Set(rows.map((row) => row.approvedBy).filter((id): id is string => Boolean(id)))] } },
+    select: { id: true, name: true },
+  })
+  const approverName = new Map(approvers.map((row) => [row.id, row.name]))
+  const bankWords = (bank: { bankName: string; accountNumber: string } | null) => (bank ? `${bank.bankName} ${bank.accountNumber}` : null)
+
+  return rows.map((row) => {
+    const invoice = invoices.find((sale) => sale.notes?.includes(row.swapNumber)) ?? null
+    const money_: Array<{ direction: "in" | "out"; amount: number; channel: string; bank: string | null; reference: string | null }> = []
+    for (const payment of invoice?.payments ?? []) {
+      money_.push({
+        direction: "in",
+        amount: money(payment.amount),
+        channel: payment.method === "CASH" ? "Cash" : "Bank",
+        bank: bankWords(payment.bankAccount),
+        reference: payment.reference,
+      })
+    }
+    for (const out of payouts.filter((entry) => entry.reference === invoice?.invoiceNumber)) {
+      money_.push({
+        direction: "out",
+        amount: money(out.amount),
+        channel: out.account === "CASH" ? "Cash" : "Bank",
+        bank: bankWords(out.bankAccount),
+        reference: null,
+      })
+    }
+    return {
+      ...row,
+      invoice: invoice ? { id: invoice.id, invoiceNumber: invoice.invoiceNumber } : null,
+      startedBy: row.user?.name ?? null,
+      approvedByName: row.approvedBy ? approverName.get(row.approvedBy) ?? null : null,
+      settledBy: invoice?.user?.name ?? null,
+      money: money_,
+    }
+  })
 }
 
 type SwapInSpec = {
@@ -1975,6 +2023,9 @@ async function finishSwap(user: Awaited<ReturnType<typeof requireUser>>, formDat
   // bank account the money went into, or came out of, is picked.
   const method = (String(formData.get("method") || "TRANSFER") === "CASH" ? "CASH" : "TRANSFER") as PaymentMethod
   const bankAccountId = String(formData.get("bankAccountId") || "").trim()
+  // The transfer description or POS code, so the money can be matched to the
+  // bank statement like any other bank payment.
+  const paymentReference = String(formData.get("paymentReference") || "").trim() || null
   const swap = await prisma.swap.findUnique({
     where: { id },
     include: { customer: true, newProduct: true, oldImei: true, newImei: true },
@@ -2011,6 +2062,9 @@ async function finishSwap(user: Awaited<ReturnType<typeof requireUser>>, formDat
       : null
   if (payChannel !== "CASH" && movesMoney && !swapBank) {
     return { error: "Pick the bank account the money went into or came out of." }
+  }
+  if (payChannel !== "CASH" && movesMoney && !paymentReference) {
+    return { error: "Type the payment reference (transfer description or POS code) so this can be matched to the bank." }
   }
   const swapBankLabel = swapBank ? ` · ${swapBank.bankName} ${swapBank.accountNumber}` : ""
   if (payable > 0 && payChannel === "CASH") {
@@ -2107,7 +2161,7 @@ async function finishSwap(user: Awaited<ReturnType<typeof requireUser>>, formDat
         },
         payments:
           receivable > 0 && collected > 0
-            ? { create: { amount: collected.toFixed(2), method, bankAccountId: swapBank?.id ?? null } }
+            ? { create: { amount: collected.toFixed(2), method, bankAccountId: swapBank?.id ?? null, reference: payChannel === "CASH" ? null : paymentReference } }
             : undefined,
       },
     })
@@ -2139,7 +2193,7 @@ async function finishSwap(user: Awaited<ReturnType<typeof requireUser>>, formDat
           type: "INCOME",
           amount: collected.toFixed(2),
           reference: invoiceNumber,
-          description: `Swap receivable ${swap.swapNumber}${swapBankLabel}`,
+          description: `Swap receivable ${swap.swapNumber}${swapBankLabel}${paymentReference ? ` · ref ${paymentReference}` : ""}`,
           bankAccountId: swapBank?.id ?? null,
         },
       })
@@ -2153,7 +2207,7 @@ async function finishSwap(user: Awaited<ReturnType<typeof requireUser>>, formDat
           type: "EXPENSE",
           amount: payOut.toFixed(2),
           reference: invoiceNumber,
-          description: `Swap payable to ${swap.customer.name} · ${swap.swapNumber}${swapBankLabel}`,
+          description: `Swap payable to ${swap.customer.name} · ${swap.swapNumber}${swapBankLabel}${paymentReference ? ` · ref ${paymentReference}` : ""}`,
           bankAccountId: swapBank?.id ?? null,
         },
       })

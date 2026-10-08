@@ -39,6 +39,17 @@ type SwapRow = {
   newProduct: { name: string; storage?: string | null }
   newImei?: { imei1: string; serialNumber?: string | null } | null
   invoice: { id: string; invoiceNumber: string } | null
+  startedBy: string | null
+  approvedByName: string | null
+  settledBy: string | null
+  /** Money that moved on the swap's invoice: received from, or paid out to, the customer. */
+  money: Array<{ direction: "in" | "out"; amount: number; channel: string; bank: string | null; reference: string | null }>
+}
+
+/** "Received ₦530,000 into FAIRMONEY 2006327917 · ref TRF8812" */
+function moneyLine(row: SwapRow["money"][number]) {
+  const where = row.bank ? `${row.direction === "in" ? "into" : "out of"} ${row.bank}` : row.channel === "Cash" ? "in cash" : "by bank"
+  return `${row.direction === "in" ? "Received" : "Paid out"} ${formatCurrency(row.amount)} ${where}${row.reference ? ` · ref ${row.reference}` : ""}`
 }
 
 function deviceLabel(row: { imei1: string; serialNumber?: string | null }) {
@@ -120,6 +131,15 @@ export function SwapsList({ swaps, banks = [] }: { swaps: SwapRow[]; banks?: Swa
         <div className="whitespace-nowrap">
           <StatusBadge value={swap.status} />
           {swap.status === "APPROVED" ? <p className="mt-1 text-[11px] font-medium text-warning">Settle and invoice</p> : null}
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {swap.startedBy ? `by ${swap.startedBy}` : ""}
+            {swap.approvedByName ? ` · approved by ${swap.approvedByName}` : ""}
+          </p>
+          {swap.money.map((row, index) => (
+            <p key={index} className="text-[11px] text-muted-foreground">
+              {moneyLine(row)}
+            </p>
+          ))}
         </div>
       ),
     },
@@ -153,11 +173,24 @@ export function SwapsList({ swaps, banks = [] }: { swaps: SwapRow[]; banks?: Swa
         filterKey={status}
         onRowClick={setOpen}
         searchText={(swap) =>
-          [swap.swapNumber, swap.customer.name, swap.oldImei.imei1, swap.oldImei.serialNumber, oldName(swap), newName(swap), swap.newImei?.imei1]
+          [
+            swap.swapNumber,
+            swap.customer.name,
+            swap.oldImei.imei1,
+            swap.oldImei.serialNumber,
+            oldName(swap),
+            newName(swap),
+            swap.newImei?.imei1,
+            swap.invoice?.invoiceNumber,
+            swap.startedBy,
+            swap.approvedByName,
+            swap.settledBy,
+            ...swap.money.flatMap((row) => [row.bank, row.reference]),
+          ]
             .filter(Boolean)
             .join(" ")
         }
-        searchPlaceholder="Search swap, customer, IMEI or phone"
+        searchPlaceholder="Search swap, invoice, customer, IMEI, bank, reference or staff"
         card={(swap) => ({
           title: swap.customer.name,
           subtitle: `${oldName(swap)} → ${newName(swap)}`,
@@ -167,6 +200,9 @@ export function SwapsList({ swaps, banks = [] }: { swaps: SwapRow[]; banks?: Swa
             <>
               <span>{swap.swapNumber}</span>
               <span>· {formatShopWhen(whenOf(swap))}</span>
+              {swap.startedBy ? <span>· by {swap.startedBy}</span> : null}
+              {swap.approvedByName ? <span>· approved by {swap.approvedByName}</span> : null}
+              {swap.money[0]?.bank ? <span>· {swap.money[0].bank}</span> : null}
             </>
           ),
         })}
@@ -202,6 +238,15 @@ function SwapPaymentFields({ banks, branchId, payingOut }: { banks: SwapBank[]; 
       </Select>
       {method === "TRANSFER" ? (
         banks.length ? (
+          <>
+          <Input
+            name="paymentReference"
+            required
+            autoComplete="off"
+            placeholder="Payment reference (transfer description or POS code)"
+            aria-label="Payment reference"
+            className="font-mono sm:col-span-2"
+          />
           <Select name="bankAccountId" required defaultValue="" aria-label="Bank account" className="sm:col-span-2">
             <option value="" disabled>
               {payingOut ? "Paid out of which bank account?" : "Received into which bank account?"}
@@ -212,6 +257,7 @@ function SwapPaymentFields({ banks, branchId, payingOut }: { banks: SwapBank[]; 
               </option>
             ))}
           </Select>
+          </>
         ) : (
           <p className="text-sm text-warning sm:col-span-2">
             No bank account is listed yet. Add one under Money in &amp; out, or settle this in cash.
@@ -260,6 +306,24 @@ function SwapDetail({ swap, banks, onDone }: { swap: SwapRow; banks: SwapBank[];
           <p className="font-medium">{[swap.newProduct.name, swap.newProduct.storage].filter(Boolean).join(" · ")}</p>
           <p className="font-mono text-xs text-muted-foreground">{givenOut}</p>
         </dd>
+        <dt className="text-muted-foreground">Started by</dt>
+        <dd>
+          {swap.startedBy ?? "-"} <span className="text-xs text-muted-foreground">· {formatShopWhen(swap.createdAt)}</span>
+        </dd>
+        <dt className="text-muted-foreground">Approved by</dt>
+        <dd>
+          {swap.approvedByName ?? (swap.status === "PENDING" ? "Waiting for approval" : "-")}
+          {swap.approvedAt ? <span className="text-xs text-muted-foreground"> · {formatShopWhen(swap.approvedAt)}</span> : null}
+        </dd>
+        {swap.settledBy ? (
+          <>
+            <dt className="text-muted-foreground">Settled by</dt>
+            <dd>
+              {swap.settledBy}
+              {swap.completedAt ? <span className="text-xs text-muted-foreground"> · {formatShopWhen(swap.completedAt)}</span> : null}
+            </dd>
+          </>
+        ) : null}
         {swap.invoice ? (
           <>
             <dt className="text-muted-foreground">Invoice</dt>
@@ -267,6 +331,14 @@ function SwapDetail({ swap, banks, onDone }: { swap: SwapRow; banks: SwapBank[];
               <Link href={`/sales/${swap.invoice.id}`} className="text-primary hover:underline">
                 {swap.invoice.invoiceNumber}
               </Link>
+            </dd>
+            <dt className="text-muted-foreground">Money</dt>
+            <dd>
+              {swap.money.length ? (
+                swap.money.map((row, index) => <p key={index}>{moneyLine(row)}</p>)
+              ) : (
+                <span className="text-muted-foreground">No money moved (even swap, or still owed by the customer)</span>
+              )}
             </dd>
           </>
         ) : null}

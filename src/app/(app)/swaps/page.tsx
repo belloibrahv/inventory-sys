@@ -61,6 +61,10 @@ export default async function SwapsPage() {
           newProduct: { name: swap.newProduct.name, storage: swap.newProduct.storage },
           newImei: swap.newImei ? { imei1: swap.newImei.imei1, serialNumber: swap.newImei.serialNumber } : null,
           invoice: swap.invoice,
+          startedBy: swap.startedBy,
+          approvedByName: swap.approvedByName,
+          settledBy: swap.settledBy,
+          money: swap.money,
         }))}
       />
     </div>
